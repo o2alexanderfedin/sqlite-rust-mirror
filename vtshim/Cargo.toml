@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "vtshim"
-path = "hello_world.rs"
+path = "src/lib.rs"

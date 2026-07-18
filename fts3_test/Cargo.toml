@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "fts3_test"
-path = "hello_world.rs"
+path = "src/lib.rs"

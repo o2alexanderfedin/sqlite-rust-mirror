@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "example_extra_init"
-path = "hello_world.rs"
+path = "src/lib.rs"

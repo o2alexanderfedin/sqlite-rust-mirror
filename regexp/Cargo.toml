@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "regexp"
-path = "hello_world.rs"
+path = "src/lib.rs"

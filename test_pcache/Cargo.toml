@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "test_pcache"
-path = "hello_world.rs"
+path = "src/lib.rs"

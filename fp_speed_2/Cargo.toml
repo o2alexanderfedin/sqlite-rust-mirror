@@ -5,4 +5,4 @@ edition = "2021"
 
 [[bin]]
 name = "fp_speed_2"
-path = "hello_world.rs"
+path = "src/lib.rs"

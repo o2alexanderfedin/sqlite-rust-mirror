@@ -1,0 +1,8 @@
+[package]
+name = "prefixes"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "prefixes"
+path = "hello_world.rs"

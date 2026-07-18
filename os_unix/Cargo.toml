@@ -1,0 +1,8 @@
+[package]
+name = "os_unix"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "os_unix"
+path = "hello_world.rs"

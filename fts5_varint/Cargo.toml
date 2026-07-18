@@ -1,0 +1,8 @@
+[package]
+name = "fts5_varint"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fts5_varint"
+path = "hello_world.rs"

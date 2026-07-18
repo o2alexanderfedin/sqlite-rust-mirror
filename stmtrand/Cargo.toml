@@ -1,0 +1,8 @@
+[package]
+name = "stmtrand"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "stmtrand"
+path = "hello_world.rs"

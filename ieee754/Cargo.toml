@@ -1,0 +1,8 @@
+[package]
+name = "ieee754"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ieee754"
+path = "hello_world.rs"

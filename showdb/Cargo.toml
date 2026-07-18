@@ -1,0 +1,8 @@
+[package]
+name = "showdb"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "showdb"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "mksourceid"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mksourceid"
+path = "hello_world.rs"

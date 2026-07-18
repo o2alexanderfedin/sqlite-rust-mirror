@@ -1,0 +1,8 @@
+[package]
+name = "sha1"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sha1"
+path = "hello_world.rs"

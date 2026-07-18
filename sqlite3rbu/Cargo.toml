@@ -1,0 +1,8 @@
+[package]
+name = "sqlite3rbu"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sqlite3rbu"
+path = "hello_world.rs"

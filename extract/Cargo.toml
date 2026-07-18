@@ -1,0 +1,8 @@
+[package]
+name = "extract"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "extract"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "touint8array"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "touint8array"
+path = "hello_world.rs"

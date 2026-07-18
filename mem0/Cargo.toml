@@ -1,0 +1,8 @@
+[package]
+name = "mem0"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mem0"
+path = "hello_world.rs"

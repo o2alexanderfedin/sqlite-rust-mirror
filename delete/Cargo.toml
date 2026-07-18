@@ -1,0 +1,8 @@
+[package]
+name = "delete"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "delete"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "nextchar"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "nextchar"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "optfuzz_db01"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "optfuzz_db01"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "fts5_test_tok"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fts5_test_tok"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "status"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "status"
+path = "hello_world.rs"

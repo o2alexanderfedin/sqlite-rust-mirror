@@ -1,0 +1,8 @@
+[package]
+name = "rollback_test"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rollback_test"
+path = "hello_world.rs"

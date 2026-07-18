@@ -1,0 +1,8 @@
+[package]
+name = "pcache"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "pcache"
+path = "hello_world.rs"

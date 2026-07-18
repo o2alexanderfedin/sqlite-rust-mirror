@@ -1,0 +1,8 @@
+[package]
+name = "malloc"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "malloc"
+path = "hello_world.rs"

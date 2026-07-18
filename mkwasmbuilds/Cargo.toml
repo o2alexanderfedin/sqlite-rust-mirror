@@ -1,0 +1,8 @@
+[package]
+name = "mkwasmbuilds"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mkwasmbuilds"
+path = "hello_world.rs"

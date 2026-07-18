@@ -1,0 +1,8 @@
+[package]
+name = "test_recover"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test_recover"
+path = "hello_world.rs"

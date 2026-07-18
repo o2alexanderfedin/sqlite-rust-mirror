@@ -1,0 +1,8 @@
+[package]
+name = "randomjson"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "randomjson"
+path = "hello_world.rs"

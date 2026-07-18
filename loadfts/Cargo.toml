@@ -1,0 +1,8 @@
+[package]
+name = "loadfts"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "loadfts"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "dbstat"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dbstat"
+path = "hello_world.rs"

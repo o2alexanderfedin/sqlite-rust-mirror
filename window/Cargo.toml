@@ -1,0 +1,8 @@
+[package]
+name = "window"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "window"
+path = "hello_world.rs"

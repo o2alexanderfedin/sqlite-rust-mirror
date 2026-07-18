@@ -1,0 +1,8 @@
+[package]
+name = "normalize"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "normalize"
+path = "hello_world.rs"

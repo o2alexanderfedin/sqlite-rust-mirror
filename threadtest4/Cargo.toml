@@ -1,0 +1,8 @@
+[package]
+name = "threadtest4"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "threadtest4"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "urifuncs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "urifuncs"
+path = "hello_world.rs"

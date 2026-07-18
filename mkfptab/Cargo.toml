@@ -1,0 +1,8 @@
+[package]
+name = "mkfptab"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mkfptab"
+path = "hello_world.rs"

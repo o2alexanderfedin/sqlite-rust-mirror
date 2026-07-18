@@ -1,0 +1,8 @@
+[package]
+name = "vt02"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "vt02"
+path = "hello_world.rs"

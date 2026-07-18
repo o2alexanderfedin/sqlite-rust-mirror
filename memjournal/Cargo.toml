@@ -1,0 +1,8 @@
+[package]
+name = "memjournal"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "memjournal"
+path = "hello_world.rs"

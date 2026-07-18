@@ -1,0 +1,8 @@
+[package]
+name = "index_usage"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "index_usage"
+path = "hello_world.rs"

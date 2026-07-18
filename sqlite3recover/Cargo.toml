@@ -1,0 +1,8 @@
+[package]
+name = "sqlite3recover"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sqlite3recover"
+path = "hello_world.rs"

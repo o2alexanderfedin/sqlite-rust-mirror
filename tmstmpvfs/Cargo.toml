@@ -1,0 +1,8 @@
+[package]
+name = "tmstmpvfs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "tmstmpvfs"
+path = "hello_world.rs"

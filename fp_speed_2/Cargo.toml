@@ -1,0 +1,8 @@
+[package]
+name = "fp_speed_2"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fp_speed_2"
+path = "hello_world.rs"

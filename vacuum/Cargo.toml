@@ -1,0 +1,8 @@
+[package]
+name = "vacuum"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "vacuum"
+path = "hello_world.rs"

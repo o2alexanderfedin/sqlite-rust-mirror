@@ -1,0 +1,8 @@
+[package]
+name = "alter"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "alter"
+path = "hello_world.rs"

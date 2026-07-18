@@ -1,0 +1,8 @@
+[package]
+name = "offsets"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "offsets"
+path = "hello_world.rs"

@@ -1,0 +1,18089 @@
+type __darwin_size_t = u64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3 {
+    p_vfs: *mut sqlite3_vfs,
+    p_vdbe: *mut Vdbe,
+    p_dflt_coll: *mut CollSeq,
+    mutex: *mut sqlite3_mutex,
+    a_db: *mut Db,
+    n_db: i32,
+    m_db_flags: u32,
+    flags: u64,
+    last_rowid: i64,
+    sz_mmap: i64,
+    n_schema_lock: u32,
+    open_flags: u32,
+    err_code: i32,
+    err_byte_offset: i32,
+    err_mask: i32,
+    i_sys_errno: i32,
+    db_opt_flags: u32,
+    enc: u8,
+    auto_commit: u8,
+    temp_store: u8,
+    malloc_failed: u8,
+    b_benign_malloc: u8,
+    dflt_lock_mode: u8,
+    next_autovac: i8,
+    suppress_err: u8,
+    vtab_on_conflict: u8,
+    is_transaction_savepoint: u8,
+    m_trace: u8,
+    no_shared_cache: u8,
+    n_sql_exec: u8,
+    e_open_state: u8,
+    n_fp_digit: u8,
+    next_pagesize: i32,
+    n_change: i64,
+    n_total_change: i64,
+    a_limit: [i32; 13],
+    n_max_sorter_mmap: i32,
+    init: sqlite3InitInfo,
+    n_vdbe_active: i32,
+    n_vdbe_read: i32,
+    n_vdbe_write: i32,
+    n_vdbe_exec: i32,
+    n_v_destroy: i32,
+    n_extension: i32,
+    a_extension: *mut *mut (),
+    trace: sqlite3_u0,
+    p_trace_arg: *mut (),
+    x_profile: Option<unsafe extern "C" fn(*mut (), *const i8, u64) -> ()>,
+    p_profile_arg: *mut (),
+    p_commit_arg: *mut (),
+    x_commit_callback: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    p_rollback_arg: *mut (),
+    x_rollback_callback: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    p_update_arg: *mut (),
+    x_update_callback: Option<unsafe extern "C" fn(*mut (), i32, *const i8,
+        *const i8, i64) -> ()>,
+    p_autovac_pages_arg: *mut (),
+    x_autovac_destr: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    x_autovac_pages: Option<unsafe extern "C" fn(*mut (), *const i8, u32, u32,
+        u32) -> u32>,
+    p_parse: *mut Parse,
+    x_wal_callback: Option<unsafe extern "C" fn(*mut (), *mut sqlite3,
+        *const i8, i32) -> i32>,
+    p_wal_arg: *mut (),
+    x_coll_needed: Option<unsafe extern "C" fn(*mut (), *mut sqlite3, i32,
+        *const i8) -> ()>,
+    x_coll_needed16: Option<unsafe extern "C" fn(*mut (), *mut sqlite3, i32,
+        *const ()) -> ()>,
+    p_coll_needed_arg: *mut (),
+    p_err: *mut sqlite3_value,
+    u1: sqlite3_u1,
+    lookaside: Lookaside,
+    x_auth: Option<unsafe extern "C" fn(*mut (), i32, *const i8, *const i8,
+        *const i8, *const i8) -> i32>,
+    p_auth_arg: *mut (),
+    x_progress: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    p_progress_arg: *mut (),
+    n_progress_ops: u32,
+    n_v_trans: i32,
+    a_module: Hash,
+    p_vtab_ctx: *mut VtabCtx,
+    a_v_trans: *mut *mut VTable,
+    p_disconnect: *mut VTable,
+    a_func: Hash,
+    a_coll_seq: Hash,
+    busy_handler: BusyHandler,
+    a_db_static: [Db; 2],
+    p_savepoint: *mut Savepoint,
+    n_analysis_limit: i32,
+    busy_timeout: i32,
+    n_savepoint: i32,
+    n_statement: i32,
+    n_deferred_cons: i64,
+    n_deferred_imm_cons: i64,
+    pn_bytes_freed: *mut i32,
+    p_db_data: *mut DbClientData,
+    n_spill: u64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_vfs {
+    i_version: i32,
+    sz_os_file: i32,
+    mx_pathname: i32,
+    p_next: *mut sqlite3_vfs,
+    z_name: *const i8,
+    p_app_data: *mut (),
+    x_open: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *const i8,
+        *mut sqlite3_file, i32, *mut i32) -> i32>,
+    x_delete: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *const i8, i32)
+        -> i32>,
+    x_access: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *const i8, i32,
+        *mut i32) -> i32>,
+    x_full_pathname: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *const i8,
+        i32, *mut i8) -> i32>,
+    x_dl_open: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *const i8)
+        -> *mut ()>,
+    x_dl_error: Option<unsafe extern "C" fn(*mut sqlite3_vfs, i32, *mut i8)
+        -> ()>,
+    x_dl_sym: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut (),
+        *const i8) -> unsafe extern "C" fn() -> ()>,
+    x_dl_close: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut ()) -> ()>,
+    x_randomness: Option<unsafe extern "C" fn(*mut sqlite3_vfs, i32, *mut i8)
+        -> i32>,
+    x_sleep: Option<unsafe extern "C" fn(*mut sqlite3_vfs, i32) -> i32>,
+    x_current_time: Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut f64)
+        -> i32>,
+    x_get_last_error: Option<unsafe extern "C" fn(*mut sqlite3_vfs, i32,
+        *mut i8) -> i32>,
+    x_current_time_int64: Option<unsafe extern "C" fn(*mut sqlite3_vfs,
+        *mut i64) -> i32>,
+    x_set_system_call: Option<unsafe extern "C" fn(*mut sqlite3_vfs,
+        *const i8, unsafe extern "C" fn() -> ()) -> i32>,
+    x_get_system_call: Option<unsafe extern "C" fn(*mut sqlite3_vfs,
+        *const i8) -> unsafe extern "C" fn() -> ()>,
+    x_next_system_call: Option<unsafe extern "C" fn(*mut sqlite3_vfs,
+        *const i8) -> *const i8>,
+}
+type sqlite3_filename = *const i8;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_file {
+    p_methods: *const sqlite3_io_methods,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_io_methods {
+    i_version: i32,
+    x_close: Option<unsafe extern "C" fn(*mut sqlite3_file) -> i32>,
+    x_read: Option<unsafe extern "C" fn(*mut sqlite3_file, *mut (), i32, i64)
+        -> i32>,
+    x_write: Option<unsafe extern "C" fn(*mut sqlite3_file, *const (), i32,
+        i64) -> i32>,
+    x_truncate: Option<unsafe extern "C" fn(*mut sqlite3_file, i64) -> i32>,
+    x_sync: Option<unsafe extern "C" fn(*mut sqlite3_file, i32) -> i32>,
+    x_file_size: Option<unsafe extern "C" fn(*mut sqlite3_file, *mut i64)
+        -> i32>,
+    x_lock: Option<unsafe extern "C" fn(*mut sqlite3_file, i32) -> i32>,
+    x_unlock: Option<unsafe extern "C" fn(*mut sqlite3_file, i32) -> i32>,
+    x_check_reserved_lock: Option<unsafe extern "C" fn(*mut sqlite3_file,
+        *mut i32) -> i32>,
+    x_file_control: Option<unsafe extern "C" fn(*mut sqlite3_file, i32,
+        *mut ()) -> i32>,
+    x_sector_size: Option<unsafe extern "C" fn(*mut sqlite3_file) -> i32>,
+    x_device_characteristics: Option<unsafe extern "C" fn(*mut sqlite3_file)
+        -> i32>,
+    x_shm_map: Option<unsafe extern "C" fn(*mut sqlite3_file, i32, i32, i32,
+        *mut *mut ()) -> i32>,
+    x_shm_lock: Option<unsafe extern "C" fn(*mut sqlite3_file, i32, i32, i32)
+        -> i32>,
+    x_shm_barrier: Option<unsafe extern "C" fn(*mut sqlite3_file) -> ()>,
+    x_shm_unmap: Option<unsafe extern "C" fn(*mut sqlite3_file, i32) -> i32>,
+    x_fetch: Option<unsafe extern "C" fn(*mut sqlite3_file, i64, i32,
+        *mut *mut ()) -> i32>,
+    x_unfetch: Option<unsafe extern "C" fn(*mut sqlite3_file, i64, *mut ())
+        -> i32>,
+}
+type sqlite_int64 = i64;
+type sqlite3_int64 = sqlite_int64;
+type sqlite3_syscall_ptr = unsafe extern "C" fn() -> ();
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Vdbe {
+    db: *mut sqlite3,
+    pp_v_prev: *mut *mut Vdbe,
+    p_v_next: *mut Vdbe,
+    p_parse: *mut Parse,
+    n_var: ynVar,
+    n_mem: i32,
+    n_cursor: i32,
+    cache_ctr: u32,
+    pc: i32,
+    rc: i32,
+    n_change: i64,
+    i_statement: i32,
+    i_current_time: i64,
+    n_fk_constraint: i64,
+    n_stmt_def_cons: i64,
+    n_stmt_def_imm_cons: i64,
+    a_mem: *mut Mem,
+    ap_arg: *mut *mut Mem,
+    ap_csr: *mut *mut VdbeCursor,
+    a_var: *mut Mem,
+    a_op: *mut Op,
+    n_op: i32,
+    n_op_alloc: i32,
+    a_col_name: *mut Mem,
+    p_result_row: *mut Mem,
+    z_err_msg: *mut i8,
+    p_v_list: *mut VList,
+    start_time: i64,
+    n_res_column: u16,
+    n_res_alloc: u16,
+    error_action: u8,
+    min_write_file_format: u8,
+    prep_flags: u8,
+    e_vdbe_state: u8,
+    _bitfield_1: u32,
+    btree_mask: yDbMask,
+    lock_mask: yDbMask,
+    a_counter: [u32; 9],
+    z_sql: *mut i8,
+    p_free: *mut (),
+    p_frame: *mut VdbeFrame,
+    p_del_frame: *mut VdbeFrame,
+    n_frame: i32,
+    expmask: u32,
+    p_program: *mut SubProgram,
+    p_aux_data: *mut AuxData,
+}
+impl Vdbe {
+    fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
+    fn set_expired(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x3u32) | ((val & 0x3u32) << 0u32);
+    }
+    fn explain(&self) -> i32 { ((self._bitfield_1 >> 2u32) & 0x3u32) as i32 }
+    fn set_explain(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x3u32 << 2u32)) | ((val & 0x3u32) << 2u32);
+    }
+    fn change_cnt_on(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_change_cnt_on(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+    fn uses_stmt_journal(&self) -> i32 {
+        ((self._bitfield_1 >> 5u32) & 0x1u32) as i32
+    }
+    fn set_uses_stmt_journal(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
+    }
+    fn read_only(&self) -> i32 {
+        ((self._bitfield_1 >> 6u32) & 0x1u32) as i32
+    }
+    fn set_read_only(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 6u32)) | ((val & 0x1u32) << 6u32);
+    }
+    fn b_is_reader(&self) -> i32 {
+        ((self._bitfield_1 >> 7u32) & 0x1u32) as i32
+    }
+    fn set_b_is_reader(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 7u32)) | ((val & 0x1u32) << 7u32);
+    }
+    fn have_eqp_ops(&self) -> i32 {
+        ((self._bitfield_1 >> 8u32) & 0x1u32) as i32
+    }
+    fn set_have_eqp_ops(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Parse {
+    db: *mut sqlite3,
+    z_err_msg: *mut i8,
+    p_vdbe: *mut Vdbe,
+    rc: i32,
+    n_query_loop: LogEst,
+    nested: u8,
+    n_temp_reg: u8,
+    is_multi_write: u8,
+    disable_lookaside: u8,
+    prep_flags: u8,
+    within_rj_subrtn: u8,
+    m_subrtn_sig: u8,
+    e_trigger_op: u8,
+    e_orconf: u8,
+    _bitfield_1: u32,
+    n_range_reg: i32,
+    i_range_reg: i32,
+    n_err: i32,
+    n_tab: i32,
+    n_mem: i32,
+    i_self_tab: i32,
+    n_nest_sel: i32,
+    n_label: i32,
+    n_label_alloc: i32,
+    a_label: *mut i32,
+    p_const_expr: *mut ExprList,
+    p_idx_epr: *mut IndexedExpr,
+    p_idx_part_expr: *mut IndexedExpr,
+    write_mask: yDbMask,
+    cookie_mask: yDbMask,
+    n_max_arg: i32,
+    n_select: i32,
+    n_progress_steps: u32,
+    n_table_lock: i32,
+    p_toplevel: *mut Parse,
+    p_trigger_tab: *mut Table,
+    p_trigger_prg: *mut TriggerPrg,
+    p_cleanup: *mut ParseCleanup,
+    a_temp_reg: [i32; 8],
+    p_outer_parse: *mut Parse,
+    s_name_token: Token,
+    oldmask: u32,
+    newmask: u32,
+    u1: Parse_u0,
+    p_ainc: *mut AutoincInfo,
+    a_table_lock: *mut TableLock,
+    s_last_token: Token,
+    n_var: ynVar,
+    i_pk_sort_order: u8,
+    explain: u8,
+    e_parse_mode: u8,
+    n_vtab_lock: i32,
+    n_height: i32,
+    addr_explain: i32,
+    p_v_list: *mut VList,
+    p_reprepare: *mut Vdbe,
+    z_tail: *const i8,
+    p_new_table: *mut Table,
+    p_new_index: *mut Index,
+    p_new_trigger: *mut Trigger,
+    z_auth_context: *const i8,
+    s_arg: Token,
+    ap_vtab_lock: *mut *mut Table,
+    p_with: *mut With,
+    p_rename: *mut RenameToken,
+}
+impl Parse {
+    fn disable_triggers(&self) -> i32 {
+        ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
+    }
+    fn set_disable_triggers(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x1u32) | ((val & 0x1u32) << 0u32);
+    }
+    fn may_abort(&self) -> i32 {
+        ((self._bitfield_1 >> 1u32) & 0x1u32) as i32
+    }
+    fn set_may_abort(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 1u32)) | ((val & 0x1u32) << 1u32);
+    }
+    fn has_compound(&self) -> i32 {
+        ((self._bitfield_1 >> 2u32) & 0x1u32) as i32
+    }
+    fn set_has_compound(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
+    }
+    fn b_returning(&self) -> i32 {
+        ((self._bitfield_1 >> 3u32) & 0x1u32) as i32
+    }
+    fn set_b_returning(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+    fn b_has_exists(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_b_has_exists(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+    fn col_names_set(&self) -> i32 {
+        ((self._bitfield_1 >> 5u32) & 0x1u32) as i32
+    }
+    fn set_col_names_set(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
+    }
+    fn b_has_with(&self) -> i32 {
+        ((self._bitfield_1 >> 6u32) & 0x1u32) as i32
+    }
+    fn set_b_has_with(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 6u32)) | ((val & 0x1u32) << 6u32);
+    }
+    fn ok_const_factor(&self) -> i32 {
+        ((self._bitfield_1 >> 7u32) & 0x1u32) as i32
+    }
+    fn set_ok_const_factor(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 7u32)) | ((val & 0x1u32) << 7u32);
+    }
+    fn check_schema(&self) -> i32 {
+        ((self._bitfield_1 >> 8u32) & 0x1u32) as i32
+    }
+    fn set_check_schema(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
+    }
+    fn uses_ainc(&self) -> i32 {
+        ((self._bitfield_1 >> 9u32) & 0x1u32) as i32
+    }
+    fn set_uses_ainc(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
+    }
+}
+type LogEst = i16;
+type bft = u32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ExprList {
+    n_expr: i32,
+    n_alloc: i32,
+    a: [ExprList_item; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ExprList_item {
+    p_expr: *mut Expr,
+    z_e_name: *mut i8,
+    fg: ExprList_item_s0,
+    u: ExprList_item_u1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Expr {
+    op: u8,
+    aff_expr: i8,
+    op2: u8,
+    flags: u32,
+    u: Expr_u0,
+    p_left: *mut Expr,
+    p_right: *mut Expr,
+    x: Expr_u1,
+    n_height: i32,
+    i_table: i32,
+    i_column: ynVar,
+    i_agg: i16,
+    w: Expr_u2,
+    p_agg_info: *mut AggInfo,
+    y: Expr_u3,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Expr_u0 {
+    z_token: *mut i8,
+    i_value: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Expr_u1 {
+    p_list: *mut ExprList,
+    p_select: *mut Select,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Select {
+    op: u8,
+    n_select_row: LogEst,
+    sel_flags: u32,
+    i_limit: i32,
+    i_offset: i32,
+    sel_id: u32,
+    p_e_list: *mut ExprList,
+    p_src: *mut SrcList,
+    p_where: *mut Expr,
+    p_group_by: *mut ExprList,
+    p_having: *mut Expr,
+    p_order_by: *mut ExprList,
+    p_prior: *mut Select,
+    p_next: *mut Select,
+    p_limit: *mut Expr,
+    p_with: *mut With,
+    p_win: *mut Window,
+    p_win_defn: *mut Window,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SrcList {
+    n_src: i32,
+    n_alloc: u32,
+    a: [SrcItem; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SrcItem {
+    z_name: *mut i8,
+    z_alias: *mut i8,
+    p_s_tab: *mut Table,
+    fg: SrcItem_s0,
+    i_cursor: i32,
+    col_used: Bitmask,
+    u1: SrcItem_u1,
+    u2: SrcItem_u2,
+    u3: SrcItem_u3,
+    u4: SrcItem_u4,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Table {
+    z_name: *mut i8,
+    a_col: *mut Column,
+    p_index: *mut Index,
+    z_col_aff: *mut i8,
+    p_check: *mut ExprList,
+    tnum: Pgno,
+    n_tab_ref: u32,
+    tab_flags: u32,
+    i_p_key: i16,
+    n_col: i16,
+    n_nv_col: i16,
+    n_row_log_est: LogEst,
+    sz_tab_row: LogEst,
+    key_conf: u8,
+    e_tab_type: u8,
+    u: Table_u0,
+    p_trigger: *mut Trigger,
+    p_schema: *mut Schema,
+    a_hx: [u8; 16],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Column {
+    z_cn_name: *mut i8,
+    _bitfield_1: u32,
+    affinity: i8,
+    sz_est: u8,
+    h_name: u8,
+    i_dflt: u16,
+    col_flags: u16,
+}
+impl Column {
+    fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
+    fn set_not_null(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0xfu32) | ((val & 0xfu32) << 0u32);
+    }
+    fn e_c_type(&self) -> i32 { ((self._bitfield_1 >> 4u32) & 0xfu32) as i32 }
+    fn set_e_c_type(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Index {
+    z_name: *mut i8,
+    ai_column: *mut i16,
+    ai_row_log_est: *mut LogEst,
+    p_table: *mut Table,
+    z_col_aff: *mut i8,
+    p_next: *mut Index,
+    p_schema: *mut Schema,
+    a_sort_order: *mut u8,
+    az_coll: *mut *const i8,
+    p_part_idx_where: *mut Expr,
+    a_col_expr: *mut ExprList,
+    tnum: Pgno,
+    sz_idx_row: LogEst,
+    n_key_col: u16,
+    n_column: u16,
+    on_error: u8,
+    _bitfield_1: u32,
+    col_not_idxed: Bitmask,
+}
+impl Index {
+    fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
+    fn set_idx_type(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x3u32) | ((val & 0x3u32) << 0u32);
+    }
+    fn b_unordered(&self) -> i32 {
+        ((self._bitfield_1 >> 2u32) & 0x1u32) as i32
+    }
+    fn set_b_unordered(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
+    }
+    fn uniq_not_null(&self) -> i32 {
+        ((self._bitfield_1 >> 3u32) & 0x1u32) as i32
+    }
+    fn set_uniq_not_null(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+    fn is_resized(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_is_resized(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+    fn is_covering(&self) -> i32 {
+        ((self._bitfield_1 >> 5u32) & 0x1u32) as i32
+    }
+    fn set_is_covering(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
+    }
+    fn no_skip_scan(&self) -> i32 {
+        ((self._bitfield_1 >> 6u32) & 0x1u32) as i32
+    }
+    fn set_no_skip_scan(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 6u32)) | ((val & 0x1u32) << 6u32);
+    }
+    fn has_stat1(&self) -> i32 {
+        ((self._bitfield_1 >> 7u32) & 0x1u32) as i32
+    }
+    fn set_has_stat1(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 7u32)) | ((val & 0x1u32) << 7u32);
+    }
+    fn b_no_query(&self) -> i32 {
+        ((self._bitfield_1 >> 8u32) & 0x1u32) as i32
+    }
+    fn set_b_no_query(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
+    }
+    fn b_asc_key_bug(&self) -> i32 {
+        ((self._bitfield_1 >> 9u32) & 0x1u32) as i32
+    }
+    fn set_b_asc_key_bug(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
+    }
+    fn b_has_v_col(&self) -> i32 {
+        ((self._bitfield_1 >> 10u32) & 0x1u32) as i32
+    }
+    fn set_b_has_v_col(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 10u32)) |
+                ((val & 0x1u32) << 10u32);
+    }
+    fn b_has_expr(&self) -> i32 {
+        ((self._bitfield_1 >> 11u32) & 0x1u32) as i32
+    }
+    fn set_b_has_expr(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 11u32)) |
+                ((val & 0x1u32) << 11u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Schema {
+    schema_cookie: i32,
+    i_generation: i32,
+    tbl_hash: Hash,
+    idx_hash: Hash,
+    trig_hash: Hash,
+    fkey_hash: Hash,
+    p_seq_tab: *mut Table,
+    file_format: u8,
+    enc: u8,
+    schema_flags: u16,
+    cache_size: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Hash {
+    htsize: u32,
+    count: u32,
+    first: *mut HashElem,
+    ht: *mut _ht,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct HashElem {
+    next: *mut HashElem,
+    prev: *mut HashElem,
+    data: *mut (),
+    p_key: *const i8,
+    h: u32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct _ht {
+    count: u32,
+    chain: *mut HashElem,
+}
+type Pgno = u32;
+type sqlite_uint64 = u64;
+type Bitmask = u64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Table_u0 {
+    tab: Table_u0_s0,
+    view: Table_u0_s1,
+    vtab: Table_u0_s2,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Table_u0_s0 {
+    add_col_offset: i32,
+    p_f_key: *mut FKey,
+    p_dflt_list: *mut ExprList,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FKey {
+    p_from: *mut Table,
+    p_next_from: *mut FKey,
+    z_to: *mut i8,
+    p_next_to: *mut FKey,
+    p_prev_to: *mut FKey,
+    n_col: i32,
+    is_deferred: u8,
+    a_action: [u8; 2],
+    ap_trigger: [*mut Trigger; 2],
+    a_col: [sColMap; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Trigger {
+    z_name: *mut i8,
+    table: *mut i8,
+    op: u8,
+    tr_tm: u8,
+    b_returning: u8,
+    p_when: *mut Expr,
+    p_columns: *mut IdList,
+    p_schema: *mut Schema,
+    p_tab_schema: *mut Schema,
+    step_list: *mut TriggerStep,
+    p_next: *mut Trigger,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IdList {
+    n_id: i32,
+    a: [IdList_item; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IdList_item {
+    z_name: *mut i8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct TriggerStep {
+    op: u8,
+    orconf: u8,
+    p_trig: *mut Trigger,
+    p_select: *mut Select,
+    p_src: *mut SrcList,
+    p_where: *mut Expr,
+    p_expr_list: *mut ExprList,
+    p_id_list: *mut IdList,
+    p_upsert: *mut Upsert,
+    z_span: *mut i8,
+    p_next: *mut TriggerStep,
+    p_last: *mut TriggerStep,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Upsert {
+    p_upsert_target: *mut ExprList,
+    p_upsert_target_where: *mut Expr,
+    p_upsert_set: *mut ExprList,
+    p_upsert_where: *mut Expr,
+    p_next_upsert: *mut Upsert,
+    is_do_update: u8,
+    is_dup: u8,
+    p_to_free: *mut (),
+    p_upsert_idx: *mut Index,
+    p_upsert_src: *mut SrcList,
+    reg_data: i32,
+    i_data_cur: i32,
+    i_idx_cur: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sColMap {
+    i_from: i32,
+    z_col: *mut i8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Table_u0_s1 {
+    p_select: *mut Select,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Table_u0_s2 {
+    n_arg: i32,
+    az_arg: *mut *mut i8,
+    p: *mut VTable,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VTable {
+    db: *mut sqlite3,
+    p_mod: *mut Module,
+    p_vtab: *mut sqlite3_vtab,
+    n_ref: i32,
+    b_constraint: u8,
+    b_all_schemas: u8,
+    e_vtab_risk: u8,
+    i_savepoint: i32,
+    p_next: *mut VTable,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Module {
+    p_module: *const sqlite3_module,
+    z_name: *const i8,
+    n_ref_module: i32,
+    p_aux: *mut (),
+    x_destroy: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    p_epo_tab: *mut Table,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_module {
+    i_version: i32,
+    x_create: Option<unsafe extern "C" fn(*mut sqlite3, *mut (), i32,
+        *const *const i8, *mut *mut sqlite3_vtab, *mut *mut i8) -> i32>,
+    x_connect: Option<unsafe extern "C" fn(*mut sqlite3, *mut (), i32,
+        *const *const i8, *mut *mut sqlite3_vtab, *mut *mut i8) -> i32>,
+    x_best_index: Option<unsafe extern "C" fn(*mut sqlite3_vtab,
+        *mut sqlite3_index_info) -> i32>,
+    x_disconnect: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_destroy: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_open: Option<unsafe extern "C" fn(*mut sqlite3_vtab,
+        *mut *mut sqlite3_vtab_cursor) -> i32>,
+    x_close: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> i32>,
+    x_filter: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor, i32,
+        *const i8, i32, *mut *mut sqlite3_value) -> i32>,
+    x_next: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> i32>,
+    x_eof: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> i32>,
+    x_column: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor,
+        *mut sqlite3_context, i32) -> i32>,
+    x_rowid: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor, *mut i64)
+        -> i32>,
+    x_update: Option<unsafe extern "C" fn(*mut sqlite3_vtab, i32,
+        *mut *mut sqlite3_value, *mut i64) -> i32>,
+    x_begin: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_sync: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_commit: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_rollback: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> i32>,
+    x_find_function: Option<unsafe extern "C" fn(*mut sqlite3_vtab, i32,
+        *const i8,
+        *mut unsafe extern "C" fn(*mut sqlite3_context, i32,
+                *mut *mut sqlite3_value) -> (), *mut *mut ()) -> i32>,
+    x_rename: Option<unsafe extern "C" fn(*mut sqlite3_vtab, *const i8)
+        -> i32>,
+    x_savepoint: Option<unsafe extern "C" fn(*mut sqlite3_vtab, i32) -> i32>,
+    x_release: Option<unsafe extern "C" fn(*mut sqlite3_vtab, i32) -> i32>,
+    x_rollback_to: Option<unsafe extern "C" fn(*mut sqlite3_vtab, i32)
+        -> i32>,
+    x_shadow_name: Option<unsafe extern "C" fn(*const i8) -> i32>,
+    x_integrity: Option<unsafe extern "C" fn(*mut sqlite3_vtab, *const i8,
+        *const i8, i32, *mut *mut i8) -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_vtab {
+    p_module: *const sqlite3_module,
+    n_ref: i32,
+    z_err_msg: *mut i8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_index_info {
+    n_constraint: i32,
+    a_constraint: *mut sqlite3_index_constraint,
+    n_order_by: i32,
+    a_order_by: *mut sqlite3_index_orderby,
+    a_constraint_usage: *mut sqlite3_index_constraint_usage,
+    idx_num: i32,
+    idx_str: *mut i8,
+    need_to_free_idx_str: i32,
+    order_by_consumed: i32,
+    estimated_cost: f64,
+    estimated_rows: sqlite3_int64,
+    idx_flags: i32,
+    col_used: sqlite3_uint64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_index_constraint {
+    i_column: i32,
+    op: u8,
+    usable: u8,
+    i_term_offset: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_index_orderby {
+    i_column: i32,
+    desc: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_index_constraint_usage {
+    argv_index: i32,
+    omit: u8,
+}
+type sqlite3_uint64 = sqlite_uint64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_vtab_cursor {
+    p_vtab: *mut sqlite3_vtab,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_value {
+    u: MemValue,
+    z: *mut i8,
+    n: i32,
+    flags: u16,
+    enc: u8,
+    e_subtype: u8,
+    db: *mut sqlite3,
+    sz_malloc: i32,
+    u_temp: u32,
+    z_malloc: *mut i8,
+    x_del: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union MemValue {
+    r: f64,
+    i: i64,
+    n_zero: i32,
+    z_p_type: *const i8,
+    p_def: *mut FuncDef,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FuncDef {
+    n_arg: i16,
+    func_flags: u32,
+    p_user_data: *mut (),
+    p_next: *mut FuncDef,
+    x_s_func: Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+        *mut *mut sqlite3_value) -> ()>,
+    x_finalize: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    x_value: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    x_inverse: Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+        *mut *mut sqlite3_value) -> ()>,
+    z_name: *const i8,
+    u: FuncDef_u0,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_context {
+    p_out: *mut Mem,
+    p_func: *mut FuncDef,
+    p_mem: *mut Mem,
+    p_vdbe: *mut Vdbe,
+    i_op: i32,
+    is_error: i32,
+    enc: u8,
+    skip_flag: u8,
+    argc: u16,
+    argv: [*mut sqlite3_value; 0],
+}
+type Mem = sqlite3_value;
+#[repr(C)]
+#[derive(Copy, Clone)]
+union FuncDef_u0 {
+    p_hash: *mut FuncDef,
+    p_destructor: *mut FuncDestructor,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FuncDestructor {
+    n_ref: i32,
+    x_destroy: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    p_user_data: *mut (),
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SrcItem_s0 {
+    jointype: u8,
+    _bitfield_1: u32,
+}
+impl SrcItem_s0 {
+    fn not_indexed(&self) -> i32 {
+        ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
+    }
+    fn set_not_indexed(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x1u32) | ((val & 0x1u32) << 0u32);
+    }
+    fn is_indexed_by(&self) -> i32 {
+        ((self._bitfield_1 >> 1u32) & 0x1u32) as i32
+    }
+    fn set_is_indexed_by(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 1u32)) | ((val & 0x1u32) << 1u32);
+    }
+    fn is_subquery(&self) -> i32 {
+        ((self._bitfield_1 >> 2u32) & 0x1u32) as i32
+    }
+    fn set_is_subquery(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
+    }
+    fn is_tab_func(&self) -> i32 {
+        ((self._bitfield_1 >> 3u32) & 0x1u32) as i32
+    }
+    fn set_is_tab_func(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+    fn is_correlated(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_is_correlated(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+    fn is_materialized(&self) -> i32 {
+        ((self._bitfield_1 >> 5u32) & 0x1u32) as i32
+    }
+    fn set_is_materialized(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
+    }
+    fn via_coroutine(&self) -> i32 {
+        ((self._bitfield_1 >> 6u32) & 0x1u32) as i32
+    }
+    fn set_via_coroutine(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 6u32)) | ((val & 0x1u32) << 6u32);
+    }
+    fn is_recursive(&self) -> i32 {
+        ((self._bitfield_1 >> 7u32) & 0x1u32) as i32
+    }
+    fn set_is_recursive(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 7u32)) | ((val & 0x1u32) << 7u32);
+    }
+    fn from_ddl(&self) -> i32 { ((self._bitfield_1 >> 8u32) & 0x1u32) as i32 }
+    fn set_from_ddl(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
+    }
+    fn is_cte(&self) -> i32 { ((self._bitfield_1 >> 9u32) & 0x1u32) as i32 }
+    fn set_is_cte(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
+    }
+    fn not_cte(&self) -> i32 { ((self._bitfield_1 >> 10u32) & 0x1u32) as i32 }
+    fn set_not_cte(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 10u32)) |
+                ((val & 0x1u32) << 10u32);
+    }
+    fn is_using(&self) -> i32 {
+        ((self._bitfield_1 >> 11u32) & 0x1u32) as i32
+    }
+    fn set_is_using(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 11u32)) |
+                ((val & 0x1u32) << 11u32);
+    }
+    fn is_on(&self) -> i32 { ((self._bitfield_1 >> 12u32) & 0x1u32) as i32 }
+    fn set_is_on(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 12u32)) |
+                ((val & 0x1u32) << 12u32);
+    }
+    fn is_synth_using(&self) -> i32 {
+        ((self._bitfield_1 >> 13u32) & 0x1u32) as i32
+    }
+    fn set_is_synth_using(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 13u32)) |
+                ((val & 0x1u32) << 13u32);
+    }
+    fn is_nested_from(&self) -> i32 {
+        ((self._bitfield_1 >> 14u32) & 0x1u32) as i32
+    }
+    fn set_is_nested_from(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 14u32)) |
+                ((val & 0x1u32) << 14u32);
+    }
+    fn rowid_used(&self) -> i32 {
+        ((self._bitfield_1 >> 15u32) & 0x1u32) as i32
+    }
+    fn set_rowid_used(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 15u32)) |
+                ((val & 0x1u32) << 15u32);
+    }
+    fn fixed_schema(&self) -> i32 {
+        ((self._bitfield_1 >> 16u32) & 0x1u32) as i32
+    }
+    fn set_fixed_schema(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 16u32)) |
+                ((val & 0x1u32) << 16u32);
+    }
+    fn had_schema(&self) -> i32 {
+        ((self._bitfield_1 >> 17u32) & 0x1u32) as i32
+    }
+    fn set_had_schema(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 17u32)) |
+                ((val & 0x1u32) << 17u32);
+    }
+    fn from_exists(&self) -> i32 {
+        ((self._bitfield_1 >> 18u32) & 0x1u32) as i32
+    }
+    fn set_from_exists(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 18u32)) |
+                ((val & 0x1u32) << 18u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union SrcItem_u1 {
+    z_indexed_by: *mut i8,
+    p_func_arg: *mut ExprList,
+    n_row: u32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union SrcItem_u2 {
+    p_ib_index: *mut Index,
+    p_cte_use: *mut CteUse,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CteUse {
+    n_use: i32,
+    addr_m9e: i32,
+    reg_rtn: i32,
+    i_cur: i32,
+    n_row_est: LogEst,
+    e_m10d: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union SrcItem_u3 {
+    p_on: *mut Expr,
+    p_using: *mut IdList,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union SrcItem_u4 {
+    p_schema: *mut Schema,
+    z_database: *mut i8,
+    p_subq: *mut Subquery,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Subquery {
+    p_select: *mut Select,
+    addr_fill_sub: i32,
+    reg_return: i32,
+    reg_result: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct With {
+    n_cte: i32,
+    b_view: i32,
+    p_outer: *mut With,
+    a: [Cte; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Cte {
+    z_name: *mut i8,
+    p_cols: *mut ExprList,
+    p_select: *mut Select,
+    z_cte_err: *const i8,
+    p_use: *mut CteUse,
+    e_m10d: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Window {
+    z_name: *mut i8,
+    z_base: *mut i8,
+    p_partition: *mut ExprList,
+    p_order_by: *mut ExprList,
+    e_frm_type: u8,
+    e_start: u8,
+    e_end: u8,
+    b_implicit_frame: u8,
+    e_exclude: u8,
+    p_start: *mut Expr,
+    p_end: *mut Expr,
+    pp_this: *mut *mut Window,
+    p_next_win: *mut Window,
+    p_filter: *mut Expr,
+    p_w_func: *mut FuncDef,
+    i_eph_csr: i32,
+    reg_accum: i32,
+    reg_result: i32,
+    csr_app: i32,
+    reg_app: i32,
+    reg_part: i32,
+    p_owner: *mut Expr,
+    n_buffer_col: i32,
+    i_arg_col: i32,
+    reg_one: i32,
+    reg_start_rowid: i32,
+    reg_end_rowid: i32,
+    b_expr_args: u8,
+}
+type ynVar = i16;
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Expr_u2 {
+    i_join: i32,
+    i_ofst: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AggInfo {
+    direct_mode: u8,
+    use_sorting_idx: u8,
+    n_sorting_column: u32,
+    sorting_idx: i32,
+    sorting_idx_p_tab: i32,
+    i_first_reg: i32,
+    p_group_by: *mut ExprList,
+    a_col: *mut AggInfo_col,
+    n_column: i32,
+    n_accumulator: i32,
+    a_func: *mut AggInfo_func,
+    n_func: i32,
+    sel_id: u32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AggInfo_col {
+    p_tab: *mut Table,
+    p_c_expr: *mut Expr,
+    i_table: i32,
+    i_column: i32,
+    i_sorter_column: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AggInfo_func {
+    p_f_expr: *mut Expr,
+    p_func: *mut FuncDef,
+    i_distinct: i32,
+    i_dist_addr: i32,
+    i_ob_tab: i32,
+    b_ob_payload: u8,
+    b_ob_unique: u8,
+    b_use_subtype: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Expr_u3 {
+    p_tab: *mut Table,
+    p_win: *mut Window,
+    n_reg: i32,
+    sub: Expr_u3_s0,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Expr_u3_s0 {
+    i_addr: i32,
+    reg_return: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ExprList_item_s0 {
+    sort_flags: u8,
+    _bitfield_1: u32,
+}
+impl ExprList_item_s0 {
+    fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
+    fn set_e_e_name(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x3u32) | ((val & 0x3u32) << 0u32);
+    }
+    fn done(&self) -> i32 { ((self._bitfield_1 >> 2u32) & 0x1u32) as i32 }
+    fn set_done(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
+    }
+    fn reusable(&self) -> i32 { ((self._bitfield_1 >> 3u32) & 0x1u32) as i32 }
+    fn set_reusable(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+    fn b_sorter_ref(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_b_sorter_ref(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+    fn b_nulls(&self) -> i32 { ((self._bitfield_1 >> 5u32) & 0x1u32) as i32 }
+    fn set_b_nulls(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
+    }
+    fn b_used(&self) -> i32 { ((self._bitfield_1 >> 6u32) & 0x1u32) as i32 }
+    fn set_b_used(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 6u32)) | ((val & 0x1u32) << 6u32);
+    }
+    fn b_using_term(&self) -> i32 {
+        ((self._bitfield_1 >> 7u32) & 0x1u32) as i32
+    }
+    fn set_b_using_term(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 7u32)) | ((val & 0x1u32) << 7u32);
+    }
+    fn b_no_expand(&self) -> i32 {
+        ((self._bitfield_1 >> 8u32) & 0x1u32) as i32
+    }
+    fn set_b_no_expand(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union ExprList_item_u1 {
+    x: ExprList_item_u1_s0,
+    i_const_expr_reg: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ExprList_item_u1_s0 {
+    i_order_by_col: u16,
+    i_alias: u16,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IndexedExpr {
+    p_expr: *mut Expr,
+    i_data_cur: i32,
+    i_idx_cur: i32,
+    i_idx_col: i32,
+    b_maybe_null_row: u8,
+    aff: u8,
+    p_ie_next: *mut IndexedExpr,
+}
+type yDbMask = u32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct TriggerPrg {
+    p_trigger: *mut Trigger,
+    p_next: *mut TriggerPrg,
+    p_program: *mut SubProgram,
+    orconf: i32,
+    a_colmask: [u32; 2],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SubProgram {
+    a_op: *mut VdbeOp,
+    n_op: i32,
+    n_mem: i32,
+    n_csr: i32,
+    a_once: *mut u8,
+    token: *mut (),
+    p_next: *mut SubProgram,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeOp {
+    opcode: u8,
+    p4type: i8,
+    p5: u16,
+    p1: i32,
+    p2: i32,
+    p3: i32,
+    p4: p4union,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union p4union {
+    i: i32,
+    p: *mut (),
+    z: *mut i8,
+    p_i64: *mut i64,
+    p_real: *mut f64,
+    p_func: *mut FuncDef,
+    p_ctx: *mut sqlite3_context,
+    p_coll: *mut CollSeq,
+    p_mem: *mut Mem,
+    p_vtab: *mut VTable,
+    p_key_info: *mut KeyInfo,
+    ai: *mut u32,
+    p_program: *mut SubProgram,
+    p_tab: *mut Table,
+    p_subrtn_sig: *mut SubrtnSig,
+    p_idx: *mut Index,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CollSeq {
+    z_name: *mut i8,
+    enc: u8,
+    p_user: *mut (),
+    x_cmp: Option<unsafe extern "C" fn(*mut (), i32, *const (), i32,
+        *const ()) -> i32>,
+    x_del: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct KeyInfo {
+    n_ref: u32,
+    enc: u8,
+    n_key_field: u16,
+    n_all_field: u16,
+    db: *mut sqlite3,
+    a_sort_flags: *mut u8,
+    a_coll: [*mut CollSeq; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SubrtnSig {
+    sel_id: i32,
+    b_complete: u8,
+    z_aff: *mut i8,
+    i_table: i32,
+    i_addr: i32,
+    reg_return: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ParseCleanup {
+    p_next: *mut ParseCleanup,
+    p_ptr: *mut (),
+    x_cleanup: Option<unsafe extern "C" fn(*mut sqlite3, *mut ()) -> ()>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Token {
+    z: *const i8,
+    n: u32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Parse_u0 {
+    cr: Parse_u0_s0,
+    d: Parse_u0_s1,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Parse_u0_s0 {
+    addr_cr_tab: i32,
+    reg_rowid: i32,
+    reg_root: i32,
+    constraint_name: Token,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Parse_u0_s1 {
+    p_returning: *mut Returning,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Returning {
+    p_parse: *mut Parse,
+    p_return_el: *mut ExprList,
+    ret_trig: Trigger,
+    ret_t_step: TriggerStep,
+    i_ret_cur: i32,
+    n_ret_col: i32,
+    i_ret_reg: i32,
+    z_name: [i8; 40],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AutoincInfo {
+    p_next: *mut AutoincInfo,
+    p_tab: *mut Table,
+    i_db: i32,
+    reg_ctr: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct TableLock {
+    _opaque: [u8; 0],
+}
+type VList = i32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RenameToken {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeCursor {
+    e_cur_type: u8,
+    i_db: i8,
+    null_row: u8,
+    deferred_moveto: u8,
+    is_table: u8,
+    _bitfield_1: u32,
+    seek_hit: u16,
+    ub: VdbeCursor_u0,
+    seq_count: i64,
+    cache_status: u32,
+    seek_result: i32,
+    p_alt_cursor: *mut VdbeCursor,
+    uc: VdbeCursor_u1,
+    p_key_info: *mut KeyInfo,
+    i_hdr_offset: u32,
+    pgno_root: Pgno,
+    n_field: i16,
+    n_hdr_parsed: u16,
+    moveto_target: i64,
+    a_offset: *mut u32,
+    a_row: *const u8,
+    payload_size: u32,
+    sz_row: u32,
+    p_cache: *mut VdbeTxtBlbCache,
+    a_type: [u32; 0],
+}
+impl VdbeCursor {
+    fn is_ephemeral(&self) -> i32 {
+        ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
+    }
+    fn set_is_ephemeral(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x1u32) | ((val & 0x1u32) << 0u32);
+    }
+    fn use_random_rowid(&self) -> i32 {
+        ((self._bitfield_1 >> 1u32) & 0x1u32) as i32
+    }
+    fn set_use_random_rowid(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 1u32)) | ((val & 0x1u32) << 1u32);
+    }
+    fn is_ordered(&self) -> i32 {
+        ((self._bitfield_1 >> 2u32) & 0x1u32) as i32
+    }
+    fn set_is_ordered(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
+    }
+    fn no_reuse(&self) -> i32 { ((self._bitfield_1 >> 3u32) & 0x1u32) as i32 }
+    fn set_no_reuse(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+    fn col_cache(&self) -> i32 {
+        ((self._bitfield_1 >> 4u32) & 0x1u32) as i32
+    }
+    fn set_col_cache(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
+    }
+}
+type Bool = u32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+union VdbeCursor_u0 {
+    p_btx: *mut Btree,
+    a_alt_map: *mut u32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Btree {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union VdbeCursor_u1 {
+    p_cursor: *mut BtCursor,
+    p_v_cur: *mut sqlite3_vtab_cursor,
+    p_sorter: *mut VdbeSorter,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct BtCursor {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeSorter {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeTxtBlbCache {
+    p_c_value: *mut i8,
+    i_offset: i64,
+    i_col: i32,
+    cache_status: u32,
+    col_cache_ctr: u32,
+}
+type Op = VdbeOp;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeFrame {
+    v: *mut Vdbe,
+    p_parent: *mut VdbeFrame,
+    a_op: *mut Op,
+    a_mem: *mut Mem,
+    ap_csr: *mut *mut VdbeCursor,
+    a_once: *mut u8,
+    token: *mut (),
+    last_rowid: i64,
+    p_aux_data: *mut AuxData,
+    n_cursor: i32,
+    pc: i32,
+    n_op: i32,
+    n_mem: i32,
+    n_child_mem: i32,
+    n_child_csr: i32,
+    n_change: i64,
+    n_db_change: i64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AuxData {
+    i_aux_op: i32,
+    i_aux_arg: i32,
+    p_aux: *mut (),
+    x_delete_aux: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    p_next_aux: *mut AuxData,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_mutex {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Db {
+    z_db_s_name: *mut i8,
+    p_bt: *mut Btree,
+    safety_level: u8,
+    b_sync_set: u8,
+    p_schema: *mut Schema,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3InitInfo {
+    new_tnum: Pgno,
+    i_db: u8,
+    busy: u8,
+    _bitfield_1: u32,
+    az_init: *mut *const i8,
+}
+impl sqlite3InitInfo {
+    fn orphan_trigger(&self) -> i32 {
+        ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
+    }
+    fn set_orphan_trigger(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !0x1u32) | ((val & 0x1u32) << 0u32);
+    }
+    fn imposter_table(&self) -> i32 {
+        ((self._bitfield_1 >> 1u32) & 0x3u32) as i32
+    }
+    fn set_imposter_table(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x3u32 << 1u32)) | ((val & 0x3u32) << 1u32);
+    }
+    fn reopen_memdb(&self) -> i32 {
+        ((self._bitfield_1 >> 3u32) & 0x1u32) as i32
+    }
+    fn set_reopen_memdb(&mut self, val: u32) {
+        self._bitfield_1 =
+            (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
+    }
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union sqlite3_u0 {
+    x_legacy: Option<unsafe extern "C" fn(*mut (), *const i8) -> ()>,
+    x_v2: Option<unsafe extern "C" fn(u32, *mut (), *mut (), *mut ()) -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union sqlite3_u1 {
+    is_interrupted: i32,
+    not_used1: f64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Lookaside {
+    b_disable: u32,
+    sz: u16,
+    sz_true: u16,
+    b_malloced: u8,
+    n_slot: u32,
+    an_stat: [u32; 3],
+    p_init: *mut LookasideSlot,
+    p_free: *mut LookasideSlot,
+    p_small_init: *mut LookasideSlot,
+    p_small_free: *mut LookasideSlot,
+    p_middle: *mut (),
+    p_start: *mut (),
+    p_end: *mut (),
+    p_true_end: *mut (),
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct LookasideSlot {
+    p_next: *mut LookasideSlot,
+}
+type sqlite3_xauth =
+    unsafe extern "C" fn(*mut (), i32, *const i8, *const i8, *const i8,
+        *const i8) -> i32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VtabCtx {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct BusyHandler {
+    x_busy_handler: Option<unsafe extern "C" fn(*mut (), i32) -> i32>,
+    p_busy_arg: *mut (),
+    n_busy: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Savepoint {
+    z_name: *mut i8,
+    n_deferred_cons: i64,
+    n_deferred_imm_cons: i64,
+    p_next: *mut Savepoint,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct DbClientData {
+    p_next: *mut DbClientData,
+    p_data: *mut (),
+    x_destructor: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    z_name: [i8; 0],
+}
+type sqlite3_callback =
+    unsafe extern "C" fn(*mut (), i32, *mut *mut i8, *mut *mut i8) -> i32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_api_routines {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_mem_methods {
+    x_malloc: Option<unsafe extern "C" fn(i32) -> *mut ()>,
+    x_free: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    x_realloc: Option<unsafe extern "C" fn(*mut (), i32) -> *mut ()>,
+    x_size: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    x_roundup: Option<unsafe extern "C" fn(i32) -> i32>,
+    x_init: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    x_shutdown: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    p_app_data: *mut (),
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_stmt {
+    _opaque: [u8; 0],
+}
+extern "C" fn also_an_int(p_rec_1: &Mem, r_value_1: f64, pi_value_1: *mut i64)
+    -> i32 {
+    unsafe {
+        let mut i_value: i64 = 0 as i64;
+        i_value = unsafe { sqlite3_real_to_i64(r_value_1) };
+        if unsafe { sqlite3_real_same_as_int(r_value_1, i_value) } != 0 {
+            unsafe { *pi_value_1 = i_value };
+            return 1;
+        }
+        return (0 ==
+                    unsafe {
+                        sqlite3_atoi64((*p_rec_1).z as *const i8, pi_value_1,
+                            (*p_rec_1).n, (*p_rec_1).enc)
+                    }) as i32;
+    }
+}
+extern "C" fn apply_numeric_affinity(p_rec_1: *mut Mem, b_try_for_int_1: i32)
+    -> () {
+    unsafe {
+        let mut r_value: f64 = 0.0;
+        let mut rc: i32 = 0;
+        { let _ = 0; };
+        rc = unsafe { sqlite3_mem_real_value_rc(p_rec_1, &mut r_value) };
+        if rc <= 0 { return; }
+        if rc & 2 == 0 &&
+                also_an_int(unsafe { &*p_rec_1 }, r_value,
+                        unsafe { &mut (*p_rec_1).u.i }) != 0 {
+            unsafe { (*p_rec_1).flags |= 4 as u16 };
+        } else {
+            unsafe { (*p_rec_1).u.r = r_value };
+            unsafe { (*p_rec_1).flags |= 8 as u16 };
+            if b_try_for_int_1 != 0 {
+                unsafe { sqlite3_vdbe_integer_affinity(p_rec_1) };
+            }
+        }
+        unsafe { (*p_rec_1).flags &= !2 as u16 };
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn sqlite3_value_numeric_type(p_val_1: *mut sqlite3_value)
+    -> i32 {
+    let mut e_type: i32 = unsafe { sqlite3_value_type(p_val_1) };
+    if e_type == 3 {
+        let p_mem: *mut Mem = p_val_1 as *mut Mem;
+        let p_mutex: *mut sqlite3_mutex =
+            if !(unsafe { (*p_mem).db }).is_null() {
+                unsafe { (*unsafe { (*p_mem).db }).mutex }
+            } else { core::ptr::null_mut() };
+        unsafe { sqlite3_mutex_enter(p_mutex) };
+        apply_numeric_affinity(p_mem, 0);
+        unsafe { sqlite3_mutex_leave(p_mutex) };
+        e_type = unsafe { sqlite3_value_type(p_val_1) };
+    }
+    return e_type;
+}
+type sqlite3_destructor_type = unsafe extern "C" fn(*mut ()) -> ();
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_blob {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_mutex_methods {
+    x_mutex_init: Option<unsafe extern "C" fn() -> i32>,
+    x_mutex_end: Option<unsafe extern "C" fn() -> i32>,
+    x_mutex_alloc: Option<unsafe extern "C" fn(i32) -> *mut sqlite3_mutex>,
+    x_mutex_free: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> ()>,
+    x_mutex_enter: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> ()>,
+    x_mutex_try: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> i32>,
+    x_mutex_leave: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> ()>,
+    x_mutex_held: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> i32>,
+    x_mutex_notheld: Option<unsafe extern "C" fn(*mut sqlite3_mutex) -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_str {
+    db: *mut sqlite3,
+    z_text: *mut i8,
+    n_alloc: u32,
+    mx_alloc: u32,
+    n_char: u32,
+    acc_error: u8,
+    printf_flags: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_pcache {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_pcache_page {
+    p_buf: *mut (),
+    p_extra: *mut (),
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_pcache_methods2 {
+    i_version: i32,
+    p_arg: *mut (),
+    x_init: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    x_shutdown: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    x_create: Option<unsafe extern "C" fn(i32, i32, i32)
+        -> *mut sqlite3_pcache>,
+    x_cachesize: Option<unsafe extern "C" fn(*mut sqlite3_pcache, i32) -> ()>,
+    x_pagecount: Option<unsafe extern "C" fn(*mut sqlite3_pcache) -> i32>,
+    x_fetch: Option<unsafe extern "C" fn(*mut sqlite3_pcache, u32, i32)
+        -> *mut sqlite3_pcache_page>,
+    x_unpin: Option<unsafe extern "C" fn(*mut sqlite3_pcache,
+        *mut sqlite3_pcache_page, i32) -> ()>,
+    x_rekey: Option<unsafe extern "C" fn(*mut sqlite3_pcache,
+        *mut sqlite3_pcache_page, u32, u32) -> ()>,
+    x_truncate: Option<unsafe extern "C" fn(*mut sqlite3_pcache, u32) -> ()>,
+    x_destroy: Option<unsafe extern "C" fn(*mut sqlite3_pcache) -> ()>,
+    x_shrink: Option<unsafe extern "C" fn(*mut sqlite3_pcache) -> ()>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_pcache_methods {
+    p_arg: *mut (),
+    x_init: Option<unsafe extern "C" fn(*mut ()) -> i32>,
+    x_shutdown: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    x_create: Option<unsafe extern "C" fn(i32, i32) -> *mut sqlite3_pcache>,
+    x_cachesize: Option<unsafe extern "C" fn(*mut sqlite3_pcache, i32) -> ()>,
+    x_pagecount: Option<unsafe extern "C" fn(*mut sqlite3_pcache) -> i32>,
+    x_fetch: Option<unsafe extern "C" fn(*mut sqlite3_pcache, u32, i32)
+        -> *mut ()>,
+    x_unpin: Option<unsafe extern "C" fn(*mut sqlite3_pcache, *mut (), i32)
+        -> ()>,
+    x_rekey: Option<unsafe extern "C" fn(*mut sqlite3_pcache, *mut (), u32,
+        u32) -> ()>,
+    x_truncate: Option<unsafe extern "C" fn(*mut sqlite3_pcache, u32) -> ()>,
+    x_destroy: Option<unsafe extern "C" fn(*mut sqlite3_pcache) -> ()>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_backup {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_snapshot {
+    hidden: [u8; 48],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_rtree_geometry {
+    p_context: *mut (),
+    n_param: i32,
+    a_param: *mut sqlite3_rtree_dbl,
+    p_user: *mut (),
+    x_del_user: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+}
+type sqlite3_rtree_dbl = f64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct sqlite3_rtree_query_info {
+    p_context: *mut (),
+    n_param: i32,
+    a_param: *mut sqlite3_rtree_dbl,
+    p_user: *mut (),
+    x_del_user: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    a_coord: *mut sqlite3_rtree_dbl,
+    an_queue: *mut u32,
+    n_coord: i32,
+    i_level: i32,
+    mx_level: i32,
+    i_rowid: sqlite3_int64,
+    r_parent_score: sqlite3_rtree_dbl,
+    e_parent_within: i32,
+    e_within: i32,
+    r_score: sqlite3_rtree_dbl,
+    ap_sql_param: *mut *mut sqlite3_value,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Fts5ExtensionApi {
+    i_version: i32,
+    x_user_data: Option<unsafe extern "C" fn(*mut Fts5Context) -> *mut ()>,
+    x_column_count: Option<unsafe extern "C" fn(*mut Fts5Context) -> i32>,
+    x_row_count: Option<unsafe extern "C" fn(*mut Fts5Context, *mut i64)
+        -> i32>,
+    x_column_total_size: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut i64) -> i32>,
+    x_tokenize: Option<unsafe extern "C" fn(*mut Fts5Context, *const i8, i32,
+        *mut (),
+        unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
+        -> i32>,
+    x_phrase_count: Option<unsafe extern "C" fn(*mut Fts5Context) -> i32>,
+    x_phrase_size: Option<unsafe extern "C" fn(*mut Fts5Context, i32) -> i32>,
+    x_inst_count: Option<unsafe extern "C" fn(*mut Fts5Context, *mut i32)
+        -> i32>,
+    x_inst: Option<unsafe extern "C" fn(*mut Fts5Context, i32, *mut i32,
+        *mut i32, *mut i32) -> i32>,
+    x_rowid: Option<unsafe extern "C" fn(*mut Fts5Context) -> i64>,
+    x_column_text: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut *const i8, *mut i32) -> i32>,
+    x_column_size: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut i32) -> i32>,
+    x_query_phrase: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut (),
+        unsafe extern "C" fn(*const Fts5ExtensionApi, *mut Fts5Context,
+                *mut ()) -> i32) -> i32>,
+    x_set_auxdata: Option<unsafe extern "C" fn(*mut Fts5Context, *mut (),
+        unsafe extern "C" fn(*mut ()) -> ()) -> i32>,
+    x_get_auxdata: Option<unsafe extern "C" fn(*mut Fts5Context, i32)
+        -> *mut ()>,
+    x_phrase_first: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut Fts5PhraseIter, *mut i32, *mut i32) -> i32>,
+    x_phrase_next: Option<unsafe extern "C" fn(*mut Fts5Context,
+        *mut Fts5PhraseIter, *mut i32, *mut i32) -> ()>,
+    x_phrase_first_column: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut Fts5PhraseIter, *mut i32) -> i32>,
+    x_phrase_next_column: Option<unsafe extern "C" fn(*mut Fts5Context,
+        *mut Fts5PhraseIter, *mut i32) -> ()>,
+    x_query_token: Option<unsafe extern "C" fn(*mut Fts5Context, i32, i32,
+        *mut *const i8, *mut i32) -> i32>,
+    x_inst_token: Option<unsafe extern "C" fn(*mut Fts5Context, i32, i32,
+        *mut *const i8, *mut i32) -> i32>,
+    x_column_locale: Option<unsafe extern "C" fn(*mut Fts5Context, i32,
+        *mut *const i8, *mut i32) -> i32>,
+    x_tokenize_v2: Option<unsafe extern "C" fn(*mut Fts5Context, *const i8,
+        i32, *const i8, i32, *mut (),
+        unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
+        -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Fts5Context {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Fts5PhraseIter {
+    a: *const u8,
+    b: *const u8,
+}
+type fts5_extension_function =
+    unsafe extern "C" fn(*const Fts5ExtensionApi, *mut Fts5Context,
+        *mut sqlite3_context, i32, *mut *mut sqlite3_value) -> ();
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Fts5Tokenizer {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct fts5_tokenizer_v2 {
+    i_version: i32,
+    x_create: Option<unsafe extern "C" fn(*mut (), *mut *const i8, i32,
+        *mut *mut Fts5Tokenizer) -> i32>,
+    x_delete: Option<unsafe extern "C" fn(*mut Fts5Tokenizer) -> ()>,
+    x_tokenize: Option<unsafe extern "C" fn(*mut Fts5Tokenizer, *mut (), i32,
+        *const i8, i32, *const i8, i32,
+        unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
+        -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct fts5_tokenizer {
+    x_create: Option<unsafe extern "C" fn(*mut (), *mut *const i8, i32,
+        *mut *mut Fts5Tokenizer) -> i32>,
+    x_delete: Option<unsafe extern "C" fn(*mut Fts5Tokenizer) -> ()>,
+    x_tokenize: Option<unsafe extern "C" fn(*mut Fts5Tokenizer, *mut (), i32,
+        *const i8, i32,
+        unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
+        -> i32>,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct fts5_api {
+    i_version: i32,
+    x_create_tokenizer: Option<unsafe extern "C" fn(*mut fts5_api, *const i8,
+        *mut (), *mut fts5_tokenizer, unsafe extern "C" fn(*mut ()) -> ())
+        -> i32>,
+    x_find_tokenizer: Option<unsafe extern "C" fn(*mut fts5_api, *const i8,
+        *mut *mut (), *mut fts5_tokenizer) -> i32>,
+    x_create_function: Option<unsafe extern "C" fn(*mut fts5_api, *const i8,
+        *mut (),
+        unsafe extern "C" fn(*const Fts5ExtensionApi, *mut Fts5Context,
+                *mut sqlite3_context, i32, *mut *mut sqlite3_value) -> (),
+        unsafe extern "C" fn(*mut ()) -> ()) -> i32>,
+    x_create_tokenizer_v2: Option<unsafe extern "C" fn(*mut fts5_api,
+        *const i8, *mut (), *mut fts5_tokenizer_v2,
+        unsafe extern "C" fn(*mut ()) -> ()) -> i32>,
+    x_find_tokenizer_v2: Option<unsafe extern "C" fn(*mut fts5_api, *const i8,
+        *mut *mut (), *mut *mut fts5_tokenizer_v2) -> i32>,
+}
+type tRowcnt = u64;
+type uptr = u64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct AuthContext {
+    z_auth_context: *const i8,
+    p_parse: *mut Parse,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Bitvec {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct DbFixer {
+    p_parse: *mut Parse,
+    w: Walker,
+    p_schema: *mut Schema,
+    b_temp: u8,
+    z_db: *const i8,
+    z_type: *const i8,
+    p_name: *const Token,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Walker {
+    p_parse: *mut Parse,
+    x_expr_callback: Option<unsafe extern "C" fn(*mut Walker, *mut Expr)
+        -> i32>,
+    x_select_callback: Option<unsafe extern "C" fn(*mut Walker, *mut Select)
+        -> i32>,
+    x_select_callback2: Option<unsafe extern "C" fn(*mut Walker, *mut Select)
+        -> ()>,
+    walker_depth: i32,
+    e_code: u16,
+    m_w_flags: u16,
+    u: Walker_u0,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union Walker_u0 {
+    p_nc: *mut NameContext,
+    n: i32,
+    i_cur: i32,
+    sz: i32,
+    p_src_list: *mut SrcList,
+    p_c_cur_hint: *mut CCurHint,
+    p_ref_src_list: *mut RefSrcList,
+    ai_col: *mut i32,
+    p_idx_cover: *mut IdxCover,
+    p_group_by: *mut ExprList,
+    p_select: *mut Select,
+    p_rewrite: *mut WindowRewrite,
+    p_const: *mut WhereConst,
+    p_rename: *mut RenameCtx,
+    p_tab: *mut Table,
+    p_cov_idx_ck: *mut CoveringIndexCheck,
+    p_src_item: *mut SrcItem,
+    p_fix: *mut DbFixer,
+    a_mem: *mut Mem,
+    p_check_on_ctx: *mut CheckOnCtx,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct NameContext {
+    p_parse: *mut Parse,
+    p_src_list: *mut SrcList,
+    u_nc: NameContext_u0,
+    p_next: *mut NameContext,
+    n_ref: i32,
+    n_nc_err: i32,
+    nc_flags: i32,
+    n_nested_select: u32,
+    p_win_select: *mut Select,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union NameContext_u0 {
+    p_e_list: *mut ExprList,
+    p_agg_info: *mut AggInfo,
+    p_upsert: *mut Upsert,
+    i_base_reg: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FpDecode {
+    n: i32,
+    i_dp: i32,
+    z: *mut i8,
+    z_buf: [i8; 21],
+    sign: i8,
+    is_special: i8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct FuncDefHash {
+    a: [*mut FuncDef; 23],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IndexSample {
+    p: *mut (),
+    n: i32,
+    an_eq: *mut tRowcnt,
+    an_lt: *mut tRowcnt,
+    an_d_lt: *mut tRowcnt,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct KeyClass {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct OnOrUsing {
+    p_on: *mut Expr,
+    p_using: *mut IdList,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PreUpdate {
+    v: *mut Vdbe,
+    p_csr: *mut VdbeCursor,
+    op: i32,
+    a_record: *mut u8,
+    p_keyinfo: *mut KeyInfo,
+    p_unpacked: *mut UnpackedRecord,
+    p_new_unpacked: *mut UnpackedRecord,
+    i_new_reg: i32,
+    i_blob_write: i32,
+    i_key1: i64,
+    i_key2: i64,
+    oldipk: Mem,
+    a_new: *mut Mem,
+    p_tab: *mut Table,
+    p_pk: *mut Index,
+    ap_dflt: *mut *mut sqlite3_value,
+    u_key: PreUpdate_s0,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct UnpackedRecord {
+    p_key_info: *mut KeyInfo,
+    a_mem: *mut Mem,
+    u: UnpackedRecord_u0,
+    n: i32,
+    n_field: u16,
+    default_rc: i8,
+    err_code: u8,
+    r1: i8,
+    r2: i8,
+    eq_seen: u8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+union UnpackedRecord_u0 {
+    z: *mut i8,
+    i: i64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PreUpdate_s0 {
+    keyinfo_space: [u8; 32],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PrintfArguments {
+    n_arg: i32,
+    n_used: i32,
+    ap_arg: *mut *mut sqlite3_value,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RCStr {
+    n_rc_ref: u64,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RowSet {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SQLiteThread {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct SelectDest {
+    e_dest: u8,
+    i_sd_parm: i32,
+    i_sd_parm2: i32,
+    i_sdst: i32,
+    n_sdst: i32,
+    z_aff_sdst: *mut i8,
+    p_order_by: *mut ExprList,
+}
+type StrAccum = sqlite3_str;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct TreeView {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct WhereInfo {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Pager {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PgHdr {
+    p_page: *mut sqlite3_pcache_page,
+    p_data: *mut (),
+    p_extra: *mut (),
+    p_cache: *mut PCache,
+    p_dirty: *mut PgHdr,
+    p_pager: *mut Pager,
+    pgno: Pgno,
+    flags: u16,
+    n_ref: i64,
+    p_dirty_next: *mut PgHdr,
+    p_dirty_prev: *mut PgHdr,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct PCache {
+    _opaque: [u8; 0],
+}
+type DbPage = PgHdr;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct BtShared {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct BtreePayload {
+    p_key: *const (),
+    n_key: sqlite3_int64,
+    p_data: *const (),
+    a_mem: *mut sqlite3_value,
+    n_mem: u16,
+    n_data: i32,
+    n_zero: i32,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct VdbeOpList {
+    opcode: u8,
+    p1: i8,
+    p2: i8,
+    p3: i8,
+}
+type RecordCompare =
+    unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord) -> i32;
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct InitData {
+    db: *mut sqlite3,
+    pz_err_msg: *mut *mut i8,
+    i_db: i32,
+    rc: i32,
+    m_init_flags: u32,
+    n_init_row: u32,
+    mx_page: Pgno,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct Sqlite3Config {
+    b_memstat: i32,
+    b_core_mutex: u8,
+    b_full_mutex: u8,
+    b_open_uri: u8,
+    b_use_cis: u8,
+    b_small_malloc: u8,
+    b_extra_schema_checks: u8,
+    mx_strlen: i32,
+    never_corrupt: i32,
+    sz_lookaside: i32,
+    n_lookaside: i32,
+    n_stmt_spill: i32,
+    m: sqlite3_mem_methods,
+    mutex: sqlite3_mutex_methods,
+    pcache2: sqlite3_pcache_methods2,
+    p_heap: *mut (),
+    n_heap: i32,
+    mn_req: i32,
+    mx_req: i32,
+    sz_mmap: sqlite3_int64,
+    mx_mmap: sqlite3_int64,
+    p_page: *mut (),
+    sz_page: i32,
+    n_page: i32,
+    mx_parser_stack: i32,
+    shared_cache_enabled: i32,
+    sz_pma: u32,
+    is_init: i32,
+    in_progress: i32,
+    is_mutex_init: i32,
+    is_malloc_init: i32,
+    is_p_cache_init: i32,
+    n_ref_init_mutex: i32,
+    p_init_mutex: *mut sqlite3_mutex,
+    x_log: Option<unsafe extern "C" fn(*mut (), i32, *const i8) -> ()>,
+    p_log_arg: *mut (),
+    mx_memdb_size: sqlite3_int64,
+    x_test_callback: Option<unsafe extern "C" fn(i32) -> i32>,
+    b_localtime_fault: i32,
+    x_alt_localtime: Option<unsafe extern "C" fn(*const (), *mut ()) -> i32>,
+    i_once_reset_threshold: i32,
+    sz_sorter_ref: u32,
+    i_prng_seed: u32,
+}
+extern "C" fn apply_affinity(p_rec_1: *mut Mem, affinity: i8, enc: u8) -> () {
+    if affinity as i32 >= 67 {
+        { let _ = 0; };
+        if unsafe { (*p_rec_1).flags } as i32 & 4 == 0 {
+            if unsafe { (*p_rec_1).flags } as i32 & (8 | 32) == 0 {
+                if unsafe { (*p_rec_1).flags } as i32 & 2 != 0 {
+                    apply_numeric_affinity(p_rec_1, 1);
+                }
+            } else if affinity as i32 <= 69 {
+                unsafe { sqlite3_vdbe_integer_affinity(p_rec_1) };
+            }
+        }
+    } else if affinity as i32 == 66 {
+        if 0 == unsafe { (*p_rec_1).flags } as i32 & 2 {
+            if unsafe { (*p_rec_1).flags } as i32 & (8 | 4 | 32) != 0 {
+                unsafe { sqlite3_vdbe_mem_stringify(p_rec_1, enc, 1 as u8) };
+            }
+        }
+        unsafe { (*p_rec_1).flags &= !(8 | 4 | 32) as u16 };
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn sqlite3_value_apply_affinity(p_val_1: *mut sqlite3_value,
+    affinity: u8, enc: u8) -> () {
+    apply_affinity(p_val_1 as *mut Mem, affinity as i8, enc);
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ScanStatus {
+    addr_explain: i32,
+    a_addr_range: [i32; 6],
+    addr_loop: i32,
+    addr_visit: i32,
+    i_select_id: i32,
+    n_est: LogEst,
+    z_name: *mut i8,
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct DblquoteStr {
+    p_next_str: *mut DblquoteStr,
+    z: [i8; 8],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct ValueList {
+    p_csr: *mut BtCursor,
+    p_out: *mut sqlite3_value,
+}
+extern "C" fn sqlite3_vdbe_log_abort(p: &Vdbe, rc: i32, p_op_1: *const Op,
+    a_op_1: *const Op) -> () {
+    unsafe {
+        let z_sql: *const i8 = (*p).z_sql as *const i8;
+        let mut z_prefix: *const i8 = c"".as_ptr() as *mut i8 as *const i8;
+        let mut pc: i32 = 0;
+        let mut z_xtra: [i8; 100] = [0; 100];
+        if !((*p).p_frame).is_null() {
+            { let _ = 0; };
+            if unsafe { (*a_op_1.offset(0 as isize)).p4.z } !=
+                    core::ptr::null_mut() {
+                { let _ = 0; };
+                unsafe {
+                    sqlite3_snprintf(core::mem::size_of::<[i8; 100]>() as i32,
+                        &raw mut z_xtra[0 as usize] as *mut i8,
+                        c"/* %s */ ".as_ptr() as *mut i8 as *const i8,
+                        unsafe {
+                            unsafe {
+                                (*a_op_1.offset(0 as isize)).p4.z.offset(3 as isize)
+                            }
+                        })
+                };
+                z_prefix =
+                    &raw mut z_xtra[0 as usize] as *mut i8 as *const i8;
+            } else {
+                z_prefix =
+                    c"/* unknown trigger */ ".as_ptr() as *mut i8 as *const i8;
+            }
+        }
+        pc = unsafe { p_op_1.offset_from(a_op_1) } as i64 as i32;
+        unsafe {
+            sqlite3_log(rc,
+                c"statement aborts at %d: %s; [%s%s]".as_ptr() as *mut i8 as
+                    *const i8, pc, (*p).z_err_msg, z_prefix, z_sql)
+        };
+    }
+}
+extern "C" fn out2_prerelease_with_clear(p_out_1: *mut Mem) -> *mut Mem {
+    unsafe { sqlite3_vdbe_mem_set_null(p_out_1) };
+    unsafe { (*p_out_1).flags = 4 as u16 };
+    return p_out_1;
+}
+extern "C" fn out2_prerelease(p: &Vdbe, p_op_1: &VdbeOp) -> *mut Mem {
+    unsafe {
+        let mut p_out: *mut Mem = core::ptr::null_mut();
+        { let _ = 0; };
+        { let _ = 0; };
+        p_out = unsafe { (*p).a_mem.offset((*p_op_1).p2 as isize) };
+        if unsafe { (*p_out).flags } as i32 & (32768 | 4096) != 0 {
+            return out2_prerelease_with_clear(p_out);
+        } else { unsafe { (*p_out).flags = 4 as u16 }; return p_out; }
+    }
+}
+extern "C" fn compute_numeric_type(p_mem_1: *mut Mem) -> u16 {
+    unsafe {
+        let mut rc: i32 = 0;
+        let mut ix: sqlite3_int64 = 0 as sqlite3_int64;
+        { let _ = 0; };
+        { let _ = 0; };
+        if if unsafe { (*p_mem_1).flags } as i32 & 1024 != 0 {
+                    unsafe { sqlite3_vdbe_mem_expand_blob(p_mem_1) }
+                } else { 0 } != 0 {
+            unsafe { (*p_mem_1).u.i = 0 as i64 };
+            return 4 as u16;
+        }
+        rc =
+            unsafe {
+                sqlite3_mem_real_value_rc(p_mem_1,
+                    unsafe { &mut (*p_mem_1).u.r })
+            };
+        if rc <= 0 {
+            if rc & 2 == 0 &&
+                    unsafe {
+                            sqlite3_atoi64(unsafe { (*p_mem_1).z } as *const i8,
+                                &mut ix, unsafe { (*p_mem_1).n }, unsafe { (*p_mem_1).enc })
+                        } <= 1 {
+                unsafe { (*p_mem_1).u.i = ix };
+                return 4 as u16;
+            } else { return 8 as u16; }
+        } else if rc & 2 == 0 &&
+                unsafe {
+                        sqlite3_atoi64(unsafe { (*p_mem_1).z } as *const i8,
+                            &mut ix, unsafe { (*p_mem_1).n }, unsafe { (*p_mem_1).enc })
+                    } == 0 {
+            unsafe { (*p_mem_1).u.i = ix };
+            return 4 as u16;
+        }
+        return 8 as u16;
+    }
+}
+extern "C" fn numeric_type(p_mem_1: *mut Mem) -> u16 {
+    { let _ = 0; };
+    if unsafe { (*p_mem_1).flags } as i32 & (4 | 8 | 32 | 1) != 0 {
+        return (unsafe { (*p_mem_1).flags } as i32 & (4 | 8 | 32 | 1)) as u16;
+    }
+    { let _ = 0; };
+    return compute_numeric_type(p_mem_1);
+    return 0 as u16;
+}
+extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
+    t: u32, i_offset_1: i64, cache_status_1: u32, col_cache_ctr_1: u32,
+    p_dest_1: *mut Mem) -> i32 {
+    unsafe {
+        let mut rc: i32 = 0;
+        let db: *mut sqlite3 = unsafe { (*p_dest_1).db };
+        let encoding: i32 = unsafe { (*p_dest_1).enc } as i32;
+        let len: i32 = unsafe { sqlite3_vdbe_serial_type_len(t) } as i32;
+        { let _ = 0; };
+        if len > unsafe { (*db).a_limit[0 as usize] } { return 18; }
+        if len > 4000 && (*p_c_1).p_key_info == core::ptr::null_mut() {
+            let mut p_cache: *mut VdbeTxtBlbCache = core::ptr::null_mut();
+            let mut p_buf: *mut i8 = core::ptr::null_mut();
+            if (*p_c_1).col_cache() as i32 == 0 {
+                (*p_c_1).p_cache =
+                    unsafe {
+                            sqlite3_db_malloc_zero(db,
+                                core::mem::size_of::<VdbeTxtBlbCache>() as u64)
+                        } as *mut VdbeTxtBlbCache;
+                if (*p_c_1).p_cache == core::ptr::null_mut() { return 7; }
+                (*p_c_1).set_col_cache(1 as Bool as u32);
+            }
+            p_cache = (*p_c_1).p_cache;
+            if unsafe { (*p_cache).p_c_value } == core::ptr::null_mut() ||
+                                unsafe { (*p_cache).i_col } != i_col_1 ||
+                            unsafe { (*p_cache).cache_status } != cache_status_1 ||
+                        unsafe { (*p_cache).col_cache_ctr } != col_cache_ctr_1 ||
+                    unsafe { (*p_cache).i_offset } !=
+                        unsafe { sqlite3_btree_offset((*p_c_1).uc.p_cursor) } {
+                if !(unsafe { (*p_cache).p_c_value }).is_null() {
+                    unsafe {
+                        sqlite3_rc_str_unref(unsafe { (*p_cache).p_c_value } as
+                                *mut ())
+                    };
+                }
+                p_buf =
+                    {
+                        unsafe {
+                            (*p_cache).p_c_value =
+                                unsafe { sqlite3_rc_str_new((len + 3) as u64) }
+                        };
+                        unsafe { (*p_cache).p_c_value }
+                    };
+                if p_buf == core::ptr::null_mut() { return 7; }
+                rc =
+                    unsafe {
+                        sqlite3_btree_payload((*p_c_1).uc.p_cursor,
+                            i_offset_1 as u32, len as u32, p_buf as *mut ())
+                    };
+                if rc != 0 { return rc; }
+                unsafe { *p_buf.offset(len as isize) = 0 as i8 };
+                unsafe { *p_buf.offset((len + 1) as isize) = 0 as i8 };
+                unsafe { *p_buf.offset((len + 2) as isize) = 0 as i8 };
+                unsafe { (*p_cache).i_col = i_col_1 };
+                unsafe { (*p_cache).cache_status = cache_status_1 };
+                unsafe { (*p_cache).col_cache_ctr = col_cache_ctr_1 };
+                unsafe {
+                    (*p_cache).i_offset =
+                        unsafe { sqlite3_btree_offset((*p_c_1).uc.p_cursor) }
+                };
+            } else { p_buf = unsafe { (*p_cache).p_c_value }; }
+            { let _ = 0; };
+            unsafe { sqlite3_rc_str_ref(p_buf) };
+            if t & 1 as u32 != 0 {
+                rc =
+                    unsafe {
+                        sqlite3_vdbe_mem_set_str(p_dest_1, p_buf as *const i8,
+                            len as i64, encoding as u8, Some(sqlite3_rc_str_unref))
+                    };
+                unsafe { (*p_dest_1).flags |= 512 as u16 };
+            } else {
+                rc =
+                    unsafe {
+                        sqlite3_vdbe_mem_set_str(p_dest_1, p_buf as *const i8,
+                            len as i64, 0 as u8, Some(sqlite3_rc_str_unref))
+                    };
+            }
+        } else {
+            rc =
+                unsafe {
+                    sqlite3_vdbe_mem_from_btree((*p_c_1).uc.p_cursor,
+                        i_offset_1 as u32, len as u32, p_dest_1)
+                };
+            if rc != 0 { return rc; }
+            unsafe {
+                sqlite3_vdbe_serial_get(unsafe { (*p_dest_1).z } as *const u8,
+                    t, p_dest_1)
+            };
+            if t & 1 as u32 != 0 as u32 && encoding == 1 {
+                unsafe {
+                    *unsafe { (*p_dest_1).z.offset(len as isize) } = 0 as i8
+                };
+                unsafe { (*p_dest_1).flags |= 512 as u16 };
+            }
+        }
+        unsafe { (*p_dest_1).flags &= !16384 as u16 };
+        return rc;
+    }
+}
+extern "C" fn vdbe_mem_type_name(p_mem_1: *mut Mem) -> *const i8 {
+    unsafe {
+        return az_types[(unsafe {
+                            sqlite3_value_type(p_mem_1 as *mut sqlite3_value)
+                        } - 1) as usize];
+    }
+}
+extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
+    e_cur_type_1: u8) -> *mut VdbeCursor {
+    unsafe {
+        let p_mem: *mut Mem =
+            if i_cur_1 > 0 {
+                unsafe {
+                    &mut *unsafe {
+                                (*p).a_mem.offset((unsafe { (*p).n_mem } - i_cur_1) as
+                                        isize)
+                            }
+                }
+            } else { unsafe { (*p).a_mem } };
+        let mut n_byte: i64 = 0 as i64;
+        let mut p_cx: *mut VdbeCursor = core::ptr::null_mut();
+        n_byte =
+            ((core::mem::offset_of!(VdbeCursor, a_type) as u64 + 7 as u64 &
+                        !7 as u64) +
+                    (n_field_1 + 1) as u64 * core::mem::size_of::<u64>() as u64)
+                as i64;
+        { let _ = 0; };
+        if e_cur_type_1 as i32 == 0 {
+            n_byte += unsafe { sqlite3_btree_cursor_size() } as i64;
+        }
+        { let _ = 0; };
+        if !(unsafe {
+                            *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) }
+                        }).is_null() {
+            unsafe {
+                sqlite3_vdbe_free_cursor_nn(p,
+                    unsafe { *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) } })
+            };
+            unsafe {
+                *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) } =
+                    core::ptr::null_mut()
+            };
+        }
+        { let _ = 0; };
+        { let _ = 0; };
+        { let _ = 0; };
+        if (unsafe { (*p_mem).sz_malloc } as i64) < n_byte {
+            if unsafe { (*p_mem).sz_malloc } > 0 {
+                unsafe {
+                    sqlite3_db_free_nn(unsafe { (*p_mem).db },
+                        unsafe { (*p_mem).z_malloc } as *mut ())
+                };
+            }
+            unsafe {
+                (*p_mem).z =
+                    {
+                        unsafe {
+                            (*p_mem).z_malloc =
+                                unsafe {
+                                        sqlite3_db_malloc_raw(unsafe { (*p_mem).db }, n_byte as u64)
+                                    } as *mut i8
+                        };
+                        unsafe { (*p_mem).z_malloc }
+                    }
+            };
+            if unsafe { (*p_mem).z_malloc } == core::ptr::null_mut() {
+                unsafe { (*p_mem).sz_malloc = 0 };
+                return core::ptr::null_mut();
+            }
+            unsafe { (*p_mem).sz_malloc = n_byte as i32 };
+        }
+        unsafe {
+            *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) } =
+                {
+                    p_cx = unsafe { (*p_mem).z_malloc } as *mut VdbeCursor;
+                    p_cx
+                }
+        };
+        unsafe {
+            memset(p_cx as *mut (), 0,
+                core::mem::offset_of!(VdbeCursor, p_alt_cursor) as u64)
+        };
+        unsafe { (*p_cx).e_cur_type = e_cur_type_1 };
+        unsafe { (*p_cx).n_field = n_field_1 as i16 };
+        unsafe {
+            (*p_cx).a_offset =
+                unsafe {
+                    &mut *(unsafe { (*p_cx).a_type.as_ptr() } as
+                                    *mut u32).offset(n_field_1 as isize)
+                }
+        };
+        if e_cur_type_1 as i32 == 0 {
+            { let _ = 0; };
+            unsafe {
+                (*p_cx).uc.p_cursor =
+                    unsafe {
+                            &raw mut *unsafe {
+                                        (*p_mem).z.add(((core::mem::offset_of!(VdbeCursor, a_type)
+                                                                as u64 + 7 as u64 & !7 as u64) +
+                                                    (n_field_1 + 1) as u64 * core::mem::size_of::<u64>() as u64)
+                                                as usize)
+                                    }
+                        } as *mut BtCursor
+            };
+            unsafe {
+                sqlite3_btree_cursor_zero(unsafe { (*p_cx).uc.p_cursor })
+            };
+        }
+        return p_cx;
+    }
+}
+extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
+    p_rc_1: &mut i32) -> i32 {
+    unsafe {
+        let mut ret: i32 = 0;
+        let mut n_key: u32 = 0 as u32;
+        { let _ = 0; };
+        n_key = unsafe { sqlite3_btree_payload_size(p_csr_1) };
+        if n_key == (*p_mem_1).n as u32 && (*p_mem_1).flags as i32 & 16 != 0 {
+            let mut m: Mem = unsafe { core::mem::zeroed() };
+            unsafe {
+                memset(&raw mut m as *mut (), 0,
+                    core::mem::size_of::<Mem>() as u64)
+            };
+            *p_rc_1 =
+                unsafe {
+                    sqlite3_vdbe_mem_from_btree_zero_offset(p_csr_1, n_key,
+                        &mut m)
+                };
+            ret =
+                (*p_rc_1 != 0 ||
+                        0 ==
+                            unsafe {
+                                memcmp((*p_mem_1).z as *const (), m.z as *const (),
+                                    n_key as u64)
+                            }) as i32;
+            unsafe { sqlite3_vdbe_mem_release_malloc(&mut m) };
+        }
+        return ret;
+    }
+}
+extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
+    unsafe {
+        let mut i: i32 = 0;
+        let mut mx: i32 = 0;
+        let mut h: u64 = 0 as u64;
+        { let _ = 0; };
+        {
+            { i = (*p_op_1).p3 as i32; mx = i + (*p_op_1).p4.i as i32 };
+            '__b0: loop {
+                if !(i < mx) { break '__b0; }
+                '__c0: loop {
+                    let p: *const Mem = unsafe { &*a_mem_1.offset(i as isize) };
+                    if unsafe { (*p).flags } as i32 & (4 | 32) != 0 {
+                        h += unsafe { (*p).u.i } as u64;
+                    } else if unsafe { (*p).flags } as i32 & 8 != 0 {
+                        h += unsafe { sqlite3_vdbe_int_value(p) } as u64;
+                    } else if unsafe { (*p).flags } as i32 & (2 | 16) != 0 {
+                        h +=
+                            (4093 + (unsafe { (*p).flags } as i32 & (2 | 16))) as u64;
+                    }
+                    break '__c0;
+                }
+                { let __p = &mut i; let __t = *__p; *__p += 1; __t };
+            }
+        }
+        return h;
+    }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
+    unsafe {
+        unsafe {
+            let mut a_op: *mut Op = core::ptr::null_mut();
+            let mut p_op: *mut Op = core::ptr::null_mut();
+            let mut rc: i32 = 0;
+            let mut db: *mut sqlite3 = core::ptr::null_mut();
+            let mut reset_schema_on_fault: u8 = 0 as u8;
+            let mut encoding: u8 = 0 as u8;
+            let mut i_compare: i32 = 0;
+            let mut n_vm_step: u64 = 0 as u64;
+            let mut n_progress_limit: u64 = 0 as u64;
+            let mut a_mem: *mut Mem = core::ptr::null_mut();
+            let mut p_in1: *mut Mem = core::ptr::null_mut();
+            let mut p_in2: *mut Mem = core::ptr::null_mut();
+            let mut p_in3: *mut Mem = core::ptr::null_mut();
+            let mut p_out: *mut Mem = core::ptr::null_mut();
+            let mut col_cache_ctr: u32 = 0 as u32;
+            let mut i_prior: u32 = 0 as u32;
+            let mut p_caller: *const VdbeOp = core::ptr::null();
+            let mut pc_dest: i32 = 0;
+            let mut p_frame: *mut VdbeFrame = core::ptr::null_mut();
+            let mut pcx: i32 = 0;
+            let mut z_err: *const i8 = core::ptr::null();
+            let mut cnt: i32 = 0;
+            let mut null_flag: u16 = 0 as u16;
+            let mut p_var: *mut Mem = core::ptr::null_mut();
+            let mut n: i32 = 0;
+            let mut p1: i32 = 0;
+            let mut p2: i32 = 0;
+            let mut n__1: i32 = 0;
+            let mut n_byte: i64 = 0 as i64;
+            let mut flags1: u16 = 0 as u16;
+            let mut flags2: u16 = 0 as u16;
+            let mut type1: u16 = 0 as u16;
+            let mut type2: u16 = 0 as u16;
+            let mut i_a: i64 = 0 as i64;
+            let mut i_b: i64 = 0 as i64;
+            let mut r_a: f64 = 0.0;
+            let mut r_b: f64 = 0.0;
+            let mut i_a_1: i64 = 0 as i64;
+            let mut u_a: u64 = 0 as u64;
+            let mut i_b_1: i64 = 0 as i64;
+            let mut op: u8 = 0 as u8;
+            let mut res: i32 = 0;
+            let mut res2: i32 = 0;
+            let mut affinity: i8 = 0 as i8;
+            let mut flags1__1: u16 = 0 as u16;
+            let mut flags3: u16 = 0 as u16;
+            let mut n__2: i32 = 0;
+            let mut i: i32 = 0;
+            let mut p1__1: i32 = 0;
+            let mut p2__1: i32 = 0;
+            let mut p_key_info: *const KeyInfo = core::ptr::null();
+            let mut idx: u32 = 0 as u32;
+            let mut p_coll: *const CollSeq = core::ptr::null();
+            let mut b_rev: i32 = 0;
+            let mut a_permute: *const u32 = core::ptr::null();
+            let mut v1: i32 = 0;
+            let mut v2: i32 = 0;
+            let mut i_addr: u32 = 0 as u32;
+            let mut c: i32 = 0;
+            let mut c__1: i32 = 0;
+            let mut p_c: *const VdbeCursor = core::ptr::null();
+            let mut type_mask: u16 = 0 as u16;
+            let mut serial_type: u32 = 0 as u32;
+            let mut p_c_1: *const VdbeCursor = core::ptr::null();
+            let mut p2__2: u32 = 0 as u32;
+            let mut p_c_2: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_crsr: *mut BtCursor = core::ptr::null_mut();
+            let mut a_offset: *mut u32 = core::ptr::null_mut();
+            let mut len: i32 = 0;
+            let mut i__1: i32 = 0;
+            let mut p_dest: *mut Mem = core::ptr::null_mut();
+            let mut s_mem: Mem = unsafe { core::mem::zeroed() };
+            let mut z_data: *const u8 = core::ptr::null();
+            let mut z_hdr: *const u8 = core::ptr::null();
+            let mut z_end_hdr: *const u8 = core::ptr::null();
+            let mut offset64: u64 = 0 as u64;
+            let mut t: u32 = 0 as u32;
+            let mut p_reg: *mut Mem = core::ptr::null_mut();
+            let mut i_map: u32 = 0 as u32;
+            let mut p5: u8 = 0 as u8;
+            let mut p_tab: *const Table = core::ptr::null();
+            let mut a_col: *const Column = core::ptr::null();
+            let mut i__2: i32 = 0;
+            let mut n_col: i32 = 0;
+            let mut z_affinity: *const i8 = core::ptr::null();
+            let mut p_rec: *mut Mem = core::ptr::null_mut();
+            let mut n_data: u64 = 0 as u64;
+            let mut n_hdr: i32 = 0;
+            let mut n_byte_1: i64 = 0 as i64;
+            let mut n_zero: i64 = 0 as i64;
+            let mut n_varint: i32 = 0;
+            let mut serial_type__1: u32 = 0 as u32;
+            let mut p_data0: *mut Mem = core::ptr::null_mut();
+            let mut p_last: *mut Mem = core::ptr::null_mut();
+            let mut n_field: i32 = 0;
+            let mut z_affinity_1: *const i8 = core::ptr::null();
+            let mut len__1: u32 = 0 as u32;
+            let mut z_hdr_1: *mut u8 = core::ptr::null_mut();
+            let mut z_payload: *mut u8 = core::ptr::null_mut();
+            let mut i__3: i64 = 0 as i64;
+            let mut uu: u64 = 0 as u64;
+            let mut v: u64 = 0 as u64;
+            let mut n_entry: i64 = 0 as i64;
+            let mut p_crsr_1: *mut BtCursor = core::ptr::null_mut();
+            let mut p1__2: i32 = 0;
+            let mut z_name: *mut i8 = core::ptr::null_mut();
+            let mut n_name: i32 = 0;
+            let mut p_new: *mut Savepoint = core::ptr::null_mut();
+            let mut p_savepoint: *mut Savepoint = core::ptr::null_mut();
+            let mut p_tmp: *mut Savepoint = core::ptr::null_mut();
+            let mut i_savepoint: i32 = 0;
+            let mut ii: i32 = 0;
+            let mut is_transaction: i32 = 0;
+            let mut is_schema_change: i32 = 0;
+            let mut desired_auto_commit: i32 = 0;
+            let mut i_rollback: i32 = 0;
+            let mut p_bt: *mut Btree = core::ptr::null_mut();
+            let mut p_db: *const Db = core::ptr::null();
+            let mut i_meta: i32 = 0;
+            let mut i_meta_1: i32 = 0;
+            let mut i_db: i32 = 0;
+            let mut i_cookie: i32 = 0;
+            let mut p_db_1: *const Db = core::ptr::null();
+            let mut n_field_1: i32 = 0;
+            let mut p_key_info_1: *mut KeyInfo = core::ptr::null_mut();
+            let mut p2__3: u32 = 0 as u32;
+            let mut i_db_1: i32 = 0;
+            let mut wr_flag: i32 = 0;
+            let mut p_x: *mut Btree = core::ptr::null_mut();
+            let mut p_cur: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_db_2: *const Db = core::ptr::null();
+            let mut p_orig: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_cx: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_cx_1: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_key_info_2: *mut KeyInfo = core::ptr::null_mut();
+            let mut p_cx_2: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_c_3: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_cx_3: *mut VdbeCursor = core::ptr::null_mut();
+            let mut res__1: i32 = 0;
+            let mut oc: i32 = 0;
+            let mut p_c_4: *mut VdbeCursor = core::ptr::null_mut();
+            let mut r: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut n_field_2: i32 = 0;
+            let mut i_key: i64 = 0 as i64;
+            let mut eq_only: i32 = 0;
+            let mut flags3__1: u16 = 0 as u16;
+            let mut new_type: u16 = 0 as u16;
+            let mut c__2: i32 = 0;
+            let mut p_c_5: *mut VdbeCursor = core::ptr::null_mut();
+            let mut res__2: i32 = 0;
+            let mut n_step: i32 = 0;
+            let mut r__1: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut p_c_6: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_cur_1: *const VdbeCursor = core::ptr::null();
+            let mut p_c_7: *const VdbeCursor = core::ptr::null();
+            let mut already_exists: i32 = 0;
+            let mut ii__1: i32 = 0;
+            let mut p_c_8: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_idx_key: *mut UnpackedRecord = core::ptr::null_mut();
+            let mut r__2: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut p_c_9: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_crsr_2: *mut BtCursor = core::ptr::null_mut();
+            let mut res__3: i32 = 0;
+            let mut i_key_1: u64 = 0 as u64;
+            let mut x: Mem = unsafe { core::mem::zeroed() };
+            let mut v__1: i64 = 0 as i64;
+            let mut p_c_10: *mut VdbeCursor = core::ptr::null_mut();
+            let mut res__4: i32 = 0;
+            let mut cnt__1: i32 = 0;
+            let mut p_mem: *mut Mem = core::ptr::null_mut();
+            let mut p_frame_1: *const VdbeFrame = core::ptr::null();
+            let mut p_data: *const Mem = core::ptr::null();
+            let mut p_key: *const Mem = core::ptr::null();
+            let mut p_c_11: *mut VdbeCursor = core::ptr::null_mut();
+            let mut seek_result: i32 = 0;
+            let mut z_db: *const i8 = core::ptr::null();
+            let mut p_tab_1: *const Table = core::ptr::null();
+            let mut x__1: BtreePayload = unsafe { core::mem::zeroed() };
+            let mut p_dest_1: *const VdbeCursor = core::ptr::null();
+            let mut p_src: *const VdbeCursor = core::ptr::null();
+            let mut i_key_2: i64 = 0 as i64;
+            let mut p_c_12: *mut VdbeCursor = core::ptr::null_mut();
+            let mut z_db_1: *const i8 = core::ptr::null();
+            let mut p_tab_2: *const Table = core::ptr::null();
+            let mut opflags: i32 = 0;
+            let mut p_c_13: *const VdbeCursor = core::ptr::null();
+            let mut res__5: i32 = 0;
+            let mut n_key_col: i32 = 0;
+            let mut p_c_14: *const VdbeCursor = core::ptr::null();
+            let mut p_c_15: *const VdbeCursor = core::ptr::null();
+            let mut p_crsr_3: *mut BtCursor = core::ptr::null_mut();
+            let mut n__3: u32 = 0 as u32;
+            let mut p_c_16: *mut VdbeCursor = core::ptr::null_mut();
+            let mut v__2: i64 = 0 as i64;
+            let mut p_vtab: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module: *const sqlite3_module = core::ptr::null();
+            let mut p_c_17: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_c_18: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_crsr_4: *mut BtCursor = core::ptr::null_mut();
+            let mut res__6: i32 = 0;
+            let mut p_c_19: *const VdbeCursor = core::ptr::null();
+            let mut p_crsr_5: *mut BtCursor = core::ptr::null_mut();
+            let mut res__7: i32 = 0;
+            let mut sz: i64 = 0 as i64;
+            let mut p_c_20: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_crsr_6: *mut BtCursor = core::ptr::null_mut();
+            let mut res__8: i32 = 0;
+            let mut p_c_21: *const VdbeCursor = core::ptr::null();
+            let mut p_crsr_7: *mut BtCursor = core::ptr::null_mut();
+            let mut res__9: i32 = 0;
+            let mut p_c_22: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_c_23: *mut VdbeCursor = core::ptr::null_mut();
+            let mut x__2: BtreePayload = unsafe { core::mem::zeroed() };
+            let mut p_c_24: *const VdbeCursor = core::ptr::null();
+            let mut p_c_25: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_crsr_8: *mut BtCursor = core::ptr::null_mut();
+            let mut res__10: i32 = 0;
+            let mut r__3: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut p_c_26: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_tab_cur: *mut VdbeCursor = core::ptr::null_mut();
+            let mut rowid: i64 = 0 as i64;
+            let mut p_c_27: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_c_28: *const VdbeCursor = core::ptr::null();
+            let mut res__11: i32 = 0;
+            let mut r__4: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut n_cell_key: i64 = 0 as i64;
+            let mut p_cur_2: *mut BtCursor = core::ptr::null_mut();
+            let mut m: Mem = unsafe { core::mem::zeroed() };
+            let mut i_moved: i32 = 0;
+            let mut i_db_2: i32 = 0;
+            let mut n_change: i64 = 0 as i64;
+            let mut p_c_29: *const VdbeCursor = core::ptr::null();
+            let mut pgno: Pgno = 0 as Pgno;
+            let mut p_db_3: *const Db = core::ptr::null();
+            let mut z_err_1: *mut i8 = core::ptr::null_mut();
+            let mut x_auth:
+                    Option<unsafe extern "C" fn(*mut (), i32, *const i8,
+                        *const i8, *const i8, *const i8) -> i32> = None;
+            let mut m_trace: u8 = 0 as u8;
+            let mut saved_analysis_limit: i32 = 0;
+            let mut i_db_3: i32 = 0;
+            let mut z_schema: *const i8 = core::ptr::null();
+            let mut z_sql: *mut i8 = core::ptr::null_mut();
+            let mut init_data: InitData = unsafe { core::mem::zeroed() };
+            let mut n_root: i32 = 0;
+            let mut a_root: *mut Pgno = core::ptr::null_mut();
+            let mut n_err: i32 = 0;
+            let mut z: *mut i8 = core::ptr::null_mut();
+            let mut pn_err: *mut Mem = core::ptr::null_mut();
+            let mut p_c_30: *mut VdbeCursor = core::ptr::null_mut();
+            let mut res__12: i32 = 0;
+            let mut r__5: UnpackedRecord = unsafe { core::mem::zeroed() };
+            let mut val: i64 = 0 as i64;
+            let mut i_set: i32 = 0;
+            let mut exists: i32 = 0;
+            let mut n_mem: i32 = 0;
+            let mut n_byte_2: i64 = 0 as i64;
+            let mut p_rt: *mut Mem = core::ptr::null_mut();
+            let mut p_mem_1: *mut Mem = core::ptr::null_mut();
+            let mut p_end: *mut Mem = core::ptr::null_mut();
+            let mut p_frame_2: *mut VdbeFrame = core::ptr::null_mut();
+            let mut p_program: *const SubProgram = core::ptr::null();
+            let mut t__1: *mut () = core::ptr::null_mut();
+            let mut p_frame_3: *const VdbeFrame = core::ptr::null();
+            let mut p_in: *const Mem = core::ptr::null();
+            let mut p_frame_4: *const VdbeFrame = core::ptr::null();
+            let mut x__3: i64 = 0 as i64;
+            let mut n__4: i32 = 0;
+            let mut p_ctx: *mut sqlite3_context = core::ptr::null_mut();
+            let mut n_alloc: u64 = 0 as u64;
+            let mut i__4: i32 = 0;
+            let mut p_ctx_1: *mut sqlite3_context = core::ptr::null_mut();
+            let mut p_mem_2: *mut Mem = core::ptr::null_mut();
+            let mut p_mem_3: *mut Mem = core::ptr::null_mut();
+            let mut i__5: i32 = 0;
+            let mut a_res: [i32; 3] = [0; 3];
+            let mut p_mem_4: *mut Mem = core::ptr::null_mut();
+            let mut p_bt_1: *mut Btree = core::ptr::null_mut();
+            let mut p_pager: *mut Pager = core::ptr::null_mut();
+            let mut e_new: i32 = 0;
+            let mut e_old: i32 = 0;
+            let mut z_filename: *const i8 = core::ptr::null();
+            let mut p_bt_2: *mut Btree = core::ptr::null_mut();
+            let mut p_c_31: *const VdbeCursor = core::ptr::null();
+            let mut p_c_32: *const VdbeCursor = core::ptr::null();
+            let mut is_write_lock: u8 = 0 as u8;
+            let mut p1__3: i32 = 0;
+            let mut z__1: *const i8 = core::ptr::null();
+            let mut p_v_tab: *mut VTable = core::ptr::null_mut();
+            let mut s_mem_1: Mem = unsafe { core::mem::zeroed() };
+            let mut z_tab: *const i8 = core::ptr::null();
+            let mut p_cur_3: *mut VdbeCursor = core::ptr::null_mut();
+            let mut p_v_cur: *mut sqlite3_vtab_cursor = core::ptr::null_mut();
+            let mut p_vtab_1: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module_1: *const sqlite3_module = core::ptr::null();
+            let mut p_tab_3: *const Table = core::ptr::null();
+            let mut p_vtab_2: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module_2: *const sqlite3_module = core::ptr::null();
+            let mut z_err_2: *mut i8 = core::ptr::null_mut();
+            let mut p_c_33: *const VdbeCursor = core::ptr::null();
+            let mut p_rhs: *mut ValueList = core::ptr::null_mut();
+            let mut n_arg: i32 = 0;
+            let mut i_query: i32 = 0;
+            let mut p_module_3: *const sqlite3_module = core::ptr::null();
+            let mut p_query: *mut Mem = core::ptr::null_mut();
+            let mut p_argc: *mut Mem = core::ptr::null_mut();
+            let mut p_v_cur_1: *mut sqlite3_vtab_cursor =
+                core::ptr::null_mut();
+            let mut p_vtab_3: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_cur_4: *mut VdbeCursor = core::ptr::null_mut();
+            let mut res__13: i32 = 0;
+            let mut i__6: i32 = 0;
+            let mut ap_arg: *mut *mut Mem = core::ptr::null_mut();
+            let mut p_vtab_4: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module_4: *const sqlite3_module = core::ptr::null();
+            let mut p_dest_2: *mut Mem = core::ptr::null_mut();
+            let mut s_context: sqlite3_context =
+                unsafe { core::mem::zeroed() };
+            let mut null_func: FuncDef = unsafe { core::mem::zeroed() };
+            let mut p_cur_5: *const VdbeCursor = core::ptr::null();
+            let mut p_vtab_5: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module_5: *const sqlite3_module = core::ptr::null();
+            let mut res__14: i32 = 0;
+            let mut p_cur_6: *const VdbeCursor = core::ptr::null();
+            let mut p_vtab_6: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_name: *mut Mem = core::ptr::null_mut();
+            let mut is_legacy: i32 = 0;
+            let mut p_vtab_7: *mut sqlite3_vtab = core::ptr::null_mut();
+            let mut p_module_6: *const sqlite3_module = core::ptr::null();
+            let mut n_arg_1: i32 = 0;
+            let mut i__7: i32 = 0;
+            let mut rowid__1: sqlite_int64 = 0 as sqlite_int64;
+            let mut ap_arg_1: *mut *mut Mem = core::ptr::null_mut();
+            let mut p_x_1: *mut Mem = core::ptr::null_mut();
+            let mut vtab_on_conflict: u8 = 0 as u8;
+            let mut new_max: u32 = 0 as u32;
+            let mut p_bt_3: *mut Btree = core::ptr::null_mut();
+            let mut i__8: i32 = 0;
+            let mut p_ctx_2: *mut sqlite3_context = core::ptr::null_mut();
+            let mut h: u64 = 0 as u64;
+            let mut h__1: u64 = 0 as u64;
+            let mut i__9: i32 = 0;
+            let mut z_trace: *mut i8 = core::ptr::null_mut();
+            let mut z__2: *mut i8 = core::ptr::null_mut();
+            let mut z__3: *mut i8 = core::ptr::null_mut();
+            let mut __state: i32 = 0;
+            loop {
+                if __state == 1 { break; }
+                '__s2:
+                    {
+                    match __state {
+                        0 => { a_op = unsafe { (*p).a_op }; __state = 22; }
+                        2 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_op).p2 } - 1) as isize)
+                                };
+                            __state = 252;
+                        }
+                        3 => {
+                            if unsafe {
+                                        std::sync::atomic::AtomicI32::from_ptr(unsafe {
+                                                        &raw mut (*db).u1.is_interrupted
+                                                    } as *mut i32).load(std::sync::atomic::Ordering::Relaxed)
+                                    } != 0 {
+                                __state = 254;
+                            } else { __state = 253; }
+                        }
+                        4 => { { let _ = 0; }; __state = 288; }
+                        5 => { i_a = unsafe { (*p_in1).u.i }; __state = 589; }
+                        6 => {
+                            r_a = unsafe { sqlite3_vdbe_real_value(p_in1) };
+                            __state = 625;
+                        }
+                        7 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 655;
+                        }
+                        8 => { { let _ = 0; }; __state = 1038; }
+                        9 => {
+                            i__1 = unsafe { (*p_c_2).n_hdr_parsed } as i32;
+                            __state = 1112;
+                        }
+                        10 => { __state = 1179; }
+                        11 => {
+                            if unsafe { (*a_op.offset(0 as isize)).p3 } > 0 {
+                                __state = 1182;
+                            } else { __state = 1183; }
+                        }
+                        12 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"cannot store %s value in %s column %s.%s".as_ptr() as
+                                            *mut i8 as *const i8, vdbe_mem_type_name(p_in1),
+                                    unsafe {
+                                        *(sqlite3_std_type.as_ptr() as
+                                                    *mut *const i8).offset((unsafe {
+                                                                (*a_col.offset(i__2 as isize)).e_c_type()
+                                                            } as i32 - 1) as isize)
+                                    }, unsafe { (*p_tab).z_name },
+                                    unsafe { (*a_col.offset(i__2 as isize)).z_cn_name })
+                            };
+                            __state = 1257;
+                        }
+                        13 => { { let _ = 0; }; __state = 1800; }
+                        14 => { { let _ = 0; }; __state = 2021; }
+                        15 => { __state = 2057; }
+                        16 => {
+                            p_c_9 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2176;
+                        }
+                        17 => {
+                            if unsafe { (*db).malloc_failed } != 0 {
+                                __state = 3779;
+                            } else { __state = 3780; }
+                        }
+                        18 => {
+                            if n_vm_step >= n_progress_limit &&
+                                    unsafe { (*db).x_progress.is_some() } {
+                                __state = 3799;
+                            } else { __state = 3798; }
+                        }
+                        19 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"string or blob too big".as_ptr() as *mut i8 as *const i8)
+                            };
+                            __state = 3809;
+                        }
+                        20 => { unsafe { sqlite3_oom_fault(db) }; __state = 3812; }
+                        21 => { { let _ = 0; }; __state = 3816; }
+                        22 => { p_op = a_op; __state = 23; }
+                        23 => { rc = 0; __state = 24; }
+                        24 => { db = unsafe { (*p).db }; __state = 25; }
+                        25 => { reset_schema_on_fault = 0 as u8; __state = 26; }
+                        26 => { encoding = unsafe { (*db).enc }; __state = 27; }
+                        27 => { i_compare = 0; __state = 28; }
+                        28 => { n_vm_step = 0 as u64; __state = 29; }
+                        29 => { __state = 30; }
+                        30 => { a_mem = unsafe { (*p).a_mem }; __state = 31; }
+                        31 => { p_in1 = core::ptr::null_mut(); __state = 32; }
+                        32 => { p_in2 = core::ptr::null_mut(); __state = 33; }
+                        33 => { p_in3 = core::ptr::null_mut(); __state = 34; }
+                        34 => { p_out = core::ptr::null_mut(); __state = 35; }
+                        35 => { col_cache_ctr = 0 as u32; __state = 36; }
+                        36 => { { let _ = 0; }; __state = 37; }
+                        37 => {
+                            if unsafe { (*p).lock_mask } != 0 as u32 {
+                                __state = 39;
+                            } else { __state = 38; }
+                        }
+                        38 => {
+                            if unsafe { (*db).x_progress.is_some() } {
+                                __state = 41;
+                            } else { __state = 42; }
+                        }
+                        39 => { unsafe { sqlite3_vdbe_enter(p) }; __state = 38; }
+                        40 => {
+                            if unsafe { (*p).rc } == 7 {
+                                __state = 46;
+                            } else { __state = 45; }
+                        }
+                        41 => {
+                            i_prior = unsafe { (*p).a_counter[4 as usize] };
+                            __state = 43;
+                        }
+                        42 => {
+                            n_progress_limit =
+                                4294967295u32 as u64 | (4294967295u32 as u64) << 32;
+                            __state = 40;
+                        }
+                        43 => { { let _ = 0; }; __state = 44; }
+                        44 => {
+                            n_progress_limit =
+                                (unsafe { (*db).n_progress_ops } -
+                                        i_prior % unsafe { (*db).n_progress_ops }) as u64;
+                            __state = 40;
+                        }
+                        45 => { { let _ = 0; }; __state = 47; }
+                        46 => { __state = 20; }
+                        47 => { __state = 48; }
+                        48 => { unsafe { (*p).rc = 0 }; __state = 49; }
+                        49 => { { let _ = 0; }; __state = 50; }
+                        50 => {
+                            unsafe { (*p).i_current_time = 0 as i64 };
+                            __state = 51;
+                        }
+                        51 => { { let _ = 0; }; __state = 52; }
+                        52 => {
+                            unsafe { (*db).busy_handler.n_busy = 0 };
+                            __state = 53;
+                        }
+                        53 => {
+                            if unsafe {
+                                        std::sync::atomic::AtomicI32::from_ptr(unsafe {
+                                                        &raw mut (*db).u1.is_interrupted
+                                                    } as *mut i32).load(std::sync::atomic::Ordering::Relaxed)
+                                    } != 0 {
+                                __state = 55;
+                            } else { __state = 54; }
+                        }
+                        54 => { __state = 56; }
+                        55 => { __state = 21; }
+                        56 => {
+                            p_op = unsafe { a_op.offset(unsafe { (*p).pc } as isize) };
+                            __state = 58;
+                        }
+                        57 => { __state = 17; }
+                        58 => { if 1 != 0 { __state = 59; } else { __state = 57; } }
+                        59 => { { let _ = 0; }; __state = 61; }
+                        60 => {
+                            {
+                                let __p = &mut p_op;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 58;
+                        }
+                        61 => { { let _ = 0; }; __state = 62; }
+                        62 => {
+                            {
+                                let __p = &mut n_vm_step;
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 63;
+                        }
+                        63 => {
+                            '__s3:
+                                {
+                                match unsafe { (*p_op).opcode } {
+                                    9 => { __state = 64; }
+                                    10 => { __state = 65; }
+                                    69 => { __state = 66; }
+                                    11 => { __state = 67; }
+                                    70 => { __state = 68; }
+                                    12 => { __state = 69; }
+                                    71 => { __state = 70; }
+                                    72 => { __state = 71; }
+                                    73 => { __state = 72; }
+                                    74 => { __state = 73; }
+                                    154 => { __state = 74; }
+                                    118 => { __state = 75; }
+                                    75 => { __state = 76; }
+                                    76 => { __state = 77; }
+                                    77 => { __state = 78; }
+                                    78 => { __state = 79; }
+                                    79 => { __state = 80; }
+                                    80 => { __state = 81; }
+                                    81 => { __state = 82; }
+                                    82 => { __state = 83; }
+                                    83 => { __state = 84; }
+                                    84 => { __state = 85; }
+                                    85 => { __state = 86; }
+                                    86 => { __state = 87; }
+                                    112 => { __state = 88; }
+                                    107 => { __state = 89; }
+                                    108 => { __state = 90; }
+                                    109 => { __state = 91; }
+                                    110 => { __state = 92; }
+                                    111 => { __state = 93; }
+                                    87 => { __state = 94; }
+                                    103 => { __state = 95; }
+                                    104 => { __state = 96; }
+                                    105 => { __state = 97; }
+                                    106 => { __state = 98; }
+                                    88 => { __state = 99; }
+                                    13 => { __state = 100; }
+                                    89 => { __state = 101; }
+                                    90 => { __state = 102; }
+                                    54 => { __state = 103; }
+                                    53 => { __state = 104; }
+                                    57 => { __state = 105; }
+                                    56 => { __state = 106; }
+                                    55 => { __state = 107; }
+                                    58 => { __state = 108; }
+                                    59 => { __state = 109; }
+                                    91 => { __state = 110; }
+                                    92 => { __state = 111; }
+                                    14 => { __state = 112; }
+                                    44 => { __state = 113; }
+                                    43 => { __state = 114; }
+                                    93 => { __state = 115; }
+                                    19 => { __state = 116; }
+                                    115 => { __state = 117; }
+                                    15 => { __state = 118; }
+                                    16 => { __state = 119; }
+                                    17 => { __state = 120; }
+                                    51 => { __state = 121; }
+                                    18 => { __state = 122; }
+                                    94 => { __state = 123; }
+                                    52 => { __state = 124; }
+                                    20 => { __state = 125; }
+                                    96 => { __state = 126; }
+                                    97 => { __state = 127; }
+                                    98 => { __state = 128; }
+                                    99 => { __state = 129; }
+                                    100 => { __state = 130; }
+                                    0 => { __state = 131; }
+                                    1 => { __state = 132; }
+                                    2 => { __state = 133; }
+                                    101 => { __state = 134; }
+                                    102 => { __state = 135; }
+                                    113 => { __state = 136; }
+                                    114 => { __state = 137; }
+                                    116 => { __state = 138; }
+                                    117 => { __state = 139; }
+                                    119 => { __state = 140; }
+                                    120 => { __state = 141; }
+                                    121 => { __state = 142; }
+                                    122 => { __state = 143; }
+                                    123 => { __state = 144; }
+                                    124 => { __state = 145; }
+                                    21 => { __state = 146; }
+                                    22 => { __state = 147; }
+                                    23 => { __state = 148; }
+                                    24 => { __state = 149; }
+                                    126 => { __state = 150; }
+                                    127 => { __state = 151; }
+                                    25 => { __state = 152; }
+                                    26 => { __state = 153; }
+                                    27 => { __state = 154; }
+                                    28 => { __state = 155; }
+                                    29 => { __state = 156; }
+                                    30 => { __state = 157; }
+                                    31 => { __state = 158; }
+                                    128 => { __state = 159; }
+                                    129 => { __state = 160; }
+                                    130 => { __state = 161; }
+                                    131 => { __state = 162; }
+                                    132 => { __state = 163; }
+                                    133 => { __state = 164; }
+                                    134 => { __state = 165; }
+                                    135 => { __state = 166; }
+                                    136 => { __state = 167; }
+                                    137 => { __state = 168; }
+                                    138 => { __state = 169; }
+                                    139 => { __state = 170; }
+                                    32 => { __state = 171; }
+                                    33 => { __state = 172; }
+                                    34 => { __state = 173; }
+                                    35 => { __state = 174; }
+                                    36 => { __state = 175; }
+                                    37 => { __state = 176; }
+                                    38 => { __state = 177; }
+                                    39 => { __state = 178; }
+                                    40 => { __state = 179; }
+                                    140 => { __state = 180; }
+                                    141 => { __state = 181; }
+                                    142 => { __state = 182; }
+                                    143 => { __state = 183; }
+                                    144 => { __state = 184; }
+                                    145 => { __state = 185; }
+                                    41 => { __state = 186; }
+                                    42 => { __state = 187; }
+                                    45 => { __state = 188; }
+                                    46 => { __state = 189; }
+                                    146 => { __state = 190; }
+                                    147 => { __state = 191; }
+                                    148 => { __state = 192; }
+                                    149 => { __state = 193; }
+                                    150 => { __state = 194; }
+                                    151 => { __state = 195; }
+                                    152 => { __state = 196; }
+                                    153 => { __state = 197; }
+                                    155 => { __state = 198; }
+                                    156 => { __state = 199; }
+                                    157 => { __state = 200; }
+                                    47 => { __state = 201; }
+                                    158 => { __state = 202; }
+                                    48 => { __state = 203; }
+                                    49 => { __state = 204; }
+                                    50 => { __state = 205; }
+                                    159 => { __state = 206; }
+                                    160 => { __state = 207; }
+                                    60 => { __state = 208; }
+                                    161 => { __state = 209; }
+                                    61 => { __state = 210; }
+                                    162 => { __state = 211; }
+                                    62 => { __state = 212; }
+                                    63 => { __state = 213; }
+                                    163 => { __state = 214; }
+                                    164 => { __state = 215; }
+                                    165 => { __state = 216; }
+                                    166 => { __state = 217; }
+                                    167 => { __state = 218; }
+                                    3 => { __state = 219; }
+                                    4 => { __state = 220; }
+                                    5 => { __state = 221; }
+                                    64 => { __state = 222; }
+                                    168 => { __state = 223; }
+                                    169 => { __state = 224; }
+                                    170 => { __state = 225; }
+                                    171 => { __state = 226; }
+                                    172 => { __state = 227; }
+                                    173 => { __state = 228; }
+                                    174 => { __state = 229; }
+                                    175 => { __state = 230; }
+                                    176 => { __state = 231; }
+                                    177 => { __state = 232; }
+                                    6 => { __state = 233; }
+                                    178 => { __state = 234; }
+                                    65 => { __state = 235; }
+                                    179 => { __state = 236; }
+                                    7 => { __state = 237; }
+                                    180 => { __state = 238; }
+                                    181 => { __state = 239; }
+                                    67 => { __state = 240; }
+                                    68 => { __state = 241; }
+                                    182 => { __state = 242; }
+                                    183 => { __state = 243; }
+                                    184 => { __state = 244; }
+                                    185 => { __state = 245; }
+                                    66 => { __state = 246; }
+                                    186 => { __state = 247; }
+                                    8 => { __state = 248; }
+                                    _ => { __state = 249; }
+                                }
+                            }
+                        }
+                        64 => { __state = 2; }
+                        65 => { { let _ = 0; }; __state = 263; }
+                        66 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 271;
+                        }
+                        67 => { { let _ = 0; }; __state = 279; }
+                        68 => { __state = 292; }
+                        69 => { __state = 302; }
+                        70 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 311;
+                        }
+                        71 => { __state = 316; }
+                        72 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 360;
+                        }
+                        73 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 363;
+                        }
+                        74 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 367;
+                        }
+                        75 => { { let _ = 0; }; __state = 372; }
+                        76 => { { let _ = 0; }; __state = 397; }
+                        77 => { __state = 78; }
+                        78 => { __state = 411; }
+                        79 => { { let _ = 0; }; __state = 427; }
+                        80 => { { let _ = 0; }; __state = 431; }
+                        81 => { __state = 441; }
+                        82 => { __state = 454; }
+                        83 => { __state = 477; }
+                        84 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 496;
+                        }
+                        85 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 501;
+                        }
+                        86 => {
+                            if {
+                                        rc = unsafe { sqlite3_vdbe_check_fk_immediate(p) };
+                                        rc
+                                    } != 0 {
+                                __state = 507;
+                            } else { __state = 506; }
+                        }
+                        87 => { { let _ = 0; }; __state = 509; }
+                        88 => { __state = 521; }
+                        89 => { __state = 90; }
+                        90 => { __state = 91; }
+                        91 => { __state = 92; }
+                        92 => { __state = 93; }
+                        93 => { __state = 575; }
+                        94 => { { let _ = 0; }; __state = 658; }
+                        95 => { __state = 96; }
+                        96 => { __state = 97; }
+                        97 => { __state = 98; }
+                        98 => { __state = 662; }
+                        99 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 698;
+                        }
+                        100 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 703;
+                        }
+                        101 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 715;
+                        }
+                        102 => { { let _ = 0; }; __state = 722; }
+                        103 => { __state = 104; }
+                        104 => { __state = 105; }
+                        105 => { __state = 106; }
+                        106 => { __state = 107; }
+                        107 => { __state = 108; }
+                        108 => { __state = 739; }
+                        109 => { { let _ = 0; }; __state = 829; }
+                        110 => { { let _ = 0; }; __state = 834; }
+                        111 => { __state = 839; }
+                        112 => { { let _ = 0; }; __state = 882; }
+                        113 => { __state = 114; }
+                        114 => { __state = 893; }
+                        115 => { { let _ = 0; }; __state = 909; }
+                        116 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 914;
+                        }
+                        117 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 920;
+                        }
+                        118 => { __state = 927; }
+                        119 => { __state = 941; }
+                        120 => { __state = 947; }
+                        121 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 953;
+                        }
+                        122 => { __state = 958; }
+                        123 => {
+                            if unsafe {
+                                                    (*a_mem.offset(unsafe { (*p_op).p1 } as isize)).flags
+                                                } as i32 & 1 != 0 ||
+                                    unsafe {
+                                                    (*a_mem.offset(unsafe { (*p_op).p3 } as isize)).flags
+                                                } as i32 & 1 != 0 {
+                                __state = 1005;
+                            } else { __state = 1006; }
+                        }
+                        124 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 1008;
+                        }
+                        125 => { __state = 1013; }
+                        126 => { __state = 1020; }
+                        127 => { __state = 1188; }
+                        128 => { __state = 1260; }
+                        129 => { __state = 1287; }
+                        130 => { __state = 1488; }
+                        131 => { __state = 1502; }
+                        132 => { __state = 1612; }
+                        133 => { __state = 1647; }
+                        134 => { __state = 1696; }
+                        135 => { __state = 1710; }
+                        136 => { __state = 1732; }
+                        137 => { __state = 138; }
+                        138 => { { let _ = 0; }; __state = 1748; }
+                        139 => { __state = 1808; }
+                        140 => { __state = 141; }
+                        141 => { __state = 1828; }
+                        142 => { __state = 1877; }
+                        143 => { __state = 1890; }
+                        144 => { __state = 1897; }
+                        145 => { { let _ = 0; }; __state = 1909; }
+                        146 => { __state = 147; }
+                        147 => { __state = 148; }
+                        148 => { __state = 149; }
+                        149 => { __state = 1913; }
+                        150 => { __state = 2030; }
+                        151 => { __state = 2074; }
+                        152 => { __state = 2084; }
+                        153 => { __state = 2091; }
+                        154 => { __state = 155; }
+                        155 => { __state = 156; }
+                        156 => { __state = 2099; }
+                        157 => { __state = 2155; }
+                        158 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2172;
+                        }
+                        159 => { { let _ = 0; }; __state = 2199; }
+                        160 => { __state = 2205; }
+                        161 => { __state = 2271; }
+                        162 => { __state = 2327; }
+                        163 => { __state = 2342; }
+                        164 => {
+                            unsafe {
+                                sqlite3_vdbe_set_changes(db, unsafe { (*p).n_change })
+                            };
+                            __state = 2378;
+                        }
+                        165 => { __state = 2381; }
+                        166 => { __state = 2398; }
+                        167 => { __state = 2409; }
+                        168 => { __state = 2437; }
+                        169 => { __state = 2471; }
+                        170 => { __state = 171; }
+                        171 => { __state = 2488; }
+                        172 => { __state = 2515; }
+                        173 => { __state = 174; }
+                        174 => {
+                            {
+                                let __p = unsafe { &mut (*p).a_counter[2 as usize] };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2540;
+                        }
+                        175 => { __state = 2543; }
+                        176 => { __state = 2569; }
+                        177 => { __state = 2586; }
+                        178 => { { let _ = 0; }; __state = 2593; }
+                        179 => { { let _ = 0; }; __state = 2602; }
+                        180 => { __state = 2620; }
+                        181 => { __state = 2646; }
+                        182 => { __state = 2662; }
+                        183 => { __state = 184; }
+                        184 => { __state = 2705; }
+                        185 => { __state = 2746; }
+                        186 => { __state = 187; }
+                        187 => { __state = 188; }
+                        188 => { __state = 189; }
+                        189 => { __state = 2754; }
+                        190 => { __state = 2801; }
+                        191 => { __state = 2825; }
+                        192 => { __state = 2840; }
+                        193 => { __state = 2852; }
+                        194 => { __state = 2868; }
+                        195 => { __state = 2895; }
+                        196 => { { let _ = 0; }; __state = 2937; }
+                        197 => { __state = 2942; }
+                        198 => { __state = 2945; }
+                        199 => { __state = 2948; }
+                        200 => { __state = 2951; }
+                        201 => { __state = 2982; }
+                        202 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3004;
+                        }
+                        203 => { __state = 3013; }
+                        204 => { __state = 3023; }
+                        205 => { __state = 3043; }
+                        206 => { __state = 3122; }
+                        207 => {
+                            if unsafe { (*p_op).p1 } != 0 {
+                                __state = 3130;
+                            } else { __state = 3131; }
+                        }
+                        208 => {
+                            if unsafe { (*p_op).p1 } != 0 {
+                                __state = 3136;
+                            } else { __state = 3137; }
+                        }
+                        209 => { __state = 3143; }
+                        210 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3158;
+                        }
+                        211 => { __state = 3165; }
+                        212 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3176;
+                        }
+                        213 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3184;
+                        }
+                        214 => { __state = 215; }
+                        215 => { __state = 3192; }
+                        216 => { __state = 3221; }
+                        217 => { __state = 218; }
+                        218 => { __state = 3258; }
+                        219 => { __state = 3276; }
+                        220 => { __state = 3295; }
+                        221 => { { let _ = 0; }; __state = 3342; }
+                        222 => { __state = 3347; }
+                        223 => { { let _ = 0; }; __state = 3360; }
+                        224 => { __state = 3365; }
+                        225 => { __state = 3372; }
+                        226 => {
+                            is_write_lock = unsafe { (*p_op).p3 } as u8;
+                            __state = 3379;
+                        }
+                        227 => { __state = 3392; }
+                        228 => { __state = 3400; }
+                        229 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_v_destroy };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3416;
+                        }
+                        230 => { __state = 3423; }
+                        231 => { __state = 3450; }
+                        232 => { __state = 3479; }
+                        233 => { __state = 3491; }
+                        234 => { __state = 3531; }
+                        235 => { __state = 3571; }
+                        236 => { __state = 3592; }
+                        237 => { __state = 3618; }
+                        238 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3664;
+                        }
+                        239 => { __state = 3667; }
+                        240 => { __state = 241; }
+                        241 => { __state = 3678; }
+                        242 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3710;
+                        }
+                        243 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3713;
+                        }
+                        244 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3719;
+                        }
+                        245 => { __state = 3727; }
+                        246 => { __state = 3736; }
+                        247 => { __state = 248; }
+                        248 => { __state = 3750; }
+                        249 => { { let _ = 0; }; __state = 3777; }
+                        250 => { __state = 64; }
+                        251 => { __state = 65; }
+                        252 => { __state = 3; }
+                        253 => {
+                            if n_vm_step >= n_progress_limit &&
+                                    unsafe { (*db).x_progress.is_some() } {
+                                __state = 256;
+                            } else { __state = 255; }
+                        }
+                        254 => { __state = 21; }
+                        255 => { __state = 60; }
+                        256 => { { let _ = 0; }; __state = 257; }
+                        257 => {
+                            n_progress_limit += unsafe { (*db).n_progress_ops } as u64;
+                            __state = 258;
+                        }
+                        258 => {
+                            if unsafe {
+                                        (unsafe {
+                                                (*db).x_progress.unwrap()
+                                            })(unsafe { (*db).p_progress_arg })
+                                    } != 0 {
+                                __state = 259;
+                            } else { __state = 253; }
+                        }
+                        259 => {
+                            n_progress_limit =
+                                4294967295u32 as u64 | (4294967295u32 as u64) << 32;
+                            __state = 260;
+                        }
+                        260 => { rc = 9; __state = 261; }
+                        261 => { __state = 17; }
+                        262 => { __state = 66; }
+                        263 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 264;
+                        }
+                        264 => { { let _ = 0; }; __state = 265; }
+                        265 => { __state = 266; }
+                        266 => {
+                            unsafe { (*p_in1).flags = 4 as u16 };
+                            __state = 267;
+                        }
+                        267 => {
+                            unsafe {
+                                (*p_in1).u.i =
+                                    unsafe { p_op.offset_from(a_op) } as i64 as i32 as i64
+                            };
+                            __state = 268;
+                        }
+                        268 => { __state = 269; }
+                        269 => { __state = 2; }
+                        270 => { __state = 67; }
+                        271 => {
+                            if unsafe { (*p_in1).flags } as i32 & 4 != 0 {
+                                __state = 273;
+                            } else { __state = 274; }
+                        }
+                        272 => { __state = 60; }
+                        273 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 276;
+                            } else { __state = 275; }
+                        }
+                        274 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 277;
+                            } else { __state = 272; }
+                        }
+                        275 => {
+                            p_op =
+                                unsafe { a_op.offset(unsafe { (*p_in1).u.i } as isize) };
+                            __state = 272;
+                        }
+                        276 => { __state = 275; }
+                        277 => { __state = 272; }
+                        278 => { __state = 68; }
+                        279 => { { let _ = 0; }; __state = 280; }
+                        280 => { { let _ = 0; }; __state = 281; }
+                        281 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 282;
+                        }
+                        282 => { { let _ = 0; }; __state = 283; }
+                        283 => {
+                            unsafe {
+                                (*p_out).u.i = (unsafe { (*p_op).p3 } - 1) as i64
+                            };
+                            __state = 284;
+                        }
+                        284 => {
+                            unsafe { (*p_out).flags = 4 as u16 };
+                            __state = 285;
+                        }
+                        285 => {
+                            if unsafe { (*p_op).p2 } == 0 {
+                                __state = 287;
+                            } else { __state = 286; }
+                        }
+                        286 => { __state = 4; }
+                        287 => { __state = 60; }
+                        288 => { { let _ = 0; }; __state = 289; }
+                        289 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_op).p2 } - 1) as isize)
+                                };
+                            __state = 290;
+                        }
+                        290 => { __state = 60; }
+                        291 => { __state = 69; }
+                        292 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 293;
+                        }
+                        293 => { { let _ = 0; }; __state = 294; }
+                        294 => { { let _ = 0; }; __state = 295; }
+                        295 => {
+                            p_caller =
+                                unsafe { a_op.offset(unsafe { (*p_in1).u.i } as isize) } as
+                                    *mut VdbeOp;
+                            __state = 296;
+                        }
+                        296 => { { let _ = 0; }; __state = 297; }
+                        297 => { { let _ = 0; }; __state = 298; }
+                        298 => {
+                            unsafe {
+                                (*p_in1).u.i =
+                                    (unsafe { p_op.offset_from(unsafe { (*p).a_op }) } as i64 as
+                                                i32 - 1) as i64
+                            };
+                            __state = 299;
+                        }
+                        299 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_caller).p2 } - 1) as isize)
+                                };
+                            __state = 300;
+                        }
+                        300 => { __state = 60; }
+                        301 => { __state = 70; }
+                        302 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 303;
+                        }
+                        303 => { { let _ = 0; }; __state = 304; }
+                        304 => {
+                            unsafe { (*p_in1).flags = 4 as u16 };
+                            __state = 305;
+                        }
+                        305 => {
+                            pc_dest = unsafe { (*p_in1).u.i } as i32;
+                            __state = 306;
+                        }
+                        306 => {
+                            unsafe {
+                                (*p_in1).u.i =
+                                    unsafe { p_op.offset_from(a_op) } as i64 as i32 as i64
+                            };
+                            __state = 307;
+                        }
+                        307 => { __state = 308; }
+                        308 => {
+                            p_op = unsafe { a_op.offset(pc_dest as isize) };
+                            __state = 309;
+                        }
+                        309 => { __state = 60; }
+                        310 => { __state = 314; }
+                        311 => {
+                            if unsafe { (*p_in3).flags } as i32 & 1 == 0 {
+                                __state = 313;
+                            } else { __state = 312; }
+                        }
+                        312 => { __state = 310; }
+                        313 => { __state = 60; }
+                        314 => { __state = 71; }
+                        315 => { __state = 72; }
+                        316 => { __state = 317; }
+                        317 => { { let _ = 0; }; __state = 318; }
+                        318 => { { let _ = 0; }; __state = 319; }
+                        319 => {
+                            if !(unsafe { (*p).p_frame }).is_null() &&
+                                    unsafe { (*p_op).p1 } == 0 {
+                                __state = 321;
+                            } else { __state = 320; }
+                        }
+                        320 => {
+                            unsafe { (*p).rc = unsafe { (*p_op).p1 } };
+                            __state = 332;
+                        }
+                        321 => { p_frame = unsafe { (*p).p_frame }; __state = 322; }
+                        322 => {
+                            unsafe { (*p).p_frame = unsafe { (*p_frame).p_parent } };
+                            __state = 323;
+                        }
+                        323 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_frame };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 324;
+                        }
+                        324 => {
+                            unsafe {
+                                sqlite3_vdbe_set_changes(db, unsafe { (*p).n_change })
+                            };
+                            __state = 325;
+                        }
+                        325 => {
+                            pcx = unsafe { sqlite3_vdbe_frame_restore(p_frame) };
+                            __state = 326;
+                        }
+                        326 => {
+                            if unsafe { (*p_op).p2 } == 4 {
+                                __state = 328;
+                            } else { __state = 327; }
+                        }
+                        327 => { a_op = unsafe { (*p).a_op }; __state = 329; }
+                        328 => {
+                            pcx =
+                                unsafe { (*unsafe { (*p).a_op.offset(pcx as isize) }).p2 } -
+                                    1;
+                            __state = 327;
+                        }
+                        329 => { a_mem = unsafe { (*p).a_mem }; __state = 330; }
+                        330 => {
+                            p_op = unsafe { a_op.offset(pcx as isize) };
+                            __state = 331;
+                        }
+                        331 => { __state = 60; }
+                        332 => {
+                            unsafe { (*p).error_action = unsafe { (*p_op).p2 } as u8 };
+                            __state = 333;
+                        }
+                        333 => { { let _ = 0; }; __state = 334; }
+                        334 => {
+                            if unsafe { (*p).rc } != 0 {
+                                __state = 336;
+                            } else { __state = 335; }
+                        }
+                        335 => {
+                            rc = unsafe { sqlite3_vdbe_halt(p) };
+                            __state = 352;
+                        }
+                        336 => {
+                            if unsafe { (*p_op).p3 } > 0 &&
+                                    unsafe { (*p_op).p4type } as i32 == 0 {
+                                __state = 338;
+                            } else { __state = 339; }
+                        }
+                        337 => {
+                            sqlite3_vdbe_log_abort(unsafe { &*p },
+                                unsafe { (*p_op).p1 }, p_op as *const Op,
+                                a_op as *const Op);
+                            __state = 335;
+                        }
+                        338 => { __state = 340; }
+                        339 => {
+                            if unsafe { (*p_op).p5 } != 0 {
+                                __state = 343;
+                            } else { __state = 344; }
+                        }
+                        340 => { { let _ = 0; }; __state = 341; }
+                        341 => {
+                            z_err =
+                                unsafe {
+                                        sqlite3ValueText(unsafe {
+                                                    &raw mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                                } as *mut sqlite3_value, 1 as u8)
+                                    } as *const i8;
+                            __state = 342;
+                        }
+                        342 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8, z_err)
+                            };
+                            __state = 337;
+                        }
+                        343 => { __state = 345; }
+                        344 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe { (*p_op).p4.z })
+                            };
+                            __state = 337;
+                        }
+                        345 => { __state = 346; }
+                        346 => { __state = 347; }
+                        347 => { __state = 348; }
+                        348 => { __state = 349; }
+                        349 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s constraint failed".as_ptr() as *mut i8 as *const i8,
+                                    az_type[(unsafe { (*p_op).p5 } as i32 - 1) as usize])
+                            };
+                            __state = 350;
+                        }
+                        350 => {
+                            if !(unsafe { (*p_op).p4.z }).is_null() {
+                                __state = 351;
+                            } else { __state = 337; }
+                        }
+                        351 => {
+                            unsafe {
+                                (*p).z_err_msg =
+                                    unsafe {
+                                        sqlite3_m_printf(db,
+                                            c"%z: %s".as_ptr() as *mut i8 as *const i8,
+                                            unsafe { (*p).z_err_msg }, unsafe { (*p_op).p4.z })
+                                    }
+                            };
+                            __state = 337;
+                        }
+                        352 => { { let _ = 0; }; __state = 353; }
+                        353 => {
+                            if rc == 5 { __state = 355; } else { __state = 356; }
+                        }
+                        354 => { __state = 18; }
+                        355 => { unsafe { (*p).rc = 5 }; __state = 354; }
+                        356 => { { let _ = 0; }; __state = 357; }
+                        357 => { { let _ = 0; }; __state = 358; }
+                        358 => {
+                            rc = if unsafe { (*p).rc } != 0 { 1 } else { 101 };
+                            __state = 354;
+                        }
+                        359 => { __state = 73; }
+                        360 => {
+                            unsafe { (*p_out).u.i = unsafe { (*p_op).p1 } as i64 };
+                            __state = 361;
+                        }
+                        361 => { __state = 60; }
+                        362 => { __state = 74; }
+                        363 => { { let _ = 0; }; __state = 364; }
+                        364 => {
+                            unsafe {
+                                (*p_out).u.i = unsafe { *unsafe { (*p_op).p4.p_i64 } }
+                            };
+                            __state = 365;
+                        }
+                        365 => { __state = 60; }
+                        366 => { __state = 75; }
+                        367 => {
+                            unsafe { (*p_out).flags = 8 as u16 };
+                            __state = 368;
+                        }
+                        368 => { { let _ = 0; }; __state = 369; }
+                        369 => {
+                            unsafe {
+                                (*p_out).u.r = unsafe { *unsafe { (*p_op).p4.p_real } }
+                            };
+                            __state = 370;
+                        }
+                        370 => { __state = 60; }
+                        371 => { __state = 395; }
+                        372 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 373;
+                        }
+                        373 => {
+                            unsafe {
+                                (*p_op).p1 =
+                                    unsafe {
+                                        sqlite3_strlen30(unsafe { (*p_op).p4.z } as *const i8)
+                                    }
+                            };
+                            __state = 374;
+                        }
+                        374 => {
+                            if encoding as i32 != 1 {
+                                __state = 376;
+                            } else { __state = 375; }
+                        }
+                        375 => {
+                            if unsafe { (*p_op).p1 } >
+                                    unsafe { (*db).a_limit[0 as usize] } {
+                                __state = 392;
+                            } else { __state = 391; }
+                        }
+                        376 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_set_str(p_out,
+                                        unsafe { (*p_op).p4.z } as *const i8, -1 as i64, 1 as u8,
+                                        None)
+                                };
+                            __state = 377;
+                        }
+                        377 => { { let _ = 0; }; __state = 378; }
+                        378 => {
+                            if rc != 0 { __state = 380; } else { __state = 379; }
+                        }
+                        379 => {
+                            if 0 !=
+                                    unsafe {
+                                        sqlite3_vdbe_change_encoding(p_out, encoding as i32)
+                                    } {
+                                __state = 382;
+                            } else { __state = 381; }
+                        }
+                        380 => { __state = 19; }
+                        381 => { { let _ = 0; }; __state = 383; }
+                        382 => { __state = 20; }
+                        383 => { { let _ = 0; }; __state = 384; }
+                        384 => { unsafe { (*p_out).sz_malloc = 0 }; __state = 385; }
+                        385 => {
+                            unsafe { (*p_out).flags |= 8192 as u16 };
+                            __state = 386;
+                        }
+                        386 => {
+                            if unsafe { (*p_op).p4type } as i32 == -7 {
+                                __state = 388;
+                            } else { __state = 387; }
+                        }
+                        387 => {
+                            unsafe { (*p_op).p4type = -7 as i8 };
+                            __state = 389;
+                        }
+                        388 => {
+                            unsafe {
+                                sqlite3_db_free(db, unsafe { (*p_op).p4.z } as *mut ())
+                            };
+                            __state = 387;
+                        }
+                        389 => {
+                            unsafe { (*p_op).p4.z = unsafe { (*p_out).z } };
+                            __state = 390;
+                        }
+                        390 => {
+                            unsafe { (*p_op).p1 = unsafe { (*p_out).n } };
+                            __state = 375;
+                        }
+                        391 => {
+                            unsafe { (*p_op).opcode = 75 as u8 };
+                            __state = 393;
+                        }
+                        392 => { __state = 19; }
+                        393 => { { let _ = 0; }; __state = 394; }
+                        394 => { __state = 371; }
+                        395 => { __state = 76; }
+                        396 => { __state = 77; }
+                        397 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 398;
+                        }
+                        398 => {
+                            unsafe { (*p_out).flags = (2 | 8192 | 512) as u16 };
+                            __state = 399;
+                        }
+                        399 => {
+                            unsafe { (*p_out).z = unsafe { (*p_op).p4.z } };
+                            __state = 400;
+                        }
+                        400 => {
+                            unsafe { (*p_out).n = unsafe { (*p_op).p1 } };
+                            __state = 401;
+                        }
+                        401 => {
+                            unsafe { (*p_out).enc = encoding };
+                            __state = 402;
+                        }
+                        402 => { __state = 403; }
+                        403 => {
+                            if unsafe { (*p_op).p3 } > 0 {
+                                __state = 405;
+                            } else { __state = 404; }
+                        }
+                        404 => { __state = 60; }
+                        405 => { { let _ = 0; }; __state = 406; }
+                        406 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 407;
+                        }
+                        407 => { { let _ = 0; }; __state = 408; }
+                        408 => {
+                            if unsafe { (*p_in3).u.i } == unsafe { (*p_op).p5 } as i64 {
+                                __state = 409;
+                            } else { __state = 404; }
+                        }
+                        409 => {
+                            unsafe { (*p_out).flags = (16 | 8192 | 512) as u16 };
+                            __state = 404;
+                        }
+                        410 => { __state = 425; }
+                        411 => { __state = 412; }
+                        412 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 413;
+                        }
+                        413 => {
+                            cnt = unsafe { (*p_op).p3 } - unsafe { (*p_op).p2 };
+                            __state = 414;
+                        }
+                        414 => { { let _ = 0; }; __state = 415; }
+                        415 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    {
+                                        null_flag =
+                                            if unsafe { (*p_op).p1 } != 0 { 1 | 256 } else { 1 } as u16;
+                                        null_flag
+                                    }
+                            };
+                            __state = 416;
+                        }
+                        416 => { unsafe { (*p_out).n = 0 }; __state = 417; }
+                        417 => {
+                            if cnt > 0 { __state = 419; } else { __state = 418; }
+                        }
+                        418 => { __state = 60; }
+                        419 => {
+                            {
+                                let __p = &mut p_out;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 420;
+                        }
+                        420 => { __state = 421; }
+                        421 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 422;
+                        }
+                        422 => {
+                            unsafe { (*p_out).flags = null_flag };
+                            __state = 423;
+                        }
+                        423 => { unsafe { (*p_out).n = 0 }; __state = 424; }
+                        424 => {
+                            { let __p = &mut cnt; let __t = *__p; *__p -= 1; __t };
+                            __state = 417;
+                        }
+                        425 => { __state = 79; }
+                        426 => { __state = 80; }
+                        427 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 428;
+                        }
+                        428 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(0 | 63) | 1) as u16
+                            };
+                            __state = 429;
+                        }
+                        429 => { __state = 60; }
+                        430 => { __state = 81; }
+                        431 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 432;
+                        }
+                        432 => {
+                            if unsafe { (*p_op).p4.z } == core::ptr::null_mut() {
+                                __state = 434;
+                            } else { __state = 435; }
+                        }
+                        433 => {
+                            unsafe { (*p_out).enc = encoding };
+                            __state = 438;
+                        }
+                        434 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_zero_blob(p_out, unsafe { (*p_op).p1 })
+                            };
+                            __state = 436;
+                        }
+                        435 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_str(p_out,
+                                    unsafe { (*p_op).p4.z } as *const i8,
+                                    unsafe { (*p_op).p1 } as i64, 0 as u8, None)
+                            };
+                            __state = 433;
+                        }
+                        436 => {
+                            if unsafe { sqlite3_vdbe_mem_expand_blob(p_out) } != 0 {
+                                __state = 437;
+                            } else { __state = 433; }
+                        }
+                        437 => { __state = 20; }
+                        438 => { __state = 439; }
+                        439 => { __state = 60; }
+                        440 => { __state = 82; }
+                        441 => { { let _ = 0; }; __state = 442; }
+                        442 => {
+                            p_var =
+                                unsafe {
+                                    unsafe {
+                                        (*p).a_var.offset((unsafe { (*p_op).p1 } - 1) as isize)
+                                    }
+                                };
+                            __state = 443;
+                        }
+                        443 => {
+                            if unsafe { sqlite3_vdbe_mem_too_big(p_var) } != 0 {
+                                __state = 445;
+                            } else { __state = 444; }
+                        }
+                        444 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 446;
+                        }
+                        445 => { __state = 19; }
+                        446 => {
+                            if unsafe { (*p_out).flags } as i32 & (32768 | 4096) != 0 {
+                                __state = 448;
+                            } else { __state = 447; }
+                        }
+                        447 => {
+                            unsafe {
+                                memcpy(p_out as *mut (), p_var as *const (),
+                                    core::mem::offset_of!(sqlite3_value, db) as u64)
+                            };
+                            __state = 449;
+                        }
+                        448 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 447;
+                        }
+                        449 => {
+                            unsafe { (*p_out).flags &= !(4096 | 16384) as u16 };
+                            __state = 450;
+                        }
+                        450 => {
+                            unsafe { (*p_out).flags |= (8192 | 64) as u16 };
+                            __state = 451;
+                        }
+                        451 => { __state = 452; }
+                        452 => { __state = 60; }
+                        453 => { __state = 83; }
+                        454 => { __state = 455; }
+                        455 => { __state = 456; }
+                        456 => { n = unsafe { (*p_op).p3 }; __state = 457; }
+                        457 => { p1 = unsafe { (*p_op).p1 }; __state = 458; }
+                        458 => { p2 = unsafe { (*p_op).p2 }; __state = 459; }
+                        459 => { { let _ = 0; }; __state = 460; }
+                        460 => { { let _ = 0; }; __state = 461; }
+                        461 => {
+                            p_in1 = unsafe { a_mem.offset(p1 as isize) };
+                            __state = 462;
+                        }
+                        462 => {
+                            p_out = unsafe { a_mem.offset(p2 as isize) };
+                            __state = 463;
+                        }
+                        463 => { { let _ = 0; }; __state = 466; }
+                        464 => { __state = 60; }
+                        465 => {
+                            if { let __p = &mut n; *__p -= 1; *__p } != 0 {
+                                __state = 463;
+                            } else { __state = 464; }
+                        }
+                        466 => { { let _ = 0; }; __state = 467; }
+                        467 => { { let _ = 0; }; __state = 468; }
+                        468 => { __state = 469; }
+                        469 => {
+                            unsafe { sqlite3_vdbe_mem_move(p_out, p_in1) };
+                            __state = 470;
+                        }
+                        470 => {
+                            if unsafe { (*p_out).flags } as i32 & 16384 != 0 &&
+                                    unsafe { sqlite3_vdbe_mem_make_writeable(p_out) } != 0 {
+                                __state = 472;
+                            } else { __state = 471; }
+                        }
+                        471 => { __state = 473; }
+                        472 => { __state = 20; }
+                        473 => { __state = 474; }
+                        474 => {
+                            {
+                                let __p = &mut p_in1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 475;
+                        }
+                        475 => {
+                            {
+                                let __p = &mut p_out;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 465;
+                        }
+                        476 => { __state = 84; }
+                        477 => { n__1 = unsafe { (*p_op).p3 }; __state = 478; }
+                        478 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 479;
+                        }
+                        479 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 480;
+                        }
+                        480 => { { let _ = 0; }; __state = 481; }
+                        481 => {
+                            if 1 != 0 { __state = 483; } else { __state = 482; }
+                        }
+                        482 => { __state = 60; }
+                        483 => { __state = 484; }
+                        484 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_shallow_copy(p_out, p_in1 as *const Mem,
+                                    16384)
+                            };
+                            __state = 485;
+                        }
+                        485 => {
+                            if unsafe { (*p_out).flags } as i32 & 16384 != 0 &&
+                                    unsafe { sqlite3_vdbe_mem_make_writeable(p_out) } != 0 {
+                                __state = 487;
+                            } else { __state = 486; }
+                        }
+                        486 => { __state = 488; }
+                        487 => { __state = 20; }
+                        488 => {
+                            if unsafe { (*p_out).flags } as i32 & 2048 != 0 &&
+                                    unsafe { (*p_op).p5 } as i32 & 2 != 0 {
+                                __state = 490;
+                            } else { __state = 489; }
+                        }
+                        489 => { __state = 491; }
+                        490 => {
+                            unsafe { (*p_out).flags &= !2048 as u16 };
+                            __state = 489;
+                        }
+                        491 => {
+                            if { let __p = &mut n__1; let __t = *__p; *__p -= 1; __t }
+                                    == 0 {
+                                __state = 493;
+                            } else { __state = 492; }
+                        }
+                        492 => {
+                            {
+                                let __p = &mut p_out;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 494;
+                        }
+                        493 => { __state = 482; }
+                        494 => {
+                            {
+                                let __p = &mut p_in1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 481;
+                        }
+                        495 => { __state = 85; }
+                        496 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 497;
+                        }
+                        497 => { { let _ = 0; }; __state = 498; }
+                        498 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_shallow_copy(p_out, p_in1 as *const Mem,
+                                    16384)
+                            };
+                            __state = 499;
+                        }
+                        499 => { __state = 60; }
+                        500 => { __state = 86; }
+                        501 => { { let _ = 0; }; __state = 502; }
+                        502 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 503;
+                        }
+                        503 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(p_out, unsafe { (*p_in1).u.i })
+                            };
+                            __state = 504;
+                        }
+                        504 => { __state = 60; }
+                        505 => { __state = 87; }
+                        506 => { __state = 60; }
+                        507 => { __state = 17; }
+                        508 => { __state = 88; }
+                        509 => { { let _ = 0; }; __state = 510; }
+                        510 => { { let _ = 0; }; __state = 511; }
+                        511 => {
+                            unsafe {
+                                (*p).cache_ctr =
+                                    unsafe { (*p).cache_ctr } + 2 as u32 | 1 as u32
+                            };
+                            __state = 512;
+                        }
+                        512 => {
+                            unsafe {
+                                (*p).p_result_row =
+                                    unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) }
+                            };
+                            __state = 513;
+                        }
+                        513 => {
+                            if unsafe { (*db).malloc_failed } != 0 {
+                                __state = 515;
+                            } else { __state = 514; }
+                        }
+                        514 => {
+                            if unsafe { (*db).m_trace } as i32 & 4 != 0 {
+                                __state = 517;
+                            } else { __state = 516; }
+                        }
+                        515 => { __state = 20; }
+                        516 => {
+                            unsafe {
+                                (*p).pc =
+                                    unsafe { p_op.offset_from(a_op) } as i64 as i32 + 1
+                            };
+                            __state = 518;
+                        }
+                        517 => {
+                            unsafe {
+                                (unsafe {
+                                        (*db).trace.x_v2.unwrap()
+                                    })(4, unsafe { (*db).p_trace_arg }, p as *mut (),
+                                    core::ptr::null_mut())
+                            };
+                            __state = 516;
+                        }
+                        518 => { rc = 100; __state = 519; }
+                        519 => { __state = 18; }
+                        520 => { __state = 89; }
+                        521 => { __state = 522; }
+                        522 => { __state = 523; }
+                        523 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 524;
+                        }
+                        524 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 525;
+                        }
+                        525 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 526;
+                        }
+                        526 => { __state = 527; }
+                        527 => { { let _ = 0; }; __state = 528; }
+                        528 => {
+                            flags1 = unsafe { (*p_in1).flags };
+                            __state = 529;
+                        }
+                        529 => { __state = 530; }
+                        530 => { __state = 531; }
+                        531 => {
+                            if (flags1 as i32 | unsafe { (*p_in2).flags } as i32) & 1 !=
+                                    0 {
+                                __state = 533;
+                            } else { __state = 532; }
+                        }
+                        532 => {
+                            if flags1 as i32 & (2 | 16) == 0 {
+                                __state = 536;
+                            } else { __state = 537; }
+                        }
+                        533 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 534;
+                        }
+                        534 => { __state = 60; }
+                        535 => {
+                            flags2 = unsafe { (*p_in2).flags };
+                            __state = 543;
+                        }
+                        536 => {
+                            if unsafe {
+                                        sqlite3_vdbe_mem_stringify(p_in1, encoding, 0 as u8)
+                                    } != 0 {
+                                __state = 539;
+                            } else { __state = 538; }
+                        }
+                        537 => {
+                            if flags1 as i32 & 1024 != 0 {
+                                __state = 540;
+                            } else { __state = 535; }
+                        }
+                        538 => {
+                            flags1 = (unsafe { (*p_in1).flags } as i32 & !2) as u16;
+                            __state = 535;
+                        }
+                        539 => { __state = 20; }
+                        540 => {
+                            if unsafe { sqlite3_vdbe_mem_expand_blob(p_in1) } != 0 {
+                                __state = 542;
+                            } else { __state = 541; }
+                        }
+                        541 => {
+                            flags1 = (unsafe { (*p_in1).flags } as i32 & !2) as u16;
+                            __state = 535;
+                        }
+                        542 => { __state = 20; }
+                        543 => {
+                            if flags2 as i32 & (2 | 16) == 0 {
+                                __state = 545;
+                            } else { __state = 546; }
+                        }
+                        544 => {
+                            n_byte = unsafe { (*p_in1).n } as i64;
+                            __state = 552;
+                        }
+                        545 => {
+                            if unsafe {
+                                        sqlite3_vdbe_mem_stringify(p_in2, encoding, 0 as u8)
+                                    } != 0 {
+                                __state = 548;
+                            } else { __state = 547; }
+                        }
+                        546 => {
+                            if flags2 as i32 & 1024 != 0 {
+                                __state = 549;
+                            } else { __state = 544; }
+                        }
+                        547 => {
+                            flags2 = (unsafe { (*p_in2).flags } as i32 & !2) as u16;
+                            __state = 544;
+                        }
+                        548 => { __state = 20; }
+                        549 => {
+                            if unsafe { sqlite3_vdbe_mem_expand_blob(p_in2) } != 0 {
+                                __state = 551;
+                            } else { __state = 550; }
+                        }
+                        550 => {
+                            flags2 = (unsafe { (*p_in2).flags } as i32 & !2) as u16;
+                            __state = 544;
+                        }
+                        551 => { __state = 20; }
+                        552 => {
+                            n_byte += unsafe { (*p_in2).n } as i64;
+                            __state = 553;
+                        }
+                        553 => {
+                            if n_byte > unsafe { (*db).a_limit[0 as usize] } as i64 {
+                                __state = 555;
+                            } else { __state = 554; }
+                        }
+                        554 => {
+                            if unsafe {
+                                        sqlite3_vdbe_mem_grow(p_out, n_byte as i32 + 2,
+                                            (p_out == p_in2) as i32)
+                                    } != 0 {
+                                __state = 557;
+                            } else { __state = 556; }
+                        }
+                        555 => { __state = 19; }
+                        556 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 2) as
+                                        u16
+                            };
+                            __state = 558;
+                        }
+                        557 => { __state = 20; }
+                        558 => {
+                            if p_out != p_in2 { __state = 560; } else { __state = 559; }
+                        }
+                        559 => {
+                            unsafe {
+                                memcpy(unsafe {
+                                            &raw mut *unsafe {
+                                                        (*p_out).z.offset(unsafe { (*p_in2).n } as isize)
+                                                    }
+                                        } as *mut (), unsafe { (*p_in1).z } as *const (),
+                                    unsafe { (*p_in1).n } as u64)
+                            };
+                            __state = 563;
+                        }
+                        560 => {
+                            unsafe {
+                                memcpy(unsafe { (*p_out).z } as *mut (),
+                                    unsafe { (*p_in2).z } as *const (),
+                                    unsafe { (*p_in2).n } as u64)
+                            };
+                            __state = 561;
+                        }
+                        561 => { { let _ = 0; }; __state = 562; }
+                        562 => {
+                            unsafe { (*p_in2).flags = flags2 };
+                            __state = 559;
+                        }
+                        563 => { { let _ = 0; }; __state = 564; }
+                        564 => {
+                            unsafe { (*p_in1).flags = flags1 };
+                            __state = 565;
+                        }
+                        565 => {
+                            if encoding as i32 > 1 {
+                                __state = 567;
+                            } else { __state = 566; }
+                        }
+                        566 => {
+                            unsafe {
+                                *unsafe { (*p_out).z.offset(n_byte as isize) } = 0 as i8
+                            };
+                            __state = 568;
+                        }
+                        567 => { n_byte &= !1 as i64; __state = 566; }
+                        568 => {
+                            unsafe {
+                                *unsafe { (*p_out).z.offset((n_byte + 1 as i64) as isize) }
+                                    = 0 as i8
+                            };
+                            __state = 569;
+                        }
+                        569 => {
+                            unsafe { (*p_out).flags |= 512 as u16 };
+                            __state = 570;
+                        }
+                        570 => {
+                            unsafe { (*p_out).n = n_byte as i32 };
+                            __state = 571;
+                        }
+                        571 => {
+                            unsafe { (*p_out).enc = encoding };
+                            __state = 572;
+                        }
+                        572 => { __state = 573; }
+                        573 => { __state = 60; }
+                        574 => { __state = 656; }
+                        575 => { __state = 576; }
+                        576 => { __state = 577; }
+                        577 => { __state = 578; }
+                        578 => { __state = 579; }
+                        579 => { __state = 580; }
+                        580 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 581;
+                        }
+                        581 => { type1 = unsafe { (*p_in1).flags }; __state = 582; }
+                        582 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 583;
+                        }
+                        583 => { type2 = unsafe { (*p_in2).flags }; __state = 584; }
+                        584 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 585;
+                        }
+                        585 => {
+                            if type1 as i32 & type2 as i32 & 4 != 0 {
+                                __state = 587;
+                            } else { __state = 588; }
+                        }
+                        586 => { __state = 60; }
+                        587 => { __state = 5; }
+                        588 => {
+                            if (type1 as i32 | type2 as i32) & 1 != 0 {
+                                __state = 619;
+                            } else { __state = 620; }
+                        }
+                        589 => { i_b = unsafe { (*p_in2).u.i }; __state = 590; }
+                        590 => {
+                            '__s4:
+                                {
+                                match unsafe { (*p_op).opcode } {
+                                    107 => { __state = 592; }
+                                    108 => { __state = 593; }
+                                    109 => { __state = 594; }
+                                    110 => { __state = 595; }
+                                    _ => { __state = 596; }
+                                }
+                            }
+                        }
+                        591 => { unsafe { (*p_out).u.i = i_b }; __state = 618; }
+                        592 => {
+                            if unsafe { sqlite3_add_int64(&mut i_b, i_a) } != 0 {
+                                __state = 599;
+                            } else { __state = 598; }
+                        }
+                        593 => {
+                            if unsafe { sqlite3_sub_int64(&mut i_b, i_a) } != 0 {
+                                __state = 602;
+                            } else { __state = 601; }
+                        }
+                        594 => {
+                            if unsafe { sqlite3_mul_int64(&mut i_b, i_a) } != 0 {
+                                __state = 605;
+                            } else { __state = 604; }
+                        }
+                        595 => {
+                            if i_a == 0 as i64 {
+                                __state = 609;
+                            } else { __state = 608; }
+                        }
+                        596 => {
+                            if i_a == 0 as i64 {
+                                __state = 614;
+                            } else { __state = 613; }
+                        }
+                        597 => { __state = 592; }
+                        598 => { __state = 591; }
+                        599 => { __state = 6; }
+                        600 => { __state = 593; }
+                        601 => { __state = 591; }
+                        602 => { __state = 6; }
+                        603 => { __state = 594; }
+                        604 => { __state = 591; }
+                        605 => { __state = 6; }
+                        606 => { __state = 595; }
+                        607 => { __state = 596; }
+                        608 => {
+                            if i_a == -1 as i64 &&
+                                    i_b ==
+                                        -1 as i64 -
+                                            (4294967295u32 as i64 | (2147483647 as i64) << 32) {
+                                __state = 611;
+                            } else { __state = 610; }
+                        }
+                        609 => { __state = 7; }
+                        610 => { i_b /= i_a; __state = 612; }
+                        611 => { __state = 6; }
+                        612 => { __state = 591; }
+                        613 => {
+                            if i_a == -1 as i64 {
+                                __state = 616;
+                            } else { __state = 615; }
+                        }
+                        614 => { __state = 7; }
+                        615 => { i_b %= i_a; __state = 617; }
+                        616 => { i_a = 1 as i64; __state = 615; }
+                        617 => { __state = 591; }
+                        618 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 4) as
+                                        u16
+                            };
+                            __state = 586;
+                        }
+                        619 => { __state = 7; }
+                        620 => { type1 = numeric_type(p_in1); __state = 621; }
+                        621 => { type2 = numeric_type(p_in2); __state = 622; }
+                        622 => {
+                            if type1 as i32 & type2 as i32 & 4 != 0 {
+                                __state = 624;
+                            } else { __state = 623; }
+                        }
+                        623 => { __state = 6; }
+                        624 => { __state = 5; }
+                        625 => {
+                            r_b = unsafe { sqlite3_vdbe_real_value(p_in2) };
+                            __state = 626;
+                        }
+                        626 => {
+                            '__s5:
+                                {
+                                match unsafe { (*p_op).opcode } {
+                                    107 => { __state = 628; }
+                                    108 => { __state = 629; }
+                                    109 => { __state = 630; }
+                                    110 => { __state = 631; }
+                                    _ => { __state = 632; }
+                                }
+                            }
+                        }
+                        627 => {
+                            if unsafe { sqlite3_is_na_n(r_b) } != 0 {
+                                __state = 652;
+                            } else { __state = 651; }
+                        }
+                        628 => { r_b += r_a; __state = 634; }
+                        629 => { r_b -= r_a; __state = 636; }
+                        630 => { r_b *= r_a; __state = 638; }
+                        631 => {
+                            if r_a == 0 as f64 {
+                                __state = 642;
+                            } else { __state = 641; }
+                        }
+                        632 => {
+                            i_a =
+                                unsafe { sqlite3_vdbe_int_value(p_in1 as *const Mem) };
+                            __state = 644;
+                        }
+                        633 => { __state = 628; }
+                        634 => { __state = 627; }
+                        635 => { __state = 629; }
+                        636 => { __state = 627; }
+                        637 => { __state = 630; }
+                        638 => { __state = 627; }
+                        639 => { __state = 631; }
+                        640 => { __state = 632; }
+                        641 => { r_b /= r_a; __state = 643; }
+                        642 => { __state = 7; }
+                        643 => { __state = 627; }
+                        644 => {
+                            i_b =
+                                unsafe { sqlite3_vdbe_int_value(p_in2 as *const Mem) };
+                            __state = 645;
+                        }
+                        645 => {
+                            if i_a == 0 as i64 {
+                                __state = 647;
+                            } else { __state = 646; }
+                        }
+                        646 => {
+                            if i_a == -1 as i64 {
+                                __state = 649;
+                            } else { __state = 648; }
+                        }
+                        647 => { __state = 7; }
+                        648 => { r_b = (i_b % i_a) as f64; __state = 650; }
+                        649 => { i_a = 1 as i64; __state = 648; }
+                        650 => { __state = 627; }
+                        651 => { unsafe { (*p_out).u.r = r_b }; __state = 653; }
+                        652 => { __state = 7; }
+                        653 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 8) as
+                                        u16
+                            };
+                            __state = 586;
+                        }
+                        654 => { __state = 7; }
+                        655 => { __state = 60; }
+                        656 => { __state = 94; }
+                        657 => { __state = 95; }
+                        658 => {
+                            if unsafe { (*p_op).p1 } != 0 {
+                                __state = 660;
+                            } else { __state = 659; }
+                        }
+                        659 => { __state = 60; }
+                        660 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(unsafe {
+                                        &mut *a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                    }, 0 as i64)
+                            };
+                            __state = 659;
+                        }
+                        661 => { __state = 696; }
+                        662 => { __state = 663; }
+                        663 => { __state = 664; }
+                        664 => { __state = 665; }
+                        665 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 666;
+                        }
+                        666 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 667;
+                        }
+                        667 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 668;
+                        }
+                        668 => {
+                            if (unsafe { (*p_in1).flags } as i32 |
+                                            unsafe { (*p_in2).flags } as i32) & 1 != 0 {
+                                __state = 670;
+                            } else { __state = 669; }
+                        }
+                        669 => {
+                            i_a_1 =
+                                unsafe { sqlite3_vdbe_int_value(p_in2 as *const Mem) };
+                            __state = 672;
+                        }
+                        670 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 671;
+                        }
+                        671 => { __state = 60; }
+                        672 => {
+                            i_b_1 =
+                                unsafe { sqlite3_vdbe_int_value(p_in1 as *const Mem) };
+                            __state = 673;
+                        }
+                        673 => { op = unsafe { (*p_op).opcode }; __state = 674; }
+                        674 => {
+                            if op as i32 == 103 {
+                                __state = 676;
+                            } else { __state = 677; }
+                        }
+                        675 => { unsafe { (*p_out).u.i = i_a_1 }; __state = 694; }
+                        676 => { i_a_1 &= i_b_1; __state = 675; }
+                        677 => {
+                            if op as i32 == 104 {
+                                __state = 678;
+                            } else { __state = 679; }
+                        }
+                        678 => { i_a_1 |= i_b_1; __state = 675; }
+                        679 => {
+                            if i_b_1 != 0 as i64 {
+                                __state = 680;
+                            } else { __state = 675; }
+                        }
+                        680 => { { let _ = 0; }; __state = 681; }
+                        681 => {
+                            if i_b_1 < 0 as i64 {
+                                __state = 683;
+                            } else { __state = 682; }
+                        }
+                        682 => {
+                            if i_b_1 >= 64 as i64 {
+                                __state = 686;
+                            } else { __state = 687; }
+                        }
+                        683 => { { let _ = 0; }; __state = 684; }
+                        684 => {
+                            op = (2 * 105 + 1 - op as i32) as u8;
+                            __state = 685;
+                        }
+                        685 => {
+                            i_b_1 = if i_b_1 > -64 as i64 { -i_b_1 } else { 64 as i64 };
+                            __state = 682;
+                        }
+                        686 => {
+                            i_a_1 =
+                                if i_a_1 >= 0 as i64 || op as i32 == 105 { 0 } else { -1 }
+                                    as i64;
+                            __state = 675;
+                        }
+                        687 => {
+                            unsafe {
+                                memcpy(&raw mut u_a as *mut (), &raw mut i_a_1 as *const (),
+                                    core::mem::size_of::<u64>() as u64)
+                            };
+                            __state = 688;
+                        }
+                        688 => {
+                            if op as i32 == 105 {
+                                __state = 690;
+                            } else { __state = 691; }
+                        }
+                        689 => {
+                            unsafe {
+                                memcpy(&raw mut i_a_1 as *mut (), &raw mut u_a as *const (),
+                                    core::mem::size_of::<i64>() as u64)
+                            };
+                            __state = 675;
+                        }
+                        690 => { u_a <<= i_b_1 as u64; __state = 689; }
+                        691 => { u_a >>= i_b_1 as u64; __state = 692; }
+                        692 => {
+                            if i_a_1 < 0 as i64 {
+                                __state = 693;
+                            } else { __state = 689; }
+                        }
+                        693 => {
+                            u_a |=
+                                ((4294967295u32 as u64) << 32 | 4294967295u32 as u64) <<
+                                    64 as i64 - i_b_1;
+                            __state = 689;
+                        }
+                        694 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 4) as
+                                        u16
+                            };
+                            __state = 695;
+                        }
+                        695 => { __state = 60; }
+                        696 => { __state = 99; }
+                        697 => { __state = 100; }
+                        698 => { __state = 699; }
+                        699 => {
+                            unsafe { sqlite3_vdbe_mem_integerify(p_in1) };
+                            __state = 700;
+                        }
+                        700 => {
+                            unsafe {
+                                *(unsafe { &raw mut (*p_in1).u.i } as *mut u64) +=
+                                    unsafe { (*p_op).p2 } as u64
+                            };
+                            __state = 701;
+                        }
+                        701 => { __state = 60; }
+                        702 => { __state = 101; }
+                        703 => {
+                            if unsafe { (*p_in1).flags } as i32 & 4 == 0 {
+                                __state = 705;
+                            } else { __state = 704; }
+                        }
+                        704 => { __state = 712; }
+                        705 => {
+                            apply_affinity(p_in1, 67 as i8, encoding);
+                            __state = 706;
+                        }
+                        706 => {
+                            if unsafe { (*p_in1).flags } as i32 & 4 == 0 {
+                                __state = 707;
+                            } else { __state = 704; }
+                        }
+                        707 => { __state = 708; }
+                        708 => {
+                            if unsafe { (*p_op).p2 } == 0 {
+                                __state = 709;
+                            } else { __state = 710; }
+                        }
+                        709 => { rc = 20; __state = 711; }
+                        710 => { __state = 4; }
+                        711 => { __state = 17; }
+                        712 => {
+                            unsafe {
+                                (*p_in1).flags =
+                                    (unsafe { (*p_in1).flags } as i32 & !(3519 | 1024) | 4) as
+                                        u16
+                            };
+                            __state = 713;
+                        }
+                        713 => { __state = 60; }
+                        714 => { __state = 102; }
+                        715 => {
+                            if unsafe { (*p_in1).flags } as i32 & (4 | 32) != 0 {
+                                __state = 717;
+                            } else { __state = 716; }
+                        }
+                        716 => { __state = 60; }
+                        717 => { __state = 718; }
+                        718 => { __state = 719; }
+                        719 => {
+                            unsafe { sqlite3_vdbe_mem_realify(p_in1) };
+                            __state = 720;
+                        }
+                        720 => { __state = 716; }
+                        721 => { __state = 103; }
+                        722 => { __state = 723; }
+                        723 => { __state = 724; }
+                        724 => { __state = 725; }
+                        725 => { __state = 726; }
+                        726 => { __state = 727; }
+                        727 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 728;
+                        }
+                        728 => { __state = 729; }
+                        729 => {
+                            rc =
+                                if unsafe { (*p_in1).flags } as i32 & 1024 != 0 {
+                                    unsafe { sqlite3_vdbe_mem_expand_blob(p_in1) }
+                                } else { 0 };
+                            __state = 730;
+                        }
+                        730 => {
+                            if rc != 0 { __state = 732; } else { __state = 731; }
+                        }
+                        731 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_cast(p_in1, unsafe { (*p_op).p2 } as u8,
+                                        encoding)
+                                };
+                            __state = 733;
+                        }
+                        732 => { __state = 17; }
+                        733 => {
+                            if rc != 0 { __state = 735; } else { __state = 734; }
+                        }
+                        734 => { __state = 736; }
+                        735 => { __state = 17; }
+                        736 => { __state = 737; }
+                        737 => { __state = 60; }
+                        738 => { __state = 827; }
+                        739 => { __state = 740; }
+                        740 => { __state = 741; }
+                        741 => { __state = 742; }
+                        742 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 743;
+                        }
+                        743 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 744;
+                        }
+                        744 => {
+                            flags1__1 = unsafe { (*p_in1).flags };
+                            __state = 745;
+                        }
+                        745 => {
+                            flags3 = unsafe { (*p_in3).flags };
+                            __state = 746;
+                        }
+                        746 => {
+                            if flags1__1 as i32 & flags3 as i32 & 4 != 0 {
+                                __state = 748;
+                            } else { __state = 747; }
+                        }
+                        747 => {
+                            if (flags1__1 as i32 | flags3 as i32) & 1 != 0 {
+                                __state = 765;
+                            } else { __state = 766; }
+                        }
+                        748 => {
+                            if unsafe { (*p_in3).u.i } > unsafe { (*p_in1).u.i } {
+                                __state = 750;
+                            } else { __state = 751; }
+                        }
+                        749 => { __state = 763; }
+                        750 => {
+                            if unsafe {
+                                        *sqlite3a_g_tb.add(unsafe { (*p_op).opcode } as usize)
+                                    } != 0 {
+                                __state = 753;
+                            } else { __state = 752; }
+                        }
+                        751 => {
+                            if unsafe { (*p_in3).u.i } < unsafe { (*p_in1).u.i } {
+                                __state = 755;
+                            } else { __state = 756; }
+                        }
+                        752 => { i_compare = 1; __state = 749; }
+                        753 => { __state = 754; }
+                        754 => { __state = 4; }
+                        755 => {
+                            if unsafe {
+                                        *sqlite3a_l_tb.add(unsafe { (*p_op).opcode } as usize)
+                                    } != 0 {
+                                __state = 758;
+                            } else { __state = 757; }
+                        }
+                        756 => {
+                            if unsafe {
+                                        *sqlite3a_e_qb.add(unsafe { (*p_op).opcode } as usize)
+                                    } != 0 {
+                                __state = 761;
+                            } else { __state = 760; }
+                        }
+                        757 => { i_compare = -1; __state = 749; }
+                        758 => { __state = 759; }
+                        759 => { __state = 4; }
+                        760 => { i_compare = 0; __state = 749; }
+                        761 => { __state = 762; }
+                        762 => { __state = 4; }
+                        763 => { __state = 60; }
+                        764 => { { let _ = 0; }; __state = 809; }
+                        765 => {
+                            if unsafe { (*p_op).p5 } as i32 & 128 != 0 {
+                                __state = 767;
+                            } else { __state = 768; }
+                        }
+                        766 => {
+                            affinity = (unsafe { (*p_op).p5 } as i32 & 71) as i8;
+                            __state = 778;
+                        }
+                        767 => { { let _ = 0; }; __state = 769; }
+                        768 => { __state = 774; }
+                        769 => { { let _ = 0; }; __state = 770; }
+                        770 => { __state = 771; }
+                        771 => {
+                            if flags1__1 as i32 & flags3 as i32 & 1 != 0 &&
+                                    flags3 as i32 & 256 == 0 {
+                                __state = 772;
+                            } else { __state = 773; }
+                        }
+                        772 => { res = 0; __state = 764; }
+                        773 => {
+                            res = if flags3 as i32 & 1 != 0 { -1 } else { 1 };
+                            __state = 764;
+                        }
+                        774 => {
+                            if unsafe { (*p_op).p5 } as i32 & 16 != 0 {
+                                __state = 776;
+                            } else { __state = 775; }
+                        }
+                        775 => { i_compare = 1; __state = 777; }
+                        776 => { __state = 4; }
+                        777 => { __state = 60; }
+                        778 => {
+                            if affinity as i32 >= 67 {
+                                __state = 780;
+                            } else { __state = 781; }
+                        }
+                        779 => { { let _ = 0; }; __state = 808; }
+                        780 => {
+                            if (flags1__1 as i32 | flags3 as i32) & 2 != 0 {
+                                __state = 782;
+                            } else { __state = 779; }
+                        }
+                        781 => {
+                            if affinity as i32 == 66 &&
+                                    (flags1__1 as i32 | flags3 as i32) & 2 != 0 {
+                                __state = 788;
+                            } else { __state = 779; }
+                        }
+                        782 => {
+                            if flags1__1 as i32 & (4 | 32 | 8 | 2) == 2 {
+                                __state = 784;
+                            } else { __state = 783; }
+                        }
+                        783 => {
+                            if flags3 as i32 & (4 | 32 | 8 | 2) == 2 {
+                                __state = 787;
+                            } else { __state = 779; }
+                        }
+                        784 => { apply_numeric_affinity(p_in1, 0); __state = 785; }
+                        785 => { { let _ = 0; }; __state = 786; }
+                        786 => {
+                            flags3 = unsafe { (*p_in3).flags };
+                            __state = 783;
+                        }
+                        787 => { apply_numeric_affinity(p_in3, 0); __state = 779; }
+                        788 => {
+                            if flags1__1 as i32 & 2 != 0 {
+                                __state = 790;
+                            } else { __state = 791; }
+                        }
+                        789 => {
+                            if flags3 as i32 & 2 != 0 {
+                                __state = 800;
+                            } else { __state = 801; }
+                        }
+                        790 => {
+                            unsafe { (*p_in1).flags &= !(4 | 8 | 32) as u16 };
+                            __state = 789;
+                        }
+                        791 => {
+                            if flags1__1 as i32 & (4 | 8 | 32) != 0 {
+                                __state = 792;
+                            } else { __state = 789; }
+                        }
+                        792 => { __state = 793; }
+                        793 => { __state = 794; }
+                        794 => { __state = 795; }
+                        795 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_stringify(p_in1, encoding, 1 as u8)
+                            };
+                            __state = 796;
+                        }
+                        796 => { __state = 797; }
+                        797 => {
+                            flags1__1 =
+                                (unsafe { (*p_in1).flags } as i32 & !3519 |
+                                        flags1__1 as i32 & 3519) as u16;
+                            __state = 798;
+                        }
+                        798 => {
+                            if p_in1 == p_in3 { __state = 799; } else { __state = 789; }
+                        }
+                        799 => {
+                            flags3 = (flags1__1 as i32 | 2) as u16;
+                            __state = 789;
+                        }
+                        800 => {
+                            unsafe { (*p_in3).flags &= !(4 | 8 | 32) as u16 };
+                            __state = 779;
+                        }
+                        801 => {
+                            if flags3 as i32 & (4 | 8 | 32) != 0 {
+                                __state = 802;
+                            } else { __state = 779; }
+                        }
+                        802 => { __state = 803; }
+                        803 => { __state = 804; }
+                        804 => { __state = 805; }
+                        805 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_stringify(p_in3, encoding, 1 as u8)
+                            };
+                            __state = 806;
+                        }
+                        806 => { __state = 807; }
+                        807 => {
+                            flags3 =
+                                (unsafe { (*p_in3).flags } as i32 & !3519 |
+                                        flags3 as i32 & 3519) as u16;
+                            __state = 779;
+                        }
+                        808 => {
+                            res =
+                                unsafe {
+                                    sqlite3_mem_compare(p_in3 as *const Mem,
+                                        p_in1 as *const Mem,
+                                        unsafe { (*p_op).p4.p_coll } as *const CollSeq)
+                                };
+                            __state = 764;
+                        }
+                        809 => { { let _ = 0; }; __state = 810; }
+                        810 => { { let _ = 0; }; __state = 811; }
+                        811 => { { let _ = 0; }; __state = 812; }
+                        812 => { { let _ = 0; }; __state = 813; }
+                        813 => {
+                            if res < 0 { __state = 815; } else { __state = 816; }
+                        }
+                        814 => { i_compare = res; __state = 819; }
+                        815 => {
+                            res2 =
+                                unsafe {
+                                        *sqlite3a_l_tb.add(unsafe { (*p_op).opcode } as usize)
+                                    } as i32;
+                            __state = 814;
+                        }
+                        816 => {
+                            if res == 0 { __state = 817; } else { __state = 818; }
+                        }
+                        817 => {
+                            res2 =
+                                unsafe {
+                                        *sqlite3a_e_qb.add(unsafe { (*p_op).opcode } as usize)
+                                    } as i32;
+                            __state = 814;
+                        }
+                        818 => {
+                            res2 =
+                                unsafe {
+                                        *sqlite3a_g_tb.add(unsafe { (*p_op).opcode } as usize)
+                                    } as i32;
+                            __state = 814;
+                        }
+                        819 => { { let _ = 0; }; __state = 820; }
+                        820 => {
+                            unsafe { (*p_in3).flags = flags3 };
+                            __state = 821;
+                        }
+                        821 => { { let _ = 0; }; __state = 822; }
+                        822 => {
+                            unsafe { (*p_in1).flags = flags1__1 };
+                            __state = 823;
+                        }
+                        823 => { __state = 824; }
+                        824 => {
+                            if res2 != 0 { __state = 826; } else { __state = 825; }
+                        }
+                        825 => { __state = 60; }
+                        826 => { __state = 4; }
+                        827 => { __state = 109; }
+                        828 => { __state = 110; }
+                        829 => { __state = 830; }
+                        830 => {
+                            if i_compare == 0 { __state = 832; } else { __state = 831; }
+                        }
+                        831 => { __state = 60; }
+                        832 => { __state = 4; }
+                        833 => { __state = 111; }
+                        834 => { { let _ = 0; }; __state = 835; }
+                        835 => { { let _ = 0; }; __state = 836; }
+                        836 => { { let _ = 0; }; __state = 837; }
+                        837 => { __state = 60; }
+                        838 => { __state = 112; }
+                        839 => { __state = 840; }
+                        840 => { __state = 841; }
+                        841 => { __state = 842; }
+                        842 => { __state = 843; }
+                        843 => { __state = 844; }
+                        844 => { __state = 845; }
+                        845 => { __state = 846; }
+                        846 => { __state = 847; }
+                        847 => {
+                            if unsafe { (*p_op).p5 } as i32 & 1 == 0 {
+                                __state = 849;
+                            } else { __state = 850; }
+                        }
+                        848 => { n__2 = unsafe { (*p_op).p3 }; __state = 855; }
+                        849 => { a_permute = core::ptr::null_mut(); __state = 848; }
+                        850 => { { let _ = 0; }; __state = 851; }
+                        851 => { { let _ = 0; }; __state = 852; }
+                        852 => { { let _ = 0; }; __state = 853; }
+                        853 => {
+                            a_permute =
+                                unsafe {
+                                    unsafe {
+                                        (*p_op.offset(-1 as isize)).p4.ai.offset(1 as isize)
+                                    }
+                                };
+                            __state = 854;
+                        }
+                        854 => { { let _ = 0; }; __state = 848; }
+                        855 => {
+                            p_key_info =
+                                unsafe { (*p_op).p4.p_key_info } as *const KeyInfo;
+                            __state = 856;
+                        }
+                        856 => { { let _ = 0; }; __state = 857; }
+                        857 => { { let _ = 0; }; __state = 858; }
+                        858 => { { let _ = 0; }; __state = 859; }
+                        859 => { p1__1 = unsafe { (*p_op).p1 }; __state = 860; }
+                        860 => { p2__1 = unsafe { (*p_op).p2 }; __state = 861; }
+                        861 => { i = 0; __state = 863; }
+                        862 => { { let _ = 0; }; __state = 880; }
+                        863 => {
+                            if i < n__2 { __state = 864; } else { __state = 862; }
+                        }
+                        864 => {
+                            idx =
+                                if !(a_permute).is_null() {
+                                    unsafe { *a_permute.offset(i as isize) }
+                                } else { i as u32 };
+                            __state = 866;
+                        }
+                        865 => {
+                            { let __p = &mut i; let __t = *__p; *__p += 1; __t };
+                            __state = 863;
+                        }
+                        866 => { { let _ = 0; }; __state = 867; }
+                        867 => { { let _ = 0; }; __state = 868; }
+                        868 => { __state = 869; }
+                        869 => { __state = 870; }
+                        870 => { { let _ = 0; }; __state = 871; }
+                        871 => {
+                            p_coll =
+                                unsafe {
+                                    *(unsafe { (*p_key_info).a_coll.as_ptr() } as
+                                                *const *mut CollSeq).offset(i as isize)
+                                };
+                            __state = 872;
+                        }
+                        872 => {
+                            b_rev =
+                                unsafe {
+                                            *unsafe { (*p_key_info).a_sort_flags.offset(i as isize) }
+                                        } as i32 & 1;
+                            __state = 873;
+                        }
+                        873 => {
+                            i_compare =
+                                unsafe {
+                                    sqlite3_mem_compare(unsafe {
+                                                &raw mut *a_mem.add((p1__1 as u32 + idx) as usize)
+                                            } as *const Mem,
+                                        unsafe {
+                                                &raw mut *a_mem.add((p2__1 as u32 + idx) as usize)
+                                            } as *const Mem, p_coll as *const CollSeq)
+                                };
+                            __state = 874;
+                        }
+                        874 => {
+                            if i_compare != 0 { __state = 875; } else { __state = 865; }
+                        }
+                        875 => {
+                            if unsafe {
+                                                    *unsafe { (*p_key_info).a_sort_flags.offset(i as isize) }
+                                                } as i32 & 2 != 0 &&
+                                    (unsafe {
+                                                        (*a_mem.add((p1__1 as u32 + idx) as usize)).flags
+                                                    } as i32 & 1 != 0 ||
+                                        unsafe { (*a_mem.add((p2__1 as u32 + idx) as usize)).flags }
+                                                    as i32 & 1 != 0) {
+                                __state = 877;
+                            } else { __state = 876; }
+                        }
+                        876 => {
+                            if b_rev != 0 { __state = 879; } else { __state = 878; }
+                        }
+                        877 => { i_compare = -i_compare; __state = 876; }
+                        878 => { __state = 862; }
+                        879 => { i_compare = -i_compare; __state = 878; }
+                        880 => { __state = 60; }
+                        881 => { __state = 113; }
+                        882 => { { let _ = 0; }; __state = 883; }
+                        883 => {
+                            if i_compare < 0 { __state = 885; } else { __state = 886; }
+                        }
+                        884 => { __state = 60; }
+                        885 => { __state = 887; }
+                        886 => {
+                            if i_compare == 0 { __state = 888; } else { __state = 889; }
+                        }
+                        887 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_op).p1 } - 1) as isize)
+                                };
+                            __state = 884;
+                        }
+                        888 => { __state = 890; }
+                        889 => { __state = 891; }
+                        890 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_op).p2 } - 1) as isize)
+                                };
+                            __state = 884;
+                        }
+                        891 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*p_op).p3 } - 1) as isize)
+                                };
+                            __state = 884;
+                        }
+                        892 => { __state = 907; }
+                        893 => { __state = 894; }
+                        894 => {
+                            v1 =
+                                unsafe {
+                                    sqlite3_vdbe_boolean_value(unsafe {
+                                            &mut *a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                        }, 2)
+                                };
+                            __state = 895;
+                        }
+                        895 => {
+                            v2 =
+                                unsafe {
+                                    sqlite3_vdbe_boolean_value(unsafe {
+                                            &mut *a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                        }, 2)
+                                };
+                            __state = 896;
+                        }
+                        896 => {
+                            if unsafe { (*p_op).opcode } as i32 == 44 {
+                                __state = 898;
+                            } else { __state = 899; }
+                        }
+                        897 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 902;
+                        }
+                        898 => { __state = 900; }
+                        899 => { __state = 901; }
+                        900 => {
+                            v1 = and_logic[(v1 * 3 + v2) as usize] as i32;
+                            __state = 897;
+                        }
+                        901 => {
+                            v1 = or_logic[(v1 * 3 + v2) as usize] as i32;
+                            __state = 897;
+                        }
+                        902 => {
+                            if v1 == 2 { __state = 904; } else { __state = 905; }
+                        }
+                        903 => { __state = 60; }
+                        904 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 1) as
+                                        u16
+                            };
+                            __state = 903;
+                        }
+                        905 => {
+                            unsafe { (*p_out).u.i = v1 as i64 };
+                            __state = 906;
+                        }
+                        906 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 4) as
+                                        u16
+                            };
+                            __state = 903;
+                        }
+                        907 => { __state = 115; }
+                        908 => { __state = 116; }
+                        909 => { { let _ = 0; }; __state = 910; }
+                        910 => { { let _ = 0; }; __state = 911; }
+                        911 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(unsafe {
+                                        &mut *a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                    },
+                                    (unsafe {
+                                                sqlite3_vdbe_boolean_value(unsafe {
+                                                        &mut *a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                                    }, unsafe { (*p_op).p3 })
+                                            } ^ unsafe { (*p_op).p4.i }) as i64)
+                            };
+                            __state = 912;
+                        }
+                        912 => { __state = 60; }
+                        913 => { __state = 117; }
+                        914 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 915;
+                        }
+                        915 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 == 0 {
+                                __state = 917;
+                            } else { __state = 918; }
+                        }
+                        916 => { __state = 60; }
+                        917 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(p_out,
+                                    (unsafe { sqlite3_vdbe_boolean_value(p_in1, 0) } == 0) as
+                                            i32 as i64)
+                            };
+                            __state = 916;
+                        }
+                        918 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 916;
+                        }
+                        919 => { __state = 118; }
+                        920 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 921;
+                        }
+                        921 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 922;
+                        }
+                        922 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 == 0 {
+                                __state = 924;
+                            } else { __state = 923; }
+                        }
+                        923 => { __state = 60; }
+                        924 => {
+                            unsafe { (*p_out).flags = 4 as u16 };
+                            __state = 925;
+                        }
+                        925 => {
+                            unsafe {
+                                (*p_out).u.i =
+                                    !unsafe { sqlite3_vdbe_int_value(p_in1 as *const Mem) }
+                            };
+                            __state = 923;
+                        }
+                        926 => { __state = 119; }
+                        927 => { { let _ = 0; }; __state = 928; }
+                        928 => {
+                            if !(unsafe { (*p).p_frame }).is_null() {
+                                __state = 930;
+                            } else { __state = 931; }
+                        }
+                        929 => { __state = 938; }
+                        930 => {
+                            i_addr =
+                                unsafe { p_op.offset_from(unsafe { (*p).a_op }) } as i64 as
+                                        i32 as u32;
+                            __state = 932;
+                        }
+                        931 => {
+                            if unsafe { (*unsafe { (*p).a_op.offset(0 as isize) }).p1 }
+                                    == unsafe { (*p_op).p1 } {
+                                __state = 936;
+                            } else { __state = 929; }
+                        }
+                        932 => {
+                            if unsafe {
+                                                *unsafe {
+                                                        (*unsafe {
+                                                                            (*p).p_frame
+                                                                        }).a_once.add((i_addr / 8 as u32) as usize)
+                                                    }
+                                            } as i32 & 1 << (i_addr & 7 as u32) != 0 {
+                                __state = 934;
+                            } else { __state = 933; }
+                        }
+                        933 => {
+                            unsafe {
+                                *unsafe {
+                                            (*unsafe {
+                                                                (*p).p_frame
+                                                            }).a_once.add((i_addr / 8 as u32) as usize)
+                                        } |= (1 << (i_addr & 7 as u32)) as u8
+                            };
+                            __state = 929;
+                        }
+                        934 => { __state = 935; }
+                        935 => { __state = 4; }
+                        936 => { __state = 937; }
+                        937 => { __state = 4; }
+                        938 => {
+                            unsafe {
+                                (*p_op).p1 =
+                                    unsafe { (*unsafe { (*p).a_op.offset(0 as isize) }).p1 }
+                            };
+                            __state = 939;
+                        }
+                        939 => { __state = 60; }
+                        940 => { __state = 120; }
+                        941 => {
+                            c =
+                                unsafe {
+                                    sqlite3_vdbe_boolean_value(unsafe {
+                                            &mut *a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                        }, unsafe { (*p_op).p3 })
+                                };
+                            __state = 942;
+                        }
+                        942 => { __state = 943; }
+                        943 => {
+                            if c != 0 { __state = 945; } else { __state = 944; }
+                        }
+                        944 => { __state = 60; }
+                        945 => { __state = 4; }
+                        946 => { __state = 121; }
+                        947 => {
+                            c__1 =
+                                (unsafe {
+                                                sqlite3_vdbe_boolean_value(unsafe {
+                                                        &mut *a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                                    }, (unsafe { (*p_op).p3 } == 0) as i32 as i32)
+                                            } == 0) as i32 as i32;
+                            __state = 948;
+                        }
+                        948 => { __state = 949; }
+                        949 => {
+                            if c__1 != 0 { __state = 951; } else { __state = 950; }
+                        }
+                        950 => { __state = 60; }
+                        951 => { __state = 4; }
+                        952 => { __state = 122; }
+                        953 => { __state = 954; }
+                        954 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 != 0 {
+                                __state = 956;
+                            } else { __state = 955; }
+                        }
+                        955 => { __state = 60; }
+                        956 => { __state = 4; }
+                        957 => { __state = 123; }
+                        958 => { __state = 959; }
+                        959 => { __state = 960; }
+                        960 => { { let _ = 0; }; __state = 961; }
+                        961 => { { let _ = 0; }; __state = 962; }
+                        962 => {
+                            if unsafe { (*p_op).p1 } >= 0 {
+                                __state = 964;
+                            } else { __state = 965; }
+                        }
+                        963 => { __state = 1000; }
+                        964 => {
+                            p_c =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 966;
+                        }
+                        965 => { { let _ = 0; }; __state = 994; }
+                        966 => { { let _ = 0; }; __state = 967; }
+                        967 => { { let _ = 0; }; __state = 968; }
+                        968 => {
+                            if unsafe { (*p_op).p3 } <
+                                    unsafe { (*p_c).n_hdr_parsed } as i32 {
+                                __state = 969;
+                            } else { __state = 970; }
+                        }
+                        969 => {
+                            serial_type =
+                                unsafe {
+                                    *(unsafe { (*p_c).a_type.as_ptr() } as
+                                                *mut u32).offset(unsafe { (*p_op).p3 } as isize)
+                                };
+                            __state = 971;
+                        }
+                        970 => {
+                            type_mask = (1 << unsafe { (*p_op).p4.i } - 1) as u16;
+                            __state = 989;
+                        }
+                        971 => {
+                            if serial_type >= 12 as u32 {
+                                __state = 972;
+                            } else { __state = 973; }
+                        }
+                        972 => {
+                            if serial_type & 1 as u32 != 0 {
+                                __state = 974;
+                            } else { __state = 975; }
+                        }
+                        973 => { __state = 976; }
+                        974 => { type_mask = 4 as u16; __state = 963; }
+                        975 => { type_mask = 8 as u16; __state = 963; }
+                        976 => { __state = 977; }
+                        977 => { __state = 978; }
+                        978 => { __state = 979; }
+                        979 => { __state = 980; }
+                        980 => { __state = 981; }
+                        981 => { __state = 982; }
+                        982 => { __state = 983; }
+                        983 => { __state = 984; }
+                        984 => { __state = 985; }
+                        985 => { __state = 986; }
+                        986 => { __state = 987; }
+                        987 => { __state = 988; }
+                        988 => {
+                            type_mask = a_mask[serial_type as usize] as u16;
+                            __state = 963;
+                        }
+                        989 => { __state = 990; }
+                        990 => { __state = 991; }
+                        991 => { __state = 992; }
+                        992 => { __state = 993; }
+                        993 => { __state = 963; }
+                        994 => {
+                            type_mask =
+                                (1 <<
+                                        unsafe {
+                                                sqlite3_value_type(unsafe {
+                                                            &raw mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                                        } as *mut sqlite3_value)
+                                            } - 1) as u16;
+                            __state = 995;
+                        }
+                        995 => { __state = 996; }
+                        996 => { __state = 997; }
+                        997 => { __state = 998; }
+                        998 => { __state = 999; }
+                        999 => { __state = 963; }
+                        1000 => {
+                            if type_mask as i32 & unsafe { (*p_op).p5 } as i32 != 0 {
+                                __state = 1002;
+                            } else { __state = 1001; }
+                        }
+                        1001 => { __state = 60; }
+                        1002 => { __state = 4; }
+                        1003 => { __state = 124; }
+                        1004 => { __state = 60; }
+                        1005 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_null(unsafe {
+                                        a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                    })
+                            };
+                            __state = 1004;
+                        }
+                        1006 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(unsafe {
+                                        a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                    }, 0 as i64)
+                            };
+                            __state = 1004;
+                        }
+                        1007 => { __state = 125; }
+                        1008 => { __state = 1009; }
+                        1009 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 == 0 {
+                                __state = 1011;
+                            } else { __state = 1010; }
+                        }
+                        1010 => { __state = 60; }
+                        1011 => { __state = 4; }
+                        1012 => { __state = 126; }
+                        1013 => { { let _ = 0; }; __state = 1014; }
+                        1014 => {
+                            p_c_1 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1015;
+                        }
+                        1015 => {
+                            if !(p_c_1).is_null() && unsafe { (*p_c_1).null_row } != 0 {
+                                __state = 1017;
+                            } else { __state = 1016; }
+                        }
+                        1016 => { __state = 60; }
+                        1017 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_null(unsafe {
+                                        a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                    })
+                            };
+                            __state = 1018;
+                        }
+                        1018 => { __state = 4; }
+                        1019 => { __state = 1186; }
+                        1020 => { __state = 1021; }
+                        1021 => { __state = 1022; }
+                        1022 => { __state = 1023; }
+                        1023 => { __state = 1024; }
+                        1024 => { __state = 1025; }
+                        1025 => { __state = 1026; }
+                        1026 => { __state = 1027; }
+                        1027 => { __state = 1028; }
+                        1028 => { __state = 1029; }
+                        1029 => { __state = 1030; }
+                        1030 => { __state = 1031; }
+                        1031 => { __state = 1032; }
+                        1032 => { __state = 1033; }
+                        1033 => { { let _ = 0; }; __state = 1034; }
+                        1034 => { { let _ = 0; }; __state = 1035; }
+                        1035 => {
+                            p_c_2 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1036;
+                        }
+                        1036 => {
+                            p2__2 = unsafe { (*p_op).p2 } as u32;
+                            __state = 1037;
+                        }
+                        1037 => { __state = 8; }
+                        1038 => { { let _ = 0; }; __state = 1039; }
+                        1039 => {
+                            a_offset = unsafe { (*p_c_2).a_offset };
+                            __state = 1040;
+                        }
+                        1040 => { { let _ = 0; }; __state = 1041; }
+                        1041 => { { let _ = 0; }; __state = 1042; }
+                        1042 => { { let _ = 0; }; __state = 1043; }
+                        1043 => { { let _ = 0; }; __state = 1044; }
+                        1044 => {
+                            if unsafe { (*p_c_2).cache_status } !=
+                                    unsafe { (*p).cache_ctr } {
+                                __state = 1046;
+                            } else { __state = 1047; }
+                        }
+                        1045 => {
+                            if unsafe { (*p_c_2).n_hdr_parsed } as u32 <= p2__2 {
+                                __state = 1100;
+                            } else { __state = 1101; }
+                        }
+                        1046 => {
+                            if unsafe { (*p_c_2).null_row } != 0 {
+                                __state = 1049;
+                            } else { __state = 1050; }
+                        }
+                        1047 => {
+                            if unsafe {
+                                        sqlite3_btree_cursor_has_moved(unsafe {
+                                                (*p_c_2).uc.p_cursor
+                                            })
+                                    } != 0 {
+                                __state = 1095;
+                            } else { __state = 1045; }
+                        }
+                        1048 => {
+                            unsafe {
+                                (*p_c_2).cache_status = unsafe { (*p).cache_ctr }
+                            };
+                            __state = 1082;
+                        }
+                        1049 => {
+                            if unsafe { (*p_c_2).e_cur_type } as i32 == 3 &&
+                                    unsafe { (*p_c_2).seek_result } > 0 {
+                                __state = 1051;
+                            } else { __state = 1052; }
+                        }
+                        1050 => {
+                            p_crsr = unsafe { (*p_c_2).uc.p_cursor };
+                            __state = 1060;
+                        }
+                        1051 => {
+                            p_reg =
+                                unsafe {
+                                    a_mem.offset(unsafe { (*p_c_2).seek_result } as isize)
+                                };
+                            __state = 1053;
+                        }
+                        1052 => {
+                            p_dest =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1057;
+                        }
+                        1053 => { { let _ = 0; }; __state = 1054; }
+                        1054 => { { let _ = 0; }; __state = 1055; }
+                        1055 => {
+                            unsafe {
+                                (*p_c_2).payload_size =
+                                    {
+                                        unsafe { (*p_c_2).sz_row = unsafe { (*p_reg).n } as u32 };
+                                        unsafe { (*p_c_2).sz_row }
+                                    }
+                            };
+                            __state = 1056;
+                        }
+                        1056 => {
+                            unsafe {
+                                (*p_c_2).a_row =
+                                    unsafe { (*p_reg).z } as *mut u8 as *const u8
+                            };
+                            __state = 1048;
+                        }
+                        1057 => { __state = 1058; }
+                        1058 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_dest) };
+                            __state = 1059;
+                        }
+                        1059 => { __state = 10; }
+                        1060 => {
+                            if unsafe { (*p_c_2).deferred_moveto } != 0 {
+                                __state = 1062;
+                            } else { __state = 1063; }
+                        }
+                        1061 => { { let _ = 0; }; __state = 1076; }
+                        1062 => { __state = 1064; }
+                        1063 => {
+                            if unsafe { sqlite3_btree_cursor_has_moved(p_crsr) } != 0 {
+                                __state = 1072;
+                            } else { __state = 1061; }
+                        }
+                        1064 => { { let _ = 0; }; __state = 1065; }
+                        1065 => {
+                            if !(unsafe { (*p_c_2).ub.a_alt_map }).is_null() &&
+                                    {
+                                            i_map =
+                                                unsafe {
+                                                    *unsafe {
+                                                            (*p_c_2).ub.a_alt_map.add((1 as u32 + p2__2) as usize)
+                                                        }
+                                                };
+                                            i_map
+                                        } > 0 as u32 {
+                                __state = 1067;
+                            } else { __state = 1066; }
+                        }
+                        1066 => {
+                            rc = unsafe { sqlite3_vdbe_finish_moveto(p_c_2) };
+                            __state = 1070;
+                        }
+                        1067 => {
+                            p_c_2 = unsafe { (*p_c_2).p_alt_cursor };
+                            __state = 1068;
+                        }
+                        1068 => { p2__2 = i_map - 1 as u32; __state = 1069; }
+                        1069 => { __state = 8; }
+                        1070 => {
+                            if rc != 0 { __state = 1071; } else { __state = 1061; }
+                        }
+                        1071 => { __state = 17; }
+                        1072 => {
+                            rc = unsafe { sqlite3_vdbe_handle_moved_cursor(p_c_2) };
+                            __state = 1073;
+                        }
+                        1073 => {
+                            if rc != 0 { __state = 1075; } else { __state = 1074; }
+                        }
+                        1074 => { __state = 8; }
+                        1075 => { __state = 17; }
+                        1076 => { { let _ = 0; }; __state = 1077; }
+                        1077 => { { let _ = 0; }; __state = 1078; }
+                        1078 => {
+                            unsafe {
+                                (*p_c_2).payload_size =
+                                    unsafe { sqlite3_btree_payload_size(p_crsr) }
+                            };
+                            __state = 1079;
+                        }
+                        1079 => {
+                            unsafe {
+                                (*p_c_2).a_row =
+                                    unsafe {
+                                            sqlite3_btree_payload_fetch(p_crsr,
+                                                unsafe { &mut (*p_c_2).sz_row })
+                                        } as *const u8
+                            };
+                            __state = 1080;
+                        }
+                        1080 => { { let _ = 0; }; __state = 1081; }
+                        1081 => { { let _ = 0; }; __state = 1048; }
+                        1082 => {
+                            if {
+                                        let __v =
+                                            unsafe { *unsafe { (*p_c_2).a_row.offset(0 as isize) } } as
+                                                u32;
+                                        unsafe { *a_offset.offset(0 as isize) = __v };
+                                        __v
+                                    } < 128 as u32 {
+                                __state = 1084;
+                            } else { __state = 1085; }
+                        }
+                        1083 => {
+                            unsafe { (*p_c_2).n_hdr_parsed = 0 as u16 };
+                            __state = 1086;
+                        }
+                        1084 => {
+                            unsafe { (*p_c_2).i_hdr_offset = 1 as u32 };
+                            __state = 1083;
+                        }
+                        1085 => {
+                            unsafe {
+                                (*p_c_2).i_hdr_offset =
+                                    unsafe {
+                                            sqlite3_get_varint32(unsafe { (*p_c_2).a_row }, a_offset)
+                                        } as u32
+                            };
+                            __state = 1083;
+                        }
+                        1086 => {
+                            if unsafe { (*p_c_2).sz_row } <
+                                    unsafe { *a_offset.offset(0 as isize) } {
+                                __state = 1087;
+                            } else { __state = 1088; }
+                        }
+                        1087 => {
+                            unsafe { (*p_c_2).a_row = core::ptr::null() };
+                            __state = 1089;
+                        }
+                        1088 => {
+                            z_data = unsafe { (*p_c_2).a_row };
+                            __state = 1092;
+                        }
+                        1089 => {
+                            unsafe { (*p_c_2).sz_row = 0 as u32 };
+                            __state = 1090;
+                        }
+                        1090 => {
+                            if unsafe { *a_offset.offset(0 as isize) } > 98307 as u32 ||
+                                    unsafe { *a_offset.offset(0 as isize) } >
+                                        unsafe { (*p_c_2).payload_size } {
+                                __state = 1091;
+                            } else { __state = 1045; }
+                        }
+                        1091 => { __state = 11; }
+                        1092 => { { let _ = 0; }; __state = 1093; }
+                        1093 => { __state = 1094; }
+                        1094 => { __state = 9; }
+                        1095 => {
+                            rc = unsafe { sqlite3_vdbe_handle_moved_cursor(p_c_2) };
+                            __state = 1096;
+                        }
+                        1096 => {
+                            if rc != 0 { __state = 1098; } else { __state = 1097; }
+                        }
+                        1097 => { __state = 8; }
+                        1098 => { __state = 17; }
+                        1099 => { { let _ = 0; }; __state = 1141; }
+                        1100 => {
+                            if unsafe { (*p_c_2).i_hdr_offset } <
+                                    unsafe { *a_offset.offset(0 as isize) } {
+                                __state = 1103;
+                            } else { __state = 1104; }
+                        }
+                        1101 => {
+                            t =
+                                unsafe {
+                                    *(unsafe { (*p_c_2).a_type.as_ptr() } as
+                                                *mut u32).add(p2__2 as usize)
+                                };
+                            __state = 1099;
+                        }
+                        1102 => {
+                            if unsafe { (*p_c_2).n_hdr_parsed } as u32 <= p2__2 {
+                                __state = 1135;
+                            } else { __state = 1099; }
+                        }
+                        1103 => {
+                            if unsafe { (*p_c_2).a_row } == core::ptr::null() {
+                                __state = 1106;
+                            } else { __state = 1107; }
+                        }
+                        1104 => { t = 0 as u32; __state = 1102; }
+                        1105 => { __state = 9; }
+                        1106 => {
+                            unsafe {
+                                memset(&raw mut s_mem as *mut (), 0,
+                                    core::mem::size_of::<Mem>() as u64)
+                            };
+                            __state = 1108;
+                        }
+                        1107 => {
+                            z_data = unsafe { (*p_c_2).a_row };
+                            __state = 1105;
+                        }
+                        1108 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_from_btree_zero_offset(unsafe {
+                                            (*p_c_2).uc.p_cursor
+                                        }, unsafe { *a_offset.offset(0 as isize) }, &mut s_mem)
+                                };
+                            __state = 1109;
+                        }
+                        1109 => {
+                            if rc != 0 { __state = 1111; } else { __state = 1110; }
+                        }
+                        1110 => {
+                            z_data = s_mem.z as *mut u8 as *const u8;
+                            __state = 1105;
+                        }
+                        1111 => { __state = 17; }
+                        1112 => {
+                            offset64 =
+                                unsafe { *a_offset.offset(i__1 as isize) } as u64;
+                            __state = 1113;
+                        }
+                        1113 => {
+                            z_hdr =
+                                unsafe {
+                                    z_data.add(unsafe { (*p_c_2).i_hdr_offset } as usize)
+                                };
+                            __state = 1114;
+                        }
+                        1114 => {
+                            z_end_hdr =
+                                unsafe {
+                                    z_data.add(unsafe { *a_offset.offset(0 as isize) } as usize)
+                                };
+                            __state = 1115;
+                        }
+                        1115 => { __state = 1116; }
+                        1116 => {
+                            if {
+                                        let __v =
+                                            { t = unsafe { *z_hdr.offset(0 as isize) } as u32; t };
+                                        unsafe {
+                                            *(unsafe { (*p_c_2).a_type.as_ptr() } as
+                                                            *mut u32).offset(i__1 as isize) = __v
+                                        };
+                                        __v
+                                    } < 128 as u32 {
+                                __state = 1120;
+                            } else { __state = 1121; }
+                        }
+                        1117 => {
+                            if z_hdr >= z_end_hdr &&
+                                        (z_hdr > z_end_hdr ||
+                                            offset64 != unsafe { (*p_c_2).payload_size } as u64) ||
+                                    offset64 > unsafe { (*p_c_2).payload_size } as u64 {
+                                __state = 1126;
+                            } else { __state = 1125; }
+                        }
+                        1118 => {
+                            if i__1 as u32 <= p2__2 && z_hdr < z_end_hdr {
+                                __state = 1116;
+                            } else { __state = 1117; }
+                        }
+                        1119 => {
+                            unsafe {
+                                *a_offset.offset({ let __p = &mut i__1; *__p += 1; *__p } as
+                                                isize) = (offset64 & 4294967295u32 as u64) as u32
+                            };
+                            __state = 1118;
+                        }
+                        1120 => {
+                            {
+                                let __p = &mut z_hdr;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1122;
+                        }
+                        1121 => {
+                            {
+                                let __n = unsafe { sqlite3_get_varint32(z_hdr, &mut t) };
+                                let __p = &mut z_hdr;
+                                *__p = unsafe { (*__p).add(__n as usize) };
+                            };
+                            __state = 1123;
+                        }
+                        1122 => {
+                            offset64 +=
+                                unsafe { sqlite3_vdbe_one_byte_serial_type_len(t as u8) } as
+                                    u64;
+                            __state = 1119;
+                        }
+                        1123 => {
+                            unsafe {
+                                *(unsafe { (*p_c_2).a_type.as_ptr() } as
+                                                *mut u32).offset(i__1 as isize) = t
+                            };
+                            __state = 1124;
+                        }
+                        1124 => {
+                            offset64 +=
+                                unsafe { sqlite3_vdbe_serial_type_len(t) } as u64;
+                            __state = 1119;
+                        }
+                        1125 => {
+                            unsafe { (*p_c_2).n_hdr_parsed = i__1 as u16 };
+                            __state = 1132;
+                        }
+                        1126 => {
+                            if unsafe { *a_offset.offset(0 as isize) } == 0 as u32 {
+                                __state = 1127;
+                            } else { __state = 1128; }
+                        }
+                        1127 => { i__1 = 0; __state = 1129; }
+                        1128 => {
+                            if unsafe { (*p_c_2).a_row } == core::ptr::null() {
+                                __state = 1131;
+                            } else { __state = 1130; }
+                        }
+                        1129 => { z_hdr = z_end_hdr; __state = 1125; }
+                        1130 => { __state = 11; }
+                        1131 => {
+                            unsafe { sqlite3_vdbe_mem_release(&mut s_mem) };
+                            __state = 1130;
+                        }
+                        1132 => {
+                            unsafe {
+                                (*p_c_2).i_hdr_offset =
+                                    unsafe { z_hdr.offset_from(z_data) } as i64 as u32
+                            };
+                            __state = 1133;
+                        }
+                        1133 => {
+                            if unsafe { (*p_c_2).a_row } == core::ptr::null() {
+                                __state = 1134;
+                            } else { __state = 1102; }
+                        }
+                        1134 => {
+                            unsafe { sqlite3_vdbe_mem_release(&mut s_mem) };
+                            __state = 1102;
+                        }
+                        1135 => {
+                            p_dest =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1136;
+                        }
+                        1136 => { __state = 1137; }
+                        1137 => {
+                            if unsafe { (*p_op).p4type } as i32 == -11 {
+                                __state = 1139;
+                            } else { __state = 1140; }
+                        }
+                        1138 => { __state = 10; }
+                        1139 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_shallow_copy(p_dest,
+                                    unsafe { (*p_op).p4.p_mem } as *const Mem, 8192)
+                            };
+                            __state = 1138;
+                        }
+                        1140 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_dest) };
+                            __state = 1138;
+                        }
+                        1141 => { { let _ = 0; }; __state = 1142; }
+                        1142 => {
+                            p_dest =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1143;
+                        }
+                        1143 => { __state = 1144; }
+                        1144 => { { let _ = 0; }; __state = 1145; }
+                        1145 => {
+                            if unsafe { (*p_dest).flags } as i32 & (32768 | 4096) != 0 {
+                                __state = 1147;
+                            } else { __state = 1146; }
+                        }
+                        1146 => { { let _ = 0; }; __state = 1148; }
+                        1147 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_dest) };
+                            __state = 1146;
+                        }
+                        1148 => {
+                            if unsafe { (*p_c_2).sz_row } >=
+                                    unsafe { *a_offset.add((p2__2 + 1 as u32) as usize) } {
+                                __state = 1150;
+                            } else { __state = 1151; }
+                        }
+                        1149 => { __state = 10; }
+                        1150 => {
+                            z_data =
+                                unsafe {
+                                    unsafe {
+                                        (*p_c_2).a_row.add(unsafe { *a_offset.add(p2__2 as usize) }
+                                                as usize)
+                                    }
+                                };
+                            __state = 1152;
+                        }
+                        1151 => { __state = 1168; }
+                        1152 => {
+                            if t < 12 as u32 {
+                                __state = 1153;
+                            } else { __state = 1154; }
+                        }
+                        1153 => {
+                            unsafe { sqlite3_vdbe_serial_get(z_data, t, p_dest) };
+                            __state = 1149;
+                        }
+                        1154 => { __state = 1155; }
+                        1155 => {
+                            unsafe {
+                                (*p_dest).n =
+                                    { len = ((t - 12 as u32) / 2 as u32) as i32; len }
+                            };
+                            __state = 1156;
+                        }
+                        1156 => {
+                            unsafe { (*p_dest).enc = encoding };
+                            __state = 1157;
+                        }
+                        1157 => {
+                            if unsafe { (*p_dest).sz_malloc } < len + 2 {
+                                __state = 1159;
+                            } else { __state = 1160; }
+                        }
+                        1158 => {
+                            unsafe {
+                                memcpy(unsafe { (*p_dest).z } as *mut (),
+                                    z_data as *const (), len as u64)
+                            };
+                            __state = 1165;
+                        }
+                        1159 => {
+                            if len > unsafe { (*db).a_limit[0 as usize] } {
+                                __state = 1162;
+                            } else { __state = 1161; }
+                        }
+                        1160 => {
+                            unsafe { (*p_dest).z = unsafe { (*p_dest).z_malloc } };
+                            __state = 1158;
+                        }
+                        1161 => {
+                            unsafe { (*p_dest).flags = 1 as u16 };
+                            __state = 1163;
+                        }
+                        1162 => { __state = 19; }
+                        1163 => {
+                            if unsafe { sqlite3_vdbe_mem_grow(p_dest, len + 2, 0) } != 0
+                                {
+                                __state = 1164;
+                            } else { __state = 1158; }
+                        }
+                        1164 => { __state = 20; }
+                        1165 => {
+                            unsafe {
+                                *unsafe { (*p_dest).z.offset(len as isize) } = 0 as i8
+                            };
+                            __state = 1166;
+                        }
+                        1166 => {
+                            unsafe {
+                                *unsafe { (*p_dest).z.offset((len + 1) as isize) } = 0 as i8
+                            };
+                            __state = 1167;
+                        }
+                        1167 => {
+                            unsafe {
+                                (*p_dest).flags = a_flag[(t & 1 as u32) as usize] as u16
+                            };
+                            __state = 1149;
+                        }
+                        1168 => {
+                            unsafe { (*p_dest).enc = encoding };
+                            __state = 1169;
+                        }
+                        1169 => { { let _ = 0; }; __state = 1170; }
+                        1170 => {
+                            if { p5 = (unsafe { (*p_op).p5 } as i32 & 192) as u8; p5 }
+                                                as i32 != 0 &&
+                                        (p5 as i32 == 128 ||
+                                            t >= 12 as u32 &&
+                                                (t & 1 as u32 == 0 as u32 || p5 as i32 == 192)) ||
+                                    unsafe { sqlite3_vdbe_serial_type_len(t) } == 0 as u32 {
+                                __state = 1171;
+                            } else { __state = 1172; }
+                        }
+                        1171 => {
+                            unsafe {
+                                sqlite3_vdbe_serial_get(sqlite3_ctype_map.as_ptr() as
+                                            *mut u8 as *const u8, t, p_dest)
+                            };
+                            __state = 1149;
+                        }
+                        1172 => {
+                            rc =
+                                vdbe_column_from_overflow(unsafe { &mut *p_c_2 },
+                                    p2__2 as i32, t,
+                                    unsafe { *a_offset.add(p2__2 as usize) } as i64,
+                                    unsafe { (*p).cache_ctr }, col_cache_ctr, p_dest);
+                            __state = 1173;
+                        }
+                        1173 => {
+                            if rc != 0 { __state = 1174; } else { __state = 1149; }
+                        }
+                        1174 => {
+                            if rc == 7 { __state = 1176; } else { __state = 1175; }
+                        }
+                        1175 => {
+                            if rc == 18 { __state = 1178; } else { __state = 1177; }
+                        }
+                        1176 => { __state = 20; }
+                        1177 => { __state = 17; }
+                        1178 => { __state = 19; }
+                        1179 => { __state = 1180; }
+                        1180 => { __state = 60; }
+                        1181 => { __state = 11; }
+                        1182 => {
+                            p_op =
+                                unsafe {
+                                    a_op.offset((unsafe { (*a_op.offset(0 as isize)).p3 } - 1)
+                                            as isize)
+                                };
+                            __state = 1184;
+                        }
+                        1183 => {
+                            rc = unsafe { sqlite3_corrupt_error(3300) };
+                            __state = 1185;
+                        }
+                        1184 => { __state = 60; }
+                        1185 => { __state = 17; }
+                        1186 => { __state = 127; }
+                        1187 => { __state = 128; }
+                        1188 => { __state = 1189; }
+                        1189 => { __state = 1190; }
+                        1190 => { __state = 1191; }
+                        1191 => { { let _ = 0; }; __state = 1192; }
+                        1192 => {
+                            p_tab = unsafe { (*p_op).p4.p_tab };
+                            __state = 1193;
+                        }
+                        1193 => { { let _ = 0; }; __state = 1194; }
+                        1194 => { { let _ = 0; }; __state = 1195; }
+                        1195 => {
+                            a_col = unsafe { (*p_tab).a_col };
+                            __state = 1196;
+                        }
+                        1196 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 1197;
+                        }
+                        1197 => {
+                            if unsafe { (*p_op).p3 } < 2 {
+                                __state = 1199;
+                            } else { __state = 1200; }
+                        }
+                        1198 => { __state = 1208; }
+                        1199 => { { let _ = 0; }; __state = 1201; }
+                        1200 => {
+                            i__2 = unsafe { (*p_op).p3 } - 2;
+                            __state = 1203;
+                        }
+                        1201 => { i__2 = 0; __state = 1202; }
+                        1202 => {
+                            n_col = unsafe { (*p_tab).n_col } as i32;
+                            __state = 1198;
+                        }
+                        1203 => { n_col = i__2 + 1; __state = 1204; }
+                        1204 => { { let _ = 0; }; __state = 1205; }
+                        1205 => { { let _ = 0; }; __state = 1206; }
+                        1206 => { { let _ = 0; }; __state = 1198; }
+                        1207 => { { let _ = 0; }; __state = 1255; }
+                        1208 => {
+                            if i__2 < n_col { __state = 1209; } else { __state = 1207; }
+                        }
+                        1209 => {
+                            if unsafe { (*a_col.offset(i__2 as isize)).col_flags } as
+                                                i32 & 96 != 0 && unsafe { (*p_op).p3 } < 2 {
+                                __state = 1212;
+                            } else { __state = 1211; }
+                        }
+                        1210 => {
+                            { let __p = &mut i__2; let __t = *__p; *__p += 1; __t };
+                            __state = 1208;
+                        }
+                        1211 => { { let _ = 0; }; __state = 1217; }
+                        1212 => {
+                            if unsafe { (*a_col.offset(i__2 as isize)).col_flags } as
+                                            i32 & 32 != 0 {
+                                __state = 1214;
+                            } else { __state = 1213; }
+                        }
+                        1213 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 1215;
+                            } else { __state = 1211; }
+                        }
+                        1214 => { __state = 1210; }
+                        1215 => {
+                            {
+                                let __p = &mut p_in1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1216;
+                        }
+                        1216 => { __state = 1210; }
+                        1217 => {
+                            apply_affinity(p_in1,
+                                unsafe { (*a_col.offset(i__2 as isize)).affinity },
+                                encoding);
+                            __state = 1218;
+                        }
+                        1218 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 == 0 {
+                                __state = 1220;
+                            } else { __state = 1219; }
+                        }
+                        1219 => { __state = 1254; }
+                        1220 => {
+                            '__s6:
+                                {
+                                match unsafe { (*a_col.offset(i__2 as isize)).e_c_type() } {
+                                    2 => { __state = 1221; }
+                                    4 => { __state = 1222; }
+                                    3 => { __state = 1223; }
+                                    6 => { __state = 1224; }
+                                    5 => { __state = 1225; }
+                                    _ => { __state = 1226; }
+                                }
+                            }
+                        }
+                        1221 => {
+                            if unsafe { (*p_in1).flags } as i32 & 16 == 0 {
+                                __state = 1230;
+                            } else { __state = 1229; }
+                        }
+                        1222 => { __state = 1223; }
+                        1223 => {
+                            if unsafe { (*p_in1).flags } as i32 & 4 == 0 {
+                                __state = 1233;
+                            } else { __state = 1232; }
+                        }
+                        1224 => {
+                            if unsafe { (*p_in1).flags } as i32 & 2 == 0 {
+                                __state = 1237;
+                            } else { __state = 1236; }
+                        }
+                        1225 => { __state = 1239; }
+                        1226 => { __state = 1219; }
+                        1227 => { __state = 1221; }
+                        1228 => { __state = 1222; }
+                        1229 => { __state = 1219; }
+                        1230 => { __state = 12; }
+                        1231 => { __state = 1234; }
+                        1232 => { __state = 1219; }
+                        1233 => { __state = 12; }
+                        1234 => { __state = 1224; }
+                        1235 => { __state = 1225; }
+                        1236 => { __state = 1219; }
+                        1237 => { __state = 12; }
+                        1238 => { __state = 1226; }
+                        1239 => { { let _ = 0; }; __state = 1240; }
+                        1240 => {
+                            if unsafe { (*p_in1).flags } as i32 & 4 != 0 {
+                                __state = 1242;
+                            } else { __state = 1243; }
+                        }
+                        1241 => { __state = 1219; }
+                        1242 => { __state = 1244; }
+                        1243 => {
+                            if unsafe { (*p_in1).flags } as i32 & (8 | 32) == 0 {
+                                __state = 1253;
+                            } else { __state = 1241; }
+                        }
+                        1244 => { __state = 1245; }
+                        1245 => { __state = 1246; }
+                        1246 => { __state = 1247; }
+                        1247 => {
+                            if unsafe { (*p_in1).u.i } <= 140737488355327i64 &&
+                                    unsafe { (*p_in1).u.i } >= -140737488355328i64 {
+                                __state = 1248;
+                            } else { __state = 1249; }
+                        }
+                        1248 => {
+                            unsafe { (*p_in1).flags |= 32 as u16 };
+                            __state = 1250;
+                        }
+                        1249 => {
+                            unsafe { (*p_in1).u.r = unsafe { (*p_in1).u.i } as f64 };
+                            __state = 1251;
+                        }
+                        1250 => {
+                            unsafe { (*p_in1).flags &= !4 as u16 };
+                            __state = 1241;
+                        }
+                        1251 => {
+                            unsafe { (*p_in1).flags |= 8 as u16 };
+                            __state = 1252;
+                        }
+                        1252 => {
+                            unsafe { (*p_in1).flags &= !4 as u16 };
+                            __state = 1241;
+                        }
+                        1253 => { __state = 12; }
+                        1254 => {
+                            {
+                                let __p = &mut p_in1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1210;
+                        }
+                        1255 => { __state = 60; }
+                        1256 => { __state = 12; }
+                        1257 => { rc = 19 | 12 << 8; __state = 1258; }
+                        1258 => { __state = 17; }
+                        1259 => { __state = 129; }
+                        1260 => {
+                            z_affinity = unsafe { (*p_op).p4.z } as *const i8;
+                            __state = 1261;
+                        }
+                        1261 => { { let _ = 0; }; __state = 1262; }
+                        1262 => { { let _ = 0; }; __state = 1263; }
+                        1263 => { { let _ = 0; }; __state = 1264; }
+                        1264 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 1265;
+                        }
+                        1265 => {
+                            if 1 != 0 { __state = 1267; } else { __state = 1266; }
+                        }
+                        1266 => { __state = 60; }
+                        1267 => { { let _ = 0; }; __state = 1268; }
+                        1268 => { { let _ = 0; }; __state = 1269; }
+                        1269 => {
+                            apply_affinity(p_in1,
+                                unsafe { *z_affinity.offset(0 as isize) }, encoding);
+                            __state = 1270;
+                        }
+                        1270 => {
+                            if unsafe { *z_affinity.offset(0 as isize) } as i32 == 69 &&
+                                    unsafe { (*p_in1).flags } as i32 & 4 != 0 {
+                                __state = 1272;
+                            } else { __state = 1271; }
+                        }
+                        1271 => { __state = 1282; }
+                        1272 => { __state = 1273; }
+                        1273 => { __state = 1274; }
+                        1274 => { __state = 1275; }
+                        1275 => { __state = 1276; }
+                        1276 => {
+                            if unsafe { (*p_in1).u.i } <= 140737488355327i64 &&
+                                    unsafe { (*p_in1).u.i } >= -140737488355328i64 {
+                                __state = 1277;
+                            } else { __state = 1278; }
+                        }
+                        1277 => {
+                            unsafe { (*p_in1).flags |= 32 as u16 };
+                            __state = 1279;
+                        }
+                        1278 => {
+                            unsafe { (*p_in1).u.r = unsafe { (*p_in1).u.i } as f64 };
+                            __state = 1280;
+                        }
+                        1279 => {
+                            unsafe { (*p_in1).flags &= !4 as u16 };
+                            __state = 1271;
+                        }
+                        1280 => {
+                            unsafe { (*p_in1).flags |= 8 as u16 };
+                            __state = 1281;
+                        }
+                        1281 => {
+                            unsafe { (*p_in1).flags &= !(4 | 2) as u16 };
+                            __state = 1271;
+                        }
+                        1282 => {
+                            {
+                                let __p = &mut z_affinity;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1283;
+                        }
+                        1283 => {
+                            if unsafe { *z_affinity.offset(0 as isize) } as i32 == 0 {
+                                __state = 1285;
+                            } else { __state = 1284; }
+                        }
+                        1284 => {
+                            {
+                                let __p = &mut p_in1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1265;
+                        }
+                        1285 => { __state = 1266; }
+                        1286 => { __state = 130; }
+                        1287 => { __state = 1288; }
+                        1288 => { __state = 1289; }
+                        1289 => { __state = 1290; }
+                        1290 => { __state = 1291; }
+                        1291 => { __state = 1292; }
+                        1292 => { __state = 1293; }
+                        1293 => { __state = 1294; }
+                        1294 => { __state = 1295; }
+                        1295 => { __state = 1296; }
+                        1296 => { __state = 1297; }
+                        1297 => { __state = 1298; }
+                        1298 => { __state = 1299; }
+                        1299 => { __state = 1300; }
+                        1300 => { n_data = 0 as u64; __state = 1301; }
+                        1301 => { n_hdr = 0; __state = 1302; }
+                        1302 => { n_zero = 0 as i64; __state = 1303; }
+                        1303 => { n_field = unsafe { (*p_op).p1 }; __state = 1304; }
+                        1304 => {
+                            z_affinity_1 = unsafe { (*p_op).p4.z };
+                            __state = 1305;
+                        }
+                        1305 => { { let _ = 0; }; __state = 1306; }
+                        1306 => {
+                            p_data0 = unsafe { a_mem.offset(n_field as isize) };
+                            __state = 1307;
+                        }
+                        1307 => { n_field = unsafe { (*p_op).p2 }; __state = 1308; }
+                        1308 => {
+                            p_last = unsafe { p_data0.offset((n_field - 1) as isize) };
+                            __state = 1309;
+                        }
+                        1309 => { { let _ = 0; }; __state = 1310; }
+                        1310 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1311;
+                        }
+                        1311 => { __state = 1312; }
+                        1312 => { { let _ = 0; }; __state = 1313; }
+                        1313 => {
+                            if !(z_affinity_1).is_null() {
+                                __state = 1315;
+                            } else { __state = 1314; }
+                        }
+                        1314 => { p_rec = p_last; __state = 1325; }
+                        1315 => { p_rec = p_data0; __state = 1316; }
+                        1316 => {
+                            apply_affinity(p_rec,
+                                unsafe { *z_affinity_1.offset(0 as isize) }, encoding);
+                            __state = 1318;
+                        }
+                        1317 => {
+                            if unsafe { *z_affinity_1.offset(0 as isize) } != 0 {
+                                __state = 1316;
+                            } else { __state = 1314; }
+                        }
+                        1318 => {
+                            if unsafe { *z_affinity_1.offset(0 as isize) } as i32 == 69
+                                    && unsafe { (*p_rec).flags } as i32 & 4 != 0 {
+                                __state = 1320;
+                            } else { __state = 1319; }
+                        }
+                        1319 => { __state = 1322; }
+                        1320 => {
+                            unsafe { (*p_rec).flags |= 32 as u16 };
+                            __state = 1321;
+                        }
+                        1321 => {
+                            unsafe { (*p_rec).flags &= !4 as u16 };
+                            __state = 1319;
+                        }
+                        1322 => {
+                            {
+                                let __p = &mut z_affinity_1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1323;
+                        }
+                        1323 => {
+                            {
+                                let __p = &mut p_rec;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1324;
+                        }
+                        1324 => { { let _ = 0; }; __state = 1317; }
+                        1325 => { { let _ = 0; }; __state = 1328; }
+                        1326 => { __state = 1398; }
+                        1327 => {
+                            if 1 != 0 { __state = 1325; } else { __state = 1326; }
+                        }
+                        1328 => {
+                            if unsafe { (*p_rec).flags } as i32 & 1 != 0 {
+                                __state = 1330;
+                            } else { __state = 1331; }
+                        }
+                        1329 => {
+                            if p_rec == p_data0 {
+                                __state = 1397;
+                            } else { __state = 1396; }
+                        }
+                        1330 => {
+                            if unsafe { (*p_rec).flags } as i32 & 1024 != 0 {
+                                __state = 1333;
+                            } else { __state = 1334; }
+                        }
+                        1331 => {
+                            if unsafe { (*p_rec).flags } as i32 & (4 | 32) != 0 {
+                                __state = 1336;
+                            } else { __state = 1337; }
+                        }
+                        1332 => {
+                            { let __p = &mut n_hdr; let __t = *__p; *__p += 1; __t };
+                            __state = 1329;
+                        }
+                        1333 => { { let _ = 0; }; __state = 1335; }
+                        1334 => {
+                            unsafe { (*p_rec).u_temp = 0 as u32 };
+                            __state = 1332;
+                        }
+                        1335 => {
+                            unsafe { (*p_rec).u_temp = 10 as u32 };
+                            __state = 1332;
+                        }
+                        1336 => { i__3 = unsafe { (*p_rec).u.i }; __state = 1338; }
+                        1337 => {
+                            if unsafe { (*p_rec).flags } as i32 & 8 != 0 {
+                                __state = 1379;
+                            } else { __state = 1380; }
+                        }
+                        1338 => { __state = 1339; }
+                        1339 => { __state = 1340; }
+                        1340 => { __state = 1341; }
+                        1341 => {
+                            if i__3 < 0 as i64 {
+                                __state = 1343;
+                            } else { __state = 1344; }
+                        }
+                        1342 => {
+                            { let __p = &mut n_hdr; let __t = *__p; *__p += 1; __t };
+                            __state = 1345;
+                        }
+                        1343 => { uu = !i__3 as u64; __state = 1342; }
+                        1344 => { uu = i__3 as u64; __state = 1342; }
+                        1345 => { __state = 1346; }
+                        1346 => { __state = 1347; }
+                        1347 => { __state = 1348; }
+                        1348 => { __state = 1349; }
+                        1349 => { __state = 1350; }
+                        1350 => { __state = 1351; }
+                        1351 => { __state = 1352; }
+                        1352 => { __state = 1353; }
+                        1353 => { __state = 1354; }
+                        1354 => { __state = 1355; }
+                        1355 => {
+                            if uu <= 127 as u64 {
+                                __state = 1356;
+                            } else { __state = 1357; }
+                        }
+                        1356 => {
+                            if i__3 & 1 as i64 == i__3 &&
+                                    unsafe { (*p).min_write_file_format } as i32 >= 4 {
+                                __state = 1358;
+                            } else { __state = 1359; }
+                        }
+                        1357 => {
+                            if uu <= 32767 as u64 {
+                                __state = 1361;
+                            } else { __state = 1362; }
+                        }
+                        1358 => {
+                            unsafe { (*p_rec).u_temp = 8 as u32 + uu as u32 };
+                            __state = 1329;
+                        }
+                        1359 => {
+                            { let __p = &mut n_data; let __t = *__p; *__p += 1; __t };
+                            __state = 1360;
+                        }
+                        1360 => {
+                            unsafe { (*p_rec).u_temp = 1 as u32 };
+                            __state = 1329;
+                        }
+                        1361 => { n_data += 2 as u64; __state = 1363; }
+                        1362 => {
+                            if uu <= 8388607 as u64 {
+                                __state = 1364;
+                            } else { __state = 1365; }
+                        }
+                        1363 => {
+                            unsafe { (*p_rec).u_temp = 2 as u32 };
+                            __state = 1329;
+                        }
+                        1364 => { n_data += 3 as u64; __state = 1366; }
+                        1365 => {
+                            if uu <= 2147483647 as u64 {
+                                __state = 1367;
+                            } else { __state = 1368; }
+                        }
+                        1366 => {
+                            unsafe { (*p_rec).u_temp = 3 as u32 };
+                            __state = 1329;
+                        }
+                        1367 => { n_data += 4 as u64; __state = 1369; }
+                        1368 => {
+                            if uu <= 140737488355327i64 as u64 {
+                                __state = 1370;
+                            } else { __state = 1371; }
+                        }
+                        1369 => {
+                            unsafe { (*p_rec).u_temp = 4 as u32 };
+                            __state = 1329;
+                        }
+                        1370 => { n_data += 6 as u64; __state = 1372; }
+                        1371 => { n_data += 8 as u64; __state = 1373; }
+                        1372 => {
+                            unsafe { (*p_rec).u_temp = 5 as u32 };
+                            __state = 1329;
+                        }
+                        1373 => {
+                            if unsafe { (*p_rec).flags } as i32 & 32 != 0 {
+                                __state = 1374;
+                            } else { __state = 1375; }
+                        }
+                        1374 => {
+                            unsafe { (*p_rec).u.r = unsafe { (*p_rec).u.i } as f64 };
+                            __state = 1376;
+                        }
+                        1375 => {
+                            unsafe { (*p_rec).u_temp = 6 as u32 };
+                            __state = 1329;
+                        }
+                        1376 => {
+                            unsafe { (*p_rec).flags &= !32 as u16 };
+                            __state = 1377;
+                        }
+                        1377 => {
+                            unsafe { (*p_rec).flags |= 8 as u16 };
+                            __state = 1378;
+                        }
+                        1378 => {
+                            unsafe { (*p_rec).u_temp = 7 as u32 };
+                            __state = 1329;
+                        }
+                        1379 => {
+                            { let __p = &mut n_hdr; let __t = *__p; *__p += 1; __t };
+                            __state = 1381;
+                        }
+                        1380 => { { let _ = 0; }; __state = 1383; }
+                        1381 => { n_data += 8 as u64; __state = 1382; }
+                        1382 => {
+                            unsafe { (*p_rec).u_temp = 7 as u32 };
+                            __state = 1329;
+                        }
+                        1383 => { { let _ = 0; }; __state = 1384; }
+                        1384 => {
+                            len__1 = unsafe { (*p_rec).n } as u32;
+                            __state = 1385;
+                        }
+                        1385 => {
+                            serial_type__1 =
+                                len__1 * 2 as u32 + 12 as u32 +
+                                    (unsafe { (*p_rec).flags } as i32 & 2 != 0) as u32;
+                            __state = 1386;
+                        }
+                        1386 => {
+                            if unsafe { (*p_rec).flags } as i32 & 1024 != 0 {
+                                __state = 1388;
+                            } else { __state = 1387; }
+                        }
+                        1387 => { n_data += len__1 as u64; __state = 1394; }
+                        1388 => {
+                            serial_type__1 +=
+                                unsafe { (*p_rec).u.n_zero } as u32 * 2 as u32;
+                            __state = 1389;
+                        }
+                        1389 => {
+                            if n_data != 0 { __state = 1390; } else { __state = 1391; }
+                        }
+                        1390 => {
+                            if unsafe { sqlite3_vdbe_mem_expand_blob(p_rec) } != 0 {
+                                __state = 1393;
+                            } else { __state = 1392; }
+                        }
+                        1391 => {
+                            n_zero += unsafe { (*p_rec).u.n_zero } as i64;
+                            __state = 1387;
+                        }
+                        1392 => {
+                            len__1 += unsafe { (*p_rec).u.n_zero } as u32;
+                            __state = 1387;
+                        }
+                        1393 => { __state = 20; }
+                        1394 => {
+                            n_hdr +=
+                                unsafe { sqlite3_varint_len(serial_type__1 as u64) };
+                            __state = 1395;
+                        }
+                        1395 => {
+                            unsafe { (*p_rec).u_temp = serial_type__1 };
+                            __state = 1329;
+                        }
+                        1396 => {
+                            {
+                                let __p = &mut p_rec;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(-1) };
+                                __t
+                            };
+                            __state = 1327;
+                        }
+                        1397 => { __state = 1326; }
+                        1398 => { __state = 1399; }
+                        1399 => {
+                            if n_hdr <= 126 { __state = 1401; } else { __state = 1402; }
+                        }
+                        1400 => {
+                            n_byte_1 = (n_hdr as u64 + n_data) as i64;
+                            __state = 1406;
+                        }
+                        1401 => { n_hdr += 1; __state = 1400; }
+                        1402 => {
+                            n_varint = unsafe { sqlite3_varint_len(n_hdr as u64) };
+                            __state = 1403;
+                        }
+                        1403 => { n_hdr += n_varint; __state = 1404; }
+                        1404 => {
+                            if n_varint < unsafe { sqlite3_varint_len(n_hdr as u64) } {
+                                __state = 1405;
+                            } else { __state = 1400; }
+                        }
+                        1405 => {
+                            { let __p = &mut n_hdr; let __t = *__p; *__p += 1; __t };
+                            __state = 1400;
+                        }
+                        1406 => {
+                            if n_byte_1 + n_zero <= unsafe { (*p_out).sz_malloc } as i64
+                                {
+                                __state = 1408;
+                            } else { __state = 1409; }
+                        }
+                        1407 => {
+                            unsafe { (*p_out).n = n_byte_1 as i32 };
+                            __state = 1413;
+                        }
+                        1408 => {
+                            unsafe { (*p_out).z = unsafe { (*p_out).z_malloc } };
+                            __state = 1407;
+                        }
+                        1409 => {
+                            if n_byte_1 + n_zero >
+                                    unsafe { (*db).a_limit[0 as usize] } as i64 {
+                                __state = 1411;
+                            } else { __state = 1410; }
+                        }
+                        1410 => {
+                            if unsafe {
+                                        sqlite3_vdbe_mem_clear_and_resize(p_out, n_byte_1 as i32)
+                                    } != 0 {
+                                __state = 1412;
+                            } else { __state = 1407; }
+                        }
+                        1411 => { __state = 19; }
+                        1412 => { __state = 20; }
+                        1413 => {
+                            unsafe { (*p_out).flags = 16 as u16 };
+                            __state = 1414;
+                        }
+                        1414 => {
+                            if n_zero != 0 { __state = 1416; } else { __state = 1415; }
+                        }
+                        1415 => { __state = 1418; }
+                        1416 => {
+                            unsafe { (*p_out).u.n_zero = n_zero as i32 };
+                            __state = 1417;
+                        }
+                        1417 => {
+                            unsafe { (*p_out).flags |= 1024 as u16 };
+                            __state = 1415;
+                        }
+                        1418 => {
+                            z_hdr_1 = unsafe { (*p_out).z } as *mut u8;
+                            __state = 1419;
+                        }
+                        1419 => {
+                            z_payload = unsafe { z_hdr_1.offset(n_hdr as isize) };
+                            __state = 1420;
+                        }
+                        1420 => {
+                            if n_hdr < 128 { __state = 1422; } else { __state = 1423; }
+                        }
+                        1421 => { { let _ = 0; }; __state = 1424; }
+                        1422 => {
+                            unsafe {
+                                *{
+                                            let __p = &mut z_hdr_1;
+                                            let __t = *__p;
+                                            *__p = unsafe { (*__p).offset(1) };
+                                            __t
+                                        } = n_hdr as u8
+                            };
+                            __state = 1421;
+                        }
+                        1423 => {
+                            {
+                                let __n =
+                                    unsafe { sqlite3_put_varint(z_hdr_1, n_hdr as u64) };
+                                let __p = &mut z_hdr_1;
+                                *__p = unsafe { (*__p).offset(__n as isize) };
+                            };
+                            __state = 1421;
+                        }
+                        1424 => { p_rec = p_data0; __state = 1425; }
+                        1425 => {
+                            if 1 != 0 { __state = 1427; } else { __state = 1426; }
+                        }
+                        1426 => { { let _ = 0; }; __state = 1483; }
+                        1427 => {
+                            serial_type__1 = unsafe { (*p_rec).u_temp };
+                            __state = 1428;
+                        }
+                        1428 => {
+                            if serial_type__1 <= 7 as u32 {
+                                __state = 1430;
+                            } else { __state = 1431; }
+                        }
+                        1429 => {
+                            if p_rec == p_last {
+                                __state = 1482;
+                            } else { __state = 1481; }
+                        }
+                        1430 => {
+                            unsafe {
+                                *{
+                                            let __p = &mut z_hdr_1;
+                                            let __t = *__p;
+                                            *__p = unsafe { (*__p).offset(1) };
+                                            __t
+                                        } = serial_type__1 as u8
+                            };
+                            __state = 1432;
+                        }
+                        1431 => {
+                            if serial_type__1 < 128 as u32 {
+                                __state = 1470;
+                            } else { __state = 1471; }
+                        }
+                        1432 => {
+                            if serial_type__1 == 0 as u32 {
+                                __state = 1433;
+                            } else { __state = 1434; }
+                        }
+                        1433 => { __state = 1429; }
+                        1434 => { __state = 1435; }
+                        1435 => {
+                            if serial_type__1 == 7 as u32 {
+                                __state = 1437;
+                            } else { __state = 1438; }
+                        }
+                        1436 => {
+                            len__1 =
+                                unsafe {
+                                        *(sqlite3_small_type_sizes.as_ptr() as
+                                                    *const u8).add(serial_type__1 as usize)
+                                    } as u32;
+                            __state = 1441;
+                        }
+                        1437 => { { let _ = 0; }; __state = 1439; }
+                        1438 => {
+                            v = unsafe { (*p_rec).u.i } as u64;
+                            __state = 1436;
+                        }
+                        1439 => {
+                            unsafe {
+                                memcpy(&raw mut v as *mut (),
+                                    unsafe { &raw mut (*p_rec).u.r } as *const (),
+                                    core::mem::size_of::<u64>() as u64)
+                            };
+                            __state = 1440;
+                        }
+                        1440 => { __state = 1436; }
+                        1441 => { { let _ = 0; }; __state = 1442; }
+                        1442 => {
+                            '__s7:
+                                {
+                                match len__1 {
+                                    6 => { __state = 1445; }
+                                    4 => { __state = 1446; }
+                                    3 => { __state = 1447; }
+                                    2 => { __state = 1448; }
+                                    1 => { __state = 1449; }
+                                    _ => { __state = 1444; }
+                                }
+                            }
+                        }
+                        1443 => {
+                            {
+                                let __n = len__1;
+                                let __p = &mut z_payload;
+                                *__p = unsafe { (*__p).add(__n as usize) };
+                            };
+                            __state = 1429;
+                        }
+                        1444 => {
+                            unsafe {
+                                *z_payload.offset(7 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1451;
+                        }
+                        1445 => {
+                            unsafe {
+                                *z_payload.offset(5 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1456;
+                        }
+                        1446 => {
+                            unsafe {
+                                *z_payload.offset(3 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1461;
+                        }
+                        1447 => {
+                            unsafe {
+                                *z_payload.offset(2 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1464;
+                        }
+                        1448 => {
+                            unsafe {
+                                *z_payload.offset(1 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1467;
+                        }
+                        1449 => {
+                            unsafe {
+                                *z_payload.offset(0 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1443;
+                        }
+                        1450 => { __state = 1444; }
+                        1451 => { v >>= 8 as u64; __state = 1452; }
+                        1452 => {
+                            unsafe {
+                                *z_payload.offset(6 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1453;
+                        }
+                        1453 => { v >>= 8 as u64; __state = 1454; }
+                        1454 => { __state = 1455; }
+                        1455 => { __state = 1445; }
+                        1456 => { v >>= 8 as u64; __state = 1457; }
+                        1457 => {
+                            unsafe {
+                                *z_payload.offset(4 as isize) = (v & 255 as u64) as u8
+                            };
+                            __state = 1458;
+                        }
+                        1458 => { v >>= 8 as u64; __state = 1459; }
+                        1459 => { __state = 1460; }
+                        1460 => { __state = 1446; }
+                        1461 => { v >>= 8 as u64; __state = 1462; }
+                        1462 => { __state = 1463; }
+                        1463 => { __state = 1447; }
+                        1464 => { v >>= 8 as u64; __state = 1465; }
+                        1465 => { __state = 1466; }
+                        1466 => { __state = 1448; }
+                        1467 => { v >>= 8 as u64; __state = 1468; }
+                        1468 => { __state = 1469; }
+                        1469 => { __state = 1449; }
+                        1470 => {
+                            unsafe {
+                                *{
+                                            let __p = &mut z_hdr_1;
+                                            let __t = *__p;
+                                            *__p = unsafe { (*__p).offset(1) };
+                                            __t
+                                        } = serial_type__1 as u8
+                            };
+                            __state = 1472;
+                        }
+                        1471 => {
+                            {
+                                let __n =
+                                    unsafe {
+                                        sqlite3_put_varint(z_hdr_1, serial_type__1 as u64)
+                                    };
+                                let __p = &mut z_hdr_1;
+                                *__p = unsafe { (*__p).offset(__n as isize) };
+                            };
+                            __state = 1476;
+                        }
+                        1472 => {
+                            if serial_type__1 >= 14 as u32 && unsafe { (*p_rec).n } > 0
+                                {
+                                __state = 1473;
+                            } else { __state = 1429; }
+                        }
+                        1473 => { { let _ = 0; }; __state = 1474; }
+                        1474 => {
+                            unsafe {
+                                memcpy(z_payload as *mut (),
+                                    unsafe { (*p_rec).z } as *const (),
+                                    unsafe { (*p_rec).n } as u64)
+                            };
+                            __state = 1475;
+                        }
+                        1475 => {
+                            {
+                                let __n = unsafe { (*p_rec).n };
+                                let __p = &mut z_payload;
+                                *__p = unsafe { (*__p).offset(__n as isize) };
+                            };
+                            __state = 1429;
+                        }
+                        1476 => {
+                            if unsafe { (*p_rec).n } != 0 {
+                                __state = 1477;
+                            } else { __state = 1429; }
+                        }
+                        1477 => { { let _ = 0; }; __state = 1478; }
+                        1478 => { { let _ = 0; }; __state = 1479; }
+                        1479 => {
+                            unsafe {
+                                memcpy(z_payload as *mut (),
+                                    unsafe { (*p_rec).z } as *const (),
+                                    unsafe { (*p_rec).n } as u64)
+                            };
+                            __state = 1480;
+                        }
+                        1480 => {
+                            {
+                                let __n = unsafe { (*p_rec).n };
+                                let __p = &mut z_payload;
+                                *__p = unsafe { (*__p).offset(__n as isize) };
+                            };
+                            __state = 1429;
+                        }
+                        1481 => {
+                            {
+                                let __p = &mut p_rec;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 1425;
+                        }
+                        1482 => { __state = 1426; }
+                        1483 => { { let _ = 0; }; __state = 1484; }
+                        1484 => { { let _ = 0; }; __state = 1485; }
+                        1485 => { __state = 1486; }
+                        1486 => { __state = 60; }
+                        1487 => { __state = 131; }
+                        1488 => { __state = 1489; }
+                        1489 => { { let _ = 0; }; __state = 1490; }
+                        1490 => {
+                            p_crsr_1 =
+                                unsafe {
+                                    (*unsafe {
+                                                        *unsafe {
+                                                                (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                                            }
+                                                    }).uc.p_cursor
+                                };
+                            __state = 1491;
+                        }
+                        1491 => { { let _ = 0; }; __state = 1492; }
+                        1492 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 1494;
+                            } else { __state = 1495; }
+                        }
+                        1493 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 1499;
+                        }
+                        1494 => {
+                            n_entry = unsafe { sqlite3_btree_row_count_est(p_crsr_1) };
+                            __state = 1493;
+                        }
+                        1495 => { n_entry = 0 as i64; __state = 1496; }
+                        1496 => {
+                            rc =
+                                unsafe { sqlite3_btree_count(db, p_crsr_1, &mut n_entry) };
+                            __state = 1497;
+                        }
+                        1497 => {
+                            if rc != 0 { __state = 1498; } else { __state = 1493; }
+                        }
+                        1498 => { __state = 17; }
+                        1499 => {
+                            unsafe { (*p_out).u.i = n_entry };
+                            __state = 1500;
+                        }
+                        1500 => { __state = 3; }
+                        1501 => { __state = 132; }
+                        1502 => { __state = 1503; }
+                        1503 => { __state = 1504; }
+                        1504 => { __state = 1505; }
+                        1505 => { __state = 1506; }
+                        1506 => { __state = 1507; }
+                        1507 => { __state = 1508; }
+                        1508 => { __state = 1509; }
+                        1509 => { p1__2 = unsafe { (*p_op).p1 }; __state = 1510; }
+                        1510 => {
+                            z_name = unsafe { (*p_op).p4.z };
+                            __state = 1511;
+                        }
+                        1511 => { { let _ = 0; }; __state = 1512; }
+                        1512 => { { let _ = 0; }; __state = 1513; }
+                        1513 => { { let _ = 0; }; __state = 1514; }
+                        1514 => { { let _ = 0; }; __state = 1515; }
+                        1515 => { { let _ = 0; }; __state = 1516; }
+                        1516 => {
+                            if p1__2 == 0 { __state = 1518; } else { __state = 1519; }
+                        }
+                        1517 => {
+                            if rc != 0 { __state = 1607; } else { __state = 1606; }
+                        }
+                        1518 => {
+                            if unsafe { (*db).n_vdbe_write } > 0 {
+                                __state = 1520;
+                            } else { __state = 1521; }
+                        }
+                        1519 => { { let _ = 0; }; __state = 1539; }
+                        1520 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"cannot open savepoint - SQL statements in progress".as_ptr()
+                                            as *mut i8 as *const i8)
+                            };
+                            __state = 1522;
+                        }
+                        1521 => {
+                            n_name = unsafe { sqlite3_strlen30(z_name as *const i8) };
+                            __state = 1523;
+                        }
+                        1522 => { rc = 5; __state = 1517; }
+                        1523 => { { let _ = 0; }; __state = 1524; }
+                        1524 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vtab_savepoint(db, 0,
+                                        unsafe { (*db).n_statement } + unsafe { (*db).n_savepoint })
+                                };
+                            __state = 1525;
+                        }
+                        1525 => {
+                            if rc != 0 { __state = 1527; } else { __state = 1526; }
+                        }
+                        1526 => {
+                            p_new =
+                                unsafe {
+                                        sqlite3_db_malloc_raw_nn(db,
+                                            core::mem::size_of::<Savepoint>() as u64 + n_name as u64 +
+                                                1 as u64)
+                                    } as *mut Savepoint;
+                            __state = 1528;
+                        }
+                        1527 => { __state = 17; }
+                        1528 => {
+                            if !(p_new).is_null() {
+                                __state = 1529;
+                            } else { __state = 1517; }
+                        }
+                        1529 => {
+                            unsafe {
+                                (*p_new).z_name =
+                                    unsafe { &raw mut *p_new.offset(1 as isize) } as *mut i8
+                            };
+                            __state = 1530;
+                        }
+                        1530 => {
+                            unsafe {
+                                memcpy(unsafe { (*p_new).z_name } as *mut (),
+                                    z_name as *const (), (n_name + 1) as u64)
+                            };
+                            __state = 1531;
+                        }
+                        1531 => {
+                            if unsafe { (*db).auto_commit } != 0 {
+                                __state = 1533;
+                            } else { __state = 1534; }
+                        }
+                        1532 => {
+                            unsafe { (*p_new).p_next = unsafe { (*db).p_savepoint } };
+                            __state = 1536;
+                        }
+                        1533 => {
+                            unsafe { (*db).auto_commit = 0 as u8 };
+                            __state = 1535;
+                        }
+                        1534 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_savepoint };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 1532;
+                        }
+                        1535 => {
+                            unsafe { (*db).is_transaction_savepoint = 1 as u8 };
+                            __state = 1532;
+                        }
+                        1536 => {
+                            unsafe { (*db).p_savepoint = p_new };
+                            __state = 1537;
+                        }
+                        1537 => {
+                            unsafe {
+                                (*p_new).n_deferred_cons = unsafe { (*db).n_deferred_cons }
+                            };
+                            __state = 1538;
+                        }
+                        1538 => {
+                            unsafe {
+                                (*p_new).n_deferred_imm_cons =
+                                    unsafe { (*db).n_deferred_imm_cons }
+                            };
+                            __state = 1517;
+                        }
+                        1539 => { i_savepoint = 0; __state = 1540; }
+                        1540 => {
+                            p_savepoint = unsafe { (*db).p_savepoint };
+                            __state = 1542;
+                        }
+                        1541 => {
+                            if (p_savepoint).is_null() as i32 != 0 {
+                                __state = 1545;
+                            } else { __state = 1546; }
+                        }
+                        1542 => {
+                            if !(p_savepoint).is_null() &&
+                                    unsafe {
+                                            sqlite3_str_i_cmp(unsafe { (*p_savepoint).z_name } as
+                                                    *const i8, z_name as *const i8)
+                                        } != 0 {
+                                __state = 1543;
+                            } else { __state = 1541; }
+                        }
+                        1543 => {
+                            {
+                                let __p = &mut i_savepoint;
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 1544;
+                        }
+                        1544 => {
+                            p_savepoint = unsafe { (*p_savepoint).p_next };
+                            __state = 1542;
+                        }
+                        1545 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"no such savepoint: %s".as_ptr() as *mut i8 as *const i8,
+                                    z_name)
+                            };
+                            __state = 1547;
+                        }
+                        1546 => {
+                            if unsafe { (*db).n_vdbe_write } > 0 && p1__2 == 1 {
+                                __state = 1548;
+                            } else { __state = 1549; }
+                        }
+                        1547 => { rc = 1; __state = 1517; }
+                        1548 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"cannot release savepoint - SQL statements in progress".as_ptr()
+                                            as *mut i8 as *const i8)
+                            };
+                            __state = 1550;
+                        }
+                        1549 => {
+                            is_transaction =
+                                (unsafe { (*p_savepoint).p_next } == core::ptr::null_mut()
+                                        && unsafe { (*db).is_transaction_savepoint } != 0) as i32;
+                            __state = 1551;
+                        }
+                        1550 => { rc = 5; __state = 1517; }
+                        1551 => {
+                            if is_transaction != 0 && p1__2 == 1 {
+                                __state = 1553;
+                            } else { __state = 1554; }
+                        }
+                        1552 => {
+                            if rc != 0 { __state = 1588; } else { __state = 1587; }
+                        }
+                        1553 => {
+                            if { rc = unsafe { sqlite3_vdbe_check_fk_deferred(p) }; rc }
+                                    != 0 {
+                                __state = 1556;
+                            } else { __state = 1555; }
+                        }
+                        1554 => { __state = 1566; }
+                        1555 => {
+                            unsafe { (*db).auto_commit = 1 as u8 };
+                            __state = 1557;
+                        }
+                        1556 => { __state = 18; }
+                        1557 => {
+                            if unsafe { sqlite3_vdbe_halt(p) } == 5 {
+                                __state = 1559;
+                            } else { __state = 1558; }
+                        }
+                        1558 => { rc = unsafe { (*p).rc }; __state = 1563; }
+                        1559 => {
+                            unsafe {
+                                (*p).pc = unsafe { p_op.offset_from(a_op) } as i64 as i32
+                            };
+                            __state = 1560;
+                        }
+                        1560 => {
+                            unsafe { (*db).auto_commit = 0 as u8 };
+                            __state = 1561;
+                        }
+                        1561 => {
+                            unsafe { (*p).rc = { rc = 5; rc } };
+                            __state = 1562;
+                        }
+                        1562 => { __state = 18; }
+                        1563 => {
+                            if rc != 0 { __state = 1564; } else { __state = 1565; }
+                        }
+                        1564 => {
+                            unsafe { (*db).auto_commit = 0 as u8 };
+                            __state = 1552;
+                        }
+                        1565 => {
+                            unsafe { (*db).is_transaction_savepoint = 0 as u8 };
+                            __state = 1552;
+                        }
+                        1566 => {
+                            i_savepoint =
+                                unsafe { (*db).n_savepoint } - i_savepoint - 1;
+                            __state = 1567;
+                        }
+                        1567 => {
+                            if p1__2 == 2 { __state = 1569; } else { __state = 1570; }
+                        }
+                        1568 => { ii = 0; __state = 1579; }
+                        1569 => {
+                            is_schema_change =
+                                (unsafe { (*db).m_db_flags } & 1 as u32 != 0 as u32) as i32;
+                            __state = 1571;
+                        }
+                        1570 => { { let _ = 0; }; __state = 1577; }
+                        1571 => { ii = 0; __state = 1572; }
+                        1572 => {
+                            if ii < unsafe { (*db).n_db } {
+                                __state = 1573;
+                            } else { __state = 1568; }
+                        }
+                        1573 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_trip_all_cursors(unsafe {
+                                            (*unsafe { (*db).a_db.offset(ii as isize) }).p_bt
+                                        }, 4 | 2 << 8, (is_schema_change == 0) as i32)
+                                };
+                            __state = 1575;
+                        }
+                        1574 => {
+                            { let __p = &mut ii; let __t = *__p; *__p += 1; __t };
+                            __state = 1572;
+                        }
+                        1575 => {
+                            if rc != 0 { __state = 1576; } else { __state = 1574; }
+                        }
+                        1576 => { __state = 17; }
+                        1577 => { is_schema_change = 0; __state = 1568; }
+                        1578 => {
+                            if is_schema_change != 0 {
+                                __state = 1584;
+                            } else { __state = 1552; }
+                        }
+                        1579 => {
+                            if ii < unsafe { (*db).n_db } {
+                                __state = 1580;
+                            } else { __state = 1578; }
+                        }
+                        1580 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_savepoint(unsafe {
+                                            (*unsafe { (*db).a_db.offset(ii as isize) }).p_bt
+                                        }, p1__2, i_savepoint)
+                                };
+                            __state = 1582;
+                        }
+                        1581 => {
+                            { let __p = &mut ii; let __t = *__p; *__p += 1; __t };
+                            __state = 1579;
+                        }
+                        1582 => {
+                            if rc != 0 { __state = 1583; } else { __state = 1581; }
+                        }
+                        1583 => { __state = 17; }
+                        1584 => {
+                            unsafe { sqlite3_expire_prepared_statements(db, 0) };
+                            __state = 1585;
+                        }
+                        1585 => {
+                            unsafe { sqlite3_reset_all_schemas_of_connection(db) };
+                            __state = 1586;
+                        }
+                        1586 => {
+                            unsafe { (*db).m_db_flags |= 1 as u32 };
+                            __state = 1552;
+                        }
+                        1587 => {
+                            if unsafe { (*db).p_savepoint } != p_savepoint {
+                                __state = 1590;
+                            } else { __state = 1589; }
+                        }
+                        1588 => { __state = 17; }
+                        1589 => {
+                            if p1__2 == 1 { __state = 1595; } else { __state = 1596; }
+                        }
+                        1590 => {
+                            p_tmp = unsafe { (*db).p_savepoint };
+                            __state = 1591;
+                        }
+                        1591 => {
+                            unsafe { (*db).p_savepoint = unsafe { (*p_tmp).p_next } };
+                            __state = 1592;
+                        }
+                        1592 => {
+                            unsafe { sqlite3_db_free(db, p_tmp as *mut ()) };
+                            __state = 1593;
+                        }
+                        1593 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_savepoint };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 1587;
+                        }
+                        1594 => {
+                            if (is_transaction == 0) as i32 != 0 || p1__2 == 2 {
+                                __state = 1603;
+                            } else { __state = 1517; }
+                        }
+                        1595 => { { let _ = 0; }; __state = 1597; }
+                        1596 => { { let _ = 0; }; __state = 1601; }
+                        1597 => {
+                            unsafe {
+                                (*db).p_savepoint = unsafe { (*p_savepoint).p_next }
+                            };
+                            __state = 1598;
+                        }
+                        1598 => {
+                            unsafe { sqlite3_db_free(db, p_savepoint as *mut ()) };
+                            __state = 1599;
+                        }
+                        1599 => {
+                            if (is_transaction == 0) as i32 != 0 {
+                                __state = 1600;
+                            } else { __state = 1594; }
+                        }
+                        1600 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_savepoint };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 1594;
+                        }
+                        1601 => {
+                            unsafe {
+                                (*db).n_deferred_cons =
+                                    unsafe { (*p_savepoint).n_deferred_cons }
+                            };
+                            __state = 1602;
+                        }
+                        1602 => {
+                            unsafe {
+                                (*db).n_deferred_imm_cons =
+                                    unsafe { (*p_savepoint).n_deferred_imm_cons }
+                            };
+                            __state = 1594;
+                        }
+                        1603 => {
+                            rc =
+                                unsafe { sqlite3_vtab_savepoint(db, p1__2, i_savepoint) };
+                            __state = 1604;
+                        }
+                        1604 => {
+                            if rc != 0 { __state = 1605; } else { __state = 1517; }
+                        }
+                        1605 => { __state = 17; }
+                        1606 => {
+                            if unsafe { (*p).e_vdbe_state } as i32 == 3 {
+                                __state = 1609;
+                            } else { __state = 1608; }
+                        }
+                        1607 => { __state = 17; }
+                        1608 => { __state = 60; }
+                        1609 => { rc = 101; __state = 1610; }
+                        1610 => { __state = 18; }
+                        1611 => { __state = 1645; }
+                        1612 => { __state = 1613; }
+                        1613 => {
+                            desired_auto_commit = unsafe { (*p_op).p1 };
+                            __state = 1614;
+                        }
+                        1614 => {
+                            i_rollback = unsafe { (*p_op).p2 };
+                            __state = 1615;
+                        }
+                        1615 => { { let _ = 0; }; __state = 1616; }
+                        1616 => { { let _ = 0; }; __state = 1617; }
+                        1617 => { { let _ = 0; }; __state = 1618; }
+                        1618 => { { let _ = 0; }; __state = 1619; }
+                        1619 => {
+                            if desired_auto_commit !=
+                                    unsafe { (*db).auto_commit } as i32 {
+                                __state = 1621;
+                            } else { __state = 1622; }
+                        }
+                        1620 => { { let _ = 0; }; __state = 1611; }
+                        1621 => {
+                            if i_rollback != 0 {
+                                __state = 1624;
+                            } else { __state = 1625; }
+                        }
+                        1622 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    if (desired_auto_commit == 0) as i32 != 0 {
+                                            c"cannot start a transaction within a transaction".as_ptr()
+                                                as *mut i8
+                                        } else {
+                                            if i_rollback != 0 {
+                                                c"cannot rollback - no transaction is active".as_ptr() as
+                                                    *mut i8
+                                            } else {
+                                                c"cannot commit - no transaction is active".as_ptr() as
+                                                    *mut i8
+                                            }
+                                        } as *const i8)
+                            };
+                            __state = 1643;
+                        }
+                        1623 => {
+                            if unsafe { sqlite3_vdbe_halt(p) } == 5 {
+                                __state = 1635;
+                            } else { __state = 1634; }
+                        }
+                        1624 => { { let _ = 0; }; __state = 1626; }
+                        1625 => {
+                            if desired_auto_commit != 0 &&
+                                    unsafe { (*db).n_vdbe_write } > 0 {
+                                __state = 1628;
+                            } else { __state = 1629; }
+                        }
+                        1626 => {
+                            unsafe { sqlite3_rollback_all(db, 4 | 2 << 8) };
+                            __state = 1627;
+                        }
+                        1627 => {
+                            unsafe { (*db).auto_commit = 1 as u8 };
+                            __state = 1623;
+                        }
+                        1628 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"cannot commit transaction - SQL statements in progress".as_ptr()
+                                            as *mut i8 as *const i8)
+                            };
+                            __state = 1630;
+                        }
+                        1629 => {
+                            if { rc = unsafe { sqlite3_vdbe_check_fk_deferred(p) }; rc }
+                                    != 0 {
+                                __state = 1632;
+                            } else { __state = 1633; }
+                        }
+                        1630 => { rc = 5; __state = 1631; }
+                        1631 => { __state = 17; }
+                        1632 => { __state = 18; }
+                        1633 => {
+                            unsafe { (*db).auto_commit = desired_auto_commit as u8 };
+                            __state = 1623;
+                        }
+                        1634 => {
+                            unsafe { sqlite3_close_savepoints(db) };
+                            __state = 1639;
+                        }
+                        1635 => {
+                            unsafe {
+                                (*p).pc = unsafe { p_op.offset_from(a_op) } as i64 as i32
+                            };
+                            __state = 1636;
+                        }
+                        1636 => {
+                            unsafe {
+                                (*db).auto_commit = (1 - desired_auto_commit) as u8
+                            };
+                            __state = 1637;
+                        }
+                        1637 => {
+                            unsafe { (*p).rc = { rc = 5; rc } };
+                            __state = 1638;
+                        }
+                        1638 => { __state = 18; }
+                        1639 => {
+                            if unsafe { (*p).rc } == 0 {
+                                __state = 1641;
+                            } else { __state = 1642; }
+                        }
+                        1640 => { __state = 18; }
+                        1641 => { rc = 101; __state = 1640; }
+                        1642 => { rc = 1; __state = 1640; }
+                        1643 => { rc = 1; __state = 1644; }
+                        1644 => { __state = 17; }
+                        1645 => { __state = 133; }
+                        1646 => { __state = 134; }
+                        1647 => { __state = 1648; }
+                        1648 => { i_meta = 0; __state = 1649; }
+                        1649 => { { let _ = 0; }; __state = 1650; }
+                        1650 => { { let _ = 0; }; __state = 1651; }
+                        1651 => { { let _ = 0; }; __state = 1652; }
+                        1652 => { { let _ = 0; }; __state = 1653; }
+                        1653 => { { let _ = 0; }; __state = 1654; }
+                        1654 => { { let _ = 0; }; __state = 1655; }
+                        1655 => {
+                            if unsafe { (*p_op).p2 } != 0 &&
+                                    unsafe { (*db).flags } & (1048576 as u64 | (2 as u64) << 32)
+                                        != 0 as u64 {
+                                __state = 1657;
+                            } else { __state = 1656; }
+                        }
+                        1656 => {
+                            p_db =
+                                unsafe {
+                                    unsafe { (*db).a_db.offset(unsafe { (*p_op).p1 } as isize) }
+                                };
+                            __state = 1661;
+                        }
+                        1657 => {
+                            if unsafe { (*db).flags } & 1048576 as u64 != 0 {
+                                __state = 1659;
+                            } else { __state = 1660; }
+                        }
+                        1658 => { __state = 17; }
+                        1659 => { rc = 8; __state = 1658; }
+                        1660 => { rc = 11; __state = 1658; }
+                        1661 => { p_bt = unsafe { (*p_db).p_bt }; __state = 1662; }
+                        1662 => {
+                            if !(p_bt).is_null() {
+                                __state = 1664;
+                            } else { __state = 1663; }
+                        }
+                        1663 => { { let _ = 0; }; __state = 1684; }
+                        1664 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_begin_trans(p_bt, unsafe { (*p_op).p2 },
+                                        &mut i_meta)
+                                };
+                            __state = 1665;
+                        }
+                        1665 => { __state = 1666; }
+                        1666 => { __state = 1667; }
+                        1667 => {
+                            if rc != 0 { __state = 1669; } else { __state = 1668; }
+                        }
+                        1668 => {
+                            if unsafe { (*p).uses_stmt_journal() } != 0 &&
+                                        unsafe { (*p_op).p2 } != 0 &&
+                                    (unsafe { (*db).auto_commit } as i32 == 0 ||
+                                        unsafe { (*db).n_vdbe_read } > 1) {
+                                __state = 1674;
+                            } else { __state = 1663; }
+                        }
+                        1669 => {
+                            if rc & 255 == 5 {
+                                __state = 1671;
+                            } else { __state = 1670; }
+                        }
+                        1670 => { __state = 17; }
+                        1671 => {
+                            unsafe {
+                                (*p).pc = unsafe { p_op.offset_from(a_op) } as i64 as i32
+                            };
+                            __state = 1672;
+                        }
+                        1672 => { unsafe { (*p).rc = rc }; __state = 1673; }
+                        1673 => { __state = 18; }
+                        1674 => { { let _ = 0; }; __state = 1675; }
+                        1675 => {
+                            if unsafe { (*p).i_statement } == 0 {
+                                __state = 1677;
+                            } else { __state = 1676; }
+                        }
+                        1676 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vtab_savepoint(db, 0,
+                                        unsafe { (*p).i_statement } - 1)
+                                };
+                            __state = 1680;
+                        }
+                        1677 => { { let _ = 0; }; __state = 1678; }
+                        1678 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_statement };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 1679;
+                        }
+                        1679 => {
+                            unsafe {
+                                (*p).i_statement =
+                                    unsafe { (*db).n_savepoint } + unsafe { (*db).n_statement }
+                            };
+                            __state = 1676;
+                        }
+                        1680 => {
+                            if rc == 0 { __state = 1682; } else { __state = 1681; }
+                        }
+                        1681 => {
+                            unsafe {
+                                (*p).n_stmt_def_cons = unsafe { (*db).n_deferred_cons }
+                            };
+                            __state = 1683;
+                        }
+                        1682 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_begin_stmt(p_bt, unsafe { (*p).i_statement })
+                                };
+                            __state = 1681;
+                        }
+                        1683 => {
+                            unsafe {
+                                (*p).n_stmt_def_imm_cons =
+                                    unsafe { (*db).n_deferred_imm_cons }
+                            };
+                            __state = 1663;
+                        }
+                        1684 => {
+                            if rc == 0 && unsafe { (*p_op).p5 } != 0 &&
+                                    (i_meta != unsafe { (*p_op).p3 } ||
+                                        unsafe { (*unsafe { (*p_db).p_schema }).i_generation } !=
+                                            unsafe { (*p_op).p4.i }) {
+                                __state = 1686;
+                            } else { __state = 1685; }
+                        }
+                        1685 => {
+                            if rc != 0 { __state = 1694; } else { __state = 1693; }
+                        }
+                        1686 => {
+                            unsafe {
+                                sqlite3_db_free(db, unsafe { (*p).z_err_msg } as *mut ())
+                            };
+                            __state = 1687;
+                        }
+                        1687 => {
+                            unsafe {
+                                (*p).z_err_msg =
+                                    unsafe {
+                                        sqlite3_db_str_dup(db,
+                                            c"database schema has changed".as_ptr() as *mut i8 as
+                                                *const i8)
+                                    }
+                            };
+                            __state = 1688;
+                        }
+                        1688 => {
+                            if unsafe {
+                                        (*unsafe {
+                                                        (*unsafe {
+                                                                    (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                                                }).p_schema
+                                                    }).schema_cookie
+                                    } != i_meta {
+                                __state = 1690;
+                            } else { __state = 1689; }
+                        }
+                        1689 => {
+                            unsafe { (*p).set_expired(1 as bft as u32) };
+                            __state = 1691;
+                        }
+                        1690 => {
+                            unsafe {
+                                sqlite3_reset_one_schema(db, unsafe { (*p_op).p1 })
+                            };
+                            __state = 1689;
+                        }
+                        1691 => { rc = 17; __state = 1692; }
+                        1692 => {
+                            unsafe { (*p).set_change_cnt_on(0 as bft as u32) };
+                            __state = 1685;
+                        }
+                        1693 => { __state = 60; }
+                        1694 => { __state = 17; }
+                        1695 => { __state = 135; }
+                        1696 => { __state = 1697; }
+                        1697 => { __state = 1698; }
+                        1698 => { { let _ = 0; }; __state = 1699; }
+                        1699 => { i_db = unsafe { (*p_op).p1 }; __state = 1700; }
+                        1700 => {
+                            i_cookie = unsafe { (*p_op).p3 };
+                            __state = 1701;
+                        }
+                        1701 => { { let _ = 0; }; __state = 1702; }
+                        1702 => { { let _ = 0; }; __state = 1703; }
+                        1703 => { { let _ = 0; }; __state = 1704; }
+                        1704 => { { let _ = 0; }; __state = 1705; }
+                        1705 => {
+                            unsafe {
+                                sqlite3_btree_get_meta(unsafe {
+                                        (*unsafe { (*db).a_db.offset(i_db as isize) }).p_bt
+                                    }, i_cookie, &raw mut i_meta_1 as *mut u32)
+                            };
+                            __state = 1706;
+                        }
+                        1706 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 1707;
+                        }
+                        1707 => {
+                            unsafe { (*p_out).u.i = i_meta_1 as i64 };
+                            __state = 1708;
+                        }
+                        1708 => { __state = 60; }
+                        1709 => { __state = 136; }
+                        1710 => { __state = 1711; }
+                        1711 => { { let _ = 0; }; __state = 1712; }
+                        1712 => { { let _ = 0; }; __state = 1713; }
+                        1713 => { { let _ = 0; }; __state = 1714; }
+                        1714 => { { let _ = 0; }; __state = 1715; }
+                        1715 => {
+                            p_db_1 =
+                                unsafe {
+                                    unsafe { (*db).a_db.offset(unsafe { (*p_op).p1 } as isize) }
+                                };
+                            __state = 1716;
+                        }
+                        1716 => { { let _ = 0; }; __state = 1717; }
+                        1717 => { { let _ = 0; }; __state = 1718; }
+                        1718 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_update_meta(unsafe { (*p_db_1).p_bt },
+                                        unsafe { (*p_op).p2 }, unsafe { (*p_op).p3 } as u32)
+                                };
+                            __state = 1719;
+                        }
+                        1719 => {
+                            if unsafe { (*p_op).p2 } == 1 {
+                                __state = 1721;
+                            } else { __state = 1722; }
+                        }
+                        1720 => {
+                            if unsafe { (*p_op).p1 } == 1 {
+                                __state = 1727;
+                            } else { __state = 1726; }
+                        }
+                        1721 => {
+                            unsafe {
+                                *(unsafe {
+                                                &raw mut (*unsafe { (*p_db_1).p_schema }).schema_cookie
+                                            } as *mut u32) =
+                                    unsafe { *(unsafe { &raw mut (*p_op).p3 } as *mut u32) } -
+                                        unsafe { (*p_op).p5 } as u32
+                            };
+                            __state = 1723;
+                        }
+                        1722 => {
+                            if unsafe { (*p_op).p2 } == 2 {
+                                __state = 1725;
+                            } else { __state = 1720; }
+                        }
+                        1723 => {
+                            unsafe { (*db).m_db_flags |= 1 as u32 };
+                            __state = 1724;
+                        }
+                        1724 => {
+                            unsafe {
+                                sqlite3_fk_clear_trigger_cache(db, unsafe { (*p_op).p1 })
+                            };
+                            __state = 1720;
+                        }
+                        1725 => {
+                            unsafe {
+                                (*unsafe { (*p_db_1).p_schema }).file_format =
+                                    unsafe { (*p_op).p3 } as u8
+                            };
+                            __state = 1720;
+                        }
+                        1726 => {
+                            if rc != 0 { __state = 1730; } else { __state = 1729; }
+                        }
+                        1727 => {
+                            unsafe { sqlite3_expire_prepared_statements(db, 0) };
+                            __state = 1728;
+                        }
+                        1728 => {
+                            unsafe { (*p).set_expired(0 as bft as u32) };
+                            __state = 1726;
+                        }
+                        1729 => { __state = 60; }
+                        1730 => { __state = 17; }
+                        1731 => { __state = 139; }
+                        1732 => { __state = 1733; }
+                        1733 => { __state = 1734; }
+                        1734 => { __state = 1735; }
+                        1735 => { __state = 1736; }
+                        1736 => { __state = 1737; }
+                        1737 => { __state = 1738; }
+                        1738 => { __state = 1739; }
+                        1739 => { { let _ = 0; }; __state = 1740; }
+                        1740 => { { let _ = 0; }; __state = 1741; }
+                        1741 => {
+                            p_cur =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1742;
+                        }
+                        1742 => {
+                            if !(p_cur).is_null() &&
+                                    unsafe { (*p_cur).pgno_root } ==
+                                        unsafe { (*p_op).p2 } as u32 {
+                                __state = 1744;
+                            } else { __state = 1743; }
+                        }
+                        1743 => { __state = 137; }
+                        1744 => { { let _ = 0; }; __state = 1745; }
+                        1745 => { { let _ = 0; }; __state = 1746; }
+                        1746 => {
+                            unsafe {
+                                sqlite3_btree_clear_cursor(unsafe { (*p_cur).uc.p_cursor })
+                            };
+                            __state = 1747;
+                        }
+                        1747 => { __state = 13; }
+                        1748 => { { let _ = 0; }; __state = 1749; }
+                        1749 => { { let _ = 0; }; __state = 1750; }
+                        1750 => {
+                            if unsafe { (*p).expired() } as i32 == 1 {
+                                __state = 1752;
+                            } else { __state = 1751; }
+                        }
+                        1751 => { n_field_1 = 0; __state = 1754; }
+                        1752 => { rc = 4 | 2 << 8; __state = 1753; }
+                        1753 => { __state = 17; }
+                        1754 => {
+                            p_key_info_1 = core::ptr::null_mut();
+                            __state = 1755;
+                        }
+                        1755 => {
+                            p2__3 = unsafe { (*p_op).p2 } as u32;
+                            __state = 1756;
+                        }
+                        1756 => { i_db_1 = unsafe { (*p_op).p3 }; __state = 1757; }
+                        1757 => { { let _ = 0; }; __state = 1758; }
+                        1758 => { { let _ = 0; }; __state = 1759; }
+                        1759 => {
+                            p_db_2 =
+                                unsafe { unsafe { (*db).a_db.offset(i_db_1 as isize) } };
+                            __state = 1760;
+                        }
+                        1760 => { p_x = unsafe { (*p_db_2).p_bt }; __state = 1761; }
+                        1761 => { { let _ = 0; }; __state = 1762; }
+                        1762 => {
+                            if unsafe { (*p_op).opcode } as i32 == 116 {
+                                __state = 1764;
+                            } else { __state = 1765; }
+                        }
+                        1763 => {
+                            if unsafe { (*p_op).p4type } as i32 == -9 {
+                                __state = 1781;
+                            } else { __state = 1782; }
+                        }
+                        1764 => { { let _ = 0; }; __state = 1766; }
+                        1765 => { wr_flag = 0; __state = 1779; }
+                        1766 => {
+                            wr_flag = 4 | unsafe { (*p_op).p5 } as i32 & 8;
+                            __state = 1767;
+                        }
+                        1767 => { { let _ = 0; }; __state = 1768; }
+                        1768 => {
+                            if (unsafe { (*unsafe { (*p_db_2).p_schema }).file_format }
+                                            as i32) < unsafe { (*p).min_write_file_format } as i32 {
+                                __state = 1770;
+                            } else { __state = 1769; }
+                        }
+                        1769 => {
+                            if unsafe { (*p_op).p5 } as i32 & 16 != 0 {
+                                __state = 1771;
+                            } else { __state = 1763; }
+                        }
+                        1770 => {
+                            unsafe {
+                                (*p).min_write_file_format =
+                                    unsafe { (*unsafe { (*p_db_2).p_schema }).file_format }
+                            };
+                            __state = 1769;
+                        }
+                        1771 => { { let _ = 0; }; __state = 1772; }
+                        1772 => { { let _ = 0; }; __state = 1773; }
+                        1773 => {
+                            p_in2 = unsafe { a_mem.add(p2__3 as usize) };
+                            __state = 1774;
+                        }
+                        1774 => { { let _ = 0; }; __state = 1775; }
+                        1775 => { { let _ = 0; }; __state = 1776; }
+                        1776 => {
+                            unsafe { sqlite3_vdbe_mem_integerify(p_in2) };
+                            __state = 1777;
+                        }
+                        1777 => {
+                            p2__3 = unsafe { (*p_in2).u.i } as i32 as u32;
+                            __state = 1778;
+                        }
+                        1778 => { { let _ = 0; }; __state = 1763; }
+                        1779 => { { let _ = 0; }; __state = 1763; }
+                        1780 => { { let _ = 0; }; __state = 1787; }
+                        1781 => {
+                            p_key_info_1 = unsafe { (*p_op).p4.p_key_info };
+                            __state = 1783;
+                        }
+                        1782 => {
+                            if unsafe { (*p_op).p4type } as i32 == -3 {
+                                __state = 1786;
+                            } else { __state = 1780; }
+                        }
+                        1783 => { { let _ = 0; }; __state = 1784; }
+                        1784 => { { let _ = 0; }; __state = 1785; }
+                        1785 => {
+                            n_field_1 = unsafe { (*p_key_info_1).n_all_field } as i32;
+                            __state = 1780;
+                        }
+                        1786 => {
+                            n_field_1 = unsafe { (*p_op).p4.i };
+                            __state = 1780;
+                        }
+                        1787 => { { let _ = 0; }; __state = 1788; }
+                        1788 => { __state = 1789; }
+                        1789 => {
+                            p_cur =
+                                allocate_cursor(p, unsafe { (*p_op).p1 }, n_field_1,
+                                    0 as u8);
+                            __state = 1790;
+                        }
+                        1790 => {
+                            if p_cur == core::ptr::null_mut() {
+                                __state = 1792;
+                            } else { __state = 1791; }
+                        }
+                        1791 => {
+                            unsafe { (*p_cur).i_db = i_db_1 as i8 };
+                            __state = 1793;
+                        }
+                        1792 => { __state = 20; }
+                        1793 => {
+                            unsafe { (*p_cur).null_row = 1 as u8 };
+                            __state = 1794;
+                        }
+                        1794 => {
+                            unsafe { (*p_cur).set_is_ordered(1 as Bool as u32) };
+                            __state = 1795;
+                        }
+                        1795 => {
+                            unsafe { (*p_cur).pgno_root = p2__3 };
+                            __state = 1796;
+                        }
+                        1796 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_cursor(p_x, p2__3, wr_flag, p_key_info_1,
+                                        unsafe { (*p_cur).uc.p_cursor })
+                                };
+                            __state = 1797;
+                        }
+                        1797 => {
+                            unsafe { (*p_cur).p_key_info = p_key_info_1 };
+                            __state = 1798;
+                        }
+                        1798 => {
+                            unsafe {
+                                (*p_cur).is_table =
+                                    (unsafe { (*p_op).p4type } as i32 != -9) as u8
+                            };
+                            __state = 1799;
+                        }
+                        1799 => { __state = 13; }
+                        1800 => { { let _ = 0; }; __state = 1801; }
+                        1801 => { __state = 1802; }
+                        1802 => { __state = 1803; }
+                        1803 => {
+                            unsafe {
+                                sqlite3_btree_cursor_hint_flags(unsafe {
+                                        (*p_cur).uc.p_cursor
+                                    }, (unsafe { (*p_op).p5 } as i32 & (1 | 2)) as u32)
+                            };
+                            __state = 1804;
+                        }
+                        1804 => {
+                            if rc != 0 { __state = 1806; } else { __state = 1805; }
+                        }
+                        1805 => { __state = 60; }
+                        1806 => { __state = 17; }
+                        1807 => { __state = 140; }
+                        1808 => { __state = 1809; }
+                        1809 => {
+                            p_orig =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p2 } as isize)
+                                        }
+                                };
+                            __state = 1810;
+                        }
+                        1810 => { { let _ = 0; }; __state = 1811; }
+                        1811 => { { let _ = 0; }; __state = 1812; }
+                        1812 => {
+                            p_cx =
+                                allocate_cursor(p, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_orig).n_field } as i32, 0 as u8);
+                            __state = 1813;
+                        }
+                        1813 => {
+                            if p_cx == core::ptr::null_mut() {
+                                __state = 1815;
+                            } else { __state = 1814; }
+                        }
+                        1814 => {
+                            unsafe { (*p_cx).null_row = 1 as u8 };
+                            __state = 1816;
+                        }
+                        1815 => { __state = 20; }
+                        1816 => {
+                            unsafe { (*p_cx).set_is_ephemeral(1 as Bool as u32) };
+                            __state = 1817;
+                        }
+                        1817 => {
+                            unsafe {
+                                (*p_cx).p_key_info = unsafe { (*p_orig).p_key_info }
+                            };
+                            __state = 1818;
+                        }
+                        1818 => {
+                            unsafe { (*p_cx).is_table = unsafe { (*p_orig).is_table } };
+                            __state = 1819;
+                        }
+                        1819 => {
+                            unsafe {
+                                (*p_cx).pgno_root = unsafe { (*p_orig).pgno_root }
+                            };
+                            __state = 1820;
+                        }
+                        1820 => {
+                            unsafe {
+                                (*p_cx).set_is_ordered(unsafe { (*p_orig).is_ordered() } as
+                                        u32)
+                            };
+                            __state = 1821;
+                        }
+                        1821 => {
+                            unsafe { (*p_cx).ub.p_btx = unsafe { (*p_orig).ub.p_btx } };
+                            __state = 1822;
+                        }
+                        1822 => {
+                            unsafe { (*p_cx).set_no_reuse(1 as Bool as u32) };
+                            __state = 1823;
+                        }
+                        1823 => {
+                            unsafe { (*p_orig).set_no_reuse(1 as Bool as u32) };
+                            __state = 1824;
+                        }
+                        1824 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_cursor(unsafe { (*p_cx).ub.p_btx },
+                                        unsafe { (*p_cx).pgno_root }, 4,
+                                        unsafe { (*p_cx).p_key_info },
+                                        unsafe { (*p_cx).uc.p_cursor })
+                                };
+                            __state = 1825;
+                        }
+                        1825 => { { let _ = 0; }; __state = 1826; }
+                        1826 => { __state = 60; }
+                        1827 => { __state = 1875; }
+                        1828 => { __state = 1829; }
+                        1829 => { __state = 1830; }
+                        1830 => { { let _ = 0; }; __state = 1831; }
+                        1831 => { { let _ = 0; }; __state = 1832; }
+                        1832 => {
+                            if unsafe { (*p_op).p3 } > 0 {
+                                __state = 1834;
+                            } else { __state = 1833; }
+                        }
+                        1833 => {
+                            p_cx_1 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1839;
+                        }
+                        1834 => { { let _ = 0; }; __state = 1835; }
+                        1835 => { { let _ = 0; }; __state = 1836; }
+                        1836 => { { let _ = 0; }; __state = 1837; }
+                        1837 => {
+                            unsafe {
+                                (*a_mem.offset(unsafe { (*p_op).p3 } as isize)).n = 0
+                            };
+                            __state = 1838;
+                        }
+                        1838 => {
+                            unsafe {
+                                (*a_mem.offset(unsafe { (*p_op).p3 } as isize)).z =
+                                    c"".as_ptr() as *mut i8
+                            };
+                            __state = 1833;
+                        }
+                        1839 => {
+                            if !(p_cx_1).is_null() &&
+                                        (unsafe { (*p_cx_1).no_reuse() } == 0) as i32 != 0 &&
+                                    unsafe { (*p_op).p2 } <= unsafe { (*p_cx_1).n_field } as i32
+                                {
+                                __state = 1841;
+                            } else { __state = 1842; }
+                        }
+                        1840 => {
+                            if rc != 0 { __state = 1873; } else { __state = 1872; }
+                        }
+                        1841 => { { let _ = 0; }; __state = 1843; }
+                        1842 => {
+                            p_cx_1 =
+                                allocate_cursor(p, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p2 }, 0 as u8);
+                            __state = 1846;
+                        }
+                        1843 => {
+                            unsafe { (*p_cx_1).seq_count = 0 as i64 };
+                            __state = 1844;
+                        }
+                        1844 => {
+                            unsafe { (*p_cx_1).cache_status = 0 as u32 };
+                            __state = 1845;
+                        }
+                        1845 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_clear_table(unsafe { (*p_cx_1).ub.p_btx },
+                                        unsafe { (*p_cx_1).pgno_root } as i32,
+                                        core::ptr::null_mut())
+                                };
+                            __state = 1840;
+                        }
+                        1846 => {
+                            if p_cx_1 == core::ptr::null_mut() {
+                                __state = 1848;
+                            } else { __state = 1847; }
+                        }
+                        1847 => {
+                            unsafe { (*p_cx_1).set_is_ephemeral(1 as Bool as u32) };
+                            __state = 1849;
+                        }
+                        1848 => { __state = 20; }
+                        1849 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_open(unsafe { (*db).p_vfs },
+                                        core::ptr::null(), db, unsafe { &mut (*p_cx_1).ub.p_btx },
+                                        1 | 4 | unsafe { (*p_op).p5 } as i32, vfs_flags)
+                                };
+                            __state = 1850;
+                        }
+                        1850 => {
+                            if rc == 0 { __state = 1851; } else { __state = 1840; }
+                        }
+                        1851 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_begin_trans(unsafe { (*p_cx_1).ub.p_btx }, 1,
+                                        core::ptr::null_mut())
+                                };
+                            __state = 1852;
+                        }
+                        1852 => {
+                            if rc == 0 { __state = 1854; } else { __state = 1853; }
+                        }
+                        1853 => {
+                            unsafe {
+                                (*p_cx_1).set_is_ordered((unsafe { (*p_op).p5 } as i32 != 8)
+                                            as Bool as u32)
+                            };
+                            __state = 1866;
+                        }
+                        1854 => {
+                            if {
+                                        let __v =
+                                            {
+                                                p_key_info_2 = unsafe { (*p_op).p4.p_key_info };
+                                                p_key_info_2
+                                            };
+                                        unsafe { (*p_cx_1).p_key_info = __v };
+                                        __v
+                                    } != core::ptr::null_mut() {
+                                __state = 1855;
+                            } else { __state = 1856; }
+                        }
+                        1855 => { { let _ = 0; }; __state = 1857; }
+                        1856 => {
+                            unsafe { (*p_cx_1).pgno_root = 1 as Pgno };
+                            __state = 1864;
+                        }
+                        1857 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_create_table(unsafe { (*p_cx_1).ub.p_btx },
+                                        unsafe { &mut (*p_cx_1).pgno_root },
+                                        2 | unsafe { (*p_op).p5 } as i32)
+                                };
+                            __state = 1858;
+                        }
+                        1858 => {
+                            if rc == 0 { __state = 1860; } else { __state = 1859; }
+                        }
+                        1859 => {
+                            unsafe { (*p_cx_1).is_table = 0 as u8 };
+                            __state = 1853;
+                        }
+                        1860 => { { let _ = 0; }; __state = 1861; }
+                        1861 => { { let _ = 0; }; __state = 1862; }
+                        1862 => { { let _ = 0; }; __state = 1863; }
+                        1863 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_cursor(unsafe { (*p_cx_1).ub.p_btx },
+                                        unsafe { (*p_cx_1).pgno_root }, 4, p_key_info_2,
+                                        unsafe { (*p_cx_1).uc.p_cursor })
+                                };
+                            __state = 1859;
+                        }
+                        1864 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_cursor(unsafe { (*p_cx_1).ub.p_btx },
+                                        1 as Pgno, 4, core::ptr::null_mut(),
+                                        unsafe { (*p_cx_1).uc.p_cursor })
+                                };
+                            __state = 1865;
+                        }
+                        1865 => {
+                            unsafe { (*p_cx_1).is_table = 1 as u8 };
+                            __state = 1853;
+                        }
+                        1866 => { { let _ = 0; }; __state = 1867; }
+                        1867 => {
+                            if rc != 0 { __state = 1868; } else { __state = 1869; }
+                        }
+                        1868 => { { let _ = 0; }; __state = 1870; }
+                        1869 => { { let _ = 0; }; __state = 1840; }
+                        1870 => {
+                            unsafe {
+                                sqlite3_btree_close(unsafe { (*p_cx_1).ub.p_btx })
+                            };
+                            __state = 1871;
+                        }
+                        1871 => {
+                            unsafe {
+                                *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        } = core::ptr::null_mut()
+                            };
+                            __state = 1840;
+                        }
+                        1872 => {
+                            unsafe { (*p_cx_1).null_row = 1 as u8 };
+                            __state = 1874;
+                        }
+                        1873 => { __state = 17; }
+                        1874 => { __state = 60; }
+                        1875 => { __state = 142; }
+                        1876 => { __state = 143; }
+                        1877 => { { let _ = 0; }; __state = 1878; }
+                        1878 => { { let _ = 0; }; __state = 1879; }
+                        1879 => {
+                            p_cx_2 =
+                                allocate_cursor(p, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p2 }, 1 as u8);
+                            __state = 1880;
+                        }
+                        1880 => {
+                            if p_cx_2 == core::ptr::null_mut() {
+                                __state = 1882;
+                            } else { __state = 1881; }
+                        }
+                        1881 => {
+                            unsafe {
+                                (*p_cx_2).p_key_info = unsafe { (*p_op).p4.p_key_info }
+                            };
+                            __state = 1883;
+                        }
+                        1882 => { __state = 20; }
+                        1883 => { { let _ = 0; }; __state = 1884; }
+                        1884 => { { let _ = 0; }; __state = 1885; }
+                        1885 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_init(db, unsafe { (*p_op).p3 }, p_cx_2)
+                                };
+                            __state = 1886;
+                        }
+                        1886 => {
+                            if rc != 0 { __state = 1888; } else { __state = 1887; }
+                        }
+                        1887 => { __state = 60; }
+                        1888 => { __state = 17; }
+                        1889 => { __state = 144; }
+                        1890 => { { let _ = 0; }; __state = 1891; }
+                        1891 => {
+                            p_c_3 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1892;
+                        }
+                        1892 => { { let _ = 0; }; __state = 1893; }
+                        1893 => {
+                            if {
+                                        let __p = unsafe { &mut (*p_c_3).seq_count };
+                                        let __t = *__p;
+                                        *__p += 1;
+                                        __t
+                                    } == 0 as i64 {
+                                __state = 1895;
+                            } else { __state = 1894; }
+                        }
+                        1894 => { __state = 60; }
+                        1895 => { __state = 4; }
+                        1896 => { __state = 145; }
+                        1897 => { { let _ = 0; }; __state = 1898; }
+                        1898 => { { let _ = 0; }; __state = 1899; }
+                        1899 => {
+                            p_cx_3 =
+                                allocate_cursor(p, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p3 }, 3 as u8);
+                            __state = 1900;
+                        }
+                        1900 => {
+                            if p_cx_3 == core::ptr::null_mut() {
+                                __state = 1902;
+                            } else { __state = 1901; }
+                        }
+                        1901 => {
+                            unsafe { (*p_cx_3).null_row = 1 as u8 };
+                            __state = 1903;
+                        }
+                        1902 => { __state = 20; }
+                        1903 => {
+                            unsafe { (*p_cx_3).seek_result = unsafe { (*p_op).p2 } };
+                            __state = 1904;
+                        }
+                        1904 => {
+                            unsafe { (*p_cx_3).is_table = 1 as u8 };
+                            __state = 1905;
+                        }
+                        1905 => {
+                            unsafe {
+                                (*p_cx_3).uc.p_cursor =
+                                    unsafe { sqlite3_btree_fake_valid_cursor() }
+                            };
+                            __state = 1906;
+                        }
+                        1906 => { { let _ = 0; }; __state = 1907; }
+                        1907 => { __state = 60; }
+                        1908 => { __state = 146; }
+                        1909 => {
+                            unsafe {
+                                sqlite3_vdbe_free_cursor(p,
+                                    unsafe {
+                                        *unsafe {
+                                                (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                            }
+                                    })
+                            };
+                            __state = 1910;
+                        }
+                        1910 => {
+                            unsafe {
+                                *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        } = core::ptr::null_mut()
+                            };
+                            __state = 1911;
+                        }
+                        1911 => { __state = 60; }
+                        1912 => { __state = 2028; }
+                        1913 => { __state = 1914; }
+                        1914 => { __state = 1915; }
+                        1915 => { __state = 1916; }
+                        1916 => { __state = 1917; }
+                        1917 => { __state = 1918; }
+                        1918 => { __state = 1919; }
+                        1919 => { { let _ = 0; }; __state = 1920; }
+                        1920 => { { let _ = 0; }; __state = 1921; }
+                        1921 => {
+                            p_c_4 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 1922;
+                        }
+                        1922 => { { let _ = 0; }; __state = 1923; }
+                        1923 => { { let _ = 0; }; __state = 1924; }
+                        1924 => { { let _ = 0; }; __state = 1925; }
+                        1925 => { { let _ = 0; }; __state = 1926; }
+                        1926 => { { let _ = 0; }; __state = 1927; }
+                        1927 => { { let _ = 0; }; __state = 1928; }
+                        1928 => { { let _ = 0; }; __state = 1929; }
+                        1929 => {
+                            oc = unsafe { (*p_op).opcode } as i32;
+                            __state = 1930;
+                        }
+                        1930 => { eq_only = 0; __state = 1931; }
+                        1931 => {
+                            unsafe { (*p_c_4).null_row = 0 as u8 };
+                            __state = 1932;
+                        }
+                        1932 => {
+                            unsafe { (*p_c_4).deferred_moveto = 0 as u8 };
+                            __state = 1933;
+                        }
+                        1933 => {
+                            unsafe { (*p_c_4).cache_status = 0 as u32 };
+                            __state = 1934;
+                        }
+                        1934 => {
+                            if unsafe { (*p_c_4).is_table } != 0 {
+                                __state = 1936;
+                            } else { __state = 1937; }
+                        }
+                        1935 => {
+                            if oc >= 23 { __state = 2001; } else { __state = 2002; }
+                        }
+                        1936 => { __state = 1938; }
+                        1937 => {
+                            if unsafe {
+                                        sqlite3_btree_cursor_has_hint(unsafe {
+                                                (*p_c_4).uc.p_cursor
+                                            }, 2 as u32)
+                                    } != 0 {
+                                __state = 1974;
+                            } else { __state = 1973; }
+                        }
+                        1938 => { { let _ = 0; }; __state = 1939; }
+                        1939 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1940;
+                        }
+                        1940 => {
+                            flags3__1 = unsafe { (*p_in3).flags };
+                            __state = 1941;
+                        }
+                        1941 => {
+                            if flags3__1 as i32 & (4 | 8 | 32 | 2) == 2 {
+                                __state = 1943;
+                            } else { __state = 1942; }
+                        }
+                        1942 => {
+                            i_key =
+                                unsafe { sqlite3_vdbe_int_value(p_in3 as *const Mem) };
+                            __state = 1944;
+                        }
+                        1943 => {
+                            apply_numeric_affinity(p_in3, 0);
+                            __state = 1942;
+                        }
+                        1944 => {
+                            new_type = unsafe { (*p_in3).flags };
+                            __state = 1945;
+                        }
+                        1945 => {
+                            unsafe { (*p_in3).flags = flags3__1 };
+                            __state = 1946;
+                        }
+                        1946 => {
+                            if new_type as i32 & (4 | 32) == 0 {
+                                __state = 1948;
+                            } else { __state = 1947; }
+                        }
+                        1947 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_table_moveto(unsafe { (*p_c_4).uc.p_cursor },
+                                        i_key as u64 as i64, 0, &mut res__1)
+                                };
+                            __state = 1970;
+                        }
+                        1948 => { __state = 1949; }
+                        1949 => {
+                            if new_type as i32 & 8 == 0 {
+                                __state = 1951;
+                            } else { __state = 1950; }
+                        }
+                        1950 => {
+                            c__2 =
+                                unsafe {
+                                    sqlite3_int_float_compare(i_key, unsafe { (*p_in3).u.r })
+                                };
+                            __state = 1958;
+                        }
+                        1951 => {
+                            if new_type as i32 & 1 != 0 || oc >= 23 {
+                                __state = 1952;
+                            } else { __state = 1953; }
+                        }
+                        1952 => { __state = 1954; }
+                        1953 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_last(unsafe { (*p_c_4).uc.p_cursor },
+                                        &mut res__1)
+                                };
+                            __state = 1955;
+                        }
+                        1954 => { __state = 4; }
+                        1955 => {
+                            if rc != 0 { __state = 1957; } else { __state = 1956; }
+                        }
+                        1956 => { __state = 14; }
+                        1957 => { __state = 17; }
+                        1958 => {
+                            if c__2 > 0 { __state = 1959; } else { __state = 1960; }
+                        }
+                        1959 => { { let _ = 0; }; __state = 1961; }
+                        1960 => {
+                            if c__2 < 0 { __state = 1965; } else { __state = 1947; }
+                        }
+                        1961 => { { let _ = 0; }; __state = 1962; }
+                        1962 => { { let _ = 0; }; __state = 1963; }
+                        1963 => {
+                            if oc & 1 == 24 & 1 {
+                                __state = 1964;
+                            } else { __state = 1947; }
+                        }
+                        1964 => {
+                            { let __p = &mut oc; let __t = *__p; *__p -= 1; __t };
+                            __state = 1947;
+                        }
+                        1965 => { { let _ = 0; }; __state = 1966; }
+                        1966 => { { let _ = 0; }; __state = 1967; }
+                        1967 => { { let _ = 0; }; __state = 1968; }
+                        1968 => {
+                            if oc & 1 == 21 & 1 {
+                                __state = 1969;
+                            } else { __state = 1947; }
+                        }
+                        1969 => {
+                            { let __p = &mut oc; let __t = *__p; *__p += 1; __t };
+                            __state = 1947;
+                        }
+                        1970 => {
+                            unsafe { (*p_c_4).moveto_target = i_key };
+                            __state = 1971;
+                        }
+                        1971 => {
+                            if rc != 0 { __state = 1972; } else { __state = 1935; }
+                        }
+                        1972 => { __state = 17; }
+                        1973 => {
+                            n_field_2 = unsafe { (*p_op).p4.i };
+                            __state = 1983;
+                        }
+                        1974 => { eq_only = 1; __state = 1975; }
+                        1975 => { { let _ = 0; }; __state = 1976; }
+                        1976 => { { let _ = 0; }; __state = 1977; }
+                        1977 => { { let _ = 0; }; __state = 1978; }
+                        1978 => { { let _ = 0; }; __state = 1979; }
+                        1979 => { { let _ = 0; }; __state = 1980; }
+                        1980 => { { let _ = 0; }; __state = 1981; }
+                        1981 => { { let _ = 0; }; __state = 1982; }
+                        1982 => { { let _ = 0; }; __state = 1973; }
+                        1983 => { { let _ = 0; }; __state = 1984; }
+                        1984 => { { let _ = 0; }; __state = 1985; }
+                        1985 => {
+                            r.p_key_info = unsafe { (*p_c_4).p_key_info };
+                            __state = 1986;
+                        }
+                        1986 => { r.n_field = n_field_2 as u16; __state = 1987; }
+                        1987 => {
+                            r.default_rc = if 1 & oc - 21 != 0 { -1 } else { 1 } as i8;
+                            __state = 1988;
+                        }
+                        1988 => { { let _ = 0; }; __state = 1989; }
+                        1989 => { { let _ = 0; }; __state = 1990; }
+                        1990 => { { let _ = 0; }; __state = 1991; }
+                        1991 => { { let _ = 0; }; __state = 1992; }
+                        1992 => {
+                            r.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 1993;
+                        }
+                        1993 => { r.eq_seen = 0 as u8; __state = 1994; }
+                        1994 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_index_moveto(unsafe { (*p_c_4).uc.p_cursor },
+                                        &mut r, &mut res__1)
+                                };
+                            __state = 1995;
+                        }
+                        1995 => {
+                            if rc != 0 { __state = 1997; } else { __state = 1996; }
+                        }
+                        1996 => {
+                            if eq_only != 0 && r.eq_seen as i32 == 0 {
+                                __state = 1998;
+                            } else { __state = 1935; }
+                        }
+                        1997 => { __state = 17; }
+                        1998 => { { let _ = 0; }; __state = 1999; }
+                        1999 => { __state = 14; }
+                        2000 => { __state = 14; }
+                        2001 => { { let _ = 0; }; __state = 2003; }
+                        2002 => { { let _ = 0; }; __state = 2012; }
+                        2003 => {
+                            if res__1 < 0 || res__1 == 0 && oc == 24 {
+                                __state = 2004;
+                            } else { __state = 2005; }
+                        }
+                        2004 => { res__1 = 0; __state = 2006; }
+                        2005 => { res__1 = 0; __state = 2000; }
+                        2006 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_next(unsafe { (*p_c_4).uc.p_cursor }, 0)
+                                };
+                            __state = 2007;
+                        }
+                        2007 => {
+                            if rc != 0 { __state = 2008; } else { __state = 2000; }
+                        }
+                        2008 => {
+                            if rc == 101 { __state = 2009; } else { __state = 2010; }
+                        }
+                        2009 => { rc = 0; __state = 2011; }
+                        2010 => { __state = 17; }
+                        2011 => { res__1 = 1; __state = 2000; }
+                        2012 => {
+                            if res__1 > 0 || res__1 == 0 && oc == 21 {
+                                __state = 2013;
+                            } else { __state = 2014; }
+                        }
+                        2013 => { res__1 = 0; __state = 2015; }
+                        2014 => {
+                            res__1 =
+                                unsafe {
+                                    sqlite3_btree_eof(unsafe { (*p_c_4).uc.p_cursor })
+                                };
+                            __state = 2000;
+                        }
+                        2015 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_previous(unsafe { (*p_c_4).uc.p_cursor }, 0)
+                                };
+                            __state = 2016;
+                        }
+                        2016 => {
+                            if rc != 0 { __state = 2017; } else { __state = 2000; }
+                        }
+                        2017 => {
+                            if rc == 101 { __state = 2018; } else { __state = 2019; }
+                        }
+                        2018 => { rc = 0; __state = 2020; }
+                        2019 => { __state = 17; }
+                        2020 => { res__1 = 1; __state = 2000; }
+                        2021 => { __state = 2022; }
+                        2022 => {
+                            if res__1 != 0 { __state = 2024; } else { __state = 2025; }
+                        }
+                        2023 => { __state = 60; }
+                        2024 => { __state = 4; }
+                        2025 => {
+                            if eq_only != 0 { __state = 2026; } else { __state = 2023; }
+                        }
+                        2026 => { { let _ = 0; }; __state = 2027; }
+                        2027 => {
+                            {
+                                let __p = &mut p_op;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 2023;
+                        }
+                        2028 => { __state = 150; }
+                        2029 => { __state = 151; }
+                        2030 => { __state = 2031; }
+                        2031 => { __state = 2032; }
+                        2032 => { __state = 2033; }
+                        2033 => { { let _ = 0; }; __state = 2034; }
+                        2034 => { { let _ = 0; }; __state = 2035; }
+                        2035 => { { let _ = 0; }; __state = 2036; }
+                        2036 => {
+                            p_c_5 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op.offset(1 as isize)).p1 }
+                                                    as isize)
+                                        }
+                                };
+                            __state = 2037;
+                        }
+                        2037 => { { let _ = 0; }; __state = 2038; }
+                        2038 => { { let _ = 0; }; __state = 2039; }
+                        2039 => { { let _ = 0; }; __state = 2040; }
+                        2040 => {
+                            if (unsafe {
+                                                sqlite3_btree_cursor_is_valid_nn(unsafe {
+                                                        (*p_c_5).uc.p_cursor
+                                                    })
+                                            } == 0) as i32 != 0 {
+                                __state = 2042;
+                            } else { __state = 2041; }
+                        }
+                        2041 => { n_step = unsafe { (*p_op).p1 }; __state = 2043; }
+                        2042 => { __state = 60; }
+                        2043 => { { let _ = 0; }; __state = 2044; }
+                        2044 => {
+                            r__1.p_key_info = unsafe { (*p_c_5).p_key_info };
+                            __state = 2045;
+                        }
+                        2045 => {
+                            r__1.n_field =
+                                unsafe { (*p_op.offset(1 as isize)).p4.i } as u16;
+                            __state = 2046;
+                        }
+                        2046 => { r__1.default_rc = 0 as i8; __state = 2047; }
+                        2047 => {
+                            r__1.a_mem =
+                                unsafe {
+                                    a_mem.offset(unsafe { (*p_op.offset(1 as isize)).p3 } as
+                                            isize)
+                                };
+                            __state = 2048;
+                        }
+                        2048 => { res__2 = 0; __state = 2049; }
+                        2049 => {
+                            if 1 != 0 { __state = 2051; } else { __state = 2050; }
+                        }
+                        2050 => { __state = 60; }
+                        2051 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_idx_key_compare(db, p_c_5, &mut r__1,
+                                        &mut res__2)
+                                };
+                            __state = 2052;
+                        }
+                        2052 => {
+                            if rc != 0 { __state = 2054; } else { __state = 2053; }
+                        }
+                        2053 => {
+                            if res__2 > 0 && unsafe { (*p_op).p5 } as i32 == 0 {
+                                __state = 2056;
+                            } else { __state = 2055; }
+                        }
+                        2054 => { __state = 17; }
+                        2055 => {
+                            if res__2 >= 0 { __state = 2060; } else { __state = 2059; }
+                        }
+                        2056 => { __state = 15; }
+                        2057 => {
+                            {
+                                let __p = &mut p_op;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 2058;
+                        }
+                        2058 => { __state = 4; }
+                        2059 => {
+                            if n_step <= 0 { __state = 2064; } else { __state = 2063; }
+                        }
+                        2060 => { __state = 2061; }
+                        2061 => { __state = 4; }
+                        2062 => { __state = 2050; }
+                        2063 => {
+                            { let __p = &mut n_step; let __t = *__p; *__p -= 1; __t };
+                            __state = 2066;
+                        }
+                        2064 => { __state = 2065; }
+                        2065 => { __state = 2050; }
+                        2066 => {
+                            unsafe { (*p_c_5).cache_status = 0 as u32 };
+                            __state = 2067;
+                        }
+                        2067 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_next(unsafe { (*p_c_5).uc.p_cursor }, 0)
+                                };
+                            __state = 2068;
+                        }
+                        2068 => {
+                            if rc != 0 { __state = 2069; } else { __state = 2049; }
+                        }
+                        2069 => {
+                            if rc == 101 { __state = 2070; } else { __state = 2071; }
+                        }
+                        2070 => { rc = 0; __state = 2072; }
+                        2071 => { __state = 17; }
+                        2072 => { __state = 15; }
+                        2073 => { __state = 152; }
+                        2074 => { { let _ = 0; }; __state = 2075; }
+                        2075 => {
+                            p_c_6 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2076;
+                        }
+                        2076 => { { let _ = 0; }; __state = 2077; }
+                        2077 => { { let _ = 0; }; __state = 2078; }
+                        2078 => {
+                            if (unsafe { (*p_c_6).seek_hit } as i32) <
+                                    unsafe { (*p_op).p2 } {
+                                __state = 2080;
+                            } else { __state = 2081; }
+                        }
+                        2079 => { __state = 60; }
+                        2080 => {
+                            unsafe { (*p_c_6).seek_hit = unsafe { (*p_op).p2 } as u16 };
+                            __state = 2079;
+                        }
+                        2081 => {
+                            if unsafe { (*p_c_6).seek_hit } as i32 >
+                                    unsafe { (*p_op).p3 } {
+                                __state = 2082;
+                            } else { __state = 2079; }
+                        }
+                        2082 => {
+                            unsafe { (*p_c_6).seek_hit = unsafe { (*p_op).p3 } as u16 };
+                            __state = 2079;
+                        }
+                        2083 => { __state = 153; }
+                        2084 => { { let _ = 0; }; __state = 2085; }
+                        2085 => {
+                            p_cur_1 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2086;
+                        }
+                        2086 => { __state = 2087; }
+                        2087 => {
+                            if p_cur_1 == core::ptr::null_mut() ||
+                                    unsafe { (*p_cur_1).null_row } != 0 {
+                                __state = 2089;
+                            } else { __state = 2088; }
+                        }
+                        2088 => { __state = 60; }
+                        2089 => { __state = 2; }
+                        2090 => { __state = 2097; }
+                        2091 => { { let _ = 0; }; __state = 2092; }
+                        2092 => {
+                            p_c_7 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2093;
+                        }
+                        2093 => { { let _ = 0; }; __state = 2094; }
+                        2094 => {
+                            if unsafe { (*p_c_7).seek_hit } as i32 >=
+                                    unsafe { (*p_op).p4.i } {
+                                __state = 2096;
+                            } else { __state = 2095; }
+                        }
+                        2095 => { __state = 2090; }
+                        2096 => { __state = 60; }
+                        2097 => { __state = 154; }
+                        2098 => { __state = 2153; }
+                        2099 => { __state = 2100; }
+                        2100 => { __state = 2101; }
+                        2101 => { __state = 2102; }
+                        2102 => { __state = 2103; }
+                        2103 => { { let _ = 0; }; __state = 2104; }
+                        2104 => { { let _ = 0; }; __state = 2105; }
+                        2105 => {
+                            p_c_8 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2106;
+                        }
+                        2106 => { { let _ = 0; }; __state = 2107; }
+                        2107 => {
+                            r__2.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2108;
+                        }
+                        2108 => { { let _ = 0; }; __state = 2109; }
+                        2109 => { { let _ = 0; }; __state = 2110; }
+                        2110 => { { let _ = 0; }; __state = 2111; }
+                        2111 => {
+                            r__2.n_field = unsafe { (*p_op).p4.i } as u16;
+                            __state = 2112;
+                        }
+                        2112 => {
+                            if r__2.n_field as i32 > 0 {
+                                __state = 2114;
+                            } else { __state = 2115; }
+                        }
+                        2113 => {
+                            if rc != 0 { __state = 2131; } else { __state = 2130; }
+                        }
+                        2114 => {
+                            r__2.p_key_info = unsafe { (*p_c_8).p_key_info };
+                            __state = 2116;
+                        }
+                        2115 => { { let _ = 0; }; __state = 2118; }
+                        2116 => { r__2.default_rc = 0 as i8; __state = 2117; }
+                        2117 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_index_moveto(unsafe { (*p_c_8).uc.p_cursor },
+                                        &mut r__2, unsafe { &mut (*p_c_8).seek_result })
+                                };
+                            __state = 2113;
+                        }
+                        2118 => { { let _ = 0; }; __state = 2119; }
+                        2119 => {
+                            rc =
+                                if unsafe { (*r__2.a_mem).flags } as i32 & 1024 != 0 {
+                                    unsafe { sqlite3_vdbe_mem_expand_blob(r__2.a_mem) }
+                                } else { 0 };
+                            __state = 2120;
+                        }
+                        2120 => { { let _ = 0; }; __state = 2121; }
+                        2121 => {
+                            if rc != 0 { __state = 2123; } else { __state = 2122; }
+                        }
+                        2122 => {
+                            p_idx_key =
+                                unsafe {
+                                    sqlite3_vdbe_alloc_unpacked_record(unsafe {
+                                            (*p_c_8).p_key_info
+                                        })
+                                };
+                            __state = 2124;
+                        }
+                        2123 => { __state = 20; }
+                        2124 => {
+                            if p_idx_key == core::ptr::null_mut() {
+                                __state = 2126;
+                            } else { __state = 2125; }
+                        }
+                        2125 => {
+                            unsafe {
+                                sqlite3_vdbe_record_unpack(unsafe { (*r__2.a_mem).n },
+                                    unsafe { (*r__2.a_mem).z } as *const (), p_idx_key)
+                            };
+                            __state = 2127;
+                        }
+                        2126 => { __state = 20; }
+                        2127 => {
+                            unsafe { (*p_idx_key).default_rc = 0 as i8 };
+                            __state = 2128;
+                        }
+                        2128 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_index_moveto(unsafe { (*p_c_8).uc.p_cursor },
+                                        p_idx_key, unsafe { &mut (*p_c_8).seek_result })
+                                };
+                            __state = 2129;
+                        }
+                        2129 => {
+                            unsafe { sqlite3_db_free_nn(db, p_idx_key as *mut ()) };
+                            __state = 2113;
+                        }
+                        2130 => {
+                            already_exists =
+                                (unsafe { (*p_c_8).seek_result } == 0) as i32;
+                            __state = 2132;
+                        }
+                        2131 => { __state = 17; }
+                        2132 => {
+                            unsafe { (*p_c_8).null_row = (1 - already_exists) as u8 };
+                            __state = 2133;
+                        }
+                        2133 => {
+                            unsafe { (*p_c_8).deferred_moveto = 0 as u8 };
+                            __state = 2134;
+                        }
+                        2134 => {
+                            unsafe { (*p_c_8).cache_status = 0 as u32 };
+                            __state = 2135;
+                        }
+                        2135 => {
+                            if unsafe { (*p_op).opcode } as i32 == 29 {
+                                __state = 2137;
+                            } else { __state = 2138; }
+                        }
+                        2136 => { __state = 60; }
+                        2137 => { __state = 2139; }
+                        2138 => {
+                            if (already_exists == 0) as i32 != 0 {
+                                __state = 2142;
+                            } else { __state = 2141; }
+                        }
+                        2139 => {
+                            if already_exists != 0 {
+                                __state = 2140;
+                            } else { __state = 2136; }
+                        }
+                        2140 => { __state = 4; }
+                        2141 => {
+                            if unsafe { (*p_op).opcode } as i32 == 27 {
+                                __state = 2145;
+                            } else { __state = 2144; }
+                        }
+                        2142 => { __state = 2143; }
+                        2143 => { __state = 4; }
+                        2144 => { __state = 2151; }
+                        2145 => { ii__1 = 0; __state = 2146; }
+                        2146 => {
+                            if ii__1 < r__2.n_field as i32 {
+                                __state = 2147;
+                            } else { __state = 2144; }
+                        }
+                        2147 => {
+                            if unsafe { (*r__2.a_mem.offset(ii__1 as isize)).flags } as
+                                            i32 & 1 != 0 {
+                                __state = 2149;
+                            } else { __state = 2148; }
+                        }
+                        2148 => {
+                            { let __p = &mut ii__1; let __t = *__p; *__p += 1; __t };
+                            __state = 2146;
+                        }
+                        2149 => { __state = 2150; }
+                        2150 => { __state = 4; }
+                        2151 => {
+                            if unsafe { (*p_op).opcode } as i32 == 26 {
+                                __state = 2152;
+                            } else { __state = 2136; }
+                        }
+                        2152 => {
+                            unsafe {
+                                (*p_c_8).seek_hit = unsafe { (*p_op).p4.i } as u16
+                            };
+                            __state = 2136;
+                        }
+                        2153 => { __state = 157; }
+                        2154 => { __state = 159; }
+                        2155 => { __state = 2156; }
+                        2156 => { __state = 2157; }
+                        2157 => { __state = 2158; }
+                        2158 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2159;
+                        }
+                        2159 => { __state = 2160; }
+                        2160 => { __state = 2161; }
+                        2161 => { __state = 2162; }
+                        2162 => { __state = 2163; }
+                        2163 => {
+                            if unsafe { (*p_in3).flags } as i32 & (4 | 32) == 0 {
+                                __state = 2165;
+                            } else { __state = 2164; }
+                        }
+                        2164 => { __state = 2171; }
+                        2165 => {
+                            x = unsafe { *p_in3.offset(0 as isize) };
+                            __state = 2166;
+                        }
+                        2166 => {
+                            apply_affinity(&mut x, 67 as i8, encoding);
+                            __state = 2167;
+                        }
+                        2167 => {
+                            if x.flags as i32 & 4 == 0 {
+                                __state = 2169;
+                            } else { __state = 2168; }
+                        }
+                        2168 => { i_key_1 = x.u.i as u64; __state = 2170; }
+                        2169 => { __state = 4; }
+                        2170 => { __state = 16; }
+                        2171 => { __state = 158; }
+                        2172 => { { let _ = 0; }; __state = 2173; }
+                        2173 => { { let _ = 0; }; __state = 2174; }
+                        2174 => {
+                            i_key_1 = unsafe { (*p_in3).u.i } as u64;
+                            __state = 2175;
+                        }
+                        2175 => { __state = 16; }
+                        2176 => { { let _ = 0; }; __state = 2177; }
+                        2177 => { { let _ = 0; }; __state = 2178; }
+                        2178 => { { let _ = 0; }; __state = 2179; }
+                        2179 => {
+                            p_crsr_2 = unsafe { (*p_c_9).uc.p_cursor };
+                            __state = 2180;
+                        }
+                        2180 => { { let _ = 0; }; __state = 2181; }
+                        2181 => { res__3 = 0; __state = 2182; }
+                        2182 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_table_moveto(p_crsr_2, i_key_1 as i64, 0,
+                                        &mut res__3)
+                                };
+                            __state = 2183;
+                        }
+                        2183 => { { let _ = 0; }; __state = 2184; }
+                        2184 => {
+                            unsafe { (*p_c_9).moveto_target = i_key_1 as i64 };
+                            __state = 2185;
+                        }
+                        2185 => {
+                            unsafe { (*p_c_9).null_row = 0 as u8 };
+                            __state = 2186;
+                        }
+                        2186 => {
+                            unsafe { (*p_c_9).cache_status = 0 as u32 };
+                            __state = 2187;
+                        }
+                        2187 => {
+                            unsafe { (*p_c_9).deferred_moveto = 0 as u8 };
+                            __state = 2188;
+                        }
+                        2188 => { __state = 2189; }
+                        2189 => {
+                            unsafe { (*p_c_9).seek_result = res__3 };
+                            __state = 2190;
+                        }
+                        2190 => {
+                            if res__3 != 0 { __state = 2192; } else { __state = 2191; }
+                        }
+                        2191 => {
+                            if rc != 0 { __state = 2197; } else { __state = 2196; }
+                        }
+                        2192 => { { let _ = 0; }; __state = 2193; }
+                        2193 => {
+                            if unsafe { (*p_op).p2 } == 0 {
+                                __state = 2194;
+                            } else { __state = 2195; }
+                        }
+                        2194 => {
+                            rc = unsafe { sqlite3_corrupt_error(5582) };
+                            __state = 2191;
+                        }
+                        2195 => { __state = 4; }
+                        2196 => { __state = 60; }
+                        2197 => { __state = 17; }
+                        2198 => { __state = 160; }
+                        2199 => { { let _ = 0; }; __state = 2200; }
+                        2200 => { { let _ = 0; }; __state = 2201; }
+                        2201 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2202;
+                        }
+                        2202 => {
+                            unsafe {
+                                (*p_out).u.i =
+                                    {
+                                        let __p =
+                                            unsafe {
+                                                &mut (*unsafe {
+                                                                    *unsafe {
+                                                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                                                        }
+                                                                }).seq_count
+                                            };
+                                        let __t = *__p;
+                                        *__p += 1;
+                                        __t
+                                    }
+                            };
+                            __state = 2203;
+                        }
+                        2203 => { __state = 60; }
+                        2204 => { __state = 161; }
+                        2205 => { __state = 2206; }
+                        2206 => { __state = 2207; }
+                        2207 => { __state = 2208; }
+                        2208 => { __state = 2209; }
+                        2209 => { __state = 2210; }
+                        2210 => { v__1 = 0 as i64; __state = 2211; }
+                        2211 => { res__4 = 0; __state = 2212; }
+                        2212 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2213;
+                        }
+                        2213 => { { let _ = 0; }; __state = 2214; }
+                        2214 => {
+                            p_c_10 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2215;
+                        }
+                        2215 => { { let _ = 0; }; __state = 2216; }
+                        2216 => { { let _ = 0; }; __state = 2217; }
+                        2217 => { { let _ = 0; }; __state = 2218; }
+                        2218 => { { let _ = 0; }; __state = 2219; }
+                        2219 => { { let _ = 0; }; __state = 2221; }
+                        2220 => { unsafe { (*p_out).u.i = v__1 }; __state = 2269; }
+                        2221 => {
+                            if (unsafe { (*p_c_10).use_random_rowid() } == 0) as i32 !=
+                                    0 {
+                                __state = 2223;
+                            } else { __state = 2222; }
+                        }
+                        2222 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 2234;
+                            } else { __state = 2233; }
+                        }
+                        2223 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_last(unsafe { (*p_c_10).uc.p_cursor },
+                                        &mut res__4)
+                                };
+                            __state = 2224;
+                        }
+                        2224 => {
+                            if rc != 0 { __state = 2226; } else { __state = 2225; }
+                        }
+                        2225 => {
+                            if res__4 != 0 { __state = 2227; } else { __state = 2228; }
+                        }
+                        2226 => { __state = 17; }
+                        2227 => { v__1 = 1 as i64; __state = 2222; }
+                        2228 => { { let _ = 0; }; __state = 2229; }
+                        2229 => {
+                            v__1 =
+                                unsafe {
+                                    sqlite3_btree_integer_key(unsafe { (*p_c_10).uc.p_cursor })
+                                };
+                            __state = 2230;
+                        }
+                        2230 => {
+                            if v__1 >=
+                                    ((2147483647 as u64) << 32 | 4294967295u32 as u64) as i64 {
+                                __state = 2231;
+                            } else { __state = 2232; }
+                        }
+                        2231 => {
+                            unsafe { (*p_c_10).set_use_random_rowid(1 as Bool as u32) };
+                            __state = 2222;
+                        }
+                        2232 => {
+                            { let __p = &mut v__1; let __t = *__p; *__p += 1; __t };
+                            __state = 2222;
+                        }
+                        2233 => {
+                            if unsafe { (*p_c_10).use_random_rowid() } != 0 {
+                                __state = 2256;
+                            } else { __state = 2255; }
+                        }
+                        2234 => { { let _ = 0; }; __state = 2235; }
+                        2235 => {
+                            if !(unsafe { (*p).p_frame }).is_null() {
+                                __state = 2237;
+                            } else { __state = 2238; }
+                        }
+                        2236 => { { let _ = 0; }; __state = 2246; }
+                        2237 => {
+                            p_frame_1 = unsafe { (*p).p_frame };
+                            __state = 2240;
+                        }
+                        2238 => { { let _ = 0; }; __state = 2244; }
+                        2239 => { { let _ = 0; }; __state = 2243; }
+                        2240 => {
+                            if !(unsafe { (*p_frame_1).p_parent }).is_null() {
+                                __state = 2241;
+                            } else { __state = 2239; }
+                        }
+                        2241 => { __state = 2242; }
+                        2242 => {
+                            p_frame_1 = unsafe { (*p_frame_1).p_parent };
+                            __state = 2240;
+                        }
+                        2243 => {
+                            p_mem =
+                                unsafe {
+                                    unsafe {
+                                        (*p_frame_1).a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                    }
+                                };
+                            __state = 2236;
+                        }
+                        2244 => {
+                            p_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2245;
+                        }
+                        2245 => { __state = 2236; }
+                        2246 => { __state = 2247; }
+                        2247 => {
+                            unsafe { sqlite3_vdbe_mem_integerify(p_mem) };
+                            __state = 2248;
+                        }
+                        2248 => { { let _ = 0; }; __state = 2249; }
+                        2249 => {
+                            if unsafe { (*p_mem).u.i } ==
+                                        ((2147483647 as u64) << 32 | 4294967295u32 as u64) as i64 ||
+                                    unsafe { (*p_c_10).use_random_rowid() } != 0 {
+                                __state = 2251;
+                            } else { __state = 2250; }
+                        }
+                        2250 => {
+                            if v__1 < unsafe { (*p_mem).u.i } + 1 as i64 {
+                                __state = 2254;
+                            } else { __state = 2253; }
+                        }
+                        2251 => { rc = 13; __state = 2252; }
+                        2252 => { __state = 17; }
+                        2253 => { unsafe { (*p_mem).u.i = v__1 }; __state = 2233; }
+                        2254 => {
+                            v__1 = unsafe { (*p_mem).u.i } + 1 as i64;
+                            __state = 2253;
+                        }
+                        2255 => {
+                            unsafe { (*p_c_10).deferred_moveto = 0 as u8 };
+                            __state = 2268;
+                        }
+                        2256 => { { let _ = 0; }; __state = 2257; }
+                        2257 => { cnt__1 = 0; __state = 2258; }
+                        2258 => {
+                            unsafe {
+                                sqlite3_randomness(core::mem::size_of::<i64>() as i32,
+                                    &raw mut v__1 as *mut ())
+                            };
+                            __state = 2261;
+                        }
+                        2259 => {
+                            if rc != 0 { __state = 2264; } else { __state = 2263; }
+                        }
+                        2260 => {
+                            if {
+                                                rc =
+                                                    unsafe {
+                                                        sqlite3_btree_table_moveto(unsafe { (*p_c_10).uc.p_cursor },
+                                                            v__1 as u64 as i64, 0, &mut res__4)
+                                                    };
+                                                rc
+                                            } == 0 && res__4 == 0 &&
+                                    { let __p = &mut cnt__1; *__p += 1; *__p } < 100 {
+                                __state = 2258;
+                            } else { __state = 2259; }
+                        }
+                        2261 => {
+                            v__1 &=
+                                ((2147483647 as u64) << 32 | 4294967295u32 as u64) as i64 >>
+                                    1;
+                            __state = 2262;
+                        }
+                        2262 => {
+                            { let __p = &mut v__1; let __t = *__p; *__p += 1; __t };
+                            __state = 2260;
+                        }
+                        2263 => {
+                            if res__4 == 0 { __state = 2266; } else { __state = 2265; }
+                        }
+                        2264 => { __state = 17; }
+                        2265 => { { let _ = 0; }; __state = 2255; }
+                        2266 => { rc = 13; __state = 2267; }
+                        2267 => { __state = 17; }
+                        2268 => {
+                            unsafe { (*p_c_10).cache_status = 0 as u32 };
+                            __state = 2220;
+                        }
+                        2269 => { __state = 60; }
+                        2270 => { __state = 162; }
+                        2271 => { __state = 2272; }
+                        2272 => { __state = 2273; }
+                        2273 => { __state = 2274; }
+                        2274 => { __state = 2275; }
+                        2275 => { __state = 2276; }
+                        2276 => { __state = 2277; }
+                        2277 => {
+                            p_data =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 2278;
+                        }
+                        2278 => { { let _ = 0; }; __state = 2279; }
+                        2279 => { { let _ = 0; }; __state = 2280; }
+                        2280 => {
+                            p_c_11 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2281;
+                        }
+                        2281 => { { let _ = 0; }; __state = 2282; }
+                        2282 => { { let _ = 0; }; __state = 2283; }
+                        2283 => { { let _ = 0; }; __state = 2284; }
+                        2284 => { { let _ = 0; }; __state = 2285; }
+                        2285 => { { let _ = 0; }; __state = 2286; }
+                        2286 => { { let _ = 0; }; __state = 2287; }
+                        2287 => { __state = 2288; }
+                        2288 => { __state = 2289; }
+                        2289 => {
+                            p_key =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2290;
+                        }
+                        2290 => { { let _ = 0; }; __state = 2291; }
+                        2291 => { { let _ = 0; }; __state = 2292; }
+                        2292 => { __state = 2293; }
+                        2293 => {
+                            x__1.n_key = unsafe { (*p_key).u.i };
+                            __state = 2294;
+                        }
+                        2294 => {
+                            if unsafe { (*p_op).p4type } as i32 == -5 &&
+                                    unsafe { (*db).x_update_callback.is_some() } {
+                                __state = 2296;
+                            } else { __state = 2297; }
+                        }
+                        2295 => { { let _ = 0; }; __state = 2302; }
+                        2296 => { { let _ = 0; }; __state = 2298; }
+                        2297 => { p_tab_1 = core::ptr::null_mut(); __state = 2301; }
+                        2298 => {
+                            z_db =
+                                unsafe {
+                                        (*unsafe {
+                                                    (*db).a_db.offset(unsafe { (*p_c_11).i_db } as isize)
+                                                }).z_db_s_name
+                                    } as *const i8;
+                            __state = 2299;
+                        }
+                        2299 => {
+                            p_tab_1 = unsafe { (*p_op).p4.p_tab };
+                            __state = 2300;
+                        }
+                        2300 => { { let _ = 0; }; __state = 2295; }
+                        2301 => { z_db = core::ptr::null(); __state = 2295; }
+                        2302 => {
+                            if unsafe { (*p_op).p5 } as i32 & 1 != 0 {
+                                __state = 2304;
+                            } else { __state = 2303; }
+                        }
+                        2303 => { { let _ = 0; }; __state = 2307; }
+                        2304 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_change };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2305;
+                        }
+                        2305 => {
+                            if unsafe { (*p_op).p5 } as i32 & 32 != 0 {
+                                __state = 2306;
+                            } else { __state = 2303; }
+                        }
+                        2306 => {
+                            unsafe { (*db).last_rowid = x__1.n_key };
+                            __state = 2303;
+                        }
+                        2307 => {
+                            x__1.p_data = unsafe { (*p_data).z } as *const ();
+                            __state = 2308;
+                        }
+                        2308 => {
+                            x__1.n_data = unsafe { (*p_data).n };
+                            __state = 2309;
+                        }
+                        2309 => {
+                            seek_result =
+                                if unsafe { (*p_op).p5 } as i32 & 16 != 0 {
+                                    unsafe { (*p_c_11).seek_result }
+                                } else { 0 };
+                            __state = 2310;
+                        }
+                        2310 => {
+                            if unsafe { (*p_data).flags } as i32 & 1024 != 0 {
+                                __state = 2312;
+                            } else { __state = 2313; }
+                        }
+                        2311 => { x__1.p_key = core::ptr::null(); __state = 2314; }
+                        2312 => {
+                            x__1.n_zero = unsafe { (*p_data).u.n_zero };
+                            __state = 2311;
+                        }
+                        2313 => { x__1.n_zero = 0; __state = 2311; }
+                        2314 => { { let _ = 0; }; __state = 2315; }
+                        2315 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_insert(unsafe { (*p_c_11).uc.p_cursor },
+                                        &raw mut x__1 as *const BtreePayload,
+                                        unsafe { (*p_op).p5 } as i32 & (8 | 2 | 128), seek_result)
+                                };
+                            __state = 2316;
+                        }
+                        2316 => {
+                            unsafe { (*p_c_11).deferred_moveto = 0 as u8 };
+                            __state = 2317;
+                        }
+                        2317 => {
+                            unsafe { (*p_c_11).cache_status = 0 as u32 };
+                            __state = 2318;
+                        }
+                        2318 => {
+                            {
+                                let __p = &mut col_cache_ctr;
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2319;
+                        }
+                        2319 => {
+                            if rc != 0 { __state = 2321; } else { __state = 2320; }
+                        }
+                        2320 => {
+                            if !(p_tab_1).is_null() {
+                                __state = 2323;
+                            } else { __state = 2322; }
+                        }
+                        2321 => { __state = 17; }
+                        2322 => { __state = 60; }
+                        2323 => { { let _ = 0; }; __state = 2324; }
+                        2324 => { { let _ = 0; }; __state = 2325; }
+                        2325 => {
+                            unsafe {
+                                (unsafe {
+                                        (*db).x_update_callback.unwrap()
+                                    })(unsafe { (*db).p_update_arg },
+                                    if unsafe { (*p_op).p5 } as i32 & 4 != 0 { 23 } else { 18 },
+                                    z_db, unsafe { (*p_tab_1).z_name } as *const i8, x__1.n_key)
+                            };
+                            __state = 2322;
+                        }
+                        2326 => { __state = 2340; }
+                        2327 => { __state = 2328; }
+                        2328 => { __state = 2329; }
+                        2329 => { { let _ = 0; }; __state = 2330; }
+                        2330 => { { let _ = 0; }; __state = 2331; }
+                        2331 => { { let _ = 0; }; __state = 2332; }
+                        2332 => { { let _ = 0; }; __state = 2333; }
+                        2333 => {
+                            p_dest_1 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2334;
+                        }
+                        2334 => {
+                            p_src =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p2 } as isize)
+                                        }
+                                };
+                            __state = 2335;
+                        }
+                        2335 => {
+                            i_key_2 =
+                                if unsafe { (*p_op).p3 } != 0 {
+                                    unsafe {
+                                        (*a_mem.offset(unsafe { (*p_op).p3 } as isize)).u.i
+                                    }
+                                } else { 0 as i64 };
+                            __state = 2336;
+                        }
+                        2336 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_transfer_row(unsafe {
+                                            (*p_dest_1).uc.p_cursor
+                                        }, unsafe { (*p_src).uc.p_cursor }, i_key_2)
+                                };
+                            __state = 2337;
+                        }
+                        2337 => {
+                            if rc != 0 { __state = 2339; } else { __state = 2338; }
+                        }
+                        2338 => { __state = 60; }
+                        2339 => { __state = 17; }
+                        2340 => { __state = 163; }
+                        2341 => { __state = 164; }
+                        2342 => { __state = 2343; }
+                        2343 => { __state = 2344; }
+                        2344 => { __state = 2345; }
+                        2345 => { opflags = unsafe { (*p_op).p2 }; __state = 2346; }
+                        2346 => { { let _ = 0; }; __state = 2347; }
+                        2347 => {
+                            p_c_12 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2348;
+                        }
+                        2348 => { { let _ = 0; }; __state = 2349; }
+                        2349 => { { let _ = 0; }; __state = 2350; }
+                        2350 => { { let _ = 0; }; __state = 2351; }
+                        2351 => { { let _ = 0; }; __state = 2352; }
+                        2352 => { __state = 2353; }
+                        2353 => {
+                            if unsafe { (*p_op).p4type } as i32 == -5 &&
+                                    unsafe { (*db).x_update_callback.is_some() } {
+                                __state = 2355;
+                            } else { __state = 2356; }
+                        }
+                        2354 => { { let _ = 0; }; __state = 2363; }
+                        2355 => { { let _ = 0; }; __state = 2357; }
+                        2356 => { z_db_1 = core::ptr::null(); __state = 2362; }
+                        2357 => { { let _ = 0; }; __state = 2358; }
+                        2358 => {
+                            z_db_1 =
+                                unsafe {
+                                        (*unsafe {
+                                                    (*db).a_db.offset(unsafe { (*p_c_12).i_db } as isize)
+                                                }).z_db_s_name
+                                    } as *const i8;
+                            __state = 2359;
+                        }
+                        2359 => {
+                            p_tab_2 = unsafe { (*p_op).p4.p_tab };
+                            __state = 2360;
+                        }
+                        2360 => {
+                            if unsafe { (*p_op).p5 } as i32 & 2 != 0 &&
+                                    unsafe { (*p_c_12).is_table } != 0 {
+                                __state = 2361;
+                            } else { __state = 2354; }
+                        }
+                        2361 => {
+                            unsafe {
+                                (*p_c_12).moveto_target =
+                                    unsafe {
+                                        sqlite3_btree_integer_key(unsafe { (*p_c_12).uc.p_cursor })
+                                    }
+                            };
+                            __state = 2354;
+                        }
+                        2362 => { p_tab_2 = core::ptr::null_mut(); __state = 2354; }
+                        2363 => { { let _ = 0; }; __state = 2364; }
+                        2364 => { { let _ = 0; }; __state = 2365; }
+                        2365 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_delete(unsafe { (*p_c_12).uc.p_cursor },
+                                        unsafe { (*p_op).p5 } as u8)
+                                };
+                            __state = 2366;
+                        }
+                        2366 => {
+                            unsafe { (*p_c_12).cache_status = 0 as u32 };
+                            __state = 2367;
+                        }
+                        2367 => {
+                            {
+                                let __p = &mut col_cache_ctr;
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2368;
+                        }
+                        2368 => {
+                            unsafe { (*p_c_12).seek_result = 0 };
+                            __state = 2369;
+                        }
+                        2369 => {
+                            if rc != 0 { __state = 2371; } else { __state = 2370; }
+                        }
+                        2370 => {
+                            if opflags & 1 != 0 {
+                                __state = 2373;
+                            } else { __state = 2372; }
+                        }
+                        2371 => { __state = 17; }
+                        2372 => { __state = 60; }
+                        2373 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_change };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2374;
+                        }
+                        2374 => {
+                            if unsafe { (*db).x_update_callback.is_some() } &&
+                                        p_tab_2 != core::ptr::null_mut() &&
+                                    unsafe { (*p_tab_2).tab_flags } & 128 as u32 == 0 as u32 {
+                                __state = 2375;
+                            } else { __state = 2372; }
+                        }
+                        2375 => {
+                            unsafe {
+                                (unsafe {
+                                        (*db).x_update_callback.unwrap()
+                                    })(unsafe { (*db).p_update_arg }, 9, z_db_1,
+                                    unsafe { (*p_tab_2).z_name } as *const i8,
+                                    unsafe { (*p_c_12).moveto_target })
+                            };
+                            __state = 2376;
+                        }
+                        2376 => { { let _ = 0; }; __state = 2372; }
+                        2377 => { __state = 165; }
+                        2378 => {
+                            unsafe { (*p).n_change = 0 as i64 };
+                            __state = 2379;
+                        }
+                        2379 => { __state = 60; }
+                        2380 => { __state = 2396; }
+                        2381 => { __state = 2382; }
+                        2382 => { __state = 2383; }
+                        2383 => {
+                            p_c_13 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2384;
+                        }
+                        2384 => { { let _ = 0; }; __state = 2385; }
+                        2385 => { { let _ = 0; }; __state = 2386; }
+                        2386 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2387;
+                        }
+                        2387 => {
+                            n_key_col = unsafe { (*p_op).p4.i };
+                            __state = 2388;
+                        }
+                        2388 => { res__5 = 0; __state = 2389; }
+                        2389 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_compare(p_c_13 as *const VdbeCursor,
+                                        p_in3, n_key_col, &mut res__5)
+                                };
+                            __state = 2390;
+                        }
+                        2390 => { __state = 2391; }
+                        2391 => {
+                            if rc != 0 { __state = 2393; } else { __state = 2392; }
+                        }
+                        2392 => {
+                            if res__5 != 0 { __state = 2395; } else { __state = 2394; }
+                        }
+                        2393 => { __state = 17; }
+                        2394 => { __state = 60; }
+                        2395 => { __state = 4; }
+                        2396 => { __state = 166; }
+                        2397 => { __state = 167; }
+                        2398 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 2399;
+                        }
+                        2399 => {
+                            p_c_14 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2400;
+                        }
+                        2400 => { { let _ = 0; }; __state = 2401; }
+                        2401 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_rowkey(p_c_14 as *const VdbeCursor,
+                                        p_out)
+                                };
+                            __state = 2402;
+                        }
+                        2402 => { { let _ = 0; }; __state = 2403; }
+                        2403 => { { let _ = 0; }; __state = 2404; }
+                        2404 => {
+                            if rc != 0 { __state = 2406; } else { __state = 2405; }
+                        }
+                        2405 => {
+                            unsafe {
+                                (*unsafe {
+                                                    *unsafe {
+                                                            (*p).ap_csr.offset(unsafe { (*p_op).p3 } as isize)
+                                                        }
+                                                }).cache_status = 0 as u32
+                            };
+                            __state = 2407;
+                        }
+                        2406 => { __state = 17; }
+                        2407 => { __state = 60; }
+                        2408 => { __state = 168; }
+                        2409 => { __state = 2410; }
+                        2410 => { __state = 2411; }
+                        2411 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2412;
+                        }
+                        2412 => { { let _ = 0; }; __state = 2413; }
+                        2413 => {
+                            p_c_15 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2414;
+                        }
+                        2414 => { { let _ = 0; }; __state = 2415; }
+                        2415 => { { let _ = 0; }; __state = 2416; }
+                        2416 => { { let _ = 0; }; __state = 2417; }
+                        2417 => { { let _ = 0; }; __state = 2418; }
+                        2418 => { { let _ = 0; }; __state = 2419; }
+                        2419 => {
+                            p_crsr_3 = unsafe { (*p_c_15).uc.p_cursor };
+                            __state = 2420;
+                        }
+                        2420 => { { let _ = 0; }; __state = 2421; }
+                        2421 => { { let _ = 0; }; __state = 2422; }
+                        2422 => {
+                            n__3 = unsafe { sqlite3_btree_payload_size(p_crsr_3) };
+                            __state = 2423;
+                        }
+                        2423 => {
+                            if n__3 > unsafe { (*db).a_limit[0 as usize] } as u32 {
+                                __state = 2425;
+                            } else { __state = 2424; }
+                        }
+                        2424 => { __state = 2426; }
+                        2425 => { __state = 19; }
+                        2426 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_from_btree_zero_offset(p_crsr_3, n__3,
+                                        p_out)
+                                };
+                            __state = 2427;
+                        }
+                        2427 => {
+                            if rc != 0 { __state = 2429; } else { __state = 2428; }
+                        }
+                        2428 => {
+                            if (unsafe { (*p_op).p3 } == 0) as i32 != 0 {
+                                __state = 2431;
+                            } else { __state = 2430; }
+                        }
+                        2429 => { __state = 17; }
+                        2430 => { __state = 2433; }
+                        2431 => {
+                            if unsafe { (*p_out).flags } as i32 & 16384 != 0 &&
+                                    unsafe { sqlite3_vdbe_mem_make_writeable(p_out) } != 0 {
+                                __state = 2432;
+                            } else { __state = 2430; }
+                        }
+                        2432 => { __state = 20; }
+                        2433 => { __state = 2434; }
+                        2434 => { __state = 2435; }
+                        2435 => { __state = 60; }
+                        2436 => { __state = 169; }
+                        2437 => { __state = 2438; }
+                        2438 => { __state = 2439; }
+                        2439 => { __state = 2440; }
+                        2440 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2441;
+                        }
+                        2441 => { { let _ = 0; }; __state = 2442; }
+                        2442 => {
+                            p_c_16 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2443;
+                        }
+                        2443 => { { let _ = 0; }; __state = 2444; }
+                        2444 => { { let _ = 0; }; __state = 2445; }
+                        2445 => {
+                            if unsafe { (*p_c_16).null_row } != 0 {
+                                __state = 2447;
+                            } else { __state = 2448; }
+                        }
+                        2446 => { unsafe { (*p_out).u.i = v__2 }; __state = 2469; }
+                        2447 => {
+                            unsafe { (*p_out).flags = 1 as u16 };
+                            __state = 2449;
+                        }
+                        2448 => {
+                            if unsafe { (*p_c_16).deferred_moveto } != 0 {
+                                __state = 2450;
+                            } else { __state = 2451; }
+                        }
+                        2449 => { __state = 60; }
+                        2450 => {
+                            v__2 = unsafe { (*p_c_16).moveto_target };
+                            __state = 2446;
+                        }
+                        2451 => {
+                            if unsafe { (*p_c_16).e_cur_type } as i32 == 2 {
+                                __state = 2452;
+                            } else { __state = 2453; }
+                        }
+                        2452 => { { let _ = 0; }; __state = 2454; }
+                        2453 => { { let _ = 0; }; __state = 2461; }
+                        2454 => {
+                            p_vtab =
+                                unsafe { (*unsafe { (*p_c_16).uc.p_v_cur }).p_vtab };
+                            __state = 2455;
+                        }
+                        2455 => {
+                            p_module = unsafe { (*p_vtab).p_module };
+                            __state = 2456;
+                        }
+                        2456 => { { let _ = 0; }; __state = 2457; }
+                        2457 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module).x_rowid.unwrap()
+                                        })(unsafe { (*p_c_16).uc.p_v_cur }, &mut v__2)
+                                };
+                            __state = 2458;
+                        }
+                        2458 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab) };
+                            __state = 2459;
+                        }
+                        2459 => {
+                            if rc != 0 { __state = 2460; } else { __state = 2446; }
+                        }
+                        2460 => { __state = 17; }
+                        2461 => { { let _ = 0; }; __state = 2462; }
+                        2462 => {
+                            rc = unsafe { sqlite3_vdbe_cursor_restore(p_c_16) };
+                            __state = 2463;
+                        }
+                        2463 => {
+                            if rc != 0 { __state = 2465; } else { __state = 2464; }
+                        }
+                        2464 => {
+                            if unsafe { (*p_c_16).null_row } != 0 {
+                                __state = 2467;
+                            } else { __state = 2466; }
+                        }
+                        2465 => { __state = 17; }
+                        2466 => {
+                            v__2 =
+                                unsafe {
+                                    sqlite3_btree_integer_key(unsafe { (*p_c_16).uc.p_cursor })
+                                };
+                            __state = 2446;
+                        }
+                        2467 => {
+                            unsafe { (*p_out).flags = 1 as u16 };
+                            __state = 2468;
+                        }
+                        2468 => { __state = 60; }
+                        2469 => { __state = 60; }
+                        2470 => { __state = 170; }
+                        2471 => { { let _ = 0; }; __state = 2472; }
+                        2472 => {
+                            p_c_17 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2473;
+                        }
+                        2473 => {
+                            if p_c_17 == core::ptr::null_mut() {
+                                __state = 2475;
+                            } else { __state = 2474; }
+                        }
+                        2474 => {
+                            unsafe { (*p_c_17).null_row = 1 as u8 };
+                            __state = 2482;
+                        }
+                        2475 => {
+                            p_c_17 =
+                                allocate_cursor(p, unsafe { (*p_op).p1 }, 1, 3 as u8);
+                            __state = 2476;
+                        }
+                        2476 => {
+                            if p_c_17 == core::ptr::null_mut() {
+                                __state = 2478;
+                            } else { __state = 2477; }
+                        }
+                        2477 => {
+                            unsafe { (*p_c_17).seek_result = 0 };
+                            __state = 2479;
+                        }
+                        2478 => { __state = 20; }
+                        2479 => {
+                            unsafe { (*p_c_17).is_table = 1 as u8 };
+                            __state = 2480;
+                        }
+                        2480 => {
+                            unsafe { (*p_c_17).set_no_reuse(1 as Bool as u32) };
+                            __state = 2481;
+                        }
+                        2481 => {
+                            unsafe {
+                                (*p_c_17).uc.p_cursor =
+                                    unsafe { sqlite3_btree_fake_valid_cursor() }
+                            };
+                            __state = 2474;
+                        }
+                        2482 => {
+                            unsafe { (*p_c_17).cache_status = 0 as u32 };
+                            __state = 2483;
+                        }
+                        2483 => {
+                            if unsafe { (*p_c_17).e_cur_type } as i32 == 0 {
+                                __state = 2485;
+                            } else { __state = 2484; }
+                        }
+                        2484 => { __state = 60; }
+                        2485 => { { let _ = 0; }; __state = 2486; }
+                        2486 => {
+                            unsafe {
+                                sqlite3_btree_clear_cursor(unsafe { (*p_c_17).uc.p_cursor })
+                            };
+                            __state = 2484;
+                        }
+                        2487 => { __state = 2513; }
+                        2488 => { __state = 2489; }
+                        2489 => { __state = 2490; }
+                        2490 => { { let _ = 0; }; __state = 2491; }
+                        2491 => {
+                            p_c_18 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2492;
+                        }
+                        2492 => { { let _ = 0; }; __state = 2493; }
+                        2493 => { { let _ = 0; }; __state = 2494; }
+                        2494 => {
+                            p_crsr_4 = unsafe { (*p_c_18).uc.p_cursor };
+                            __state = 2495;
+                        }
+                        2495 => { res__6 = 0; __state = 2496; }
+                        2496 => { { let _ = 0; }; __state = 2497; }
+                        2497 => {
+                            if unsafe { (*p_op).opcode } as i32 == 139 {
+                                __state = 2499;
+                            } else { __state = 2498; }
+                        }
+                        2498 => {
+                            rc = unsafe { sqlite3_btree_last(p_crsr_4, &mut res__6) };
+                            __state = 2503;
+                        }
+                        2499 => { { let _ = 0; }; __state = 2500; }
+                        2500 => {
+                            unsafe { (*p_c_18).seek_result = -1 };
+                            __state = 2501;
+                        }
+                        2501 => {
+                            if unsafe { sqlite3_btree_cursor_is_valid_nn(p_crsr_4) } !=
+                                    0 {
+                                __state = 2502;
+                            } else { __state = 2498; }
+                        }
+                        2502 => { __state = 60; }
+                        2503 => {
+                            unsafe { (*p_c_18).null_row = res__6 as u8 };
+                            __state = 2504;
+                        }
+                        2504 => {
+                            unsafe { (*p_c_18).deferred_moveto = 0 as u8 };
+                            __state = 2505;
+                        }
+                        2505 => {
+                            unsafe { (*p_c_18).cache_status = 0 as u32 };
+                            __state = 2506;
+                        }
+                        2506 => {
+                            if rc != 0 { __state = 2508; } else { __state = 2507; }
+                        }
+                        2507 => {
+                            if unsafe { (*p_op).p2 } > 0 {
+                                __state = 2510;
+                            } else { __state = 2509; }
+                        }
+                        2508 => { __state = 17; }
+                        2509 => { __state = 60; }
+                        2510 => { __state = 2511; }
+                        2511 => {
+                            if res__6 != 0 { __state = 2512; } else { __state = 2509; }
+                        }
+                        2512 => { __state = 4; }
+                        2513 => { __state = 172; }
+                        2514 => { __state = 173; }
+                        2515 => { __state = 2516; }
+                        2516 => { __state = 2517; }
+                        2517 => { __state = 2518; }
+                        2518 => { { let _ = 0; }; __state = 2519; }
+                        2519 => { { let _ = 0; }; __state = 2520; }
+                        2520 => { { let _ = 0; }; __state = 2521; }
+                        2521 => { { let _ = 0; }; __state = 2522; }
+                        2522 => {
+                            p_c_19 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2523;
+                        }
+                        2523 => { { let _ = 0; }; __state = 2524; }
+                        2524 => {
+                            p_crsr_5 = unsafe { (*p_c_19).uc.p_cursor };
+                            __state = 2525;
+                        }
+                        2525 => { { let _ = 0; }; __state = 2526; }
+                        2526 => {
+                            rc = unsafe { sqlite3_btree_first(p_crsr_5, &mut res__7) };
+                            __state = 2527;
+                        }
+                        2527 => {
+                            if rc != 0 { __state = 2529; } else { __state = 2528; }
+                        }
+                        2528 => {
+                            if res__7 != 0 { __state = 2531; } else { __state = 2532; }
+                        }
+                        2529 => { __state = 17; }
+                        2530 => {
+                            res__7 =
+                                (sz >= unsafe { (*p_op).p3 } as i64 &&
+                                        sz <= unsafe { (*p_op).p4.i } as i64) as i32;
+                            __state = 2535;
+                        }
+                        2531 => { sz = -1 as i64; __state = 2530; }
+                        2532 => {
+                            sz = unsafe { sqlite3_btree_row_count_est(p_crsr_5) };
+                            __state = 2533;
+                        }
+                        2533 => { { let _ = 0; }; __state = 2534; }
+                        2534 => {
+                            sz = unsafe { sqlite3_log_est(sz as u64) } as i64;
+                            __state = 2530;
+                        }
+                        2535 => { __state = 2536; }
+                        2536 => {
+                            if res__7 != 0 { __state = 2538; } else { __state = 2537; }
+                        }
+                        2537 => { __state = 60; }
+                        2538 => { __state = 4; }
+                        2539 => { __state = 2541; }
+                        2540 => { __state = 2539; }
+                        2541 => { __state = 175; }
+                        2542 => { __state = 176; }
+                        2543 => { __state = 2544; }
+                        2544 => { __state = 2545; }
+                        2545 => { { let _ = 0; }; __state = 2546; }
+                        2546 => { { let _ = 0; }; __state = 2547; }
+                        2547 => { { let _ = 0; }; __state = 2548; }
+                        2548 => {
+                            p_c_20 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2549;
+                        }
+                        2549 => { { let _ = 0; }; __state = 2550; }
+                        2550 => { { let _ = 0; }; __state = 2551; }
+                        2551 => { res__8 = 1; __state = 2552; }
+                        2552 => {
+                            if unsafe { (*p_c_20).e_cur_type } as i32 == 1 {
+                                __state = 2554;
+                            } else { __state = 2555; }
+                        }
+                        2553 => {
+                            if rc != 0 { __state = 2562; } else { __state = 2561; }
+                        }
+                        2554 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_rewind(p_c_20 as *const VdbeCursor,
+                                        &mut res__8)
+                                };
+                            __state = 2553;
+                        }
+                        2555 => { { let _ = 0; }; __state = 2556; }
+                        2556 => {
+                            p_crsr_6 = unsafe { (*p_c_20).uc.p_cursor };
+                            __state = 2557;
+                        }
+                        2557 => { { let _ = 0; }; __state = 2558; }
+                        2558 => {
+                            rc = unsafe { sqlite3_btree_first(p_crsr_6, &mut res__8) };
+                            __state = 2559;
+                        }
+                        2559 => {
+                            unsafe { (*p_c_20).deferred_moveto = 0 as u8 };
+                            __state = 2560;
+                        }
+                        2560 => {
+                            unsafe { (*p_c_20).cache_status = 0 as u32 };
+                            __state = 2553;
+                        }
+                        2561 => {
+                            unsafe { (*p_c_20).null_row = res__8 as u8 };
+                            __state = 2563;
+                        }
+                        2562 => { __state = 17; }
+                        2563 => {
+                            if unsafe { (*p_op).p2 } > 0 {
+                                __state = 2565;
+                            } else { __state = 2564; }
+                        }
+                        2564 => { __state = 60; }
+                        2565 => { __state = 2566; }
+                        2566 => {
+                            if res__8 != 0 { __state = 2567; } else { __state = 2564; }
+                        }
+                        2567 => { __state = 4; }
+                        2568 => { __state = 177; }
+                        2569 => { __state = 2570; }
+                        2570 => { __state = 2571; }
+                        2571 => { { let _ = 0; }; __state = 2572; }
+                        2572 => { { let _ = 0; }; __state = 2573; }
+                        2573 => {
+                            p_c_21 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2574;
+                        }
+                        2574 => { { let _ = 0; }; __state = 2575; }
+                        2575 => { { let _ = 0; }; __state = 2576; }
+                        2576 => {
+                            p_crsr_7 = unsafe { (*p_c_21).uc.p_cursor };
+                            __state = 2577;
+                        }
+                        2577 => { { let _ = 0; }; __state = 2578; }
+                        2578 => {
+                            rc =
+                                unsafe { sqlite3_btree_is_empty(p_crsr_7, &mut res__9) };
+                            __state = 2579;
+                        }
+                        2579 => {
+                            if rc != 0 { __state = 2581; } else { __state = 2580; }
+                        }
+                        2580 => { __state = 2582; }
+                        2581 => { __state = 17; }
+                        2582 => {
+                            if res__9 != 0 { __state = 2584; } else { __state = 2583; }
+                        }
+                        2583 => { __state = 60; }
+                        2584 => { __state = 4; }
+                        2585 => { __state = 180; }
+                        2586 => {
+                            p_c_22 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2589;
+                        }
+                        2587 => {
+                            unsafe { (*p_c_22).cache_status = 0 as u32 };
+                            __state = 2609;
+                        }
+                        2588 => {
+                            if false { __state = 2586; } else { __state = 2587; }
+                        }
+                        2589 => { { let _ = 0; }; __state = 2590; }
+                        2590 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_next(db, p_c_22 as *const VdbeCursor)
+                                };
+                            __state = 2591;
+                        }
+                        2591 => { __state = 2587; }
+                        2592 => { __state = 178; }
+                        2593 => { { let _ = 0; }; __state = 2594; }
+                        2594 => {
+                            p_c_22 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2595;
+                        }
+                        2595 => { { let _ = 0; }; __state = 2596; }
+                        2596 => { { let _ = 0; }; __state = 2597; }
+                        2597 => { { let _ = 0; }; __state = 2598; }
+                        2598 => { { let _ = 0; }; __state = 2599; }
+                        2599 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_previous(unsafe { (*p_c_22).uc.p_cursor },
+                                        unsafe { (*p_op).p3 })
+                                };
+                            __state = 2600;
+                        }
+                        2600 => { __state = 2587; }
+                        2601 => { __state = 179; }
+                        2602 => { { let _ = 0; }; __state = 2603; }
+                        2603 => {
+                            p_c_22 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2604;
+                        }
+                        2604 => { { let _ = 0; }; __state = 2605; }
+                        2605 => { { let _ = 0; }; __state = 2606; }
+                        2606 => { { let _ = 0; }; __state = 2607; }
+                        2607 => { { let _ = 0; }; __state = 2608; }
+                        2608 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_next(unsafe { (*p_c_22).uc.p_cursor },
+                                        unsafe { (*p_op).p3 })
+                                };
+                            __state = 2588;
+                        }
+                        2609 => { __state = 2610; }
+                        2610 => {
+                            if rc == 0 { __state = 2612; } else { __state = 2611; }
+                        }
+                        2611 => {
+                            if rc != 101 { __state = 2616; } else { __state = 2615; }
+                        }
+                        2612 => {
+                            unsafe { (*p_c_22).null_row = 0 as u8 };
+                            __state = 2613;
+                        }
+                        2613 => {
+                            {
+                                let __p =
+                                    unsafe {
+                                        &mut (*p).a_counter[unsafe { (*p_op).p5 } as usize]
+                                    };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2614;
+                        }
+                        2614 => { __state = 2; }
+                        2615 => { rc = 0; __state = 2617; }
+                        2616 => { __state = 17; }
+                        2617 => {
+                            unsafe { (*p_c_22).null_row = 1 as u8 };
+                            __state = 2618;
+                        }
+                        2618 => { __state = 3; }
+                        2619 => { __state = 181; }
+                        2620 => { __state = 2621; }
+                        2621 => { { let _ = 0; }; __state = 2622; }
+                        2622 => {
+                            p_c_23 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2623;
+                        }
+                        2623 => { __state = 2624; }
+                        2624 => { { let _ = 0; }; __state = 2625; }
+                        2625 => { { let _ = 0; }; __state = 2626; }
+                        2626 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 2627;
+                        }
+                        2627 => { { let _ = 0; }; __state = 2628; }
+                        2628 => {
+                            if unsafe { (*p_op).p5 } as i32 & 1 != 0 {
+                                __state = 2630;
+                            } else { __state = 2629; }
+                        }
+                        2629 => { { let _ = 0; }; __state = 2631; }
+                        2630 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_change };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2629;
+                        }
+                        2631 => { { let _ = 0; }; __state = 2632; }
+                        2632 => {
+                            rc =
+                                if unsafe { (*p_in2).flags } as i32 & 1024 != 0 {
+                                    unsafe { sqlite3_vdbe_mem_expand_blob(p_in2) }
+                                } else { 0 };
+                            __state = 2633;
+                        }
+                        2633 => {
+                            if rc != 0 { __state = 2635; } else { __state = 2634; }
+                        }
+                        2634 => {
+                            x__2.n_key = unsafe { (*p_in2).n } as sqlite3_int64;
+                            __state = 2636;
+                        }
+                        2635 => { __state = 17; }
+                        2636 => {
+                            x__2.p_key = unsafe { (*p_in2).z } as *const ();
+                            __state = 2637;
+                        }
+                        2637 => {
+                            x__2.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) } as
+                                    *mut sqlite3_value;
+                            __state = 2638;
+                        }
+                        2638 => {
+                            x__2.n_mem = unsafe { (*p_op).p4.i } as u16;
+                            __state = 2639;
+                        }
+                        2639 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_insert(unsafe { (*p_c_23).uc.p_cursor },
+                                        &raw mut x__2 as *const BtreePayload,
+                                        unsafe { (*p_op).p5 } as i32 & (8 | 2 | 128),
+                                        if unsafe { (*p_op).p5 } as i32 & 16 != 0 {
+                                            unsafe { (*p_c_23).seek_result }
+                                        } else { 0 })
+                                };
+                            __state = 2640;
+                        }
+                        2640 => { { let _ = 0; }; __state = 2641; }
+                        2641 => {
+                            unsafe { (*p_c_23).cache_status = 0 as u32 };
+                            __state = 2642;
+                        }
+                        2642 => {
+                            if rc != 0 { __state = 2644; } else { __state = 2643; }
+                        }
+                        2643 => { __state = 60; }
+                        2644 => { __state = 17; }
+                        2645 => { __state = 182; }
+                        2646 => { { let _ = 0; }; __state = 2647; }
+                        2647 => {
+                            p_c_24 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2648;
+                        }
+                        2648 => { __state = 2649; }
+                        2649 => { { let _ = 0; }; __state = 2650; }
+                        2650 => { { let _ = 0; }; __state = 2651; }
+                        2651 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 2652;
+                        }
+                        2652 => { { let _ = 0; }; __state = 2653; }
+                        2653 => { { let _ = 0; }; __state = 2654; }
+                        2654 => {
+                            rc =
+                                if unsafe { (*p_in2).flags } as i32 & 1024 != 0 {
+                                    unsafe { sqlite3_vdbe_mem_expand_blob(p_in2) }
+                                } else { 0 };
+                            __state = 2655;
+                        }
+                        2655 => {
+                            if rc != 0 { __state = 2657; } else { __state = 2656; }
+                        }
+                        2656 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_sorter_write(p_c_24 as *const VdbeCursor,
+                                        p_in2)
+                                };
+                            __state = 2658;
+                        }
+                        2657 => { __state = 17; }
+                        2658 => {
+                            if rc != 0 { __state = 2660; } else { __state = 2659; }
+                        }
+                        2659 => { __state = 60; }
+                        2660 => { __state = 17; }
+                        2661 => { __state = 183; }
+                        2662 => { __state = 2663; }
+                        2663 => { __state = 2664; }
+                        2664 => { __state = 2665; }
+                        2665 => { { let _ = 0; }; __state = 2666; }
+                        2666 => { { let _ = 0; }; __state = 2667; }
+                        2667 => { { let _ = 0; }; __state = 2668; }
+                        2668 => {
+                            p_c_25 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2669;
+                        }
+                        2669 => { { let _ = 0; }; __state = 2670; }
+                        2670 => { { let _ = 0; }; __state = 2671; }
+                        2671 => { __state = 2672; }
+                        2672 => {
+                            p_crsr_8 = unsafe { (*p_c_25).uc.p_cursor };
+                            __state = 2673;
+                        }
+                        2673 => { { let _ = 0; }; __state = 2674; }
+                        2674 => {
+                            r__3.p_key_info = unsafe { (*p_c_25).p_key_info };
+                            __state = 2675;
+                        }
+                        2675 => {
+                            r__3.n_field = unsafe { (*p_op).p5 };
+                            __state = 2676;
+                        }
+                        2676 => { r__3.default_rc = 0 as i8; __state = 2677; }
+                        2677 => {
+                            r__3.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 2678;
+                        }
+                        2678 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_index_moveto(p_crsr_8, &mut r__3,
+                                        &mut res__10)
+                                };
+                            __state = 2679;
+                        }
+                        2679 => {
+                            if rc != 0 { __state = 2681; } else { __state = 2680; }
+                        }
+                        2680 => {
+                            if res__10 != 0 { __state = 2683; } else { __state = 2682; }
+                        }
+                        2681 => { __state = 17; }
+                        2682 => {
+                            if unsafe { (*p_op).p3 } != 0 &&
+                                    vdbe_index_key_compare(p_crsr_8,
+                                            unsafe { &*a_mem.offset(unsafe { (*p_op).p3 } as isize) },
+                                            &mut rc) != 0 {
+                                __state = 2694;
+                            } else { __state = 2693; }
+                        }
+                        2683 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_find_index_key(p_crsr_8,
+                                        unsafe { (*p_op).p4.p_idx }, &mut r__3, &mut res__10, 0)
+                                };
+                            __state = 2684;
+                        }
+                        2684 => {
+                            if rc != 0 { __state = 2686; } else { __state = 2685; }
+                        }
+                        2685 => {
+                            if res__10 != 0 { __state = 2687; } else { __state = 2682; }
+                        }
+                        2686 => { __state = 17; }
+                        2687 => {
+                            if (unsafe { sqlite3_writable_schema(db) } == 0) as i32 != 0
+                                {
+                                __state = 2689;
+                            } else { __state = 2688; }
+                        }
+                        2688 => {
+                            unsafe { (*p_c_25).cache_status = 0 as u32 };
+                            __state = 2691;
+                        }
+                        2689 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_report_error(11 | 3 << 8, 6704,
+                                        c"index corruption".as_ptr() as *mut i8 as *const i8)
+                                };
+                            __state = 2690;
+                        }
+                        2690 => { __state = 17; }
+                        2691 => {
+                            unsafe { (*p_c_25).seek_result = 0 };
+                            __state = 2692;
+                        }
+                        2692 => { __state = 60; }
+                        2693 => {
+                            rc = unsafe { sqlite3_btree_delete(p_crsr_8, 4 as u8) };
+                            __state = 2698;
+                        }
+                        2694 => {
+                            if rc != 0 { __state = 2696; } else { __state = 2695; }
+                        }
+                        2695 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_null(unsafe {
+                                        &mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                    })
+                            };
+                            __state = 2697;
+                        }
+                        2696 => { __state = 17; }
+                        2697 => { __state = 60; }
+                        2698 => {
+                            if rc != 0 { __state = 2700; } else { __state = 2699; }
+                        }
+                        2699 => { { let _ = 0; }; __state = 2701; }
+                        2700 => { __state = 17; }
+                        2701 => {
+                            unsafe { (*p_c_25).cache_status = 0 as u32 };
+                            __state = 2702;
+                        }
+                        2702 => {
+                            unsafe { (*p_c_25).seek_result = 0 };
+                            __state = 2703;
+                        }
+                        2703 => { __state = 60; }
+                        2704 => { __state = 2744; }
+                        2705 => { __state = 2706; }
+                        2706 => { __state = 2707; }
+                        2707 => { { let _ = 0; }; __state = 2708; }
+                        2708 => {
+                            p_c_26 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2709;
+                        }
+                        2709 => { { let _ = 0; }; __state = 2710; }
+                        2710 => { { let _ = 0; }; __state = 2711; }
+                        2711 => { { let _ = 0; }; __state = 2712; }
+                        2712 => { { let _ = 0; }; __state = 2713; }
+                        2713 => { { let _ = 0; }; __state = 2714; }
+                        2714 => { { let _ = 0; }; __state = 2715; }
+                        2715 => {
+                            rc = unsafe { sqlite3_vdbe_cursor_restore(p_c_26) };
+                            __state = 2716;
+                        }
+                        2716 => {
+                            if rc != 0 { __state = 2718; } else { __state = 2717; }
+                        }
+                        2717 => {
+                            if (unsafe { (*p_c_26).null_row } == 0) as i32 != 0 {
+                                __state = 2720;
+                            } else { __state = 2721; }
+                        }
+                        2718 => { __state = 17; }
+                        2719 => { __state = 60; }
+                        2720 => { rowid = 0 as i64; __state = 2722; }
+                        2721 => { { let _ = 0; }; __state = 2743; }
+                        2722 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_idx_rowid(db, unsafe { (*p_c_26).uc.p_cursor },
+                                        &mut rowid)
+                                };
+                            __state = 2723;
+                        }
+                        2723 => {
+                            if rc != 0 { __state = 2725; } else { __state = 2724; }
+                        }
+                        2724 => {
+                            if unsafe { (*p_op).opcode } as i32 == 143 {
+                                __state = 2726;
+                            } else { __state = 2727; }
+                        }
+                        2725 => { __state = 17; }
+                        2726 => { { let _ = 0; }; __state = 2728; }
+                        2727 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2742;
+                        }
+                        2728 => {
+                            p_tab_cur =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p3 } as isize)
+                                        }
+                                };
+                            __state = 2729;
+                        }
+                        2729 => { { let _ = 0; }; __state = 2730; }
+                        2730 => { { let _ = 0; }; __state = 2731; }
+                        2731 => { { let _ = 0; }; __state = 2732; }
+                        2732 => { { let _ = 0; }; __state = 2733; }
+                        2733 => {
+                            unsafe { (*p_tab_cur).null_row = 0 as u8 };
+                            __state = 2734;
+                        }
+                        2734 => {
+                            unsafe { (*p_tab_cur).moveto_target = rowid };
+                            __state = 2735;
+                        }
+                        2735 => {
+                            unsafe { (*p_tab_cur).deferred_moveto = 1 as u8 };
+                            __state = 2736;
+                        }
+                        2736 => {
+                            unsafe { (*p_tab_cur).cache_status = 0 as u32 };
+                            __state = 2737;
+                        }
+                        2737 => { { let _ = 0; }; __state = 2738; }
+                        2738 => { { let _ = 0; }; __state = 2739; }
+                        2739 => {
+                            unsafe {
+                                (*p_tab_cur).ub.a_alt_map = unsafe { (*p_op).p4.ai }
+                            };
+                            __state = 2740;
+                        }
+                        2740 => { { let _ = 0; }; __state = 2741; }
+                        2741 => {
+                            unsafe { (*p_tab_cur).p_alt_cursor = p_c_26 };
+                            __state = 2719;
+                        }
+                        2742 => { unsafe { (*p_out).u.i = rowid }; __state = 2719; }
+                        2743 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_null(unsafe {
+                                        &mut *a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                    })
+                            };
+                            __state = 2719;
+                        }
+                        2744 => { __state = 185; }
+                        2745 => { __state = 186; }
+                        2746 => { { let _ = 0; }; __state = 2747; }
+                        2747 => {
+                            p_c_27 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2748;
+                        }
+                        2748 => {
+                            if unsafe { (*p_c_27).deferred_moveto } != 0 {
+                                __state = 2750;
+                            } else { __state = 2749; }
+                        }
+                        2749 => { __state = 60; }
+                        2750 => {
+                            rc = unsafe { sqlite3_vdbe_finish_moveto(p_c_27) };
+                            __state = 2751;
+                        }
+                        2751 => {
+                            if rc != 0 { __state = 2752; } else { __state = 2749; }
+                        }
+                        2752 => { __state = 17; }
+                        2753 => { __state = 2799; }
+                        2754 => { __state = 2755; }
+                        2755 => { __state = 2756; }
+                        2756 => { { let _ = 0; }; __state = 2757; }
+                        2757 => {
+                            p_c_28 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2758;
+                        }
+                        2758 => { { let _ = 0; }; __state = 2759; }
+                        2759 => { { let _ = 0; }; __state = 2760; }
+                        2760 => { { let _ = 0; }; __state = 2761; }
+                        2761 => { { let _ = 0; }; __state = 2762; }
+                        2762 => { { let _ = 0; }; __state = 2763; }
+                        2763 => { { let _ = 0; }; __state = 2764; }
+                        2764 => {
+                            r__4.p_key_info = unsafe { (*p_c_28).p_key_info };
+                            __state = 2765;
+                        }
+                        2765 => {
+                            r__4.n_field = unsafe { (*p_op).p4.i } as u16;
+                            __state = 2766;
+                        }
+                        2766 => {
+                            if (unsafe { (*p_op).opcode } as i32) < 45 {
+                                __state = 2768;
+                            } else { __state = 2769; }
+                        }
+                        2767 => {
+                            r__4.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2772;
+                        }
+                        2768 => { { let _ = 0; }; __state = 2770; }
+                        2769 => { { let _ = 0; }; __state = 2771; }
+                        2770 => { r__4.default_rc = -1 as i8; __state = 2767; }
+                        2771 => { r__4.default_rc = 0 as i8; __state = 2767; }
+                        2772 => { n_cell_key = 0 as i64; __state = 2774; }
+                        2773 => { { let _ = 0; }; __state = 2789; }
+                        2774 => { __state = 2775; }
+                        2775 => { __state = 2776; }
+                        2776 => { { let _ = 0; }; __state = 2777; }
+                        2777 => {
+                            p_cur_2 = unsafe { (*p_c_28).uc.p_cursor };
+                            __state = 2778;
+                        }
+                        2778 => { { let _ = 0; }; __state = 2779; }
+                        2779 => {
+                            n_cell_key =
+                                unsafe { sqlite3_btree_payload_size(p_cur_2) } as i64;
+                            __state = 2780;
+                        }
+                        2780 => {
+                            if n_cell_key <= 0 as i64 || n_cell_key > 2147483647 as i64
+                                {
+                                __state = 2782;
+                            } else { __state = 2781; }
+                        }
+                        2781 => {
+                            unsafe { sqlite3_vdbe_mem_init(&mut m, db, 0 as u16) };
+                            __state = 2784;
+                        }
+                        2782 => {
+                            rc = unsafe { sqlite3_corrupt_error(6928) };
+                            __state = 2783;
+                        }
+                        2783 => { __state = 17; }
+                        2784 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_from_btree_zero_offset(p_cur_2,
+                                        n_cell_key as u32, &mut m)
+                                };
+                            __state = 2785;
+                        }
+                        2785 => {
+                            if rc != 0 { __state = 2787; } else { __state = 2786; }
+                        }
+                        2786 => {
+                            res__11 =
+                                unsafe {
+                                    sqlite3_vdbe_record_compare_with_skip(m.n, m.z as *const (),
+                                        &mut r__4, 0)
+                                };
+                            __state = 2788;
+                        }
+                        2787 => { __state = 17; }
+                        2788 => {
+                            unsafe { sqlite3_vdbe_mem_release_malloc(&mut m) };
+                            __state = 2773;
+                        }
+                        2789 => {
+                            if unsafe { (*p_op).opcode } as i32 & 1 == 45 & 1 {
+                                __state = 2791;
+                            } else { __state = 2792; }
+                        }
+                        2790 => { __state = 2795; }
+                        2791 => { { let _ = 0; }; __state = 2793; }
+                        2792 => { { let _ = 0; }; __state = 2794; }
+                        2793 => { res__11 = -res__11; __state = 2790; }
+                        2794 => {
+                            { let __p = &mut res__11; let __t = *__p; *__p += 1; __t };
+                            __state = 2790;
+                        }
+                        2795 => { { let _ = 0; }; __state = 2796; }
+                        2796 => {
+                            if res__11 > 0 { __state = 2798; } else { __state = 2797; }
+                        }
+                        2797 => { __state = 60; }
+                        2798 => { __state = 4; }
+                        2799 => { __state = 190; }
+                        2800 => { __state = 191; }
+                        2801 => { __state = 2802; }
+                        2802 => { __state = 2803; }
+                        2803 => { { let _ = 0; }; __state = 2804; }
+                        2804 => { { let _ = 0; }; __state = 2805; }
+                        2805 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2806;
+                        }
+                        2806 => {
+                            unsafe { (*p_out).flags = 1 as u16 };
+                            __state = 2807;
+                        }
+                        2807 => {
+                            if unsafe { (*db).n_vdbe_read } >
+                                    unsafe { (*db).n_v_destroy } + 1 {
+                                __state = 2809;
+                            } else { __state = 2810; }
+                        }
+                        2808 => { __state = 60; }
+                        2809 => { rc = 6; __state = 2811; }
+                        2810 => { i_db_2 = unsafe { (*p_op).p3 }; __state = 2813; }
+                        2811 => {
+                            unsafe { (*p).error_action = 2 as u8 };
+                            __state = 2812;
+                        }
+                        2812 => { __state = 17; }
+                        2813 => { { let _ = 0; }; __state = 2814; }
+                        2814 => { i_moved = 0; __state = 2815; }
+                        2815 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_drop_table(unsafe {
+                                            (*unsafe { (*db).a_db.offset(i_db_2 as isize) }).p_bt
+                                        }, unsafe { (*p_op).p1 }, &mut i_moved)
+                                };
+                            __state = 2816;
+                        }
+                        2816 => {
+                            unsafe { (*p_out).flags = 4 as u16 };
+                            __state = 2817;
+                        }
+                        2817 => {
+                            unsafe { (*p_out).u.i = i_moved as i64 };
+                            __state = 2818;
+                        }
+                        2818 => {
+                            if rc != 0 { __state = 2820; } else { __state = 2819; }
+                        }
+                        2819 => {
+                            if i_moved != 0 { __state = 2821; } else { __state = 2808; }
+                        }
+                        2820 => { __state = 17; }
+                        2821 => {
+                            unsafe {
+                                sqlite3_root_page_moved(db, i_db_2, i_moved as Pgno,
+                                    unsafe { (*p_op).p1 } as Pgno)
+                            };
+                            __state = 2822;
+                        }
+                        2822 => { { let _ = 0; }; __state = 2823; }
+                        2823 => {
+                            reset_schema_on_fault = (i_db_2 + 1) as u8;
+                            __state = 2808;
+                        }
+                        2824 => { __state = 192; }
+                        2825 => { __state = 2826; }
+                        2826 => { n_change = 0 as i64; __state = 2827; }
+                        2827 => { { let _ = 0; }; __state = 2828; }
+                        2828 => { { let _ = 0; }; __state = 2829; }
+                        2829 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_clear_table(unsafe {
+                                            (*unsafe {
+                                                        (*db).a_db.offset(unsafe { (*p_op).p2 } as isize)
+                                                    }).p_bt
+                                        }, unsafe { (*p_op).p1 } as u32 as i32, &mut n_change)
+                                };
+                            __state = 2830;
+                        }
+                        2830 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 2832;
+                            } else { __state = 2831; }
+                        }
+                        2831 => {
+                            if rc != 0 { __state = 2838; } else { __state = 2837; }
+                        }
+                        2832 => {
+                            unsafe { (*p).n_change += n_change };
+                            __state = 2833;
+                        }
+                        2833 => {
+                            if unsafe { (*p_op).p3 } > 0 {
+                                __state = 2834;
+                            } else { __state = 2831; }
+                        }
+                        2834 => { { let _ = 0; }; __state = 2835; }
+                        2835 => { __state = 2836; }
+                        2836 => {
+                            unsafe {
+                                (*a_mem.offset(unsafe { (*p_op).p3 } as isize)).u.i +=
+                                    n_change
+                            };
+                            __state = 2831;
+                        }
+                        2837 => { __state = 60; }
+                        2838 => { __state = 17; }
+                        2839 => { __state = 193; }
+                        2840 => { { let _ = 0; }; __state = 2841; }
+                        2841 => {
+                            p_c_29 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2842;
+                        }
+                        2842 => { { let _ = 0; }; __state = 2843; }
+                        2843 => {
+                            if unsafe { (*p_c_29).e_cur_type } as i32 == 1 {
+                                __state = 2845;
+                            } else { __state = 2846; }
+                        }
+                        2844 => { __state = 60; }
+                        2845 => {
+                            unsafe {
+                                sqlite3_vdbe_sorter_reset(db,
+                                    unsafe { (*p_c_29).uc.p_sorter })
+                            };
+                            __state = 2844;
+                        }
+                        2846 => { { let _ = 0; }; __state = 2847; }
+                        2847 => { { let _ = 0; }; __state = 2848; }
+                        2848 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_clear_table_of_cursor(unsafe {
+                                            (*p_c_29).uc.p_cursor
+                                        })
+                                };
+                            __state = 2849;
+                        }
+                        2849 => {
+                            if rc != 0 { __state = 2850; } else { __state = 2844; }
+                        }
+                        2850 => { __state = 17; }
+                        2851 => { __state = 194; }
+                        2852 => { __state = 2853; }
+                        2853 => { __state = 2854; }
+                        2854 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 2855;
+                        }
+                        2855 => { pgno = 0 as Pgno; __state = 2856; }
+                        2856 => { { let _ = 0; }; __state = 2857; }
+                        2857 => { { let _ = 0; }; __state = 2858; }
+                        2858 => { { let _ = 0; }; __state = 2859; }
+                        2859 => { { let _ = 0; }; __state = 2860; }
+                        2860 => {
+                            p_db_3 =
+                                unsafe {
+                                    unsafe { (*db).a_db.offset(unsafe { (*p_op).p1 } as isize) }
+                                };
+                            __state = 2861;
+                        }
+                        2861 => { { let _ = 0; }; __state = 2862; }
+                        2862 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_create_table(unsafe { (*p_db_3).p_bt },
+                                        &mut pgno, unsafe { (*p_op).p3 })
+                                };
+                            __state = 2863;
+                        }
+                        2863 => {
+                            if rc != 0 { __state = 2865; } else { __state = 2864; }
+                        }
+                        2864 => {
+                            unsafe { (*p_out).u.i = pgno as i64 };
+                            __state = 2866;
+                        }
+                        2865 => { __state = 17; }
+                        2866 => { __state = 60; }
+                        2867 => { __state = 195; }
+                        2868 => { __state = 2869; }
+                        2869 => { __state = 2870; }
+                        2870 => { __state = 2871; }
+                        2871 => { __state = 2872; }
+                        2872 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_sql_exec };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 2873;
+                        }
+                        2873 => { z_err_1 = core::ptr::null_mut(); __state = 2874; }
+                        2874 => {
+                            x_auth = unsafe { (*db).x_auth };
+                            __state = 2875;
+                        }
+                        2875 => {
+                            m_trace = unsafe { (*db).m_trace };
+                            __state = 2876;
+                        }
+                        2876 => {
+                            saved_analysis_limit = unsafe { (*db).n_analysis_limit };
+                            __state = 2877;
+                        }
+                        2877 => {
+                            if unsafe { (*p_op).p1 } & 1 != 0 {
+                                __state = 2879;
+                            } else { __state = 2878; }
+                        }
+                        2878 => {
+                            if unsafe { (*p_op).p1 } & 2 != 0 {
+                                __state = 2882;
+                            } else { __state = 2881; }
+                        }
+                        2879 => { unsafe { (*db).x_auth = None }; __state = 2880; }
+                        2880 => {
+                            unsafe { (*db).m_trace = 0 as u8 };
+                            __state = 2878;
+                        }
+                        2881 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_exec(db, unsafe { (*p_op).p4.z } as *const i8, None,
+                                        core::ptr::null_mut(), &mut z_err_1)
+                                };
+                            __state = 2883;
+                        }
+                        2882 => {
+                            unsafe { (*db).n_analysis_limit = unsafe { (*p_op).p2 } };
+                            __state = 2881;
+                        }
+                        2883 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_sql_exec };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 2884;
+                        }
+                        2884 => {
+                            unsafe { (*db).x_auth = x_auth };
+                            __state = 2885;
+                        }
+                        2885 => {
+                            unsafe { (*db).m_trace = m_trace };
+                            __state = 2886;
+                        }
+                        2886 => {
+                            unsafe { (*db).n_analysis_limit = saved_analysis_limit };
+                            __state = 2887;
+                        }
+                        2887 => {
+                            if !(z_err_1).is_null() || rc != 0 {
+                                __state = 2889;
+                            } else { __state = 2888; }
+                        }
+                        2888 => { __state = 60; }
+                        2889 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8, z_err_1)
+                            };
+                            __state = 2890;
+                        }
+                        2890 => {
+                            unsafe { sqlite3_free(z_err_1 as *mut ()) };
+                            __state = 2891;
+                        }
+                        2891 => {
+                            if rc == 7 { __state = 2893; } else { __state = 2892; }
+                        }
+                        2892 => { __state = 17; }
+                        2893 => { __state = 20; }
+                        2894 => { __state = 196; }
+                        2895 => { __state = 2896; }
+                        2896 => { __state = 2897; }
+                        2897 => { __state = 2898; }
+                        2898 => { i_db_3 = unsafe { (*p_op).p1 }; __state = 2899; }
+                        2899 => { { let _ = 0; }; __state = 2900; }
+                        2900 => { { let _ = 0; }; __state = 2901; }
+                        2901 => {
+                            if unsafe { (*p_op).p4.z } == core::ptr::null_mut() {
+                                __state = 2903;
+                            } else { __state = 2904; }
+                        }
+                        2902 => {
+                            if rc != 0 { __state = 2932; } else { __state = 2931; }
+                        }
+                        2903 => { { let _ = 0; }; __state = 2905; }
+                        2904 => { { let _ = 0; }; __state = 2910; }
+                        2905 => {
+                            unsafe {
+                                sqlite3_schema_clear(unsafe {
+                                            (*unsafe { (*db).a_db.offset(i_db_3 as isize) }).p_schema
+                                        } as *mut ())
+                            };
+                            __state = 2906;
+                        }
+                        2906 => {
+                            unsafe { (*db).m_db_flags &= !16 as u32 };
+                            __state = 2907;
+                        }
+                        2907 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_init_one(db, i_db_3, unsafe { &mut (*p).z_err_msg },
+                                        unsafe { (*p_op).p5 } as u32)
+                                };
+                            __state = 2908;
+                        }
+                        2908 => {
+                            unsafe { (*db).m_db_flags |= 1 as u32 };
+                            __state = 2909;
+                        }
+                        2909 => {
+                            unsafe { (*p).set_expired(0 as bft as u32) };
+                            __state = 2902;
+                        }
+                        2910 => {
+                            z_schema =
+                                c"sqlite_master".as_ptr() as *mut i8 as *const i8;
+                            __state = 2911;
+                        }
+                        2911 => { init_data.db = db; __state = 2912; }
+                        2912 => { init_data.i_db = i_db_3; __state = 2913; }
+                        2913 => {
+                            init_data.pz_err_msg = unsafe { &mut (*p).z_err_msg };
+                            __state = 2914;
+                        }
+                        2914 => {
+                            init_data.m_init_flags = 0 as u32;
+                            __state = 2915;
+                        }
+                        2915 => {
+                            init_data.mx_page =
+                                unsafe {
+                                    sqlite3_btree_last_page(unsafe {
+                                            (*unsafe { (*db).a_db.offset(i_db_3 as isize) }).p_bt
+                                        })
+                                };
+                            __state = 2916;
+                        }
+                        2916 => {
+                            z_sql =
+                                unsafe {
+                                    sqlite3_m_printf(db,
+                                        c"SELECT*FROM\"%w\".%s WHERE %s ORDER BY rowid".as_ptr() as
+                                                *mut i8 as *const i8,
+                                        unsafe {
+                                            (*unsafe { (*db).a_db.offset(i_db_3 as isize) }).z_db_s_name
+                                        }, z_schema, unsafe { (*p_op).p4.z })
+                                };
+                            __state = 2917;
+                        }
+                        2917 => {
+                            if z_sql == core::ptr::null_mut() {
+                                __state = 2918;
+                            } else { __state = 2919; }
+                        }
+                        2918 => { rc = 7; __state = 2902; }
+                        2919 => { { let _ = 0; }; __state = 2920; }
+                        2920 => {
+                            unsafe { (*db).init.busy = 1 as u8 };
+                            __state = 2921;
+                        }
+                        2921 => { init_data.rc = 0; __state = 2922; }
+                        2922 => { init_data.n_init_row = 0 as u32; __state = 2923; }
+                        2923 => { { let _ = 0; }; __state = 2924; }
+                        2924 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_exec(db, z_sql as *const i8,
+                                        Some(sqlite3_init_callback), &raw mut init_data as *mut (),
+                                        core::ptr::null_mut())
+                                };
+                            __state = 2925;
+                        }
+                        2925 => {
+                            if rc == 0 { __state = 2927; } else { __state = 2926; }
+                        }
+                        2926 => {
+                            if rc == 0 && init_data.n_init_row == 0 as u32 {
+                                __state = 2929;
+                            } else { __state = 2928; }
+                        }
+                        2927 => { rc = init_data.rc; __state = 2926; }
+                        2928 => {
+                            unsafe { sqlite3_db_free_nn(db, z_sql as *mut ()) };
+                            __state = 2930;
+                        }
+                        2929 => {
+                            rc = unsafe { sqlite3_corrupt_error(7230) };
+                            __state = 2928;
+                        }
+                        2930 => {
+                            unsafe { (*db).init.busy = 0 as u8 };
+                            __state = 2902;
+                        }
+                        2931 => { __state = 60; }
+                        2932 => {
+                            unsafe { sqlite3_reset_all_schemas_of_connection(db) };
+                            __state = 2933;
+                        }
+                        2933 => {
+                            if rc == 7 { __state = 2935; } else { __state = 2934; }
+                        }
+                        2934 => { __state = 17; }
+                        2935 => { __state = 20; }
+                        2936 => { __state = 197; }
+                        2937 => {
+                            rc =
+                                unsafe { sqlite3_analysis_load(db, unsafe { (*p_op).p1 }) };
+                            __state = 2938;
+                        }
+                        2938 => {
+                            if rc != 0 { __state = 2940; } else { __state = 2939; }
+                        }
+                        2939 => { __state = 60; }
+                        2940 => { __state = 17; }
+                        2941 => { __state = 198; }
+                        2942 => {
+                            unsafe {
+                                sqlite3_unlink_and_delete_table(db, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p4.z } as *const i8)
+                            };
+                            __state = 2943;
+                        }
+                        2943 => { __state = 60; }
+                        2944 => { __state = 199; }
+                        2945 => {
+                            unsafe {
+                                sqlite3_unlink_and_delete_index(db, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p4.z } as *const i8)
+                            };
+                            __state = 2946;
+                        }
+                        2946 => { __state = 60; }
+                        2947 => { __state = 200; }
+                        2948 => {
+                            unsafe {
+                                sqlite3_unlink_and_delete_trigger(db, unsafe { (*p_op).p1 },
+                                    unsafe { (*p_op).p4.z } as *const i8)
+                            };
+                            __state = 2949;
+                        }
+                        2949 => { __state = 60; }
+                        2950 => { __state = 201; }
+                        2951 => { __state = 2952; }
+                        2952 => { __state = 2953; }
+                        2953 => { __state = 2954; }
+                        2954 => { __state = 2955; }
+                        2955 => { { let _ = 0; }; __state = 2956; }
+                        2956 => { { let _ = 0; }; __state = 2957; }
+                        2957 => { n_root = unsafe { (*p_op).p2 }; __state = 2958; }
+                        2958 => {
+                            a_root = unsafe { (*p_op).p4.ai };
+                            __state = 2959;
+                        }
+                        2959 => { { let _ = 0; }; __state = 2960; }
+                        2960 => { { let _ = 0; }; __state = 2961; }
+                        2961 => { { let _ = 0; }; __state = 2962; }
+                        2962 => { { let _ = 0; }; __state = 2963; }
+                        2963 => {
+                            pn_err =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 2964;
+                        }
+                        2964 => { { let _ = 0; }; __state = 2965; }
+                        2965 => { { let _ = 0; }; __state = 2966; }
+                        2966 => {
+                            p_in1 =
+                                unsafe {
+                                    a_mem.offset((unsafe { (*p_op).p1 } + 1) as isize)
+                                };
+                            __state = 2967;
+                        }
+                        2967 => { { let _ = 0; }; __state = 2968; }
+                        2968 => { { let _ = 0; }; __state = 2969; }
+                        2969 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_integrity_check(db,
+                                        unsafe {
+                                            (*unsafe {
+                                                        (*db).a_db.add(unsafe { (*p_op).p5 } as usize)
+                                                    }).p_bt
+                                        }, unsafe { &mut *a_root.offset(1 as isize) },
+                                        unsafe {
+                                                &raw mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                            } as *mut sqlite3_value, n_root,
+                                        unsafe { (*pn_err).u.i } as i32 + 1, &mut n_err, &mut z)
+                                };
+                            __state = 2970;
+                        }
+                        2970 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_in1) };
+                            __state = 2971;
+                        }
+                        2971 => {
+                            if n_err == 0 { __state = 2973; } else { __state = 2974; }
+                        }
+                        2972 => { __state = 2979; }
+                        2973 => { { let _ = 0; }; __state = 2972; }
+                        2974 => {
+                            if rc != 0 { __state = 2975; } else { __state = 2976; }
+                        }
+                        2975 => {
+                            unsafe { sqlite3_free(z as *mut ()) };
+                            __state = 2977;
+                        }
+                        2976 => {
+                            unsafe { (*pn_err).u.i -= (n_err - 1) as i64 };
+                            __state = 2978;
+                        }
+                        2977 => { __state = 17; }
+                        2978 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_str(p_in1, z as *const i8, -1 as i64,
+                                    1 as u8, Some(sqlite3_free))
+                            };
+                            __state = 2972;
+                        }
+                        2979 => {
+                            unsafe {
+                                sqlite3_vdbe_change_encoding(p_in1, encoding as i32)
+                            };
+                            __state = 2980;
+                        }
+                        2980 => { __state = 3; }
+                        2981 => { __state = 3002; }
+                        2982 => { __state = 2983; }
+                        2983 => { __state = 2984; }
+                        2984 => { { let _ = 0; }; __state = 2985; }
+                        2985 => { { let _ = 0; }; __state = 2986; }
+                        2986 => { { let _ = 0; }; __state = 2987; }
+                        2987 => {
+                            p_c_30 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 2988;
+                        }
+                        2988 => { { let _ = 0; }; __state = 2989; }
+                        2989 => { { let _ = 0; }; __state = 2990; }
+                        2990 => { { let _ = 0; }; __state = 2991; }
+                        2991 => { { let _ = 0; }; __state = 2992; }
+                        2992 => {
+                            unsafe {
+                                memset(&raw mut r__5 as *mut (), 0,
+                                    core::mem::size_of::<UnpackedRecord>() as u64)
+                            };
+                            __state = 2993;
+                        }
+                        2993 => {
+                            r__5.a_mem =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 2994;
+                        }
+                        2994 => {
+                            r__5.n_field =
+                                unsafe { (*unsafe { (*p_op).p4.p_idx }).n_column };
+                            __state = 2995;
+                        }
+                        2995 => {
+                            r__5.p_key_info = unsafe { (*p_c_30).p_key_info };
+                            __state = 2996;
+                        }
+                        2996 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_find_index_key(unsafe {
+                                            (*p_c_30).uc.p_cursor
+                                        }, unsafe { (*p_op).p4.p_idx }, &mut r__5, &mut res__12, 1)
+                                };
+                            __state = 2997;
+                        }
+                        2997 => {
+                            if rc != 0 || res__12 != 0 {
+                                __state = 2999;
+                            } else { __state = 2998; }
+                        }
+                        2998 => {
+                            unsafe { (*p_c_30).null_row = 0 as u8 };
+                            __state = 3001;
+                        }
+                        2999 => { rc = 0; __state = 3000; }
+                        3000 => { __state = 4; }
+                        3001 => { __state = 60; }
+                        3002 => { __state = 202; }
+                        3003 => { __state = 203; }
+                        3004 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 3005;
+                        }
+                        3005 => { { let _ = 0; }; __state = 3006; }
+                        3006 => {
+                            if unsafe { (*p_in1).flags } as i32 & 16 == 0 {
+                                __state = 3008;
+                            } else { __state = 3007; }
+                        }
+                        3007 => { { let _ = 0; }; __state = 3010; }
+                        3008 => {
+                            if unsafe { sqlite3_vdbe_mem_set_row_set(p_in1) } != 0 {
+                                __state = 3009;
+                            } else { __state = 3007; }
+                        }
+                        3009 => { __state = 20; }
+                        3010 => {
+                            unsafe {
+                                sqlite3_row_set_insert(unsafe { (*p_in1).z } as *mut RowSet,
+                                    unsafe { (*p_in2).u.i })
+                            };
+                            __state = 3011;
+                        }
+                        3011 => { __state = 60; }
+                        3012 => { __state = 204; }
+                        3013 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3014;
+                        }
+                        3014 => { { let _ = 0; }; __state = 3015; }
+                        3015 => {
+                            if unsafe { (*p_in1).flags } as i32 & 16 == 0 ||
+                                    unsafe {
+                                            sqlite3_row_set_next(unsafe { (*p_in1).z } as *mut RowSet,
+                                                &mut val)
+                                        } == 0 {
+                                __state = 3017;
+                            } else { __state = 3018; }
+                        }
+                        3016 => { __state = 3; }
+                        3017 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_in1) };
+                            __state = 3019;
+                        }
+                        3018 => { __state = 3021; }
+                        3019 => { __state = 3020; }
+                        3020 => { __state = 2; }
+                        3021 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(unsafe {
+                                        &mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                    }, val)
+                            };
+                            __state = 3016;
+                        }
+                        3022 => { __state = 205; }
+                        3023 => { __state = 3024; }
+                        3024 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3025;
+                        }
+                        3025 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3026;
+                        }
+                        3026 => { i_set = unsafe { (*p_op).p4.i }; __state = 3027; }
+                        3027 => { { let _ = 0; }; __state = 3028; }
+                        3028 => {
+                            if unsafe { (*p_in1).flags } as i32 & 16 == 0 {
+                                __state = 3030;
+                            } else { __state = 3029; }
+                        }
+                        3029 => { { let _ = 0; }; __state = 3032; }
+                        3030 => {
+                            if unsafe { sqlite3_vdbe_mem_set_row_set(p_in1) } != 0 {
+                                __state = 3031;
+                            } else { __state = 3029; }
+                        }
+                        3031 => { __state = 20; }
+                        3032 => { { let _ = 0; }; __state = 3033; }
+                        3033 => { { let _ = 0; }; __state = 3034; }
+                        3034 => {
+                            if i_set != 0 { __state = 3036; } else { __state = 3035; }
+                        }
+                        3035 => {
+                            if i_set >= 0 { __state = 3041; } else { __state = 3040; }
+                        }
+                        3036 => {
+                            exists =
+                                unsafe {
+                                    sqlite3_row_set_test(unsafe { (*p_in1).z } as *mut RowSet,
+                                        i_set, unsafe { (*p_in3).u.i })
+                                };
+                            __state = 3037;
+                        }
+                        3037 => { __state = 3038; }
+                        3038 => {
+                            if exists != 0 { __state = 3039; } else { __state = 3035; }
+                        }
+                        3039 => { __state = 4; }
+                        3040 => { __state = 60; }
+                        3041 => {
+                            unsafe {
+                                sqlite3_row_set_insert(unsafe { (*p_in1).z } as *mut RowSet,
+                                    unsafe { (*p_in3).u.i })
+                            };
+                            __state = 3040;
+                        }
+                        3042 => { __state = 206; }
+                        3043 => { __state = 3044; }
+                        3044 => { __state = 3045; }
+                        3045 => { __state = 3046; }
+                        3046 => { __state = 3047; }
+                        3047 => { __state = 3048; }
+                        3048 => { __state = 3049; }
+                        3049 => { __state = 3050; }
+                        3050 => {
+                            p_program = unsafe { (*p_op).p4.p_program };
+                            __state = 3051;
+                        }
+                        3051 => {
+                            p_rt =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3052;
+                        }
+                        3052 => { { let _ = 0; }; __state = 3053; }
+                        3053 => {
+                            if unsafe { (*p_op).p5 } != 0 {
+                                __state = 3055;
+                            } else { __state = 3054; }
+                        }
+                        3054 => {
+                            if unsafe { (*p).n_frame } >=
+                                    unsafe { (*db).a_limit[10 as usize] } {
+                                __state = 3063;
+                            } else { __state = 3062; }
+                        }
+                        3055 => {
+                            t__1 = unsafe { (*p_program).token };
+                            __state = 3056;
+                        }
+                        3056 => {
+                            p_frame_2 = unsafe { (*p).p_frame };
+                            __state = 3058;
+                        }
+                        3057 => {
+                            if !(p_frame_2).is_null() {
+                                __state = 3061;
+                            } else { __state = 3054; }
+                        }
+                        3058 => {
+                            if !(p_frame_2).is_null() &&
+                                    unsafe { (*p_frame_2).token } != t__1 {
+                                __state = 3059;
+                            } else { __state = 3057; }
+                        }
+                        3059 => { __state = 3060; }
+                        3060 => {
+                            p_frame_2 = unsafe { (*p_frame_2).p_parent };
+                            __state = 3058;
+                        }
+                        3061 => { __state = 60; }
+                        3062 => {
+                            if unsafe { (*p_rt).flags } as i32 & 16 == 0 {
+                                __state = 3067;
+                            } else { __state = 3068; }
+                        }
+                        3063 => { rc = 1; __state = 3064; }
+                        3064 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"triggers nested too deep".as_ptr() as *mut i8 as
+                                        *const i8)
+                            };
+                            __state = 3065;
+                        }
+                        3065 => { __state = 17; }
+                        3066 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_frame };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3102;
+                        }
+                        3067 => {
+                            n_mem =
+                                unsafe { (*p_program).n_mem } +
+                                    unsafe { (*p_program).n_csr };
+                            __state = 3069;
+                        }
+                        3068 => {
+                            p_frame_2 = unsafe { (*p_rt).z } as *mut VdbeFrame;
+                            __state = 3098;
+                        }
+                        3069 => { { let _ = 0; }; __state = 3070; }
+                        3070 => {
+                            if unsafe { (*p_program).n_csr } == 0 {
+                                __state = 3072;
+                            } else { __state = 3071; }
+                        }
+                        3071 => {
+                            n_byte_2 =
+                                ((core::mem::size_of::<VdbeFrame>() as u64 + 7 as u64 &
+                                                    !7 as u64) +
+                                                n_mem as u64 * core::mem::size_of::<Mem>() as u64 +
+                                            unsafe { (*p_program).n_csr } as u64 *
+                                                core::mem::size_of::<*mut VdbeCursor>() as u64 +
+                                        ((7 as i64 + unsafe { (*p_program).n_op } as i64) /
+                                                8 as i64) as u64) as i64;
+                            __state = 3073;
+                        }
+                        3072 => {
+                            { let __p = &mut n_mem; let __t = *__p; *__p += 1; __t };
+                            __state = 3071;
+                        }
+                        3073 => {
+                            p_frame_2 =
+                                unsafe { sqlite3_db_malloc_zero(db, n_byte_2 as u64) } as
+                                    *mut VdbeFrame;
+                            __state = 3074;
+                        }
+                        3074 => {
+                            if (p_frame_2).is_null() as i32 != 0 {
+                                __state = 3076;
+                            } else { __state = 3075; }
+                        }
+                        3075 => {
+                            unsafe { sqlite3_vdbe_mem_release(p_rt) };
+                            __state = 3077;
+                        }
+                        3076 => { __state = 20; }
+                        3077 => {
+                            unsafe { (*p_rt).flags = (16 | 4096) as u16 };
+                            __state = 3078;
+                        }
+                        3078 => {
+                            unsafe { (*p_rt).z = p_frame_2 as *mut i8 };
+                            __state = 3079;
+                        }
+                        3079 => {
+                            unsafe { (*p_rt).n = n_byte_2 as i32 };
+                            __state = 3080;
+                        }
+                        3080 => {
+                            unsafe { (*p_rt).x_del = Some(sqlite3_vdbe_frame_mem_del) };
+                            __state = 3081;
+                        }
+                        3081 => { unsafe { (*p_frame_2).v = p }; __state = 3082; }
+                        3082 => {
+                            unsafe { (*p_frame_2).n_child_mem = n_mem };
+                            __state = 3083;
+                        }
+                        3083 => {
+                            unsafe {
+                                (*p_frame_2).n_child_csr = unsafe { (*p_program).n_csr }
+                            };
+                            __state = 3084;
+                        }
+                        3084 => {
+                            unsafe {
+                                (*p_frame_2).pc =
+                                    unsafe { p_op.offset_from(a_op) } as i64 as i32
+                            };
+                            __state = 3085;
+                        }
+                        3085 => {
+                            unsafe { (*p_frame_2).a_mem = unsafe { (*p).a_mem } };
+                            __state = 3086;
+                        }
+                        3086 => {
+                            unsafe { (*p_frame_2).n_mem = unsafe { (*p).n_mem } };
+                            __state = 3087;
+                        }
+                        3087 => {
+                            unsafe { (*p_frame_2).ap_csr = unsafe { (*p).ap_csr } };
+                            __state = 3088;
+                        }
+                        3088 => {
+                            unsafe { (*p_frame_2).n_cursor = unsafe { (*p).n_cursor } };
+                            __state = 3089;
+                        }
+                        3089 => {
+                            unsafe { (*p_frame_2).a_op = unsafe { (*p).a_op } };
+                            __state = 3090;
+                        }
+                        3090 => {
+                            unsafe { (*p_frame_2).n_op = unsafe { (*p).n_op } };
+                            __state = 3091;
+                        }
+                        3091 => {
+                            unsafe {
+                                (*p_frame_2).token = unsafe { (*p_program).token }
+                            };
+                            __state = 3092;
+                        }
+                        3092 => {
+                            p_end =
+                                unsafe {
+                                    (unsafe {
+                                                &raw mut *(p_frame_2 as
+                                                                *mut u8).add((core::mem::size_of::<VdbeFrame>() as u64 +
+                                                                        7 as u64 & !7 as u64) as usize)
+                                            } as
+                                            *mut Mem).offset(unsafe { (*p_frame_2).n_child_mem } as
+                                            isize)
+                                };
+                            __state = 3093;
+                        }
+                        3093 => {
+                            p_mem_1 =
+                                unsafe {
+                                        &raw mut *(p_frame_2 as
+                                                        *mut u8).add((core::mem::size_of::<VdbeFrame>() as u64 +
+                                                                7 as u64 & !7 as u64) as usize)
+                                    } as *mut Mem;
+                            __state = 3094;
+                        }
+                        3094 => {
+                            if p_mem_1 != p_end {
+                                __state = 3095;
+                            } else { __state = 3066; }
+                        }
+                        3095 => {
+                            unsafe { (*p_mem_1).flags = 0 as u16 };
+                            __state = 3097;
+                        }
+                        3096 => {
+                            {
+                                let __p = &mut p_mem_1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 3094;
+                        }
+                        3097 => { unsafe { (*p_mem_1).db = db }; __state = 3096; }
+                        3098 => { { let _ = 0; }; __state = 3099; }
+                        3099 => { { let _ = 0; }; __state = 3100; }
+                        3100 => { { let _ = 0; }; __state = 3101; }
+                        3101 => { { let _ = 0; }; __state = 3066; }
+                        3102 => {
+                            unsafe { (*p_frame_2).p_parent = unsafe { (*p).p_frame } };
+                            __state = 3103;
+                        }
+                        3103 => {
+                            unsafe {
+                                (*p_frame_2).last_rowid = unsafe { (*db).last_rowid }
+                            };
+                            __state = 3104;
+                        }
+                        3104 => {
+                            unsafe { (*p_frame_2).n_change = unsafe { (*p).n_change } };
+                            __state = 3105;
+                        }
+                        3105 => {
+                            unsafe {
+                                (*p_frame_2).n_db_change =
+                                    unsafe { (*unsafe { (*p).db }).n_change }
+                            };
+                            __state = 3106;
+                        }
+                        3106 => { { let _ = 0; }; __state = 3107; }
+                        3107 => {
+                            unsafe {
+                                (*p_frame_2).p_aux_data = unsafe { (*p).p_aux_data }
+                            };
+                            __state = 3108;
+                        }
+                        3108 => {
+                            unsafe { (*p).p_aux_data = core::ptr::null_mut() };
+                            __state = 3109;
+                        }
+                        3109 => {
+                            unsafe { (*p).n_change = 0 as i64 };
+                            __state = 3110;
+                        }
+                        3110 => {
+                            unsafe { (*p).p_frame = p_frame_2 };
+                            __state = 3111;
+                        }
+                        3111 => {
+                            unsafe {
+                                (*p).a_mem =
+                                    {
+                                        a_mem =
+                                            unsafe {
+                                                    &raw mut *(p_frame_2 as
+                                                                    *mut u8).add((core::mem::size_of::<VdbeFrame>() as u64 +
+                                                                            7 as u64 & !7 as u64) as usize)
+                                                } as *mut Mem;
+                                        a_mem
+                                    }
+                            };
+                            __state = 3112;
+                        }
+                        3112 => {
+                            unsafe { (*p).n_mem = unsafe { (*p_frame_2).n_child_mem } };
+                            __state = 3113;
+                        }
+                        3113 => {
+                            unsafe {
+                                (*p).n_cursor =
+                                    unsafe { (*p_frame_2).n_child_csr } as u16 as i32
+                            };
+                            __state = 3114;
+                        }
+                        3114 => {
+                            unsafe {
+                                (*p).ap_csr =
+                                    unsafe {
+                                            &raw mut *a_mem.offset(unsafe { (*p).n_mem } as isize)
+                                        } as *mut *mut VdbeCursor
+                            };
+                            __state = 3115;
+                        }
+                        3115 => {
+                            unsafe {
+                                (*p_frame_2).a_once =
+                                    unsafe {
+                                            &raw mut *unsafe {
+                                                        (*p).ap_csr.offset(unsafe { (*p_program).n_csr } as isize)
+                                                    }
+                                        } as *mut u8
+                            };
+                            __state = 3116;
+                        }
+                        3116 => {
+                            unsafe {
+                                memset(unsafe { (*p_frame_2).a_once } as *mut (), 0,
+                                    ((unsafe { (*p_program).n_op } + 7) / 8) as u64)
+                            };
+                            __state = 3117;
+                        }
+                        3117 => {
+                            unsafe {
+                                (*p).a_op =
+                                    { a_op = unsafe { (*p_program).a_op } as *mut Op; a_op }
+                            };
+                            __state = 3118;
+                        }
+                        3118 => {
+                            unsafe { (*p).n_op = unsafe { (*p_program).n_op } };
+                            __state = 3119;
+                        }
+                        3119 => {
+                            p_op = unsafe { a_op.offset(-1 as isize) };
+                            __state = 3120;
+                        }
+                        3120 => { __state = 3; }
+                        3121 => { __state = 207; }
+                        3122 => { __state = 3123; }
+                        3123 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3124;
+                        }
+                        3124 => {
+                            p_frame_3 = unsafe { (*p).p_frame };
+                            __state = 3125;
+                        }
+                        3125 => {
+                            p_in =
+                                unsafe {
+                                    unsafe {
+                                        (*p_frame_3).a_mem.offset((unsafe { (*p_op).p1 } +
+                                                    unsafe {
+                                                        (*unsafe {
+                                                                    (*p_frame_3).a_op.offset(unsafe { (*p_frame_3).pc } as
+                                                                            isize)
+                                                                }).p1
+                                                    }) as isize)
+                                    }
+                                };
+                            __state = 3126;
+                        }
+                        3126 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_shallow_copy(p_out, p_in as *const Mem,
+                                    16384)
+                            };
+                            __state = 3127;
+                        }
+                        3127 => { __state = 60; }
+                        3128 => { __state = 208; }
+                        3129 => { __state = 60; }
+                        3130 => {
+                            unsafe {
+                                (*db).n_deferred_cons += unsafe { (*p_op).p2 } as i64
+                            };
+                            __state = 3129;
+                        }
+                        3131 => {
+                            if unsafe { (*db).flags } & 524288 as u64 != 0 {
+                                __state = 3132;
+                            } else { __state = 3133; }
+                        }
+                        3132 => {
+                            unsafe {
+                                (*db).n_deferred_imm_cons += unsafe { (*p_op).p2 } as i64
+                            };
+                            __state = 3129;
+                        }
+                        3133 => {
+                            unsafe {
+                                (*p).n_fk_constraint += unsafe { (*p_op).p2 } as i64
+                            };
+                            __state = 3129;
+                        }
+                        3134 => { __state = 209; }
+                        3135 => { __state = 60; }
+                        3136 => { __state = 3138; }
+                        3137 => { __state = 3140; }
+                        3138 => {
+                            if unsafe { (*db).n_deferred_cons } == 0 as i64 &&
+                                    unsafe { (*db).n_deferred_imm_cons } == 0 as i64 {
+                                __state = 3139;
+                            } else { __state = 3135; }
+                        }
+                        3139 => { __state = 4; }
+                        3140 => {
+                            if unsafe { (*p).n_fk_constraint } == 0 as i64 &&
+                                    unsafe { (*db).n_deferred_imm_cons } == 0 as i64 {
+                                __state = 3141;
+                            } else { __state = 3135; }
+                        }
+                        3141 => { __state = 4; }
+                        3142 => { __state = 210; }
+                        3143 => {
+                            if !(unsafe { (*p).p_frame }).is_null() {
+                                __state = 3145;
+                            } else { __state = 3146; }
+                        }
+                        3144 => { { let _ = 0; }; __state = 3151; }
+                        3145 => {
+                            p_frame_4 = unsafe { (*p).p_frame };
+                            __state = 3148;
+                        }
+                        3146 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3144;
+                        }
+                        3147 => {
+                            p_in1 =
+                                unsafe {
+                                    unsafe {
+                                        (*p_frame_4).a_mem.offset(unsafe { (*p_op).p1 } as isize)
+                                    }
+                                };
+                            __state = 3144;
+                        }
+                        3148 => {
+                            if !(unsafe { (*p_frame_4).p_parent }).is_null() {
+                                __state = 3149;
+                            } else { __state = 3147; }
+                        }
+                        3149 => { __state = 3150; }
+                        3150 => {
+                            p_frame_4 = unsafe { (*p_frame_4).p_parent };
+                            __state = 3148;
+                        }
+                        3151 => {
+                            unsafe { sqlite3_vdbe_mem_integerify(p_in1) };
+                            __state = 3152;
+                        }
+                        3152 => {
+                            p_in2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 3153;
+                        }
+                        3153 => {
+                            unsafe { sqlite3_vdbe_mem_integerify(p_in2) };
+                            __state = 3154;
+                        }
+                        3154 => {
+                            if unsafe { (*p_in1).u.i } < unsafe { (*p_in2).u.i } {
+                                __state = 3156;
+                            } else { __state = 3155; }
+                        }
+                        3155 => { __state = 60; }
+                        3156 => {
+                            unsafe { (*p_in1).u.i = unsafe { (*p_in2).u.i } };
+                            __state = 3155;
+                        }
+                        3157 => { __state = 211; }
+                        3158 => { { let _ = 0; }; __state = 3159; }
+                        3159 => { __state = 3160; }
+                        3160 => {
+                            if unsafe { (*p_in1).u.i } > 0 as i64 {
+                                __state = 3162;
+                            } else { __state = 3161; }
+                        }
+                        3161 => { __state = 60; }
+                        3162 => {
+                            unsafe { (*p_in1).u.i -= unsafe { (*p_op).p3 } as i64 };
+                            __state = 3163;
+                        }
+                        3163 => { __state = 4; }
+                        3164 => { __state = 212; }
+                        3165 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3166;
+                        }
+                        3166 => {
+                            p_in3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3167;
+                        }
+                        3167 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3168;
+                        }
+                        3168 => { { let _ = 0; }; __state = 3169; }
+                        3169 => { { let _ = 0; }; __state = 3170; }
+                        3170 => { x__3 = unsafe { (*p_in1).u.i }; __state = 3171; }
+                        3171 => {
+                            if x__3 <= 0 as i64 ||
+                                    unsafe {
+                                            sqlite3_add_int64(&mut x__3,
+                                                if unsafe { (*p_in3).u.i } > 0 as i64 {
+                                                    unsafe { (*p_in3).u.i }
+                                                } else { 0 as i64 })
+                                        } != 0 {
+                                __state = 3173;
+                            } else { __state = 3174; }
+                        }
+                        3172 => { __state = 60; }
+                        3173 => {
+                            unsafe { (*p_out).u.i = -1 as i64 };
+                            __state = 3172;
+                        }
+                        3174 => { unsafe { (*p_out).u.i = x__3 }; __state = 3172; }
+                        3175 => { __state = 213; }
+                        3176 => { { let _ = 0; }; __state = 3177; }
+                        3177 => { __state = 3178; }
+                        3178 => {
+                            if unsafe { (*p_in1).u.i } != 0 {
+                                __state = 3180;
+                            } else { __state = 3179; }
+                        }
+                        3179 => { __state = 60; }
+                        3180 => {
+                            if unsafe { (*p_in1).u.i } > 0 as i64 {
+                                __state = 3182;
+                            } else { __state = 3181; }
+                        }
+                        3181 => { __state = 4; }
+                        3182 => {
+                            {
+                                let __p = unsafe { &mut (*p_in1).u.i };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 3181;
+                        }
+                        3183 => { __state = 214; }
+                        3184 => { { let _ = 0; }; __state = 3185; }
+                        3185 => {
+                            if unsafe { (*p_in1).u.i } >
+                                    -1 as i64 -
+                                        (4294967295u32 as i64 | (2147483647 as i64) << 32) {
+                                __state = 3187;
+                            } else { __state = 3186; }
+                        }
+                        3186 => { __state = 3188; }
+                        3187 => {
+                            {
+                                let __p = unsafe { &mut (*p_in1).u.i };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 3186;
+                        }
+                        3188 => {
+                            if unsafe { (*p_in1).u.i } == 0 as i64 {
+                                __state = 3190;
+                            } else { __state = 3189; }
+                        }
+                        3189 => { __state = 60; }
+                        3190 => { __state = 4; }
+                        3191 => { __state = 3219; }
+                        3192 => { __state = 3193; }
+                        3193 => { __state = 3194; }
+                        3194 => { { let _ = 0; }; __state = 3195; }
+                        3195 => {
+                            n__4 = unsafe { (*p_op).p5 } as i32;
+                            __state = 3196;
+                        }
+                        3196 => { { let _ = 0; }; __state = 3197; }
+                        3197 => { { let _ = 0; }; __state = 3198; }
+                        3198 => { { let _ = 0; }; __state = 3199; }
+                        3199 => {
+                            n_alloc =
+                                (core::mem::offset_of!(sqlite3_context, argv) as u64 +
+                                        n__4 as u64 *
+                                            core::mem::size_of::<*mut sqlite3_value>() as u64) as u64;
+                            __state = 3200;
+                        }
+                        3200 => {
+                            p_ctx =
+                                unsafe {
+                                        sqlite3_db_malloc_raw_nn(db,
+                                            n_alloc + core::mem::size_of::<Mem>() as u64)
+                                    } as *mut sqlite3_context;
+                            __state = 3201;
+                        }
+                        3201 => {
+                            if p_ctx == core::ptr::null_mut() {
+                                __state = 3203;
+                            } else { __state = 3202; }
+                        }
+                        3202 => {
+                            unsafe {
+                                (*p_ctx).p_out =
+                                    unsafe { (p_ctx as *mut u8).add(n_alloc as usize) } as
+                                        *mut Mem
+                            };
+                            __state = 3204;
+                        }
+                        3203 => { __state = 20; }
+                        3204 => { { let _ = 0; }; __state = 3205; }
+                        3205 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_init(unsafe { (*p_ctx).p_out }, db,
+                                    1 as u16)
+                            };
+                            __state = 3206;
+                        }
+                        3206 => {
+                            unsafe { (*p_ctx).p_mem = core::ptr::null_mut() };
+                            __state = 3207;
+                        }
+                        3207 => {
+                            unsafe { (*p_ctx).p_func = unsafe { (*p_op).p4.p_func } };
+                            __state = 3208;
+                        }
+                        3208 => {
+                            unsafe {
+                                (*p_ctx).i_op =
+                                    unsafe { p_op.offset_from(a_op) } as i64 as i32
+                            };
+                            __state = 3209;
+                        }
+                        3209 => { unsafe { (*p_ctx).p_vdbe = p }; __state = 3210; }
+                        3210 => {
+                            unsafe { (*p_ctx).skip_flag = 0 as u8 };
+                            __state = 3211;
+                        }
+                        3211 => {
+                            unsafe { (*p_ctx).is_error = 0 };
+                            __state = 3212;
+                        }
+                        3212 => {
+                            unsafe { (*p_ctx).enc = encoding };
+                            __state = 3213;
+                        }
+                        3213 => {
+                            unsafe { (*p_ctx).argc = n__4 as u16 };
+                            __state = 3214;
+                        }
+                        3214 => {
+                            unsafe { (*p_op).p4type = -16 as i8 };
+                            __state = 3215;
+                        }
+                        3215 => {
+                            unsafe { (*p_op).p4.p_ctx = p_ctx };
+                            __state = 3216;
+                        }
+                        3216 => { { let _ = 0; }; __state = 3217; }
+                        3217 => {
+                            unsafe { (*p_op).opcode = 165 as u8 };
+                            __state = 3218;
+                        }
+                        3218 => { __state = 3191; }
+                        3219 => { __state = 216; }
+                        3220 => { __state = 217; }
+                        3221 => { __state = 3222; }
+                        3222 => { __state = 3223; }
+                        3223 => { { let _ = 0; }; __state = 3224; }
+                        3224 => {
+                            p_ctx_1 = unsafe { (*p_op).p4.p_ctx };
+                            __state = 3225;
+                        }
+                        3225 => {
+                            p_mem_2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3226;
+                        }
+                        3226 => {
+                            if unsafe { (*p_ctx_1).p_mem } != p_mem_2 {
+                                __state = 3228;
+                            } else { __state = 3227; }
+                        }
+                        3227 => {
+                            {
+                                let __p = unsafe { &mut (*p_mem_2).n };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3233;
+                        }
+                        3228 => {
+                            unsafe { (*p_ctx_1).p_mem = p_mem_2 };
+                            __state = 3229;
+                        }
+                        3229 => {
+                            i__4 = unsafe { (*p_ctx_1).argc } as i32 - 1;
+                            __state = 3230;
+                        }
+                        3230 => {
+                            if i__4 >= 0 { __state = 3231; } else { __state = 3227; }
+                        }
+                        3231 => {
+                            unsafe {
+                                *(unsafe { (*p_ctx_1).argv.as_ptr() } as
+                                                *mut *mut sqlite3_value).offset(i__4 as isize) =
+                                    unsafe {
+                                            a_mem.offset((unsafe { (*p_op).p2 } + i__4) as isize)
+                                        } as *mut sqlite3_value
+                            };
+                            __state = 3232;
+                        }
+                        3232 => {
+                            { let __p = &mut i__4; let __t = *__p; *__p -= 1; __t };
+                            __state = 3230;
+                        }
+                        3233 => { { let _ = 0; }; __state = 3234; }
+                        3234 => { { let _ = 0; }; __state = 3235; }
+                        3235 => { { let _ = 0; }; __state = 3236; }
+                        3236 => {
+                            if unsafe { (*p_op).p1 } != 0 {
+                                __state = 3238;
+                            } else { __state = 3239; }
+                        }
+                        3237 => {
+                            if unsafe { (*p_ctx_1).is_error } != 0 {
+                                __state = 3241;
+                            } else { __state = 3240; }
+                        }
+                        3238 => {
+                            unsafe {
+                                (unsafe {
+                                        (*unsafe { (*p_ctx_1).p_func }).x_inverse.unwrap()
+                                    })(p_ctx_1, unsafe { (*p_ctx_1).argc } as i32,
+                                    unsafe { (*p_ctx_1).argv.as_ptr() } as
+                                        *mut *mut sqlite3_value)
+                            };
+                            __state = 3237;
+                        }
+                        3239 => {
+                            unsafe {
+                                (unsafe {
+                                        (*unsafe { (*p_ctx_1).p_func }).x_s_func.unwrap()
+                                    })(p_ctx_1, unsafe { (*p_ctx_1).argc } as i32,
+                                    unsafe { (*p_ctx_1).argv.as_ptr() } as
+                                        *mut *mut sqlite3_value)
+                            };
+                            __state = 3237;
+                        }
+                        3240 => { { let _ = 0; }; __state = 3255; }
+                        3241 => {
+                            if unsafe { (*p_ctx_1).is_error } > 0 {
+                                __state = 3243;
+                            } else { __state = 3242; }
+                        }
+                        3242 => {
+                            if unsafe { (*p_ctx_1).skip_flag } != 0 {
+                                __state = 3246;
+                            } else { __state = 3245; }
+                        }
+                        3243 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe {
+                                        sqlite3_value_text(unsafe { (*p_ctx_1).p_out } as
+                                                *mut sqlite3_value)
+                                    })
+                            };
+                            __state = 3244;
+                        }
+                        3244 => {
+                            rc = unsafe { (*p_ctx_1).is_error };
+                            __state = 3242;
+                        }
+                        3245 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_release(unsafe { (*p_ctx_1).p_out })
+                            };
+                            __state = 3251;
+                        }
+                        3246 => { { let _ = 0; }; __state = 3247; }
+                        3247 => {
+                            i__4 = unsafe { (*p_op.offset(-1 as isize)).p1 };
+                            __state = 3248;
+                        }
+                        3248 => {
+                            if i__4 != 0 { __state = 3250; } else { __state = 3249; }
+                        }
+                        3249 => {
+                            unsafe { (*p_ctx_1).skip_flag = 0 as u8 };
+                            __state = 3245;
+                        }
+                        3250 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(unsafe {
+                                        &mut *a_mem.offset(i__4 as isize)
+                                    }, 1 as i64)
+                            };
+                            __state = 3249;
+                        }
+                        3251 => {
+                            unsafe { (*unsafe { (*p_ctx_1).p_out }).flags = 1 as u16 };
+                            __state = 3252;
+                        }
+                        3252 => {
+                            unsafe { (*p_ctx_1).is_error = 0 };
+                            __state = 3253;
+                        }
+                        3253 => {
+                            if rc != 0 { __state = 3254; } else { __state = 3240; }
+                        }
+                        3254 => { __state = 17; }
+                        3255 => { { let _ = 0; }; __state = 3256; }
+                        3256 => { __state = 60; }
+                        3257 => { __state = 3274; }
+                        3258 => { { let _ = 0; }; __state = 3259; }
+                        3259 => { { let _ = 0; }; __state = 3260; }
+                        3260 => {
+                            p_mem_3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3261;
+                        }
+                        3261 => { { let _ = 0; }; __state = 3262; }
+                        3262 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 3264;
+                            } else { __state = 3265; }
+                        }
+                        3263 => {
+                            if rc != 0 { __state = 3269; } else { __state = 3268; }
+                        }
+                        3264 => { __state = 3266; }
+                        3265 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_finalize(p_mem_3,
+                                        unsafe { (*p_op).p4.p_func })
+                                };
+                            __state = 3263;
+                        }
+                        3266 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_agg_value(p_mem_3,
+                                        unsafe {
+                                            &mut *a_mem.offset(unsafe { (*p_op).p3 } as isize)
+                                        }, unsafe { (*p_op).p4.p_func })
+                                };
+                            __state = 3267;
+                        }
+                        3267 => {
+                            p_mem_3 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3263;
+                        }
+                        3268 => {
+                            unsafe {
+                                sqlite3_vdbe_change_encoding(p_mem_3, encoding as i32)
+                            };
+                            __state = 3271;
+                        }
+                        3269 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe {
+                                        sqlite3_value_text(p_mem_3 as *mut sqlite3_value)
+                                    })
+                            };
+                            __state = 3270;
+                        }
+                        3270 => { __state = 17; }
+                        3271 => { __state = 3272; }
+                        3272 => { __state = 3273; }
+                        3273 => { __state = 60; }
+                        3274 => { __state = 219; }
+                        3275 => { __state = 3293; }
+                        3276 => { __state = 3277; }
+                        3277 => { __state = 3278; }
+                        3278 => { { let _ = 0; }; __state = 3279; }
+                        3279 => { a_res[0 as usize] = 0; __state = 3280; }
+                        3280 => {
+                            a_res[1 as usize] =
+                                { a_res[2 as usize] = -1; a_res[2 as usize] };
+                            __state = 3281;
+                        }
+                        3281 => { { let _ = 0; }; __state = 3282; }
+                        3282 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_checkpoint(db, unsafe { (*p_op).p1 },
+                                        unsafe { (*p_op).p2 }, &mut a_res[1 as usize],
+                                        &mut a_res[2 as usize])
+                                };
+                            __state = 3283;
+                        }
+                        3283 => {
+                            if rc != 0 { __state = 3285; } else { __state = 3284; }
+                        }
+                        3284 => {
+                            {
+                                i__5 = 0;
+                                p_mem_4 =
+                                    unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) }
+                            };
+                            __state = 3290;
+                        }
+                        3285 => {
+                            if rc != 5 { __state = 3287; } else { __state = 3286; }
+                        }
+                        3286 => { rc = 0; __state = 3288; }
+                        3287 => { __state = 17; }
+                        3288 => { a_res[0 as usize] = 1; __state = 3284; }
+                        3289 => { __state = 60; }
+                        3290 => {
+                            if i__5 < 3 { __state = 3291; } else { __state = 3289; }
+                        }
+                        3291 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(p_mem_4,
+                                    a_res[i__5 as usize] as i64)
+                            };
+                            __state = 3292;
+                        }
+                        3292 => {
+                            {
+                                { let __p = &mut i__5; let __t = *__p; *__p += 1; __t };
+                                {
+                                    let __p = &mut p_mem_4;
+                                    let __t = *__p;
+                                    *__p = unsafe { (*__p).offset(1) };
+                                    __t
+                                }
+                            };
+                            __state = 3290;
+                        }
+                        3293 => { __state = 220; }
+                        3294 => { __state = 3340; }
+                        3295 => { __state = 3296; }
+                        3296 => { __state = 3297; }
+                        3297 => { __state = 3298; }
+                        3298 => { __state = 3299; }
+                        3299 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3300;
+                        }
+                        3300 => { e_new = unsafe { (*p_op).p3 }; __state = 3301; }
+                        3301 => { { let _ = 0; }; __state = 3302; }
+                        3302 => { { let _ = 0; }; __state = 3303; }
+                        3303 => { { let _ = 0; }; __state = 3304; }
+                        3304 => {
+                            p_bt_1 =
+                                unsafe {
+                                    (*unsafe {
+                                                (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                            }).p_bt
+                                };
+                            __state = 3305;
+                        }
+                        3305 => {
+                            p_pager = unsafe { sqlite3_btree_pager(p_bt_1) };
+                            __state = 3306;
+                        }
+                        3306 => {
+                            e_old = unsafe { sqlite3_pager_get_journal_mode(p_pager) };
+                            __state = 3307;
+                        }
+                        3307 => {
+                            if e_new == -1 { __state = 3309; } else { __state = 3308; }
+                        }
+                        3308 => { { let _ = 0; }; __state = 3310; }
+                        3309 => { e_new = e_old; __state = 3308; }
+                        3310 => {
+                            if (unsafe {
+                                                sqlite3_pager_ok_to_change_journal_mode(p_pager)
+                                            } == 0) as i32 != 0 {
+                                __state = 3312;
+                            } else { __state = 3311; }
+                        }
+                        3311 => {
+                            z_filename =
+                                unsafe {
+                                    sqlite3_pager_filename(p_pager as *const Pager, 1)
+                                };
+                            __state = 3313;
+                        }
+                        3312 => { e_new = e_old; __state = 3311; }
+                        3313 => {
+                            if e_new == 5 &&
+                                    (unsafe { sqlite3_strlen30(z_filename) } == 0 ||
+                                        (unsafe { sqlite3_pager_wal_supported(p_pager) } == 0) as
+                                                i32 != 0) {
+                                __state = 3315;
+                            } else { __state = 3314; }
+                        }
+                        3314 => {
+                            if e_new != e_old && (e_old == 5 || e_new == 5) {
+                                __state = 3317;
+                            } else { __state = 3316; }
+                        }
+                        3315 => { e_new = e_old; __state = 3314; }
+                        3316 => {
+                            if rc != 0 { __state = 3331; } else { __state = 3330; }
+                        }
+                        3317 => {
+                            if (unsafe { (*db).auto_commit } == 0) as i32 != 0 ||
+                                    unsafe { (*db).n_vdbe_read } > 1 {
+                                __state = 3318;
+                            } else { __state = 3319; }
+                        }
+                        3318 => { rc = 1; __state = 3320; }
+                        3319 => {
+                            if e_old == 5 { __state = 3323; } else { __state = 3324; }
+                        }
+                        3320 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"cannot change %s wal mode from within a transaction".as_ptr()
+                                            as *mut i8 as *const i8,
+                                    if e_new == 5 {
+                                        c"into".as_ptr() as *mut i8
+                                    } else { c"out of".as_ptr() as *mut i8 })
+                            };
+                            __state = 3321;
+                        }
+                        3321 => { __state = 17; }
+                        3322 => { { let _ = 0; }; __state = 3328; }
+                        3323 => {
+                            rc = unsafe { sqlite3_pager_close_wal(p_pager, db) };
+                            __state = 3325;
+                        }
+                        3324 => {
+                            if e_old == 4 { __state = 3327; } else { __state = 3322; }
+                        }
+                        3325 => {
+                            if rc == 0 { __state = 3326; } else { __state = 3322; }
+                        }
+                        3326 => {
+                            unsafe { sqlite3_pager_set_journal_mode(p_pager, e_new) };
+                            __state = 3322;
+                        }
+                        3327 => {
+                            unsafe { sqlite3_pager_set_journal_mode(p_pager, 2) };
+                            __state = 3322;
+                        }
+                        3328 => {
+                            if rc == 0 { __state = 3329; } else { __state = 3316; }
+                        }
+                        3329 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_set_version(p_bt_1,
+                                        if e_new == 5 { 2 } else { 1 })
+                                };
+                            __state = 3316;
+                        }
+                        3330 => {
+                            e_new =
+                                unsafe { sqlite3_pager_set_journal_mode(p_pager, e_new) };
+                            __state = 3332;
+                        }
+                        3331 => { e_new = e_old; __state = 3330; }
+                        3332 => {
+                            unsafe { (*p_out).flags = (2 | 8192 | 512) as u16 };
+                            __state = 3333;
+                        }
+                        3333 => {
+                            unsafe {
+                                (*p_out).z =
+                                    unsafe { sqlite3_journal_modename(e_new) } as *mut i8
+                            };
+                            __state = 3334;
+                        }
+                        3334 => {
+                            unsafe {
+                                (*p_out).n =
+                                    unsafe {
+                                        sqlite3_strlen30(unsafe { (*p_out).z } as *const i8)
+                                    }
+                            };
+                            __state = 3335;
+                        }
+                        3335 => {
+                            unsafe { (*p_out).enc = 1 as u8 };
+                            __state = 3336;
+                        }
+                        3336 => {
+                            unsafe {
+                                sqlite3_vdbe_change_encoding(p_out, encoding as i32)
+                            };
+                            __state = 3337;
+                        }
+                        3337 => {
+                            if rc != 0 { __state = 3339; } else { __state = 3338; }
+                        }
+                        3338 => { __state = 60; }
+                        3339 => { __state = 17; }
+                        3340 => { __state = 221; }
+                        3341 => { __state = 222; }
+                        3342 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_run_vacuum(unsafe { &mut (*p).z_err_msg }, db,
+                                        unsafe { (*p_op).p1 },
+                                        if unsafe { (*p_op).p2 } != 0 {
+                                                unsafe {
+                                                    &mut *a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                                }
+                                            } else { core::ptr::null_mut() } as *mut sqlite3_value)
+                                };
+                            __state = 3343;
+                        }
+                        3343 => {
+                            if rc != 0 { __state = 3345; } else { __state = 3344; }
+                        }
+                        3344 => { __state = 60; }
+                        3345 => { __state = 17; }
+                        3346 => { __state = 223; }
+                        3347 => { { let _ = 0; }; __state = 3348; }
+                        3348 => { { let _ = 0; }; __state = 3349; }
+                        3349 => { { let _ = 0; }; __state = 3350; }
+                        3350 => {
+                            p_bt_2 =
+                                unsafe {
+                                    (*unsafe {
+                                                (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                            }).p_bt
+                                };
+                            __state = 3351;
+                        }
+                        3351 => {
+                            rc = unsafe { sqlite3_btree_incr_vacuum(p_bt_2) };
+                            __state = 3352;
+                        }
+                        3352 => { __state = 3353; }
+                        3353 => {
+                            if rc != 0 { __state = 3355; } else { __state = 3354; }
+                        }
+                        3354 => { __state = 60; }
+                        3355 => {
+                            if rc != 101 { __state = 3357; } else { __state = 3356; }
+                        }
+                        3356 => { rc = 0; __state = 3358; }
+                        3357 => { __state = 17; }
+                        3358 => { __state = 4; }
+                        3359 => { __state = 224; }
+                        3360 => {
+                            if (unsafe { (*p_op).p1 } == 0) as i32 != 0 {
+                                __state = 3362;
+                            } else { __state = 3363; }
+                        }
+                        3361 => { __state = 60; }
+                        3362 => {
+                            unsafe {
+                                sqlite3_expire_prepared_statements(db,
+                                    unsafe { (*p_op).p2 })
+                            };
+                            __state = 3361;
+                        }
+                        3363 => {
+                            unsafe {
+                                (*p).set_expired((unsafe { (*p_op).p2 } + 1) as bft as u32)
+                            };
+                            __state = 3361;
+                        }
+                        3364 => { __state = 225; }
+                        3365 => { { let _ = 0; }; __state = 3366; }
+                        3366 => {
+                            p_c_31 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3367;
+                        }
+                        3367 => { { let _ = 0; }; __state = 3368; }
+                        3368 => { { let _ = 0; }; __state = 3369; }
+                        3369 => {
+                            unsafe {
+                                sqlite3_btree_cursor_pin(unsafe { (*p_c_31).uc.p_cursor })
+                            };
+                            __state = 3370;
+                        }
+                        3370 => { __state = 60; }
+                        3371 => { __state = 226; }
+                        3372 => { { let _ = 0; }; __state = 3373; }
+                        3373 => {
+                            p_c_32 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3374;
+                        }
+                        3374 => { { let _ = 0; }; __state = 3375; }
+                        3375 => { { let _ = 0; }; __state = 3376; }
+                        3376 => {
+                            unsafe {
+                                sqlite3_btree_cursor_unpin(unsafe { (*p_c_32).uc.p_cursor })
+                            };
+                            __state = 3377;
+                        }
+                        3377 => { __state = 60; }
+                        3378 => { __state = 227; }
+                        3379 => {
+                            if is_write_lock != 0 ||
+                                    0 as u64 == unsafe { (*db).flags } & (4 as u64) << 32 {
+                                __state = 3381;
+                            } else { __state = 3380; }
+                        }
+                        3380 => { __state = 60; }
+                        3381 => { p1__3 = unsafe { (*p_op).p1 }; __state = 3382; }
+                        3382 => { { let _ = 0; }; __state = 3383; }
+                        3383 => { { let _ = 0; }; __state = 3384; }
+                        3384 => { { let _ = 0; }; __state = 3385; }
+                        3385 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_btree_lock_table(unsafe {
+                                            (*unsafe { (*db).a_db.offset(p1__3 as isize) }).p_bt
+                                        }, unsafe { (*p_op).p2 }, is_write_lock)
+                                };
+                            __state = 3386;
+                        }
+                        3386 => {
+                            if rc != 0 { __state = 3387; } else { __state = 3380; }
+                        }
+                        3387 => {
+                            if rc & 255 == 6 {
+                                __state = 3389;
+                            } else { __state = 3388; }
+                        }
+                        3388 => { __state = 17; }
+                        3389 => {
+                            z__1 = unsafe { (*p_op).p4.z } as *const i8;
+                            __state = 3390;
+                        }
+                        3390 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"database table is locked: %s".as_ptr() as *mut i8 as
+                                        *const i8, z__1)
+                            };
+                            __state = 3388;
+                        }
+                        3391 => { __state = 228; }
+                        3392 => {
+                            p_v_tab = unsafe { (*p_op).p4.p_vtab };
+                            __state = 3393;
+                        }
+                        3393 => {
+                            rc = unsafe { sqlite3_vtab_begin(db, p_v_tab) };
+                            __state = 3394;
+                        }
+                        3394 => {
+                            if !(p_v_tab).is_null() {
+                                __state = 3396;
+                            } else { __state = 3395; }
+                        }
+                        3395 => {
+                            if rc != 0 { __state = 3398; } else { __state = 3397; }
+                        }
+                        3396 => {
+                            unsafe {
+                                sqlite3_vtab_import_errmsg(p, unsafe { (*p_v_tab).p_vtab })
+                            };
+                            __state = 3395;
+                        }
+                        3397 => { __state = 60; }
+                        3398 => { __state = 17; }
+                        3399 => { __state = 229; }
+                        3400 => { __state = 3401; }
+                        3401 => {
+                            unsafe {
+                                memset(&raw mut s_mem_1 as *mut (), 0,
+                                    core::mem::size_of::<Mem>() as u64)
+                            };
+                            __state = 3402;
+                        }
+                        3402 => { s_mem_1.db = db; __state = 3403; }
+                        3403 => { { let _ = 0; }; __state = 3404; }
+                        3404 => { { let _ = 0; }; __state = 3405; }
+                        3405 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vdbe_mem_copy(&mut s_mem_1,
+                                        unsafe {
+                                                &raw mut *a_mem.offset(unsafe { (*p_op).p2 } as isize)
+                                            } as *const Mem)
+                                };
+                            __state = 3406;
+                        }
+                        3406 => { { let _ = 0; }; __state = 3407; }
+                        3407 => {
+                            z_tab =
+                                unsafe {
+                                        sqlite3_value_text(&raw mut s_mem_1 as *mut sqlite3_value)
+                                    } as *const i8;
+                            __state = 3408;
+                        }
+                        3408 => { { let _ = 0; }; __state = 3409; }
+                        3409 => {
+                            if !(z_tab).is_null() {
+                                __state = 3411;
+                            } else { __state = 3410; }
+                        }
+                        3410 => {
+                            unsafe { sqlite3_vdbe_mem_release(&mut s_mem_1) };
+                            __state = 3412;
+                        }
+                        3411 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vtab_call_create(db, unsafe { (*p_op).p1 }, z_tab,
+                                        unsafe { &mut (*p).z_err_msg })
+                                };
+                            __state = 3410;
+                        }
+                        3412 => {
+                            if rc != 0 { __state = 3414; } else { __state = 3413; }
+                        }
+                        3413 => { __state = 60; }
+                        3414 => { __state = 17; }
+                        3415 => { __state = 230; }
+                        3416 => {
+                            rc =
+                                unsafe {
+                                    sqlite3_vtab_call_destroy(db, unsafe { (*p_op).p1 },
+                                        unsafe { (*p_op).p4.z } as *const i8)
+                                };
+                            __state = 3417;
+                        }
+                        3417 => {
+                            {
+                                let __p = unsafe { &mut (*db).n_v_destroy };
+                                let __t = *__p;
+                                *__p -= 1;
+                                __t
+                            };
+                            __state = 3418;
+                        }
+                        3418 => { { let _ = 0; }; __state = 3419; }
+                        3419 => {
+                            if rc != 0 { __state = 3421; } else { __state = 3420; }
+                        }
+                        3420 => { __state = 60; }
+                        3421 => { __state = 17; }
+                        3422 => { __state = 231; }
+                        3423 => { __state = 3424; }
+                        3424 => { __state = 3425; }
+                        3425 => { __state = 3426; }
+                        3426 => { { let _ = 0; }; __state = 3427; }
+                        3427 => {
+                            p_cur_3 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3428;
+                        }
+                        3428 => {
+                            if p_cur_3 != core::ptr::null_mut() &&
+                                        unsafe { (*p_cur_3).e_cur_type } as i32 == 2 &&
+                                    unsafe { (*unsafe { (*p_cur_3).uc.p_v_cur }).p_vtab } ==
+                                        unsafe { (*unsafe { (*p_op).p4.p_vtab }).p_vtab } {
+                                __state = 3430;
+                            } else { __state = 3429; }
+                        }
+                        3429 => { p_v_cur = core::ptr::null_mut(); __state = 3431; }
+                        3430 => { __state = 60; }
+                        3431 => {
+                            p_vtab_1 =
+                                unsafe { (*unsafe { (*p_op).p4.p_vtab }).p_vtab };
+                            __state = 3432;
+                        }
+                        3432 => {
+                            if p_vtab_1 == core::ptr::null_mut() ||
+                                    unsafe { (*p_vtab_1).p_module } == core::ptr::null() {
+                                __state = 3434;
+                            } else { __state = 3433; }
+                        }
+                        3433 => {
+                            p_module_1 = unsafe { (*p_vtab_1).p_module };
+                            __state = 3436;
+                        }
+                        3434 => { rc = 6; __state = 3435; }
+                        3435 => { __state = 17; }
+                        3436 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_1).x_open.unwrap()
+                                        })(p_vtab_1, &mut p_v_cur)
+                                };
+                            __state = 3437;
+                        }
+                        3437 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_1) };
+                            __state = 3438;
+                        }
+                        3438 => {
+                            if rc != 0 { __state = 3440; } else { __state = 3439; }
+                        }
+                        3439 => {
+                            unsafe { (*p_v_cur).p_vtab = p_vtab_1 };
+                            __state = 3441;
+                        }
+                        3440 => { __state = 17; }
+                        3441 => {
+                            p_cur_3 =
+                                allocate_cursor(p, unsafe { (*p_op).p1 }, 0, 2 as u8);
+                            __state = 3442;
+                        }
+                        3442 => {
+                            if !(p_cur_3).is_null() {
+                                __state = 3444;
+                            } else { __state = 3445; }
+                        }
+                        3443 => { __state = 60; }
+                        3444 => {
+                            unsafe { (*p_cur_3).uc.p_v_cur = p_v_cur };
+                            __state = 3446;
+                        }
+                        3445 => { { let _ = 0; }; __state = 3447; }
+                        3446 => {
+                            {
+                                let __p = unsafe { &mut (*p_vtab_1).n_ref };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3443;
+                        }
+                        3447 => {
+                            unsafe {
+                                (unsafe { (*p_module_1).x_close.unwrap() })(p_v_cur)
+                            };
+                            __state = 3448;
+                        }
+                        3448 => { __state = 20; }
+                        3449 => { __state = 232; }
+                        3450 => { __state = 3451; }
+                        3451 => { __state = 3452; }
+                        3452 => { z_err_2 = core::ptr::null_mut(); __state = 3453; }
+                        3453 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 3454;
+                        }
+                        3454 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 3455;
+                        }
+                        3455 => { { let _ = 0; }; __state = 3456; }
+                        3456 => {
+                            p_tab_3 = unsafe { (*p_op).p4.p_tab };
+                            __state = 3457;
+                        }
+                        3457 => { { let _ = 0; }; __state = 3458; }
+                        3458 => { { let _ = 0; }; __state = 3459; }
+                        3459 => { { let _ = 0; }; __state = 3460; }
+                        3460 => {
+                            if unsafe { (*p_tab_3).u.vtab.p } == core::ptr::null_mut() {
+                                __state = 3462;
+                            } else { __state = 3461; }
+                        }
+                        3461 => {
+                            p_vtab_2 =
+                                unsafe { (*unsafe { (*p_tab_3).u.vtab.p }).p_vtab };
+                            __state = 3463;
+                        }
+                        3462 => { __state = 60; }
+                        3463 => { { let _ = 0; }; __state = 3464; }
+                        3464 => {
+                            p_module_2 = unsafe { (*p_vtab_2).p_module };
+                            __state = 3465;
+                        }
+                        3465 => { { let _ = 0; }; __state = 3466; }
+                        3466 => { { let _ = 0; }; __state = 3467; }
+                        3467 => { { let _ = 0; }; __state = 3468; }
+                        3468 => {
+                            unsafe {
+                                sqlite3_vtab_lock(unsafe { (*p_tab_3).u.vtab.p })
+                            };
+                            __state = 3469;
+                        }
+                        3469 => { { let _ = 0; }; __state = 3470; }
+                        3470 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_2).x_integrity.unwrap()
+                                        })(p_vtab_2,
+                                        unsafe {
+                                                (*unsafe {
+                                                            (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                                        }).z_db_s_name
+                                            } as *const i8, unsafe { (*p_tab_3).z_name } as *const i8,
+                                        unsafe { (*p_op).p3 }, &mut z_err_2)
+                                };
+                            __state = 3471;
+                        }
+                        3471 => {
+                            unsafe {
+                                sqlite3_vtab_unlock(unsafe { (*p_tab_3).u.vtab.p })
+                            };
+                            __state = 3472;
+                        }
+                        3472 => {
+                            if rc != 0 { __state = 3474; } else { __state = 3473; }
+                        }
+                        3473 => {
+                            if !(z_err_2).is_null() {
+                                __state = 3477;
+                            } else { __state = 3476; }
+                        }
+                        3474 => {
+                            unsafe { sqlite3_free(z_err_2 as *mut ()) };
+                            __state = 3475;
+                        }
+                        3475 => { __state = 17; }
+                        3476 => { __state = 60; }
+                        3477 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_str(p_out, z_err_2 as *const i8,
+                                    -1 as i64, 1 as u8, Some(sqlite3_free))
+                            };
+                            __state = 3476;
+                        }
+                        3478 => { __state = 233; }
+                        3479 => { __state = 3480; }
+                        3480 => {
+                            p_c_33 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3481;
+                        }
+                        3481 => {
+                            p_rhs =
+                                unsafe {
+                                        sqlite3_malloc64(core::mem::size_of::<ValueList>() as
+                                                sqlite3_uint64)
+                                    } as *mut ValueList;
+                            __state = 3482;
+                        }
+                        3482 => {
+                            if p_rhs == core::ptr::null_mut() {
+                                __state = 3484;
+                            } else { __state = 3483; }
+                        }
+                        3483 => {
+                            unsafe {
+                                (*p_rhs).p_csr = unsafe { (*p_c_33).uc.p_cursor }
+                            };
+                            __state = 3485;
+                        }
+                        3484 => { __state = 20; }
+                        3485 => {
+                            unsafe {
+                                (*p_rhs).p_out =
+                                    unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) } as
+                                        *mut sqlite3_value
+                            };
+                            __state = 3486;
+                        }
+                        3486 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3487;
+                        }
+                        3487 => {
+                            unsafe { (*p_out).flags = 1 as u16 };
+                            __state = 3488;
+                        }
+                        3488 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_pointer(p_out, p_rhs as *mut (),
+                                    c"ValueList".as_ptr() as *mut i8 as *const i8,
+                                    Some(sqlite3_vdbe_value_list_free))
+                            };
+                            __state = 3489;
+                        }
+                        3489 => { __state = 60; }
+                        3490 => { __state = 234; }
+                        3491 => { __state = 3492; }
+                        3492 => { __state = 3493; }
+                        3493 => { __state = 3494; }
+                        3494 => { __state = 3495; }
+                        3495 => { __state = 3496; }
+                        3496 => { __state = 3497; }
+                        3497 => { __state = 3498; }
+                        3498 => { __state = 3499; }
+                        3499 => { __state = 3500; }
+                        3500 => { __state = 3501; }
+                        3501 => {
+                            p_query =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3502;
+                        }
+                        3502 => {
+                            p_argc = unsafe { p_query.offset(1 as isize) };
+                            __state = 3503;
+                        }
+                        3503 => {
+                            p_cur_4 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3504;
+                        }
+                        3504 => { { let _ = 0; }; __state = 3505; }
+                        3505 => { __state = 3506; }
+                        3506 => { { let _ = 0; }; __state = 3507; }
+                        3507 => { { let _ = 0; }; __state = 3508; }
+                        3508 => {
+                            p_v_cur_1 = unsafe { (*p_cur_4).uc.p_v_cur };
+                            __state = 3509;
+                        }
+                        3509 => {
+                            p_vtab_3 = unsafe { (*p_v_cur_1).p_vtab };
+                            __state = 3510;
+                        }
+                        3510 => {
+                            p_module_3 = unsafe { (*p_vtab_3).p_module };
+                            __state = 3511;
+                        }
+                        3511 => { { let _ = 0; }; __state = 3512; }
+                        3512 => {
+                            n_arg = unsafe { (*p_argc).u.i } as i32;
+                            __state = 3513;
+                        }
+                        3513 => {
+                            i_query = unsafe { (*p_query).u.i } as i32;
+                            __state = 3514;
+                        }
+                        3514 => { ap_arg = unsafe { (*p).ap_arg }; __state = 3515; }
+                        3515 => { { let _ = 0; }; __state = 3516; }
+                        3516 => { i__6 = 0; __state = 3518; }
+                        3517 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_3).x_filter.unwrap()
+                                        })(p_v_cur_1, i_query, unsafe { (*p_op).p4.z } as *const i8,
+                                        n_arg, ap_arg as *mut *mut sqlite3_value)
+                                };
+                            __state = 3521;
+                        }
+                        3518 => {
+                            if i__6 < n_arg { __state = 3519; } else { __state = 3517; }
+                        }
+                        3519 => {
+                            unsafe {
+                                *ap_arg.offset(i__6 as isize) =
+                                    unsafe { p_argc.offset((i__6 + 1) as isize) }
+                            };
+                            __state = 3520;
+                        }
+                        3520 => {
+                            { let __p = &mut i__6; let __t = *__p; *__p += 1; __t };
+                            __state = 3518;
+                        }
+                        3521 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_3) };
+                            __state = 3522;
+                        }
+                        3522 => {
+                            if rc != 0 { __state = 3524; } else { __state = 3523; }
+                        }
+                        3523 => {
+                            res__13 =
+                                unsafe {
+                                    (unsafe { (*p_module_3).x_eof.unwrap() })(p_v_cur_1)
+                                };
+                            __state = 3525;
+                        }
+                        3524 => { __state = 17; }
+                        3525 => {
+                            unsafe { (*p_cur_4).null_row = 0 as u8 };
+                            __state = 3526;
+                        }
+                        3526 => { __state = 3527; }
+                        3527 => {
+                            if res__13 != 0 { __state = 3529; } else { __state = 3528; }
+                        }
+                        3528 => { __state = 60; }
+                        3529 => { __state = 4; }
+                        3530 => { __state = 235; }
+                        3531 => { __state = 3532; }
+                        3532 => { __state = 3533; }
+                        3533 => { __state = 3534; }
+                        3534 => { __state = 3535; }
+                        3535 => {
+                            p_cur_5 =
+                                unsafe {
+                                        *unsafe {
+                                                (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                            }
+                                    } as *const VdbeCursor;
+                            __state = 3536;
+                        }
+                        3536 => { { let _ = 0; }; __state = 3537; }
+                        3537 => { { let _ = 0; }; __state = 3538; }
+                        3538 => {
+                            p_dest_2 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3539;
+                        }
+                        3539 => { __state = 3540; }
+                        3540 => {
+                            if unsafe { (*p_cur_5).null_row } != 0 {
+                                __state = 3542;
+                            } else { __state = 3541; }
+                        }
+                        3541 => { { let _ = 0; }; __state = 3544; }
+                        3542 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_dest_2) };
+                            __state = 3543;
+                        }
+                        3543 => { __state = 60; }
+                        3544 => {
+                            p_vtab_4 =
+                                unsafe { (*unsafe { (*p_cur_5).uc.p_v_cur }).p_vtab };
+                            __state = 3545;
+                        }
+                        3545 => {
+                            p_module_4 = unsafe { (*p_vtab_4).p_module };
+                            __state = 3546;
+                        }
+                        3546 => { { let _ = 0; }; __state = 3547; }
+                        3547 => {
+                            unsafe {
+                                memset(&raw mut s_context as *mut (), 0,
+                                    core::mem::size_of::<sqlite3_context>() as u64)
+                            };
+                            __state = 3548;
+                        }
+                        3548 => { s_context.p_out = p_dest_2; __state = 3549; }
+                        3549 => { s_context.enc = encoding; __state = 3550; }
+                        3550 => {
+                            null_func.p_user_data = core::ptr::null_mut();
+                            __state = 3551;
+                        }
+                        3551 => {
+                            null_func.func_flags = 16777216 as u32;
+                            __state = 3552;
+                        }
+                        3552 => {
+                            s_context.p_func = &mut null_func;
+                            __state = 3553;
+                        }
+                        3553 => { { let _ = 0; }; __state = 3554; }
+                        3554 => {
+                            if unsafe { (*p_op).p5 } as i32 & 1 != 0 {
+                                __state = 3556;
+                            } else { __state = 3557; }
+                        }
+                        3555 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_4).x_column.unwrap()
+                                        })(unsafe { (*p_cur_5).uc.p_v_cur }, &mut s_context,
+                                        unsafe { (*p_op).p2 })
+                                };
+                            __state = 3560;
+                        }
+                        3556 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_dest_2) };
+                            __state = 3558;
+                        }
+                        3557 => {
+                            unsafe {
+                                (*p_dest_2).flags =
+                                    (unsafe { (*p_dest_2).flags } as i32 & !(3519 | 1024) | 1)
+                                        as u16
+                            };
+                            __state = 3555;
+                        }
+                        3558 => {
+                            unsafe { (*p_dest_2).flags = (1 | 1024) as u16 };
+                            __state = 3559;
+                        }
+                        3559 => {
+                            unsafe { (*p_dest_2).u.n_zero = 0 };
+                            __state = 3555;
+                        }
+                        3560 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_4) };
+                            __state = 3561;
+                        }
+                        3561 => {
+                            if s_context.is_error > 0 {
+                                __state = 3563;
+                            } else { __state = 3562; }
+                        }
+                        3562 => {
+                            unsafe {
+                                sqlite3_vdbe_change_encoding(p_dest_2, encoding as i32)
+                            };
+                            __state = 3565;
+                        }
+                        3563 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe {
+                                        sqlite3_value_text(p_dest_2 as *mut sqlite3_value)
+                                    })
+                            };
+                            __state = 3564;
+                        }
+                        3564 => { rc = s_context.is_error; __state = 3562; }
+                        3565 => { __state = 3566; }
+                        3566 => { __state = 3567; }
+                        3567 => {
+                            if rc != 0 { __state = 3569; } else { __state = 3568; }
+                        }
+                        3568 => { __state = 60; }
+                        3569 => { __state = 17; }
+                        3570 => { __state = 236; }
+                        3571 => { __state = 3572; }
+                        3572 => { __state = 3573; }
+                        3573 => { __state = 3574; }
+                        3574 => {
+                            p_cur_6 =
+                                unsafe {
+                                    *unsafe {
+                                            (*p).ap_csr.offset(unsafe { (*p_op).p1 } as isize)
+                                        }
+                                };
+                            __state = 3575;
+                        }
+                        3575 => { { let _ = 0; }; __state = 3576; }
+                        3576 => { { let _ = 0; }; __state = 3577; }
+                        3577 => {
+                            if unsafe { (*p_cur_6).null_row } != 0 {
+                                __state = 3579;
+                            } else { __state = 3578; }
+                        }
+                        3578 => {
+                            p_vtab_5 =
+                                unsafe { (*unsafe { (*p_cur_6).uc.p_v_cur }).p_vtab };
+                            __state = 3580;
+                        }
+                        3579 => { __state = 60; }
+                        3580 => {
+                            p_module_5 = unsafe { (*p_vtab_5).p_module };
+                            __state = 3581;
+                        }
+                        3581 => { { let _ = 0; }; __state = 3582; }
+                        3582 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_5).x_next.unwrap()
+                                        })(unsafe { (*p_cur_6).uc.p_v_cur })
+                                };
+                            __state = 3583;
+                        }
+                        3583 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_5) };
+                            __state = 3584;
+                        }
+                        3584 => {
+                            if rc != 0 { __state = 3586; } else { __state = 3585; }
+                        }
+                        3585 => {
+                            res__14 =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_5).x_eof.unwrap()
+                                        })(unsafe { (*p_cur_6).uc.p_v_cur })
+                                };
+                            __state = 3587;
+                        }
+                        3586 => { __state = 17; }
+                        3587 => { __state = 3588; }
+                        3588 => {
+                            if (res__14 == 0) as i32 != 0 {
+                                __state = 3590;
+                            } else { __state = 3589; }
+                        }
+                        3589 => { __state = 3; }
+                        3590 => { __state = 2; }
+                        3591 => { __state = 237; }
+                        3592 => { __state = 3593; }
+                        3593 => { __state = 3594; }
+                        3594 => {
+                            is_legacy =
+                                (unsafe { (*db).flags } & 67108864 as u64) as i32;
+                            __state = 3595;
+                        }
+                        3595 => {
+                            unsafe { (*db).flags |= 67108864 as u64 };
+                            __state = 3596;
+                        }
+                        3596 => {
+                            p_vtab_6 =
+                                unsafe { (*unsafe { (*p_op).p4.p_vtab }).p_vtab };
+                            __state = 3597;
+                        }
+                        3597 => {
+                            p_name =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3598;
+                        }
+                        3598 => { { let _ = 0; }; __state = 3599; }
+                        3599 => { { let _ = 0; }; __state = 3600; }
+                        3600 => { { let _ = 0; }; __state = 3601; }
+                        3601 => { __state = 3602; }
+                        3602 => { { let _ = 0; }; __state = 3603; }
+                        3603 => { __state = 3604; }
+                        3604 => { __state = 3605; }
+                        3605 => { __state = 3606; }
+                        3606 => {
+                            rc = unsafe { sqlite3_vdbe_change_encoding(p_name, 1) };
+                            __state = 3607;
+                        }
+                        3607 => {
+                            if rc != 0 { __state = 3609; } else { __state = 3608; }
+                        }
+                        3608 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*unsafe { (*p_vtab_6).p_module }).x_rename.unwrap()
+                                        })(p_vtab_6, unsafe { (*p_name).z } as *const i8)
+                                };
+                            __state = 3610;
+                        }
+                        3609 => { __state = 17; }
+                        3610 => {
+                            if is_legacy == 0 {
+                                __state = 3612;
+                            } else { __state = 3611; }
+                        }
+                        3611 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_6) };
+                            __state = 3613;
+                        }
+                        3612 => {
+                            unsafe { (*db).flags &= !(67108864 as u64) };
+                            __state = 3611;
+                        }
+                        3613 => {
+                            unsafe { (*p).set_expired(0 as bft as u32) };
+                            __state = 3614;
+                        }
+                        3614 => {
+                            if rc != 0 { __state = 3616; } else { __state = 3615; }
+                        }
+                        3615 => { __state = 60; }
+                        3616 => { __state = 17; }
+                        3617 => { __state = 238; }
+                        3618 => { __state = 3619; }
+                        3619 => { __state = 3620; }
+                        3620 => { __state = 3621; }
+                        3621 => { rowid__1 = 0 as sqlite_int64; __state = 3622; }
+                        3622 => { __state = 3623; }
+                        3623 => { __state = 3624; }
+                        3624 => { { let _ = 0; }; __state = 3625; }
+                        3625 => { { let _ = 0; }; __state = 3626; }
+                        3626 => {
+                            if unsafe { (*db).malloc_failed } != 0 {
+                                __state = 3628;
+                            } else { __state = 3627; }
+                        }
+                        3627 => { __state = 3629; }
+                        3628 => { __state = 20; }
+                        3629 => {
+                            p_vtab_7 =
+                                unsafe { (*unsafe { (*p_op).p4.p_vtab }).p_vtab };
+                            __state = 3630;
+                        }
+                        3630 => {
+                            if p_vtab_7 == core::ptr::null_mut() ||
+                                    unsafe { (*p_vtab_7).p_module } == core::ptr::null() {
+                                __state = 3632;
+                            } else { __state = 3631; }
+                        }
+                        3631 => {
+                            p_module_6 = unsafe { (*p_vtab_7).p_module };
+                            __state = 3634;
+                        }
+                        3632 => { rc = 6; __state = 3633; }
+                        3633 => { __state = 17; }
+                        3634 => { n_arg_1 = unsafe { (*p_op).p2 }; __state = 3635; }
+                        3635 => { { let _ = 0; }; __state = 3636; }
+                        3636 => {
+                            if unsafe { (*p_module_6).x_update.is_some() } {
+                                __state = 3638;
+                            } else { __state = 3637; }
+                        }
+                        3637 => { __state = 60; }
+                        3638 => {
+                            vtab_on_conflict = unsafe { (*db).vtab_on_conflict };
+                            __state = 3639;
+                        }
+                        3639 => {
+                            ap_arg_1 = unsafe { (*p).ap_arg };
+                            __state = 3640;
+                        }
+                        3640 => {
+                            p_x_1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3641;
+                        }
+                        3641 => { { let _ = 0; }; __state = 3642; }
+                        3642 => { i__7 = 0; __state = 3644; }
+                        3643 => {
+                            unsafe {
+                                (*db).vtab_on_conflict = unsafe { (*p_op).p5 } as u8
+                            };
+                            __state = 3650;
+                        }
+                        3644 => {
+                            if i__7 < n_arg_1 {
+                                __state = 3645;
+                            } else { __state = 3643; }
+                        }
+                        3645 => { { let _ = 0; }; __state = 3647; }
+                        3646 => {
+                            { let __p = &mut i__7; let __t = *__p; *__p += 1; __t };
+                            __state = 3644;
+                        }
+                        3647 => { __state = 3648; }
+                        3648 => {
+                            unsafe { *ap_arg_1.offset(i__7 as isize) = p_x_1 };
+                            __state = 3649;
+                        }
+                        3649 => {
+                            {
+                                let __p = &mut p_x_1;
+                                let __t = *__p;
+                                *__p = unsafe { (*__p).offset(1) };
+                                __t
+                            };
+                            __state = 3646;
+                        }
+                        3650 => {
+                            rc =
+                                unsafe {
+                                    (unsafe {
+                                            (*p_module_6).x_update.unwrap()
+                                        })(p_vtab_7, n_arg_1, ap_arg_1 as *mut *mut sqlite3_value,
+                                        &mut rowid__1)
+                                };
+                            __state = 3651;
+                        }
+                        3651 => {
+                            unsafe { (*db).vtab_on_conflict = vtab_on_conflict };
+                            __state = 3652;
+                        }
+                        3652 => {
+                            unsafe { sqlite3_vtab_import_errmsg(p, p_vtab_7) };
+                            __state = 3653;
+                        }
+                        3653 => {
+                            if rc == 0 && unsafe { (*p_op).p1 } != 0 {
+                                __state = 3655;
+                            } else { __state = 3654; }
+                        }
+                        3654 => {
+                            if rc & 255 == 19 &&
+                                    unsafe { (*unsafe { (*p_op).p4.p_vtab }).b_constraint } != 0
+                                {
+                                __state = 3658;
+                            } else { __state = 3659; }
+                        }
+                        3655 => { { let _ = 0; }; __state = 3656; }
+                        3656 => {
+                            unsafe { (*db).last_rowid = rowid__1 };
+                            __state = 3654;
+                        }
+                        3657 => {
+                            if rc != 0 { __state = 3662; } else { __state = 3637; }
+                        }
+                        3658 => {
+                            if unsafe { (*p_op).p5 } as i32 == 4 {
+                                __state = 3660;
+                            } else { __state = 3661; }
+                        }
+                        3659 => {
+                            {
+                                let __p = unsafe { &mut (*p).n_change };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3657;
+                        }
+                        3660 => { rc = 0; __state = 3657; }
+                        3661 => {
+                            unsafe {
+                                (*p).error_action =
+                                    if unsafe { (*p_op).p5 } as i32 == 5 {
+                                            2
+                                        } else { (unsafe { (*p_op).p5 }) as i32 } as u8
+                            };
+                            __state = 3657;
+                        }
+                        3662 => { __state = 17; }
+                        3663 => { __state = 239; }
+                        3664 => {
+                            unsafe {
+                                (*p_out).u.i =
+                                    unsafe {
+                                            sqlite3_btree_last_page(unsafe {
+                                                    (*unsafe {
+                                                                (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                                            }).p_bt
+                                                })
+                                        } as i64
+                            };
+                            __state = 3665;
+                        }
+                        3665 => { __state = 60; }
+                        3666 => { __state = 240; }
+                        3667 => { __state = 3668; }
+                        3668 => {
+                            p_out = out2_prerelease(unsafe { &*p }, unsafe { &*p_op });
+                            __state = 3669;
+                        }
+                        3669 => {
+                            p_bt_3 =
+                                unsafe {
+                                    (*unsafe {
+                                                (*db).a_db.offset(unsafe { (*p_op).p1 } as isize)
+                                            }).p_bt
+                                };
+                            __state = 3670;
+                        }
+                        3670 => { new_max = 0 as u32; __state = 3671; }
+                        3671 => {
+                            if unsafe { (*p_op).p3 } != 0 {
+                                __state = 3673;
+                            } else { __state = 3672; }
+                        }
+                        3672 => {
+                            unsafe {
+                                (*p_out).u.i =
+                                    unsafe { sqlite3_btree_max_page_count(p_bt_3, new_max) } as
+                                        i64
+                            };
+                            __state = 3676;
+                        }
+                        3673 => {
+                            new_max = unsafe { sqlite3_btree_last_page(p_bt_3) };
+                            __state = 3674;
+                        }
+                        3674 => {
+                            if new_max < unsafe { (*p_op).p3 } as u32 {
+                                __state = 3675;
+                            } else { __state = 3672; }
+                        }
+                        3675 => {
+                            new_max = unsafe { (*p_op).p3 } as u32;
+                            __state = 3672;
+                        }
+                        3676 => { __state = 60; }
+                        3677 => { __state = 3708; }
+                        3678 => { __state = 3679; }
+                        3679 => { { let _ = 0; }; __state = 3680; }
+                        3680 => {
+                            p_ctx_2 = unsafe { (*p_op).p4.p_ctx };
+                            __state = 3681;
+                        }
+                        3681 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p3 } as isize) };
+                            __state = 3682;
+                        }
+                        3682 => {
+                            if unsafe { (*p_ctx_2).p_out } != p_out {
+                                __state = 3684;
+                            } else { __state = 3683; }
+                        }
+                        3683 => { { let _ = 0; }; __state = 3691; }
+                        3684 => {
+                            unsafe { (*p_ctx_2).p_vdbe = p };
+                            __state = 3685;
+                        }
+                        3685 => {
+                            unsafe { (*p_ctx_2).p_out = p_out };
+                            __state = 3686;
+                        }
+                        3686 => {
+                            unsafe { (*p_ctx_2).enc = encoding };
+                            __state = 3687;
+                        }
+                        3687 => {
+                            i__8 = unsafe { (*p_ctx_2).argc } as i32 - 1;
+                            __state = 3688;
+                        }
+                        3688 => {
+                            if i__8 >= 0 { __state = 3689; } else { __state = 3683; }
+                        }
+                        3689 => {
+                            unsafe {
+                                *(unsafe { (*p_ctx_2).argv.as_ptr() } as
+                                                *mut *mut sqlite3_value).offset(i__8 as isize) =
+                                    unsafe {
+                                            a_mem.offset((unsafe { (*p_op).p2 } + i__8) as isize)
+                                        } as *mut sqlite3_value
+                            };
+                            __state = 3690;
+                        }
+                        3690 => {
+                            { let __p = &mut i__8; let __t = *__p; *__p -= 1; __t };
+                            __state = 3688;
+                        }
+                        3691 => { __state = 3692; }
+                        3692 => {
+                            unsafe {
+                                (*p_out).flags =
+                                    (unsafe { (*p_out).flags } as i32 & !(3519 | 1024) | 1) as
+                                        u16
+                            };
+                            __state = 3693;
+                        }
+                        3693 => { { let _ = 0; }; __state = 3694; }
+                        3694 => {
+                            unsafe {
+                                (unsafe {
+                                        (*unsafe { (*p_ctx_2).p_func }).x_s_func.unwrap()
+                                    })(p_ctx_2, unsafe { (*p_ctx_2).argc } as i32,
+                                    unsafe { (*p_ctx_2).argv.as_ptr() } as
+                                        *mut *mut sqlite3_value)
+                            };
+                            __state = 3695;
+                        }
+                        3695 => {
+                            if unsafe { (*p_ctx_2).is_error } != 0 {
+                                __state = 3697;
+                            } else { __state = 3696; }
+                        }
+                        3696 => { { let _ = 0; }; __state = 3704; }
+                        3697 => {
+                            if unsafe { (*p_ctx_2).is_error } > 0 {
+                                __state = 3699;
+                            } else { __state = 3698; }
+                        }
+                        3698 => {
+                            unsafe {
+                                sqlite3_vdbe_delete_aux_data(db,
+                                    unsafe { &mut (*p).p_aux_data }, unsafe { (*p_ctx_2).i_op },
+                                    unsafe { (*p_op).p1 })
+                            };
+                            __state = 3701;
+                        }
+                        3699 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe { sqlite3_value_text(p_out as *mut sqlite3_value) })
+                            };
+                            __state = 3700;
+                        }
+                        3700 => {
+                            rc = unsafe { (*p_ctx_2).is_error };
+                            __state = 3698;
+                        }
+                        3701 => {
+                            unsafe { (*p_ctx_2).is_error = 0 };
+                            __state = 3702;
+                        }
+                        3702 => {
+                            if rc != 0 { __state = 3703; } else { __state = 3696; }
+                        }
+                        3703 => { __state = 17; }
+                        3704 => { { let _ = 0; }; __state = 3705; }
+                        3705 => { __state = 3706; }
+                        3706 => { __state = 3707; }
+                        3707 => { __state = 60; }
+                        3708 => { __state = 242; }
+                        3709 => { __state = 243; }
+                        3710 => {
+                            unsafe { (*p_in1).flags &= !2048 as u16 };
+                            __state = 3711;
+                        }
+                        3711 => { __state = 60; }
+                        3712 => { __state = 244; }
+                        3713 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 3714;
+                        }
+                        3714 => {
+                            if unsafe { (*p_in1).flags } as i32 & 2048 != 0 {
+                                __state = 3716;
+                            } else { __state = 3717; }
+                        }
+                        3715 => { __state = 60; }
+                        3716 => {
+                            unsafe {
+                                sqlite3_vdbe_mem_set_int64(p_out,
+                                    unsafe { (*p_in1).e_subtype } as i64)
+                            };
+                            __state = 3715;
+                        }
+                        3717 => {
+                            unsafe { sqlite3_vdbe_mem_set_null(p_out) };
+                            __state = 3715;
+                        }
+                        3718 => { __state = 245; }
+                        3719 => {
+                            p_out =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p2 } as isize) };
+                            __state = 3720;
+                        }
+                        3720 => {
+                            if unsafe { (*p_in1).flags } as i32 & 1 != 0 {
+                                __state = 3722;
+                            } else { __state = 3723; }
+                        }
+                        3721 => { __state = 60; }
+                        3722 => {
+                            unsafe { (*p_out).flags &= !2048 as u16 };
+                            __state = 3721;
+                        }
+                        3723 => { { let _ = 0; }; __state = 3724; }
+                        3724 => {
+                            unsafe { (*p_out).flags |= 2048 as u16 };
+                            __state = 3725;
+                        }
+                        3725 => {
+                            unsafe {
+                                (*p_out).e_subtype =
+                                    (unsafe { (*p_in1).u.i } & 255 as i64) as u8
+                            };
+                            __state = 3721;
+                        }
+                        3726 => { __state = 246; }
+                        3727 => { { let _ = 0; }; __state = 3728; }
+                        3728 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3729;
+                        }
+                        3729 => { { let _ = 0; }; __state = 3730; }
+                        3730 => { { let _ = 0; }; __state = 3731; }
+                        3731 => {
+                            h = filter_hash(a_mem as *const Mem, unsafe { &*p_op });
+                            __state = 3732;
+                        }
+                        3732 => {
+                            h %= (unsafe { (*p_in1).n } * 8) as u64;
+                            __state = 3733;
+                        }
+                        3733 => {
+                            unsafe {
+                                *unsafe { (*p_in1).z.add((h / 8 as u64) as usize) } |=
+                                    (1 << (h & 7 as u64)) as i8
+                            };
+                            __state = 3734;
+                        }
+                        3734 => { __state = 60; }
+                        3735 => { __state = 247; }
+                        3736 => { { let _ = 0; }; __state = 3737; }
+                        3737 => {
+                            p_in1 =
+                                unsafe { a_mem.offset(unsafe { (*p_op).p1 } as isize) };
+                            __state = 3738;
+                        }
+                        3738 => { { let _ = 0; }; __state = 3739; }
+                        3739 => { { let _ = 0; }; __state = 3740; }
+                        3740 => {
+                            h__1 = filter_hash(a_mem as *const Mem, unsafe { &*p_op });
+                            __state = 3741;
+                        }
+                        3741 => {
+                            h__1 %= (unsafe { (*p_in1).n } * 8) as u64;
+                            __state = 3742;
+                        }
+                        3742 => {
+                            if unsafe {
+                                                *unsafe { (*p_in1).z.add((h__1 / 8 as u64) as usize) }
+                                            } as i32 & 1 << (h__1 & 7 as u64) == 0 {
+                                __state = 3744;
+                            } else { __state = 3745; }
+                        }
+                        3743 => { __state = 60; }
+                        3744 => { __state = 3746; }
+                        3745 => {
+                            {
+                                let __p = unsafe { &mut (*p).a_counter[7 as usize] };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3748;
+                        }
+                        3746 => {
+                            {
+                                let __p = unsafe { &mut (*p).a_counter[8 as usize] };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3747;
+                        }
+                        3747 => { __state = 4; }
+                        3748 => { __state = 3743; }
+                        3749 => { __state = 3776; }
+                        3750 => { __state = 3751; }
+                        3751 => { { let _ = 0; }; __state = 3752; }
+                        3752 => { { let _ = 0; }; __state = 3753; }
+                        3753 => {
+                            if unsafe { (*db).m_trace } as i32 & (1 | 64) != 0 &&
+                                        unsafe { (*p).min_write_file_format } as i32 != 254 &&
+                                    {
+                                            z_trace =
+                                                if !(unsafe { (*p_op).p4.z }).is_null() {
+                                                    unsafe { (*p_op).p4.z }
+                                                } else { unsafe { (*p).z_sql } };
+                                            z_trace
+                                        } != core::ptr::null_mut() {
+                                __state = 3755;
+                            } else { __state = 3754; }
+                        }
+                        3754 => { { let _ = 0; }; __state = 3764; }
+                        3755 => {
+                            if unsafe { (*db).m_trace } as i32 & 64 != 0 {
+                                __state = 3756;
+                            } else { __state = 3757; }
+                        }
+                        3756 => {
+                            z__2 =
+                                unsafe { sqlite3_vdbe_expand_sql(p, z_trace as *const i8) };
+                            __state = 3758;
+                        }
+                        3757 => {
+                            if unsafe { (*db).n_vdbe_exec } > 1 {
+                                __state = 3760;
+                            } else { __state = 3761; }
+                        }
+                        3758 => {
+                            unsafe {
+                                (unsafe {
+                                        (*db).trace.x_legacy.unwrap()
+                                    })(unsafe { (*db).p_trace_arg }, z__2 as *const i8)
+                            };
+                            __state = 3759;
+                        }
+                        3759 => {
+                            unsafe { sqlite3_free(z__2 as *mut ()) };
+                            __state = 3754;
+                        }
+                        3760 => {
+                            z__3 =
+                                unsafe {
+                                    sqlite3_m_printf(db,
+                                        c"-- %s".as_ptr() as *mut i8 as *const i8, z_trace)
+                                };
+                            __state = 3762;
+                        }
+                        3761 => {
+                            {
+                                let _ =
+                                    unsafe {
+                                        (unsafe {
+                                                (*db).trace.x_v2.unwrap()
+                                            })(1, unsafe { (*db).p_trace_arg }, p as *mut (),
+                                            z_trace as *mut ())
+                                    };
+                            };
+                            __state = 3754;
+                        }
+                        3762 => {
+                            {
+                                let _ =
+                                    unsafe {
+                                        (unsafe {
+                                                (*db).trace.x_v2.unwrap()
+                                            })(1, unsafe { (*db).p_trace_arg }, p as *mut (),
+                                            z__3 as *mut ())
+                                    };
+                            };
+                            __state = 3763;
+                        }
+                        3763 => {
+                            unsafe { sqlite3_db_free(db, z__3 as *mut ()) };
+                            __state = 3754;
+                        }
+                        3764 => {
+                            if unsafe { (*p_op).p1 } >=
+                                    sqlite3Config.i_once_reset_threshold {
+                                __state = 3766;
+                            } else { __state = 3765; }
+                        }
+                        3765 => {
+                            {
+                                let __p = unsafe { &mut (*p_op).p1 };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3774;
+                        }
+                        3766 => {
+                            if unsafe { (*p_op).opcode } as i32 == 186 {
+                                __state = 3768;
+                            } else { __state = 3767; }
+                        }
+                        3767 => { i__9 = 1; __state = 3770; }
+                        3768 => { __state = 60; }
+                        3769 => { unsafe { (*p_op).p1 = 0 }; __state = 3765; }
+                        3770 => {
+                            if i__9 < unsafe { (*p).n_op } {
+                                __state = 3771;
+                            } else { __state = 3769; }
+                        }
+                        3771 => {
+                            if unsafe {
+                                            (*unsafe { (*p).a_op.offset(i__9 as isize) }).opcode
+                                        } as i32 == 15 {
+                                __state = 3773;
+                            } else { __state = 3772; }
+                        }
+                        3772 => {
+                            { let __p = &mut i__9; let __t = *__p; *__p += 1; __t };
+                            __state = 3770;
+                        }
+                        3773 => {
+                            unsafe {
+                                (*unsafe { (*p).a_op.offset(i__9 as isize) }).p1 = 0
+                            };
+                            __state = 3772;
+                        }
+                        3774 => {
+                            {
+                                let __p = unsafe { &mut (*p).a_counter[6 as usize] };
+                                let __t = *__p;
+                                *__p += 1;
+                                __t
+                            };
+                            __state = 3775;
+                        }
+                        3775 => { __state = 4; }
+                        3776 => { __state = 249; }
+                        3777 => { __state = 60; }
+                        3778 => { { let _ = 0; }; __state = 3782; }
+                        3779 => { rc = 7; __state = 3778; }
+                        3780 => {
+                            if rc == 10 | 33 << 8 {
+                                __state = 3781;
+                            } else { __state = 3778; }
+                        }
+                        3781 => {
+                            rc = unsafe { sqlite3_corrupt_error(9366) };
+                            __state = 3778;
+                        }
+                        3782 => {
+                            if unsafe { (*p).z_err_msg } == core::ptr::null_mut() &&
+                                    rc != 10 | 12 << 8 {
+                                __state = 3784;
+                            } else { __state = 3783; }
+                        }
+                        3783 => { unsafe { (*p).rc = rc }; __state = 3785; }
+                        3784 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"%s".as_ptr() as *mut i8 as *const i8,
+                                    unsafe { sqlite3_err_str(rc) })
+                            };
+                            __state = 3783;
+                        }
+                        3785 => {
+                            unsafe { sqlite3_system_error(db, rc) };
+                            __state = 3786;
+                        }
+                        3786 => { __state = 3787; }
+                        3787 => {
+                            sqlite3_vdbe_log_abort(unsafe { &*p }, rc,
+                                p_op as *const Op, a_op as *const Op);
+                            __state = 3788;
+                        }
+                        3788 => {
+                            if unsafe { (*p).e_vdbe_state } as i32 == 2 {
+                                __state = 3790;
+                            } else { __state = 3789; }
+                        }
+                        3789 => {
+                            if rc == 10 | 12 << 8 {
+                                __state = 3792;
+                            } else { __state = 3791; }
+                        }
+                        3790 => { unsafe { sqlite3_vdbe_halt(p) }; __state = 3789; }
+                        3791 => {
+                            if rc == 11 && unsafe { (*db).auto_commit } as i32 == 0 {
+                                __state = 3794;
+                            } else { __state = 3793; }
+                        }
+                        3792 => {
+                            unsafe { sqlite3_oom_fault(db) };
+                            __state = 3791;
+                        }
+                        3793 => { rc = 1; __state = 3795; }
+                        3794 => {
+                            unsafe { (*db).flags |= (2 as u64) << 32 };
+                            __state = 3793;
+                        }
+                        3795 => {
+                            if reset_schema_on_fault as i32 > 0 {
+                                __state = 3797;
+                            } else { __state = 3796; }
+                        }
+                        3796 => { __state = 18; }
+                        3797 => {
+                            unsafe {
+                                sqlite3_reset_one_schema(db,
+                                    reset_schema_on_fault as i32 - 1)
+                            };
+                            __state = 3796;
+                        }
+                        3798 => {
+                            unsafe {
+                                (*p).a_counter[4 as usize] += n_vm_step as i32 as u32
+                            };
+                            __state = 3804;
+                        }
+                        3799 => {
+                            n_progress_limit += unsafe { (*db).n_progress_ops } as u64;
+                            __state = 3800;
+                        }
+                        3800 => {
+                            if unsafe {
+                                        (unsafe {
+                                                (*db).x_progress.unwrap()
+                                            })(unsafe { (*db).p_progress_arg })
+                                    } != 0 {
+                                __state = 3801;
+                            } else { __state = 18; }
+                        }
+                        3801 => {
+                            n_progress_limit =
+                                4294967295u32 as u64 | (4294967295u32 as u64) << 32;
+                            __state = 3802;
+                        }
+                        3802 => { rc = 9; __state = 3803; }
+                        3803 => { __state = 17; }
+                        3804 => {
+                            if unsafe { (*p).lock_mask } != 0 as u32 {
+                                __state = 3806;
+                            } else { __state = 3805; }
+                        }
+                        3805 => { { let _ = 0; }; __state = 3807; }
+                        3806 => {
+                            unsafe { sqlite3_vdbe_leave(p) };
+                            __state = 3805;
+                        }
+                        3807 => { return rc; }
+                        3808 => { __state = 19; }
+                        3809 => { rc = 18; __state = 3810; }
+                        3810 => { __state = 17; }
+                        3811 => { __state = 20; }
+                        3812 => {
+                            unsafe {
+                                sqlite3_vdbe_error(p,
+                                    c"out of memory".as_ptr() as *mut i8 as *const i8)
+                            };
+                            __state = 3813;
+                        }
+                        3813 => { rc = 7; __state = 3814; }
+                        3814 => { __state = 17; }
+                        3815 => { __state = 21; }
+                        3816 => { rc = 9; __state = 3817; }
+                        3817 => { __state = 17; }
+                        _ => {}
+                    }
+                }
+            }
+            unreachable!();
+        }
+    }
+}
+static mut az_types: [*const i8; 5] =
+    [c"INT".as_ptr() as *const i8, c"REAL".as_ptr() as *const i8,
+            c"TEXT".as_ptr() as *const i8, c"BLOB".as_ptr() as *const i8,
+            c"NULL".as_ptr() as *const i8];
+static mut az_type: [*const i8; 4] =
+    [c"NOT NULL".as_ptr() as *const i8, c"UNIQUE".as_ptr() as *const i8,
+            c"CHECK".as_ptr() as *const i8,
+            c"FOREIGN KEY".as_ptr() as *const i8];
+static and_logic: [u8; 9] =
+    [0 as u8, 0 as u8, 0 as u8, 0 as u8, 1 as u8, 2 as u8, 0 as u8, 2 as u8,
+            2 as u8];
+static or_logic: [u8; 9] =
+    [0 as u8, 1 as u8, 2 as u8, 1 as u8, 1 as u8, 1 as u8, 2 as u8, 1 as u8,
+            2 as u8];
+static a_mask: [u8; 12] =
+    [16 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 2 as u8,
+            1 as u8, 1 as u8, 16 as u8, 16 as u8];
+static a_flag: [u16; 2] = [16 as u16, (2 | 512) as u16];
+static vfs_flags: i32 = (2 | 4 | 16 | 8 | 1024) as i32;
+extern "C" {
+    fn __transpiler_isa(child: i32, ancestor: i32)
+    -> bool;
+    static sqlite3_version: [i8; 0];
+    fn sqlite3_libversion()
+    -> *const i8;
+    fn sqlite3_sourceid()
+    -> *const i8;
+    fn sqlite3_libversion_number()
+    -> i32;
+    fn sqlite3_compileoption_used(z_opt_name_1: *const i8)
+    -> i32;
+    fn sqlite3_compileoption_get(n_1: i32)
+    -> *const i8;
+    fn sqlite3_threadsafe()
+    -> i32;
+    fn sqlite3_close(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_close_v2(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_exec(_: *mut sqlite3, sql: *const i8,
+    callback:
+        Option<unsafe extern "C" fn(*mut (), i32, *mut *mut i8, *mut *mut i8)
+            -> i32>, _: *mut (), errmsg: *mut *mut i8)
+    -> i32;
+    fn sqlite3_initialize()
+    -> i32;
+    fn sqlite3_shutdown()
+    -> i32;
+    fn sqlite3_os_init()
+    -> i32;
+    fn sqlite3_os_end()
+    -> i32;
+    fn sqlite3_config(_: i32, ...)
+    -> i32;
+    fn sqlite3_db_config(_: *mut sqlite3, op: i32, ...)
+    -> i32;
+    fn sqlite3_extended_result_codes(_: *mut sqlite3, onoff: i32)
+    -> i32;
+    fn sqlite3_last_insert_rowid(_: *mut sqlite3)
+    -> sqlite3_int64;
+    fn sqlite3_set_last_insert_rowid(_: *mut sqlite3, _: sqlite3_int64)
+    -> ();
+    fn sqlite3_changes(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_changes64(_: *mut sqlite3)
+    -> sqlite3_int64;
+    fn sqlite3_total_changes(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_total_changes64(_: *mut sqlite3)
+    -> sqlite3_int64;
+    fn sqlite3_interrupt(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_is_interrupted(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_complete(sql: *const i8)
+    -> i32;
+    fn sqlite3_complete16(sql: *const ())
+    -> i32;
+    fn sqlite3_incomplete(sql: *const i8)
+    -> sqlite3_int64;
+    fn sqlite3_busy_handler(_: *mut sqlite3,
+    _: Option<unsafe extern "C" fn(*mut (), i32) -> i32>, _: *mut ())
+    -> i32;
+    fn sqlite3_busy_timeout(_: *mut sqlite3, ms: i32)
+    -> i32;
+    fn sqlite3_setlk_timeout(_: *mut sqlite3, ms: i32, flags: i32)
+    -> i32;
+    fn sqlite3_get_table(db: *mut sqlite3, z_sql_1: *const i8,
+    paz_result_1: *mut *mut *mut i8, pn_row_1: *mut i32,
+    pn_column_1: *mut i32, pz_errmsg_1: *mut *mut i8)
+    -> i32;
+    fn sqlite3_free_table(result: *mut *mut i8)
+    -> ();
+    fn sqlite3_mprintf(_: *const i8, ...)
+    -> *mut i8;
+    fn sqlite3_vmprintf(_: *const i8, _: *mut i8)
+    -> *mut i8;
+    fn sqlite3_snprintf(_: i32, _: *mut i8, _: *const i8, ...)
+    -> *mut i8;
+    fn sqlite3_vsnprintf(_: i32, _: *mut i8, _: *const i8, _: *mut i8)
+    -> *mut i8;
+    fn sqlite3_malloc(_: i32)
+    -> *mut ();
+    fn sqlite3_malloc64(_: sqlite3_uint64)
+    -> *mut ();
+    fn sqlite3_realloc(_: *mut (), _: i32)
+    -> *mut ();
+    fn sqlite3_realloc64(_: *mut (), _: sqlite3_uint64)
+    -> *mut ();
+    fn sqlite3_free(_: *mut ())
+    -> ();
+    fn sqlite3_msize(_: *mut ())
+    -> sqlite3_uint64;
+    fn sqlite3_memory_used()
+    -> sqlite3_int64;
+    fn sqlite3_memory_highwater(reset_flag_1: i32)
+    -> sqlite3_int64;
+    fn sqlite3_randomness(n_1: i32, p_1: *mut ())
+    -> ();
+    fn sqlite3_set_authorizer(_: *mut sqlite3,
+    x_auth_1:
+        Option<unsafe extern "C" fn(*mut (), i32, *const i8, *const i8,
+            *const i8, *const i8) -> i32>, p_user_data_1: *mut ())
+    -> i32;
+    fn sqlite3_trace(_: *mut sqlite3,
+    x_trace_1: Option<unsafe extern "C" fn(*mut (), *const i8) -> ()>,
+    _: *mut ())
+    -> *mut ();
+    fn sqlite3_profile(_: *mut sqlite3,
+    x_profile_1: Option<unsafe extern "C" fn(*mut (), *const i8, u64) -> ()>,
+    _: *mut ())
+    -> *mut ();
+    fn sqlite3_trace_v2(_: *mut sqlite3, u_mask_1: u32,
+    x_callback_1:
+        Option<unsafe extern "C" fn(u32, *mut (), *mut (), *mut ()) -> i32>,
+    p_ctx_1: *mut ())
+    -> i32;
+    fn sqlite3_progress_handler(_: *mut sqlite3, _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> i32>, _: *mut ())
+    -> ();
+    fn sqlite3_open(filename: *const i8, pp_db_1: *mut *mut sqlite3)
+    -> i32;
+    fn sqlite3_open16(filename: *const (), pp_db_1: *mut *mut sqlite3)
+    -> i32;
+    fn sqlite3_open_v2(filename: *const i8, pp_db_1: *mut *mut sqlite3,
+    flags: i32, z_vfs_1: *const i8)
+    -> i32;
+    fn sqlite3_uri_parameter(z: sqlite3_filename, z_param_1: *const i8)
+    -> *const i8;
+    fn sqlite3_uri_boolean(z: sqlite3_filename, z_param_1: *const i8,
+    b_default_1: i32)
+    -> i32;
+    fn sqlite3_uri_int64(_: sqlite3_filename, _: *const i8, _: sqlite3_int64)
+    -> sqlite3_int64;
+    fn sqlite3_uri_key(z: sqlite3_filename, n_1: i32)
+    -> *const i8;
+    fn sqlite3_filename_database(_: sqlite3_filename)
+    -> *const i8;
+    fn sqlite3_filename_journal(_: sqlite3_filename)
+    -> *const i8;
+    fn sqlite3_filename_wal(_: sqlite3_filename)
+    -> *const i8;
+    fn sqlite3_database_file_object(_: *const i8)
+    -> *mut sqlite3_file;
+    fn sqlite3_create_filename(z_database_1: *const i8,
+    z_journal_1: *const i8, z_wal_1: *const i8, n_param_1: i32,
+    az_param_1: *mut *const i8)
+    -> sqlite3_filename;
+    fn sqlite3_free_filename(_: sqlite3_filename)
+    -> ();
+    fn sqlite3_errcode(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_extended_errcode(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_errmsg(_: *mut sqlite3)
+    -> *const i8;
+    fn sqlite3_errmsg16(_: *mut sqlite3)
+    -> *const ();
+    fn sqlite3_errstr(_: i32)
+    -> *const i8;
+    fn sqlite3_error_offset(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_set_errmsg(db: *mut sqlite3, errcode: i32,
+    z_err_msg_1: *const i8)
+    -> i32;
+    fn sqlite3_limit(_: *mut sqlite3, id: i32, new_val_1: i32)
+    -> i32;
+    fn sqlite3_prepare(db: *mut sqlite3, z_sql_1: *const i8, n_byte_1: i32,
+    pp_stmt_1: *mut *mut sqlite3_stmt, pz_tail_1: *mut *const i8)
+    -> i32;
+    fn sqlite3_prepare_v2(db: *mut sqlite3, z_sql_1: *const i8, n_byte_1: i32,
+    pp_stmt_1: *mut *mut sqlite3_stmt, pz_tail_1: *mut *const i8)
+    -> i32;
+    fn sqlite3_prepare_v3(db: *mut sqlite3, z_sql_1: *const i8, n_byte_1: i32,
+    prep_flags_1: u32, pp_stmt_1: *mut *mut sqlite3_stmt,
+    pz_tail_1: *mut *const i8)
+    -> i32;
+    fn sqlite3_prepare16(db: *mut sqlite3, z_sql_1: *const (), n_byte_1: i32,
+    pp_stmt_1: *mut *mut sqlite3_stmt, pz_tail_1: *mut *const ())
+    -> i32;
+    fn sqlite3_prepare16_v2(db: *mut sqlite3, z_sql_1: *const (),
+    n_byte_1: i32, pp_stmt_1: *mut *mut sqlite3_stmt,
+    pz_tail_1: *mut *const ())
+    -> i32;
+    fn sqlite3_prepare16_v3(db: *mut sqlite3, z_sql_1: *const (),
+    n_byte_1: i32, prep_flags_1: u32, pp_stmt_1: *mut *mut sqlite3_stmt,
+    pz_tail_1: *mut *const ())
+    -> i32;
+    fn sqlite3_sql(p_stmt_1: *mut sqlite3_stmt)
+    -> *const i8;
+    fn sqlite3_expanded_sql(p_stmt_1: *mut sqlite3_stmt)
+    -> *mut i8;
+    fn sqlite3_stmt_readonly(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_stmt_isexplain(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_stmt_explain(p_stmt_1: *mut sqlite3_stmt, e_mode_1: i32)
+    -> i32;
+    fn sqlite3_stmt_busy(_: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_bind_blob(_: *mut sqlite3_stmt, _: i32, _: *const (), n: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_bind_blob64(_: *mut sqlite3_stmt, _: i32, _: *const (),
+    _: sqlite3_uint64, _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_bind_double(_: *mut sqlite3_stmt, _: i32, _: f64)
+    -> i32;
+    fn sqlite3_bind_int(_: *mut sqlite3_stmt, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_bind_int64(_: *mut sqlite3_stmt, _: i32, _: sqlite3_int64)
+    -> i32;
+    fn sqlite3_bind_null(_: *mut sqlite3_stmt, _: i32)
+    -> i32;
+    fn sqlite3_bind_text(_: *mut sqlite3_stmt, _: i32, _: *const i8, _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_bind_text16(_: *mut sqlite3_stmt, _: i32, _: *const (), _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_bind_text64(_: *mut sqlite3_stmt, _: i32, _: *const i8,
+    _: sqlite3_uint64, _: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    encoding: u8)
+    -> i32;
+    fn sqlite3_bind_value(_: *mut sqlite3_stmt, _: i32,
+    _: *const sqlite3_value)
+    -> i32;
+    fn sqlite3_bind_pointer(_: *mut sqlite3_stmt, _: i32, _: *mut (),
+    _: *const i8, _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_bind_zeroblob(_: *mut sqlite3_stmt, _: i32, n: i32)
+    -> i32;
+    fn sqlite3_bind_zeroblob64(_: *mut sqlite3_stmt, _: i32,
+    _: sqlite3_uint64)
+    -> i32;
+    fn sqlite3_bind_parameter_count(_: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_bind_parameter_name(_: *mut sqlite3_stmt, _: i32)
+    -> *const i8;
+    fn sqlite3_bind_parameter_index(_: *mut sqlite3_stmt, z_name_1: *const i8)
+    -> i32;
+    fn sqlite3_clear_bindings(_: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_column_count(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_column_name(_: *mut sqlite3_stmt, n_1: i32)
+    -> *const i8;
+    fn sqlite3_column_name16(_: *mut sqlite3_stmt, n_1: i32)
+    -> *const ();
+    fn sqlite3_column_database_name(_: *mut sqlite3_stmt, _: i32)
+    -> *const i8;
+    fn sqlite3_column_database_name16(_: *mut sqlite3_stmt, _: i32)
+    -> *const ();
+    fn sqlite3_column_table_name(_: *mut sqlite3_stmt, _: i32)
+    -> *const i8;
+    fn sqlite3_column_table_name16(_: *mut sqlite3_stmt, _: i32)
+    -> *const ();
+    fn sqlite3_column_origin_name(_: *mut sqlite3_stmt, _: i32)
+    -> *const i8;
+    fn sqlite3_column_origin_name16(_: *mut sqlite3_stmt, _: i32)
+    -> *const ();
+    fn sqlite3_column_decltype(_: *mut sqlite3_stmt, _: i32)
+    -> *const i8;
+    fn sqlite3_column_decltype16(_: *mut sqlite3_stmt, _: i32)
+    -> *const ();
+    fn sqlite3_step(_: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_data_count(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_column_blob(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> *const ();
+    fn sqlite3_column_double(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> f64;
+    fn sqlite3_column_int(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> i32;
+    fn sqlite3_column_int64(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> sqlite3_int64;
+    fn sqlite3_column_text(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> *const u8;
+    fn sqlite3_column_text16(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> *const ();
+    fn sqlite3_column_value(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> *mut sqlite3_value;
+    fn sqlite3_column_bytes(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> i32;
+    fn sqlite3_column_bytes16(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> i32;
+    fn sqlite3_column_type(_: *mut sqlite3_stmt, i_col_1: i32)
+    -> i32;
+    fn sqlite3_finalize(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_reset(p_stmt_1: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_create_function(db: *mut sqlite3, z_function_name_1: *const i8,
+    n_arg_1: i32, e_text_rep_1: i32, p_app_1: *mut (),
+    x_func_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_step_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_final_1: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>)
+    -> i32;
+    fn sqlite3_create_function16(db: *mut sqlite3,
+    z_function_name_1: *const (), n_arg_1: i32, e_text_rep_1: i32,
+    p_app_1: *mut (),
+    x_func_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_step_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_final_1: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>)
+    -> i32;
+    fn sqlite3_create_function_v2(db: *mut sqlite3,
+    z_function_name_1: *const i8, n_arg_1: i32, e_text_rep_1: i32,
+    p_app_1: *mut (),
+    x_func_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_step_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_final_1: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_create_window_function(db: *mut sqlite3,
+    z_function_name_1: *const i8, n_arg_1: i32, e_text_rep_1: i32,
+    p_app_1: *mut (),
+    x_step_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_final_1: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    x_value_1: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    x_inverse_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_aggregate_count(_: *mut sqlite3_context)
+    -> i32;
+    fn sqlite3_expired(_: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_transfer_bindings(_: *mut sqlite3_stmt, _: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_global_recover()
+    -> i32;
+    fn sqlite3_thread_cleanup()
+    -> ();
+    fn sqlite3_memory_alarm(_:
+        Option<unsafe extern "C" fn(*mut (), i64, i32) -> ()>, _: *mut (),
+    _: sqlite3_int64)
+    -> i32;
+    fn sqlite3_value_blob(_: *mut sqlite3_value)
+    -> *const ();
+    fn sqlite3_value_double(_: *mut sqlite3_value)
+    -> f64;
+    fn sqlite3_value_int(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_int64(_: *mut sqlite3_value)
+    -> sqlite3_int64;
+    fn sqlite3_value_pointer(_: *mut sqlite3_value, _: *const i8)
+    -> *mut ();
+    fn sqlite3_value_text(_: *mut sqlite3_value)
+    -> *const u8;
+    fn sqlite3_value_text16(_: *mut sqlite3_value)
+    -> *const ();
+    fn sqlite3_value_text16le(_: *mut sqlite3_value)
+    -> *const ();
+    fn sqlite3_value_text16be(_: *mut sqlite3_value)
+    -> *const ();
+    fn sqlite3_value_bytes(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_bytes16(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_type(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_mutex_enter(_: *mut sqlite3_mutex)
+    -> ();
+    fn sqlite3_mem_real_value_rc(_: *mut Mem, _: *mut f64)
+    -> i32;
+    fn sqlite3_real_to_i64(_: f64)
+    -> i64;
+    fn sqlite3_real_same_as_int(_: f64, _: sqlite3_int64)
+    -> i32;
+    fn sqlite3_atoi64(_: *const i8, _: *mut i64, _: i32, _: u8)
+    -> i32;
+    fn sqlite3_vdbe_integer_affinity(_: *mut Mem)
+    -> ();
+    fn sqlite3_mutex_leave(_: *mut sqlite3_mutex)
+    -> ();
+    fn sqlite3_value_nochange(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_frombind(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_encoding(_: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_value_subtype(_: *mut sqlite3_value)
+    -> u32;
+    fn sqlite3_value_dup(_: *const sqlite3_value)
+    -> *mut sqlite3_value;
+    fn sqlite3_value_free(_: *mut sqlite3_value)
+    -> ();
+    fn sqlite3_aggregate_context(_: *mut sqlite3_context, n_bytes_1: i32)
+    -> *mut ();
+    fn sqlite3_user_data(_: *mut sqlite3_context)
+    -> *mut ();
+    fn sqlite3_context_db_handle(_: *mut sqlite3_context)
+    -> *mut sqlite3;
+    fn sqlite3_get_auxdata(_: *mut sqlite3_context, n_1: i32)
+    -> *mut ();
+    fn sqlite3_set_auxdata(_: *mut sqlite3_context, n_1: i32, _: *mut (),
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_get_clientdata(_: *mut sqlite3, _: *const i8)
+    -> *mut ();
+    fn sqlite3_set_clientdata(_: *mut sqlite3, _: *const i8, _: *mut (),
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_result_blob(_: *mut sqlite3_context, _: *const (), _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_blob64(_: *mut sqlite3_context, _: *const (),
+    _: sqlite3_uint64, _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_double(_: *mut sqlite3_context, _: f64)
+    -> ();
+    fn sqlite3_result_error(_: *mut sqlite3_context, _: *const i8, _: i32)
+    -> ();
+    fn sqlite3_result_error16(_: *mut sqlite3_context, _: *const (), _: i32)
+    -> ();
+    fn sqlite3_result_error_toobig(_: *mut sqlite3_context)
+    -> ();
+    fn sqlite3_result_error_nomem(_: *mut sqlite3_context)
+    -> ();
+    fn sqlite3_result_error_code(_: *mut sqlite3_context, _: i32)
+    -> ();
+    fn sqlite3_result_int(_: *mut sqlite3_context, _: i32)
+    -> ();
+    fn sqlite3_result_int64(_: *mut sqlite3_context, _: sqlite3_int64)
+    -> ();
+    fn sqlite3_result_null(_: *mut sqlite3_context)
+    -> ();
+    fn sqlite3_result_text(_: *mut sqlite3_context, _: *const i8, _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_text64(_: *mut sqlite3_context, z: *const i8,
+    n: sqlite3_uint64, _: Option<unsafe extern "C" fn(*mut ()) -> ()>,
+    encoding: u8)
+    -> ();
+    fn sqlite3_result_text16(_: *mut sqlite3_context, _: *const (), _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_text16le(_: *mut sqlite3_context, _: *const (), _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_text16be(_: *mut sqlite3_context, _: *const (), _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_value(_: *mut sqlite3_context, _: *mut sqlite3_value)
+    -> ();
+    fn sqlite3_result_pointer(_: *mut sqlite3_context, _: *mut (),
+    _: *const i8, _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_result_zeroblob(_: *mut sqlite3_context, n: i32)
+    -> ();
+    fn sqlite3_result_zeroblob64(_: *mut sqlite3_context, n: sqlite3_uint64)
+    -> i32;
+    fn sqlite3_result_subtype(_: *mut sqlite3_context, _: u32)
+    -> ();
+    fn sqlite3_create_collation(_: *mut sqlite3, z_name_1: *const i8,
+    e_text_rep_1: i32, p_arg_1: *mut (),
+    x_compare_1:
+        Option<unsafe extern "C" fn(*mut (), i32, *const (), i32, *const ())
+            -> i32>)
+    -> i32;
+    fn sqlite3_create_collation_v2(_: *mut sqlite3, z_name_1: *const i8,
+    e_text_rep_1: i32, p_arg_1: *mut (),
+    x_compare_1:
+        Option<unsafe extern "C" fn(*mut (), i32, *const (), i32, *const ())
+            -> i32>, x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_create_collation16(_: *mut sqlite3, z_name_1: *const (),
+    e_text_rep_1: i32, p_arg_1: *mut (),
+    x_compare_1:
+        Option<unsafe extern "C" fn(*mut (), i32, *const (), i32, *const ())
+            -> i32>)
+    -> i32;
+    fn sqlite3_collation_needed(_: *mut sqlite3, _: *mut (),
+    _:
+        Option<unsafe extern "C" fn(*mut (), *mut sqlite3, i32, *const i8)
+            -> ()>)
+    -> i32;
+    fn sqlite3_collation_needed16(_: *mut sqlite3, _: *mut (),
+    _:
+        Option<unsafe extern "C" fn(*mut (), *mut sqlite3, i32, *const ())
+            -> ()>)
+    -> i32;
+    fn sqlite3_sleep(_: i32)
+    -> i32;
+    static mut sqlite3_temp_directory: *mut i8;
+    static mut sqlite3_data_directory: *mut i8;
+    fn sqlite3_win32_set_directory(type__1: u64, z_value_1: *mut ())
+    -> i32;
+    fn sqlite3_win32_set_directory8(type__1: u64, z_value_1: *const i8)
+    -> i32;
+    fn sqlite3_win32_set_directory16(type__1: u64, z_value_1: *const ())
+    -> i32;
+    fn sqlite3_get_autocommit(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_db_handle(_: *mut sqlite3_stmt)
+    -> *mut sqlite3;
+    fn sqlite3_db_name(db: *mut sqlite3, n_1: i32)
+    -> *const i8;
+    fn sqlite3_db_filename(db: *mut sqlite3, z_db_name_1: *const i8)
+    -> sqlite3_filename;
+    fn sqlite3_db_readonly(db: *mut sqlite3, z_db_name_1: *const i8)
+    -> i32;
+    fn sqlite3_txn_state(_: *mut sqlite3, z_schema_1: *const i8)
+    -> i32;
+    fn sqlite3_next_stmt(p_db_1: *mut sqlite3, p_stmt_1: *mut sqlite3_stmt)
+    -> *mut sqlite3_stmt;
+    fn sqlite3_commit_hook(_: *mut sqlite3,
+    _: Option<unsafe extern "C" fn(*mut ()) -> i32>, _: *mut ())
+    -> *mut ();
+    fn sqlite3_rollback_hook(_: *mut sqlite3,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>, _: *mut ())
+    -> *mut ();
+    fn sqlite3_autovacuum_pages(db: *mut sqlite3,
+    _: Option<unsafe extern "C" fn(*mut (), *const i8, u32, u32, u32) -> u32>,
+    _: *mut (), _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_update_hook(_: *mut sqlite3,
+    _:
+        Option<unsafe extern "C" fn(*mut (), i32, *const i8, *const i8, i64)
+            -> ()>, _: *mut ())
+    -> *mut ();
+    fn sqlite3_enable_shared_cache(_: i32)
+    -> i32;
+    fn sqlite3_release_memory(_: i32)
+    -> i32;
+    fn sqlite3_db_release_memory(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_soft_heap_limit64(n_1: sqlite3_int64)
+    -> sqlite3_int64;
+    fn sqlite3_hard_heap_limit64(n_1: sqlite3_int64)
+    -> sqlite3_int64;
+    fn sqlite3_soft_heap_limit(n_1: i32)
+    -> ();
+    fn sqlite3_table_column_metadata(db: *mut sqlite3, z_db_name_1: *const i8,
+    z_table_name_1: *const i8, z_column_name_1: *const i8,
+    pz_data_type_1: *mut *const i8, pz_coll_seq_1: *mut *const i8,
+    p_not_null_1: *mut i32, p_primary_key_1: *mut i32, p_autoinc_1: *mut i32)
+    -> i32;
+    fn sqlite3_load_extension(db: *mut sqlite3, z_file_1: *const i8,
+    z_proc_1: *const i8, pz_err_msg_1: *mut *mut i8)
+    -> i32;
+    fn sqlite3_enable_load_extension(db: *mut sqlite3, onoff: i32)
+    -> i32;
+    fn sqlite3_auto_extension(x_entry_point_1:
+        Option<unsafe extern "C" fn() -> ()>)
+    -> i32;
+    fn sqlite3_cancel_auto_extension(x_entry_point_1:
+        Option<unsafe extern "C" fn() -> ()>)
+    -> i32;
+    fn sqlite3_reset_auto_extension()
+    -> ();
+    fn sqlite3_create_module(db: *mut sqlite3, z_name_1: *const i8,
+    p: *const sqlite3_module, p_client_data_1: *mut ())
+    -> i32;
+    fn sqlite3_create_module_v2(db: *mut sqlite3, z_name_1: *const i8,
+    p: *const sqlite3_module, p_client_data_1: *mut (),
+    x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_drop_modules(db: *mut sqlite3, az_keep_1: *mut *const i8)
+    -> i32;
+    fn sqlite3_declare_vtab(_: *mut sqlite3, z_sql_1: *const i8)
+    -> i32;
+    fn sqlite3_overload_function(_: *mut sqlite3, z_func_name_1: *const i8,
+    n_arg_1: i32)
+    -> i32;
+    fn sqlite3_blob_open(_: *mut sqlite3, z_db_1: *const i8,
+    z_table_1: *const i8, z_column_1: *const i8, i_row_1: sqlite3_int64,
+    flags: i32, pp_blob_1: *mut *mut sqlite3_blob)
+    -> i32;
+    fn sqlite3_blob_reopen(_: *mut sqlite3_blob, _: sqlite3_int64)
+    -> i32;
+    fn sqlite3_blob_close(_: *mut sqlite3_blob)
+    -> i32;
+    fn sqlite3_blob_bytes(_: *mut sqlite3_blob)
+    -> i32;
+    fn sqlite3_blob_read(_: *mut sqlite3_blob, z_1: *mut (), n_1: i32,
+    i_offset_1: i32)
+    -> i32;
+    fn sqlite3_blob_write(_: *mut sqlite3_blob, z: *const (), n: i32,
+    i_offset_1: i32)
+    -> i32;
+    fn sqlite3_vfs_find(z_vfs_name_1: *const i8)
+    -> *mut sqlite3_vfs;
+    fn sqlite3_vfs_register(_: *mut sqlite3_vfs, make_dflt_1: i32)
+    -> i32;
+    fn sqlite3_vfs_unregister(_: *mut sqlite3_vfs)
+    -> i32;
+    fn sqlite3_mutex_alloc(_: i32)
+    -> *mut sqlite3_mutex;
+    fn sqlite3_mutex_free(_: *mut sqlite3_mutex)
+    -> ();
+    fn sqlite3_mutex_try(_: *mut sqlite3_mutex)
+    -> i32;
+    fn sqlite3_mutex_held(_: *mut sqlite3_mutex)
+    -> i32;
+    fn sqlite3_mutex_notheld(_: *mut sqlite3_mutex)
+    -> i32;
+    fn sqlite3_db_mutex(_: *mut sqlite3)
+    -> *mut sqlite3_mutex;
+    fn sqlite3_file_control(_: *mut sqlite3, z_db_name_1: *const i8, op: i32,
+    _: *mut ())
+    -> i32;
+    fn sqlite3_test_control(op: i32, ...)
+    -> i32;
+    fn sqlite3_keyword_count()
+    -> i32;
+    fn sqlite3_keyword_name(_: i32, _: *mut *const i8, _: *mut i32)
+    -> i32;
+    fn sqlite3_keyword_check(_: *const i8, _: i32)
+    -> i32;
+    fn sqlite3_str_new(_: *mut sqlite3)
+    -> *mut sqlite3_str;
+    fn sqlite3_str_finish(_: *mut sqlite3_str)
+    -> *mut i8;
+    fn sqlite3_str_free(_: *mut sqlite3_str)
+    -> ();
+    fn sqlite3_result_str(_: *mut sqlite3_context, _: *mut sqlite3_str,
+    _: i32)
+    -> ();
+    fn sqlite3_str_appendf(_: *mut sqlite3_str, z_format_1: *const i8, ...)
+    -> ();
+    fn sqlite3_str_vappendf(_: *mut sqlite3_str, z_format_1: *const i8,
+    _: *mut i8)
+    -> ();
+    fn sqlite3_str_append(_: *mut sqlite3_str, z_in_1: *const i8, n_1: i32)
+    -> ();
+    fn sqlite3_str_appendall(_: *mut sqlite3_str, z_in_1: *const i8)
+    -> ();
+    fn sqlite3_str_appendchar(_: *mut sqlite3_str, n_1: i32, c_1: i8)
+    -> ();
+    fn sqlite3_str_reset(_: *mut sqlite3_str)
+    -> ();
+    fn sqlite3_str_truncate(_: *mut sqlite3_str, n_1: i32)
+    -> ();
+    fn sqlite3_str_errcode(_: *mut sqlite3_str)
+    -> i32;
+    fn sqlite3_str_length(_: *mut sqlite3_str)
+    -> i32;
+    fn sqlite3_str_value(_: *mut sqlite3_str)
+    -> *mut i8;
+    fn sqlite3_status(op: i32, p_current_1: *mut i32, p_highwater_1: *mut i32,
+    reset_flag_1: i32)
+    -> i32;
+    fn sqlite3_status64(op: i32, p_current_1: *mut sqlite3_int64,
+    p_highwater_1: *mut sqlite3_int64, reset_flag_1: i32)
+    -> i32;
+    fn sqlite3_db_status(_: *mut sqlite3, op: i32, p_cur_1: *mut i32,
+    p_hiwtr_1: *mut i32, reset_flg_1: i32)
+    -> i32;
+    fn sqlite3_db_status64(_: *mut sqlite3, _: i32, _: *mut sqlite3_int64,
+    _: *mut sqlite3_int64, _: i32)
+    -> i32;
+    fn sqlite3_stmt_status(_: *mut sqlite3_stmt, op: i32, reset_flg_1: i32)
+    -> i32;
+    fn sqlite3_backup_init(p_dest_1: *mut sqlite3, z_dest_name_1: *const i8,
+    p_source_1: *mut sqlite3, z_source_name_1: *const i8)
+    -> *mut sqlite3_backup;
+    fn sqlite3_backup_step(p: *mut sqlite3_backup, n_page_1: i32)
+    -> i32;
+    fn sqlite3_backup_finish(p: *mut sqlite3_backup)
+    -> i32;
+    fn sqlite3_backup_remaining(p: *mut sqlite3_backup)
+    -> i32;
+    fn sqlite3_backup_pagecount(p: *mut sqlite3_backup)
+    -> i32;
+    fn sqlite3_unlock_notify(p_blocked_1: *mut sqlite3,
+    x_notify_1: Option<unsafe extern "C" fn(*mut *mut (), i32) -> ()>,
+    p_notify_arg_1: *mut ())
+    -> i32;
+    fn sqlite3_stricmp(_: *const i8, _: *const i8)
+    -> i32;
+    fn sqlite3_strnicmp(_: *const i8, _: *const i8, _: i32)
+    -> i32;
+    fn sqlite3_strglob(z_glob_1: *const i8, z_str_1: *const i8)
+    -> i32;
+    fn sqlite3_strlike(z_glob_1: *const i8, z_str_1: *const i8, c_esc_1: u32)
+    -> i32;
+    fn sqlite3_log(i_err_code_1: i32, z_format_1: *const i8, ...)
+    -> ();
+    fn sqlite3_wal_hook(_: *mut sqlite3,
+    _:
+        Option<unsafe extern "C" fn(*mut (), *mut sqlite3, *const i8, i32)
+            -> i32>, _: *mut ())
+    -> *mut ();
+    fn sqlite3_wal_autocheckpoint(db: *mut sqlite3, n_1: i32)
+    -> i32;
+    fn sqlite3_wal_checkpoint(db: *mut sqlite3, z_db_1: *const i8)
+    -> i32;
+    fn sqlite3_wal_checkpoint_v2(db: *mut sqlite3, z_db_1: *const i8,
+    e_mode_1: i32, pn_log_1: *mut i32, pn_ckpt_1: *mut i32)
+    -> i32;
+    fn sqlite3_vtab_config(_: *mut sqlite3, op: i32, ...)
+    -> i32;
+    fn sqlite3_vtab_on_conflict(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_vtab_nochange(_: *mut sqlite3_context)
+    -> i32;
+    fn sqlite3_vtab_collation(_: *mut sqlite3_index_info, _: i32)
+    -> *const i8;
+    fn sqlite3_vtab_distinct(_: *mut sqlite3_index_info)
+    -> i32;
+    fn sqlite3_vtab_in(_: *mut sqlite3_index_info, i_cons_1: i32,
+    b_handle_1: i32)
+    -> i32;
+    fn sqlite3_vtab_in_first(p_val_1: *mut sqlite3_value,
+    pp_out_1: *mut *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_vtab_in_next(p_val_1: *mut sqlite3_value,
+    pp_out_1: *mut *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_vtab_rhs_value(_: *mut sqlite3_index_info, _: i32,
+    pp_val_1: *mut *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_stmt_scanstatus(p_stmt_1: *mut sqlite3_stmt, idx: i32,
+    i_scan_status_op_1: i32, p_out_1: *mut ())
+    -> i32;
+    fn sqlite3_stmt_scanstatus_v2(p_stmt_1: *mut sqlite3_stmt, idx: i32,
+    i_scan_status_op_1: i32, flags: i32, p_out_1: *mut ())
+    -> i32;
+    fn sqlite3_stmt_scanstatus_reset(_: *mut sqlite3_stmt)
+    -> ();
+    fn sqlite3_db_cacheflush(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_system_errno(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_snapshot_get(db: *mut sqlite3, z_schema_1: *const i8,
+    pp_snapshot_1: *mut *mut sqlite3_snapshot)
+    -> i32;
+    fn sqlite3_snapshot_open(db: *mut sqlite3, z_schema_1: *const i8,
+    p_snapshot_1: *mut sqlite3_snapshot)
+    -> i32;
+    fn sqlite3_snapshot_free(_: *mut sqlite3_snapshot)
+    -> ();
+    fn sqlite3_snapshot_cmp(p1: *mut sqlite3_snapshot,
+    p2: *mut sqlite3_snapshot)
+    -> i32;
+    fn sqlite3_snapshot_recover(db: *mut sqlite3, z_db_1: *const i8)
+    -> i32;
+    fn sqlite3_serialize(db: *mut sqlite3, z_schema_1: *const i8,
+    pi_size_1: *mut sqlite3_int64, m_flags_1: u32)
+    -> *mut u8;
+    fn sqlite3_deserialize(db: *mut sqlite3, z_schema_1: *const i8,
+    p_data_1: *mut u8, sz_db_1: sqlite3_int64, sz_buf_1: sqlite3_int64,
+    m_flags_1: u32)
+    -> i32;
+    fn sqlite3_carray_bind_v2(p_stmt_1: *mut sqlite3_stmt, i: i32,
+    a_data_1: *mut (), n_data_1: i32, m_flags_1: i32,
+    x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>, p_del_1: *mut ())
+    -> i32;
+    fn sqlite3_carray_bind(p_stmt_1: *mut sqlite3_stmt, i: i32,
+    a_data_1: *mut (), n_data_1: i32, m_flags_1: i32,
+    x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_rtree_geometry_callback(db: *mut sqlite3, z_geom_1: *const i8,
+    x_geom_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_rtree_geometry, i32,
+            *mut f64, *mut i32) -> i32>, p_context_1: *mut ())
+    -> i32;
+    fn sqlite3_rtree_query_callback(db: *mut sqlite3,
+    z_query_func_1: *const i8,
+    x_query_func_1:
+        Option<unsafe extern "C" fn(*mut sqlite3_rtree_query_info) -> i32>,
+    p_context_1: *mut (),
+    x_destructor_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_hash_init(_: *mut Hash)
+    -> ();
+    fn sqlite3_hash_insert(_: *mut Hash, p_key_1: *const i8,
+    p_data_1: *mut ())
+    -> *mut ();
+    fn sqlite3_hash_find(_: *const Hash, p_key_1: *const i8)
+    -> *mut ();
+    fn sqlite3_hash_clear(_: *mut Hash)
+    -> ();
+    static mut sqlite3_tree_trace: u32;
+    static mut sqlite3_where_trace: u32;
+    fn sqlite3OsInit()
+    -> i32;
+    fn sqlite3_os_close(_: *mut sqlite3_file)
+    -> ();
+    fn sqlite3_os_read(_: *mut sqlite3_file, _: *mut (), amt: i32,
+    offset: i64)
+    -> i32;
+    fn sqlite3_os_write(_: *mut sqlite3_file, _: *const (), amt: i32,
+    offset: i64)
+    -> i32;
+    fn sqlite3_os_truncate(_: *mut sqlite3_file, size: i64)
+    -> i32;
+    fn sqlite3_os_sync(_: *mut sqlite3_file, _: i32)
+    -> i32;
+    fn sqlite3_os_file_size(_: *mut sqlite3_file, p_size_1: *mut i64)
+    -> i32;
+    fn sqlite3_os_lock(_: *mut sqlite3_file, _: i32)
+    -> i32;
+    fn sqlite3_os_unlock(_: *mut sqlite3_file, _: i32)
+    -> i32;
+    fn sqlite3_os_check_reserved_lock(id: *mut sqlite3_file,
+    p_res_out_1: *mut i32)
+    -> i32;
+    fn sqlite3_os_file_control(_: *mut sqlite3_file, _: i32, _: *mut ())
+    -> i32;
+    fn sqlite3_os_file_control_hint(_: *mut sqlite3_file, _: i32, _: *mut ())
+    -> ();
+    fn sqlite3_os_sector_size(id: *mut sqlite3_file)
+    -> i32;
+    fn sqlite3_os_device_characteristics(id: *mut sqlite3_file)
+    -> i32;
+    fn sqlite3_os_shm_map(_: *mut sqlite3_file, _: i32, _: i32, _: i32,
+    _: *mut *mut ())
+    -> i32;
+    fn sqlite3_os_shm_lock(id: *mut sqlite3_file, _: i32, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_os_shm_barrier(id: *mut sqlite3_file)
+    -> ();
+    fn sqlite3_os_shm_unmap(id: *mut sqlite3_file, _: i32)
+    -> i32;
+    fn sqlite3_os_fetch(id: *mut sqlite3_file, _: i64, _: i32,
+    _: *mut *mut ())
+    -> i32;
+    fn sqlite3_os_unfetch(_: *mut sqlite3_file, _: i64, _: *mut ())
+    -> i32;
+    fn sqlite3_os_open(_: *mut sqlite3_vfs, _: *const i8,
+    _: *mut sqlite3_file, _: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_os_delete(_: *mut sqlite3_vfs, _: *const i8, _: i32)
+    -> i32;
+    fn sqlite3_os_access(_: *mut sqlite3_vfs, _: *const i8, _: i32,
+    p_res_out_1: *mut i32)
+    -> i32;
+    fn sqlite3_os_full_pathname(_: *mut sqlite3_vfs, _: *const i8, _: i32,
+    _: *mut i8)
+    -> i32;
+    fn sqlite3_os_dl_open(_: *mut sqlite3_vfs, _: *const i8)
+    -> *mut ();
+    fn sqlite3_os_dl_error(_: *mut sqlite3_vfs, _: i32, _: *mut i8)
+    -> ();
+    fn sqlite3_os_dl_sym(_: *mut sqlite3_vfs, _: *mut (), _: *const i8)
+    -> unsafe extern "C" fn() -> ();
+    fn sqlite3_os_dl_close(_: *mut sqlite3_vfs, _: *mut ())
+    -> ();
+    fn sqlite3_os_randomness(_: *mut sqlite3_vfs, _: i32, _: *mut i8)
+    -> i32;
+    fn sqlite3_os_sleep(_: *mut sqlite3_vfs, _: i32)
+    -> i32;
+    fn sqlite3_os_get_last_error(_: *mut sqlite3_vfs)
+    -> i32;
+    fn sqlite3_os_current_time_int64(_: *mut sqlite3_vfs,
+    _: *mut sqlite3_int64)
+    -> i32;
+    fn sqlite3_os_open_malloc(_: *mut sqlite3_vfs, _: *const i8,
+    _: *mut *mut sqlite3_file, _: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_os_close_free(_: *mut sqlite3_file)
+    -> ();
+    fn sqlite3_pager_open(_: *mut sqlite3_vfs, pp_pager_1: *mut *mut Pager,
+    _: *const i8, _: i32, _: i32, _: i32,
+    _: Option<unsafe extern "C" fn(*mut PgHdr) -> ()>)
+    -> i32;
+    fn sqlite3_pager_close(p_pager_1: *mut Pager, _: *mut sqlite3)
+    -> i32;
+    fn sqlite3_pager_read_fileheader(_: *mut Pager, _: i32, _: *mut u8)
+    -> i32;
+    fn sqlite3_pager_set_busy_handler(_: *mut Pager,
+    _: Option<unsafe extern "C" fn(*mut ()) -> i32>, _: *mut ())
+    -> ();
+    fn sqlite3_pager_set_pagesize(_: *mut Pager, _: *mut u32, _: i32)
+    -> i32;
+    fn sqlite3_pager_max_page_count(_: *mut Pager, _: Pgno)
+    -> Pgno;
+    fn sqlite3_pager_set_cachesize(_: *mut Pager, _: i32)
+    -> ();
+    fn sqlite3_pager_set_spillsize(_: *mut Pager, _: i32)
+    -> i32;
+    fn sqlite3_pager_set_mmap_limit(_: *mut Pager, _: sqlite3_int64)
+    -> ();
+    fn sqlite3_pager_shrink(_: *mut Pager)
+    -> ();
+    fn sqlite3_pager_set_flags(_: *mut Pager, _: u32)
+    -> ();
+    fn sqlite3_pager_locking_mode(_: *mut Pager, _: i32)
+    -> i32;
+    fn sqlite3_pager_set_journal_mode(_: *mut Pager, _: i32)
+    -> i32;
+    fn sqlite3_pager_get_journal_mode(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_ok_to_change_journal_mode(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_journal_size_limit(_: *mut Pager, _: i64)
+    -> i64;
+    fn sqlite3_pager_backup_ptr(_: *mut Pager)
+    -> *mut *mut sqlite3_backup;
+    fn sqlite3_pager_flush(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_get(p_pager_1: *mut Pager, pgno: Pgno,
+    pp_page_1: *mut *mut DbPage, clr_flag_1: i32)
+    -> i32;
+    fn sqlite3_pager_lookup(p_pager_1: *mut Pager, pgno: Pgno)
+    -> *mut DbPage;
+    fn sqlite3_pager_ref(_: *mut DbPage)
+    -> ();
+    fn sqlite3_pager_unref(_: *mut DbPage)
+    -> ();
+    fn sqlite3_pager_unref_not_null(_: *mut DbPage)
+    -> ();
+    fn sqlite3_pager_unref_page_one(_: *mut DbPage)
+    -> ();
+    fn sqlite3_pager_write(_: *mut DbPage)
+    -> i32;
+    fn sqlite3_pager_dont_write(_: *mut DbPage)
+    -> ();
+    fn sqlite3_pager_movepage(_: *mut Pager, _: *mut DbPage, _: Pgno, _: i32)
+    -> i32;
+    fn sqlite3_pager_page_refcount(_: *mut DbPage)
+    -> i32;
+    fn sqlite3_pager_get_data(_: *mut DbPage)
+    -> *mut ();
+    fn sqlite3_pager_get_extra(_: *mut DbPage)
+    -> *mut ();
+    fn sqlite3_pager_pagecount(_: *mut Pager, _: *mut i32)
+    -> ();
+    fn sqlite3_pager_begin(_: *mut Pager, ex_flag_1: i32, _: i32)
+    -> i32;
+    fn sqlite3_pager_commit_phase_one(_: *mut Pager, z_super_1: *const i8,
+    _: i32)
+    -> i32;
+    fn sqlite3_pager_exclusive_lock(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_sync(p_pager_1: *mut Pager, z_super_1: *const i8)
+    -> i32;
+    fn sqlite3_pager_commit_phase_two(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_rollback(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_open_savepoint(p_pager_1: *mut Pager, n: i32)
+    -> i32;
+    fn sqlite3_pager_savepoint(p_pager_1: *mut Pager, op: i32,
+    i_savepoint_1: i32)
+    -> i32;
+    fn sqlite3_pager_shared_lock(p_pager_1: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_checkpoint(p_pager_1: *mut Pager, _: *mut sqlite3,
+    _: i32, _: *mut i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_pager_wal_supported(p_pager_1: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_wal_callback(p_pager_1: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_open_wal(p_pager_1: *mut Pager, pis_open_1: *mut i32)
+    -> i32;
+    fn sqlite3_pager_close_wal(p_pager_1: *mut Pager, _: *mut sqlite3)
+    -> i32;
+    fn sqlite3_pager_direct_read_ok(p_pager_1: *mut Pager, pgno: Pgno)
+    -> i32;
+    fn sqlite3_pager_isreadonly(_: *mut Pager)
+    -> u8;
+    fn sqlite3_pager_data_version(_: *mut Pager)
+    -> u32;
+    fn sqlite3_pager_mem_used(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_filename(_: *const Pager, _: i32)
+    -> *const i8;
+    fn sqlite3_pager_vfs(_: *mut Pager)
+    -> *mut sqlite3_vfs;
+    fn sqlite3_pager_file(_: *mut Pager)
+    -> *mut sqlite3_file;
+    fn sqlite3_pager_jrnl_file(_: *mut Pager)
+    -> *mut sqlite3_file;
+    fn sqlite3_pager_journalname(_: *mut Pager)
+    -> *const i8;
+    fn sqlite3_pager_temp_space(_: *mut Pager)
+    -> *mut ();
+    fn sqlite3_pager_is_memdb(_: *mut Pager)
+    -> i32;
+    fn sqlite3_pager_cache_stat(_: *mut Pager, _: i32, _: i32, _: *mut u64)
+    -> ();
+    fn sqlite3_pager_clear_cache(_: *mut Pager)
+    -> ();
+    fn sqlite3_sector_size(_: *mut sqlite3_file)
+    -> i32;
+    fn sqlite3_pager_truncate_image(_: *mut Pager, _: Pgno)
+    -> ();
+    fn sqlite3_pager_rekey(_: *mut DbPage, _: Pgno, _: u16)
+    -> ();
+    fn sqlite3_btree_open(p_vfs_1: *mut sqlite3_vfs, z_filename_1: *const i8,
+    db: *mut sqlite3, pp_btree_1: *mut *mut Btree, flags: i32,
+    vfs_flags_1: i32)
+    -> i32;
+    fn sqlite3_btree_close(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_set_cache_size(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_set_spill_size(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_set_mmap_limit(_: *mut Btree, _: sqlite3_int64)
+    -> i32;
+    fn sqlite3_btree_set_pager_flags(_: *mut Btree, _: u32)
+    -> i32;
+    fn sqlite3_btree_set_page_size(p: *mut Btree, n_pagesize_1: i32,
+    n_reserve_1: i32, e_fix_1: i32)
+    -> i32;
+    fn sqlite3_btree_get_page_size(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_max_page_count(_: *mut Btree, _: Pgno)
+    -> Pgno;
+    fn sqlite3_btree_last_page(_: *mut Btree)
+    -> Pgno;
+    fn sqlite3_btree_secure_delete(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_get_requested_reserve(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_get_reserve_no_mutex(p: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_set_auto_vacuum(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_get_auto_vacuum(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_begin_trans(_: *mut Btree, _: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_btree_commit_phase_one(_: *mut Btree, _: *const i8)
+    -> i32;
+    fn sqlite3_btree_commit_phase_two(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_commit(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_rollback(_: *mut Btree, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_btree_begin_stmt(_: *mut Btree, _: i32)
+    -> i32;
+    fn sqlite3_btree_create_table(_: *mut Btree, _: *mut Pgno, flags: i32)
+    -> i32;
+    fn sqlite3_btree_txn_state(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_is_in_backup(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_schema(_: *mut Btree, _: i32,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> *mut ();
+    fn sqlite3_btree_schema_locked(p_btree_1: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_lock_table(p_btree_1: *mut Btree, i_tab_1: i32,
+    is_write_lock_1: u8)
+    -> i32;
+    fn sqlite3_btree_savepoint(_: *mut Btree, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_btree_checkpoint(_: *mut Btree, _: i32, _: *mut i32,
+    _: *mut i32)
+    -> i32;
+    fn sqlite3_btree_get_filename(_: *mut Btree)
+    -> *const i8;
+    fn sqlite3_btree_get_journalname(_: *mut Btree)
+    -> *const i8;
+    fn sqlite3_btree_copy_file(_: *mut Btree, _: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_incr_vacuum(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_drop_table(_: *mut Btree, _: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_btree_clear_table(_: *mut Btree, _: i32, _: *mut i64)
+    -> i32;
+    fn sqlite3_btree_clear_table_of_cursor(_: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_trip_all_cursors(_: *mut Btree, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_btree_get_meta(p_btree_1: *mut Btree, idx: i32,
+    p_value_1: *mut u32)
+    -> ();
+    fn sqlite3_btree_update_meta(_: *mut Btree, idx: i32, value: u32)
+    -> i32;
+    fn sqlite3_btree_new_db(p: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_cursor(_: *mut Btree, i_table_1: Pgno, wr_flag_1: i32,
+    _: *mut KeyInfo, p_cursor_1: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_fake_valid_cursor()
+    -> *mut BtCursor;
+    fn sqlite3_btree_cursor_size()
+    -> i32;
+    fn sqlite3_btree_cursor_zero(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_cursor_hint_flags(_: *mut BtCursor, _: u32)
+    -> ();
+    fn sqlite3_btree_close_cursor(_: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_table_moveto(_: *mut BtCursor, int_key_1: i64, bias: i32,
+    p_res_1: *mut i32)
+    -> i32;
+    fn sqlite3_btree_index_moveto(_: *mut BtCursor,
+    p_un_key_1: *mut UnpackedRecord, p_res_1: *mut i32)
+    -> i32;
+    fn sqlite3_btree_cursor_has_moved(_: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_cursor_restore(_: *mut BtCursor, _: *mut i32)
+    -> i32;
+    fn sqlite3_btree_delete(_: *mut BtCursor, flags: u8)
+    -> i32;
+    fn sqlite3_btree_insert(_: *mut BtCursor,
+    p_payload_1: *const BtreePayload, flags: i32, seek_result_1: i32)
+    -> i32;
+    fn sqlite3_btree_first(_: *mut BtCursor, p_res_1: *mut i32)
+    -> i32;
+    fn sqlite3_btree_is_empty(p_cur_1: *mut BtCursor, p_res_1: *mut i32)
+    -> i32;
+    fn sqlite3_btree_last(_: *mut BtCursor, p_res_1: *mut i32)
+    -> i32;
+    fn sqlite3_btree_next(_: *mut BtCursor, flags: i32)
+    -> i32;
+    fn sqlite3_btree_eof(_: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_previous(_: *mut BtCursor, flags: i32)
+    -> i32;
+    fn sqlite3_btree_integer_key(_: *mut BtCursor)
+    -> i64;
+    fn sqlite3_btree_cursor_pin(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_cursor_unpin(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_offset(_: *mut BtCursor)
+    -> i64;
+    fn sqlite3_btree_payload(_: *mut BtCursor, offset: u32, amt: u32,
+    _: *mut ())
+    -> i32;
+    fn sqlite3_btree_payload_fetch(_: *mut BtCursor, p_amt_1: *mut u32)
+    -> *const ();
+    fn sqlite3_btree_payload_size(_: *mut BtCursor)
+    -> u32;
+    fn sqlite3_btree_max_record_size(_: *mut BtCursor)
+    -> sqlite3_int64;
+    fn sqlite3_btree_integrity_check(db: *mut sqlite3, p: *mut Btree,
+    a_root_1: *mut Pgno, a_cnt_1: *mut sqlite3_value, n_root_1: i32,
+    mx_err_1: i32, pn_err_1: *mut i32, pz_out_1: *mut *mut i8)
+    -> i32;
+    fn sqlite3_btree_pager(_: *mut Btree)
+    -> *mut Pager;
+    fn sqlite3_btree_row_count_est(_: *mut BtCursor)
+    -> i64;
+    fn sqlite3_btree_payload_checked(_: *mut BtCursor, offset: u32, amt: u32,
+    _: *mut ())
+    -> i32;
+    fn sqlite3_btree_put_data(_: *mut BtCursor, offset: u32, amt: u32,
+    _: *mut ())
+    -> i32;
+    fn sqlite3_btree_incrblob_cursor(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_clear_cursor(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_set_version(p_bt_1: *mut Btree, i_version_1: i32)
+    -> i32;
+    fn sqlite3_btree_cursor_has_hint(_: *mut BtCursor, mask: u32)
+    -> i32;
+    fn sqlite3_btree_is_readonly(p_bt_1: *mut Btree)
+    -> i32;
+    fn sqlite3_header_size_btree()
+    -> i32;
+    fn sqlite3_btree_cursor_is_valid_nn(_: *mut BtCursor)
+    -> i32;
+    fn sqlite3_btree_count(_: *mut sqlite3, _: *mut BtCursor, _: *mut i64)
+    -> i32;
+    fn sqlite3_btree_transfer_row(_: *mut BtCursor, _: *mut BtCursor, _: i64)
+    -> i32;
+    fn sqlite3_btree_clear_cache(_: *mut Btree)
+    -> ();
+    fn sqlite3_btree_enter(_: *mut Btree)
+    -> ();
+    fn sqlite3_btree_enter_all(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_btree_sharable(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_enter_cursor(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_connection_count(_: *mut Btree)
+    -> i32;
+    fn sqlite3_btree_leave(_: *mut Btree)
+    -> ();
+    fn sqlite3_btree_leave_cursor(_: *mut BtCursor)
+    -> ();
+    fn sqlite3_btree_leave_all(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_vdbe_create(_: *mut Parse)
+    -> *mut Vdbe;
+    fn sqlite3_vdbe_parser(_: *mut Vdbe)
+    -> *mut Parse;
+    fn sqlite3_vdbe_add_op0(_: *mut Vdbe, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_op1(_: *mut Vdbe, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_op2(_: *mut Vdbe, _: i32, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_goto(_: *mut Vdbe, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_load_string(_: *mut Vdbe, _: i32, _: *const i8)
+    -> i32;
+    fn sqlite3_vdbe_multi_load(_: *mut Vdbe, _: i32, _: *const i8, ...)
+    -> ();
+    fn sqlite3_vdbe_add_op3(_: *mut Vdbe, _: i32, _: i32, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_op4(_: *mut Vdbe, _: i32, _: i32, _: i32, _: i32,
+    z_p4_1: *const i8, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_op4_dup8(_: *mut Vdbe, _: i32, _: i32, _: i32, _: i32,
+    _: *const u8, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_op4_int(_: *mut Vdbe, _: i32, _: i32, _: i32, _: i32,
+    _: i32)
+    -> i32;
+    fn sqlite3_vdbe_add_function_call(_: *mut Parse, _: i32, _: i32, _: i32,
+    _: i32, _: *const FuncDef, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_end_coroutine(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_add_op_list(_: *mut Vdbe, n_op_1: i32,
+    a_op_1: *const VdbeOpList, i_lineno_1: i32)
+    -> *mut VdbeOp;
+    fn sqlite3_vdbe_explain(_: *mut Parse, _: u8, _: *const i8, ...)
+    -> i32;
+    fn sqlite3_vdbe_explain_pop(_: *mut Parse)
+    -> ();
+    fn sqlite3_vdbe_explain_parent(_: *mut Parse)
+    -> i32;
+    fn sqlite3_vdbe_add_parse_schema_op(_: *mut Vdbe, _: i32, _: *mut i8,
+    _: u16)
+    -> ();
+    fn sqlite3_vdbe_change_opcode(_: *mut Vdbe, addr: i32, _: u8)
+    -> ();
+    fn sqlite3_vdbe_change_p1(_: *mut Vdbe, addr: i32, p1_1: i32)
+    -> ();
+    fn sqlite3_vdbe_change_p2(_: *mut Vdbe, addr: i32, p2_1: i32)
+    -> ();
+    fn sqlite3_vdbe_change_p3(_: *mut Vdbe, addr: i32, p3_1: i32)
+    -> ();
+    fn sqlite3_vdbe_change_p5(_: *mut Vdbe, p5_1: u16)
+    -> ();
+    fn sqlite3_vdbe_typeof_column(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_jump_here(_: *mut Vdbe, addr: i32)
+    -> ();
+    fn sqlite3_vdbe_jump_here_or_pop_inst(_: *mut Vdbe, addr: i32)
+    -> ();
+    fn sqlite3_vdbe_change_to_noop(_: *mut Vdbe, addr: i32)
+    -> i32;
+    fn sqlite3_vdbe_delete_prior_opcode(_: *mut Vdbe, op: u8)
+    -> i32;
+    fn sqlite3_vdbe_change_p4(_: *mut Vdbe, addr: i32, z_p4_1: *const i8,
+    n_1: i32)
+    -> ();
+    fn sqlite3_vdbe_append_p4(_: *mut Vdbe, p_p4_1: *mut (), p4type: i32)
+    -> ();
+    fn sqlite3_vdbe_set_p4_key_info(_: *mut Parse, _: *mut Index)
+    -> ();
+    fn sqlite3_vdbe_uses_btree(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_get_op(_: *mut Vdbe, _: i32)
+    -> *mut VdbeOp;
+    fn sqlite3_vdbe_get_last_op(_: *mut Vdbe)
+    -> *mut VdbeOp;
+    fn sqlite3_vdbe_make_label(_: *mut Parse)
+    -> i32;
+    fn sqlite3_vdbe_run_only_once(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_reusable(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_delete(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_make_ready(_: *mut Vdbe, _: *mut Parse)
+    -> ();
+    fn sqlite3_vdbe_finalize(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_resolve_label(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_current_addr(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_reset_step_result(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_rewind(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_reset(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_set_num_cols(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_set_col_name(_: *mut Vdbe, _: i32, _: i32, _: *const i8,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_vdbe_count_changes(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_db(_: *mut Vdbe)
+    -> *mut sqlite3;
+    fn sqlite3_vdbe_prepare_flags(_: *mut Vdbe)
+    -> u8;
+    fn sqlite3_vdbe_set_sql(_: *mut Vdbe, z: *const i8, n: i32, _: u8)
+    -> ();
+    fn sqlite3_vdbe_swap(_: *mut Vdbe, _: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_take_op_array(_: *mut Vdbe, _: *mut i32, _: *mut i32)
+    -> *mut VdbeOp;
+    fn sqlite3_vdbe_get_bound_value(_: *mut Vdbe, _: i32, _: u8)
+    -> *mut sqlite3_value;
+    fn sqlite3_vdbe_set_varmask(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_expand_sql(_: *mut Vdbe, _: *const i8)
+    -> *mut i8;
+    fn sqlite3_mem_compare(_: *const Mem, _: *const Mem, _: *const CollSeq)
+    -> i32;
+    fn sqlite3_blob_compare(_: *const Mem, _: *const Mem)
+    -> i32;
+    fn sqlite3_vdbe_func_name(_: *const sqlite3_context)
+    -> *const i8;
+    fn sqlite3_vdbe_record_unpack(_: i32, _: *const (),
+    _: *mut UnpackedRecord)
+    -> ();
+    fn sqlite3_vdbe_record_compare(_: i32, _: *const (),
+    _: *mut UnpackedRecord)
+    -> i32;
+    fn sqlite3_vdbe_record_compare_with_skip(_: i32, _: *const (),
+    _: *mut UnpackedRecord, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_alloc_unpacked_record(_: *mut KeyInfo)
+    -> *mut UnpackedRecord;
+    fn sqlite3_vdbe_find_compare(_: *mut UnpackedRecord)
+    -> unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord) -> i32;
+    fn sqlite3_vdbe_link_sub_program(_: *mut Vdbe, _: *mut SubProgram)
+    -> ();
+    fn sqlite3_vdbe_has_sub_program(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_mem_set_array_int64(a_mem_1: *mut sqlite3_value, i_idx_1: i32,
+    val: i64)
+    -> ();
+    fn sqlite3_not_pure_func(_: *mut sqlite3_context)
+    -> i32;
+    fn sqlite3_pcache_initialize()
+    -> i32;
+    fn sqlite3_pcache_shutdown()
+    -> ();
+    fn sqlite3_p_cache_buffer_setup(_: *mut (), sz: i32, n: i32)
+    -> ();
+    fn sqlite3_pcache_open(sz_page_1: i32, sz_extra_1: i32,
+    b_purgeable_1: i32,
+    x_stress_1: Option<unsafe extern "C" fn(*mut (), *mut PgHdr) -> i32>,
+    p_stress_1: *mut (), p_to_init_1: *mut PCache)
+    -> i32;
+    fn sqlite3_pcache_set_page_size(_: *mut PCache, _: i32)
+    -> i32;
+    fn sqlite3_pcache_size()
+    -> i32;
+    fn sqlite3_pcache_fetch(_: *mut PCache, _: Pgno, create_flag_1: i32)
+    -> *mut sqlite3_pcache_page;
+    fn sqlite3_pcache_fetch_stress(_: *mut PCache, _: Pgno,
+    _: *mut *mut sqlite3_pcache_page)
+    -> i32;
+    fn sqlite3_pcache_fetch_finish(_: *mut PCache, _: Pgno,
+    p_page_1: *mut sqlite3_pcache_page)
+    -> *mut PgHdr;
+    fn sqlite3_pcache_release(_: *mut PgHdr)
+    -> ();
+    fn sqlite3_pcache_drop(_: *mut PgHdr)
+    -> ();
+    fn sqlite3_pcache_make_dirty(_: *mut PgHdr)
+    -> ();
+    fn sqlite3_pcache_make_clean(_: *mut PgHdr)
+    -> ();
+    fn sqlite3_pcache_clean_all(_: *mut PCache)
+    -> ();
+    fn sqlite3_pcache_clear_writable(_: *mut PCache)
+    -> ();
+    fn sqlite3_pcache_move(_: *mut PgHdr, _: Pgno)
+    -> ();
+    fn sqlite3_pcache_truncate(_: *mut PCache, x: Pgno)
+    -> ();
+    fn sqlite3_pcache_dirty_list(_: *mut PCache)
+    -> *mut PgHdr;
+    fn sqlite3_pcache_close(_: *mut PCache)
+    -> ();
+    fn sqlite3_pcache_clear_sync_flags(_: *mut PCache)
+    -> ();
+    fn sqlite3_pcache_clear(_: *mut PCache)
+    -> ();
+    fn sqlite3_pcache_ref_count(_: *mut PCache)
+    -> i64;
+    fn sqlite3_pcache_ref(_: *mut PgHdr)
+    -> ();
+    fn sqlite3_pcache_page_refcount(_: *mut PgHdr)
+    -> i64;
+    fn sqlite3_pcache_pagecount(_: *mut PCache)
+    -> i32;
+    fn sqlite3_pcache_set_cachesize(_: *mut PCache, _: i32)
+    -> ();
+    fn sqlite3_pcache_set_spillsize(_: *mut PCache, _: i32)
+    -> i32;
+    fn sqlite3_pcache_shrink(_: *mut PCache)
+    -> ();
+    fn sqlite3_p_cache_set_default()
+    -> ();
+    fn sqlite3_header_size_pcache()
+    -> i32;
+    fn sqlite3_header_size_pcache1()
+    -> i32;
+    fn sqlite3_p_cache_percent_dirty(_: *mut PCache)
+    -> i32;
+    fn sqlite3_p_cache_is_dirty(p_cache_1: *mut PCache)
+    -> i32;
+    fn sqlite3_walk_expr(_: *mut Walker, _: *mut Expr)
+    -> i32;
+    fn sqlite3_walk_expr_nn(_: *mut Walker, _: *mut Expr)
+    -> i32;
+    fn sqlite3_walk_expr_list(_: *mut Walker, _: *mut ExprList)
+    -> i32;
+    fn sqlite3_walk_select(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_walk_select_expr(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_walk_select_from(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_expr_walk_noop(_: *mut Walker, _: *mut Expr)
+    -> i32;
+    fn sqlite3_select_walk_noop(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_select_walk_fail(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_walker_depth_increase(_: *mut Walker, _: *mut Select)
+    -> i32;
+    fn sqlite3_walker_depth_decrease(_: *mut Walker, _: *mut Select)
+    -> ();
+    fn sqlite3_walk_win_defn_dummy_callback(_: *mut Walker, _: *mut Select)
+    -> ();
+    fn sqlite3_select_pop_with(_: *mut Walker, _: *mut Select)
+    -> ();
+    fn sqlite3_multi_values(p_parse_1: *mut Parse, p_left_1: *mut Select,
+    p_row_1: *mut ExprList)
+    -> *mut Select;
+    fn sqlite3_multi_values_end(p_parse_1: *mut Parse, p_val_1: *mut Select)
+    -> ();
+    fn sqlite3_window_delete(_: *mut sqlite3, _: *mut Window)
+    -> ();
+    fn sqlite3_window_unlink_from_select(_: *mut Window)
+    -> ();
+    fn sqlite3_window_list_delete(db: *mut sqlite3, p: *mut Window)
+    -> ();
+    fn sqlite3_window_alloc(_: *mut Parse, _: i32, _: i32, _: *mut Expr,
+    _: i32, _: *mut Expr, _: u8)
+    -> *mut Window;
+    fn sqlite3_window_attach(_: *mut Parse, _: *mut Expr, _: *mut Window)
+    -> ();
+    fn sqlite3_window_link(p_sel_1: *mut Select, p_win_1: *mut Window)
+    -> ();
+    fn sqlite3_window_compare(_: *const Parse, _: *const Window,
+    _: *const Window, _: i32)
+    -> i32;
+    fn sqlite3_window_code_init(_: *mut Parse, _: *mut Select)
+    -> ();
+    fn sqlite3_window_code_step(_: *mut Parse, _: *mut Select,
+    _: *mut WhereInfo, _: i32, _: i32)
+    -> ();
+    fn sqlite3_window_rewrite(_: *mut Parse, _: *mut Select)
+    -> i32;
+    fn sqlite3_window_update(_: *mut Parse, _: *mut Window, _: *mut Window,
+    _: *mut FuncDef)
+    -> ();
+    fn sqlite3_window_dup(db: *mut sqlite3, p_owner_1: *mut Expr,
+    p: *mut Window)
+    -> *mut Window;
+    fn sqlite3_window_list_dup(db: *mut sqlite3, p: *mut Window)
+    -> *mut Window;
+    fn sqlite3_window_functions()
+    -> ();
+    fn sqlite3_window_chain(_: *mut Parse, _: *mut Window, _: *mut Window)
+    -> ();
+    fn sqlite3_window_assemble(_: *mut Parse, _: *mut Window,
+    _: *mut ExprList, _: *mut ExprList, _: *mut Token)
+    -> *mut Window;
+    fn sqlite3_report_error(i_err_1: i32, lineno: i32, z_type_1: *const i8)
+    -> i32;
+    fn sqlite3_corrupt_error(_: i32)
+    -> i32;
+    fn sqlite3_misuse_error(_: i32)
+    -> i32;
+    fn sqlite3_cantopen_error(_: i32)
+    -> i32;
+    fn sqlite3_is_id_char(_: u8)
+    -> i32;
+    fn sqlite3_str_i_cmp(_: *const i8, _: *const i8)
+    -> i32;
+    fn sqlite3_strlen30(_: *const i8)
+    -> i32;
+    fn sqlite3ColumnType(_: *mut Column, _: *mut i8)
+    -> *mut i8;
+    fn sqlite3_malloc_init()
+    -> i32;
+    fn sqlite3_malloc_end()
+    -> ();
+    fn sqlite3Malloc(_: u64)
+    -> *mut ();
+    fn sqlite3_malloc_zero(_: u64)
+    -> *mut ();
+    fn sqlite3_db_malloc_zero(_: *mut sqlite3, _: u64)
+    -> *mut ();
+    fn sqlite3_db_malloc_raw(_: *mut sqlite3, _: u64)
+    -> *mut ();
+    fn sqlite3_db_malloc_raw_nn(_: *mut sqlite3, _: u64)
+    -> *mut ();
+    fn sqlite3_db_str_dup(_: *mut sqlite3, _: *const i8)
+    -> *mut i8;
+    fn sqlite3_db_str_n_dup(_: *mut sqlite3, _: *const i8, _: u64)
+    -> *mut i8;
+    fn sqlite3_db_span_dup(_: *mut sqlite3, _: *const i8, _: *const i8)
+    -> *mut i8;
+    fn sqlite3Realloc(_: *mut (), _: u64)
+    -> *mut ();
+    fn sqlite3_db_realloc_or_free(_: *mut sqlite3, _: *mut (), _: u64)
+    -> *mut ();
+    fn sqlite3_db_realloc(_: *mut sqlite3, _: *mut (), _: u64)
+    -> *mut ();
+    fn sqlite3_db_free(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_db_free_nn(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_db_nn_free_nn(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_malloc_size(_: *const ())
+    -> i32;
+    fn sqlite3_db_malloc_size(_: *mut sqlite3, _: *const ())
+    -> i32;
+    fn sqlite3_page_malloc(_: i32)
+    -> *mut ();
+    fn sqlite3_page_free(_: *mut ())
+    -> ();
+    fn sqlite3_mem_set_default()
+    -> ();
+    fn sqlite3_benign_malloc_hooks(_: Option<unsafe extern "C" fn() -> ()>,
+    _: Option<unsafe extern "C" fn() -> ()>)
+    -> ();
+    fn sqlite3_heap_nearly_full()
+    -> i32;
+    fn sqlite3_default_mutex()
+    -> *const sqlite3_mutex_methods;
+    fn sqlite3_noop_mutex()
+    -> *const sqlite3_mutex_methods;
+    fn sqlite3MutexAlloc(_: i32)
+    -> *mut sqlite3_mutex;
+    fn sqlite3_mutex_init()
+    -> i32;
+    fn sqlite3_mutex_end()
+    -> i32;
+    fn sqlite3_memory_barrier()
+    -> ();
+    fn sqlite3_status_value(_: i32)
+    -> sqlite3_int64;
+    fn sqlite3_status_up(_: i32, _: i32)
+    -> ();
+    fn sqlite3_status_down(_: i32, _: i32)
+    -> ();
+    fn sqlite3_status_highwater(_: i32, _: i32)
+    -> ();
+    fn sqlite3_lookaside_used(_: *mut sqlite3, _: *mut i32)
+    -> i32;
+    fn sqlite3_pcache1_mutex()
+    -> *mut sqlite3_mutex;
+    fn sqlite3_malloc_mutex()
+    -> *mut sqlite3_mutex;
+    fn sqlite3_is_na_n(_: f64)
+    -> i32;
+    fn sqlite3_is_overflow(_: f64)
+    -> i32;
+    fn sqlite3_fp_decode(_: *mut FpDecode, _: f64, _: i32, _: i32)
+    -> ();
+    fn sqlite3_m_printf(_: *mut sqlite3, _: *const i8, ...)
+    -> *mut i8;
+    fn sqlite3_vm_printf(_: *mut sqlite3, _: *const i8, _: *mut i8)
+    -> *mut i8;
+    fn sqlite3_set_string(_: *mut *mut i8, _: *mut sqlite3, _: *const i8)
+    -> ();
+    fn sqlite3_progress_check(_: *mut Parse)
+    -> ();
+    fn sqlite3_error_msg(_: *mut Parse, _: *const i8, ...)
+    -> ();
+    fn sqlite3_error_to_parser(_: *mut sqlite3, _: i32)
+    -> i32;
+    fn sqlite3_dequote(_: *mut i8)
+    -> ();
+    fn sqlite3_dequote_expr(_: *mut Expr)
+    -> ();
+    fn sqlite3_dequote_token(_: *mut Token)
+    -> ();
+    fn sqlite3_dequote_number(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_token_init(_: *mut Token, _: *mut i8)
+    -> ();
+    fn sqlite3_keyword_code(_: *const u8, _: i32)
+    -> i32;
+    fn sqlite3_run_parser(_: *mut Parse, _: *const i8)
+    -> i32;
+    fn sqlite3_finish_coding(_: *mut Parse)
+    -> ();
+    fn sqlite3_get_temp_reg(_: *mut Parse)
+    -> i32;
+    fn sqlite3_release_temp_reg(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_get_temp_range(_: *mut Parse, _: i32)
+    -> i32;
+    fn sqlite3_release_temp_range(_: *mut Parse, _: i32, _: i32)
+    -> ();
+    fn sqlite3_clear_temp_reg_cache(_: *mut Parse)
+    -> ();
+    fn sqlite3_touch_register(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_expr_alloc(_: *mut sqlite3, _: i32, _: *const Token, _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr(_: *mut sqlite3, _: i32, _: *const i8)
+    -> *mut Expr;
+    fn sqlite3_expr_int32(_: *mut sqlite3, _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr_attach_subtrees(_: *mut sqlite3, _: *mut Expr,
+    _: *mut Expr, _: *mut Expr)
+    -> ();
+    fn sqlite3_p_expr(_: *mut Parse, _: i32, _: *mut Expr, _: *mut Expr)
+    -> *mut Expr;
+    fn sqlite3_p_expr_add_select(_: *mut Parse, _: *mut Expr, _: *mut Select)
+    -> ();
+    fn sqlite3_expr_and(_: *mut Parse, _: *mut Expr, _: *mut Expr)
+    -> *mut Expr;
+    fn sqlite3_expr_simplified_and_or(_: *mut Expr)
+    -> *mut Expr;
+    fn sqlite3_expr_function(_: *mut Parse, _: *mut ExprList, _: *const Token,
+    _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr_add_function_order_by(_: *mut Parse, _: *mut Expr,
+    _: *mut ExprList)
+    -> ();
+    fn sqlite3_expr_order_by_aggregate_error(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_expr_function_usable(_: *mut Parse, _: *const Expr,
+    _: *const FuncDef)
+    -> ();
+    fn sqlite3_expr_assign_var_number(_: *mut Parse, _: *mut Expr, _: u32)
+    -> ();
+    fn sqlite3_expr_delete(_: *mut sqlite3, _: *mut Expr)
+    -> ();
+    fn sqlite3_expr_delete_generic(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_expr_deferred_delete(_: *mut Parse, _: *mut Expr)
+    -> i32;
+    fn sqlite3_expr_unmap_and_delete(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_expr_list_append(_: *mut Parse, _: *mut ExprList, _: *mut Expr)
+    -> *mut ExprList;
+    fn sqlite3_expr_list_append_vector(_: *mut Parse, _: *mut ExprList,
+    _: *mut IdList, _: *mut Expr)
+    -> *mut ExprList;
+    fn sqlite3_expr_list_to_values(_: *mut Parse, _: i32, _: *mut ExprList)
+    -> *mut Select;
+    fn sqlite3_expr_list_set_sort_order(_: *mut ExprList, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_list_set_name(_: *mut Parse, _: *mut ExprList,
+    _: *const Token, _: i32)
+    -> ();
+    fn sqlite3_expr_list_set_span(_: *mut Parse, _: *mut ExprList,
+    _: *const i8, _: *const i8)
+    -> ();
+    fn sqlite3_expr_list_delete(_: *mut sqlite3, _: *mut ExprList)
+    -> ();
+    fn sqlite3_expr_list_delete_generic(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_expr_list_flags(_: *const ExprList)
+    -> u32;
+    fn sqlite3_index_has_duplicate_root_page(_: *mut Index)
+    -> i32;
+    fn sqlite3_init(_: *mut sqlite3, _: *mut *mut i8)
+    -> i32;
+    fn sqlite3_init_callback(_: *mut (), _: i32, _: *mut *mut i8,
+    _: *mut *mut i8)
+    -> i32;
+    fn sqlite3_init_one(_: *mut sqlite3, _: i32, _: *mut *mut i8, _: u32)
+    -> i32;
+    fn sqlite3_pragma(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut Token, _: i32)
+    -> ();
+    fn sqlite3_pragma_vtab_register(_: *mut sqlite3, z_name_1: *const i8)
+    -> *mut Module;
+    fn sqlite3_reset_all_schemas_of_connection(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_reset_one_schema(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_collapse_database_array(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_commit_internal_changes(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_column_set_expr(_: *mut Parse, _: *mut Table, _: *mut Column,
+    _: *mut Expr)
+    -> ();
+    fn sqlite3_column_expr(_: *mut Table, _: *mut Column)
+    -> *mut Expr;
+    fn sqlite3_column_set_coll(_: *mut sqlite3, _: *mut Column,
+    z_coll_1: *const i8)
+    -> ();
+    fn sqlite3_column_coll(_: *mut Column)
+    -> *const i8;
+    fn sqlite3_delete_column_names(_: *mut sqlite3, _: *mut Table)
+    -> ();
+    fn sqlite3_generate_column_names(p_parse_1: *mut Parse,
+    p_select_1: *mut Select)
+    -> ();
+    fn sqlite3_columns_from_expr_list(_: *mut Parse, _: *mut ExprList,
+    _: *mut i16, _: *mut *mut Column)
+    -> i32;
+    fn sqlite3_subquery_column_types(_: *mut Parse, _: *mut Table,
+    _: *mut Select, _: i8)
+    -> ();
+    fn sqlite3_result_set_of_select(_: *mut Parse, _: *mut Select, _: i8)
+    -> *mut Table;
+    fn sqlite3_open_schema_table(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_primary_key_index(_: *mut Table)
+    -> *mut Index;
+    fn sqlite3_table_column_to_index(_: *mut Index, _: i32)
+    -> i32;
+    fn sqlite3_table_column_to_storage(_: *mut Table, _: i16)
+    -> i16;
+    fn sqlite3_storage_column_to_table(_: *mut Table, _: i16)
+    -> i16;
+    fn sqlite3_start_table(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: i32, _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_add_column(_: *mut Parse, _: Token, _: Token)
+    -> ();
+    fn sqlite3_add_not_null(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_add_primary_key(_: *mut Parse, _: *mut ExprList, _: i32,
+    _: i32, _: i32)
+    -> ();
+    fn sqlite3_add_check_constraint(_: *mut Parse, _: *mut Expr, _: *const i8,
+    _: *const i8)
+    -> ();
+    fn sqlite3_add_default_value(_: *mut Parse, _: *mut Expr, _: *const i8,
+    _: *const i8)
+    -> ();
+    fn sqlite3_add_collate_type(_: *mut Parse, _: *mut Token)
+    -> ();
+    fn sqlite3_add_generated(_: *mut Parse, _: *mut Expr, _: *mut Token)
+    -> ();
+    fn sqlite3_end_table(_: *mut Parse, _: *mut Token, _: *mut Token, _: u32,
+    _: *mut Select)
+    -> ();
+    fn sqlite3_add_returning(_: *mut Parse, _: *mut ExprList)
+    -> ();
+    fn sqlite3_parse_uri(_: *const i8, _: *const i8, _: *mut u32,
+    _: *mut *mut sqlite3_vfs, _: *mut *mut i8, _: *mut *mut i8)
+    -> i32;
+    fn sqlite3_db_name_to_btree(_: *mut sqlite3, _: *const i8)
+    -> *mut Btree;
+    fn sqlite3_fault_sim(_: i32)
+    -> i32;
+    fn sqlite3_bitvec_create(_: u32)
+    -> *mut Bitvec;
+    fn sqlite3_bitvec_test(_: *mut Bitvec, _: u32)
+    -> i32;
+    fn sqlite3_bitvec_test_not_null(_: *mut Bitvec, _: u32)
+    -> i32;
+    fn sqlite3_bitvec_set(_: *mut Bitvec, _: u32)
+    -> i32;
+    fn sqlite3_bitvec_clear(_: *mut Bitvec, _: u32, _: *mut ())
+    -> ();
+    fn sqlite3_bitvec_destroy(_: *mut Bitvec)
+    -> ();
+    fn sqlite3_bitvec_size(_: *mut Bitvec)
+    -> u32;
+    fn sqlite3_bitvec_builtin_test(_: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_row_set_init(_: *mut sqlite3)
+    -> *mut RowSet;
+    fn sqlite3_row_set_delete(_: *mut ())
+    -> ();
+    fn sqlite3_row_set_clear(_: *mut ())
+    -> ();
+    fn sqlite3_row_set_insert(_: *mut RowSet, _: i64)
+    -> ();
+    fn sqlite3_row_set_test(_: *mut RowSet, i_batch_1: i32, _: i64)
+    -> i32;
+    fn sqlite3_row_set_next(_: *mut RowSet, _: *mut i64)
+    -> i32;
+    fn sqlite3_create_view(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut Token, _: *mut ExprList, _: *mut Select, _: i32, _: i32)
+    -> ();
+    fn sqlite3_view_get_column_names(_: *mut Parse, _: *mut Table)
+    -> i32;
+    fn sqlite3_drop_table(_: *mut Parse, _: *mut SrcList, _: i32, _: i32)
+    -> ();
+    fn sqlite3_code_drop_table(_: *mut Parse, _: *mut Table, _: i32, _: i32)
+    -> ();
+    fn sqlite3_delete_table(_: *mut sqlite3, _: *mut Table)
+    -> ();
+    fn sqlite3_delete_table_generic(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_free_index(_: *mut sqlite3, _: *mut Index)
+    -> ();
+    fn sqlite3_autoincrement_begin(p_parse_1: *mut Parse)
+    -> ();
+    fn sqlite3_autoincrement_end(p_parse_1: *mut Parse)
+    -> ();
+    fn sqlite3_insert(_: *mut Parse, _: *mut SrcList, _: *mut Select,
+    _: *mut IdList, _: i32, _: *mut Upsert)
+    -> ();
+    fn sqlite3_compute_generated_columns(_: *mut Parse, _: i32, _: *mut Table)
+    -> ();
+    fn sqlite3_array_allocate(_: *mut sqlite3, _: *mut (), _: i32,
+    _: *mut i32, _: *mut i32)
+    -> *mut ();
+    fn sqlite3_id_list_append(_: *mut Parse, _: *mut IdList, _: *mut Token)
+    -> *mut IdList;
+    fn sqlite3_id_list_index(_: *mut IdList, _: *const i8)
+    -> i32;
+    fn sqlite3_src_list_enlarge(_: *mut Parse, _: *mut SrcList, _: i32,
+    _: i32)
+    -> *mut SrcList;
+    fn sqlite3_src_list_append_list(p_parse_1: *mut Parse, p1: *mut SrcList,
+    p2: *mut SrcList)
+    -> *mut SrcList;
+    fn sqlite3_src_list_append(_: *mut Parse, _: *mut SrcList, _: *mut Token,
+    _: *mut Token)
+    -> *mut SrcList;
+    fn sqlite3_subquery_delete(_: *mut sqlite3, _: *mut Subquery)
+    -> ();
+    fn sqlite3_subquery_detach(_: *mut sqlite3, _: *mut SrcItem)
+    -> *mut Select;
+    fn sqlite3_src_item_attach_subquery(_: *mut Parse, _: *mut SrcItem,
+    _: *mut Select, _: i32)
+    -> i32;
+    fn sqlite3_src_list_append_from_term(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token, _: *mut Token, _: *mut Token, _: *mut Select,
+    _: *mut OnOrUsing)
+    -> *mut SrcList;
+    fn sqlite3_src_list_indexed_by(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token)
+    -> ();
+    fn sqlite3_src_list_func_args(_: *mut Parse, _: *mut SrcList,
+    _: *mut ExprList)
+    -> ();
+    fn sqlite3_indexed_by_lookup(_: *mut Parse, _: *mut SrcItem)
+    -> i32;
+    fn sqlite3_src_list_shift_join_type(_: *mut Parse, _: *mut SrcList)
+    -> ();
+    fn sqlite3_src_list_assign_cursors(_: *mut Parse, _: *mut SrcList)
+    -> ();
+    fn sqlite3_id_list_delete(_: *mut sqlite3, _: *mut IdList)
+    -> ();
+    fn sqlite3_clear_on_or_using(_: *mut sqlite3, _: *mut OnOrUsing)
+    -> ();
+    fn sqlite3_src_list_delete(_: *mut sqlite3, _: *mut SrcList)
+    -> ();
+    fn sqlite3_allocate_index_object(_: *mut sqlite3, _: i32, _: i32,
+    _: *mut *mut i8)
+    -> *mut Index;
+    fn sqlite3_create_index(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut SrcList, _: *mut ExprList, _: i32, _: *mut Token, _: *mut Expr,
+    _: i32, _: i32, _: u8)
+    -> ();
+    fn sqlite3_drop_index(_: *mut Parse, _: *mut SrcList, _: i32)
+    -> ();
+    fn sqlite3_select(_: *mut Parse, _: *mut Select, _: *mut SelectDest)
+    -> i32;
+    fn sqlite3_select_new(_: *mut Parse, _: *mut ExprList, _: *mut SrcList,
+    _: *mut Expr, _: *mut ExprList, _: *mut Expr, _: *mut ExprList, _: u32,
+    _: *mut Expr)
+    -> *mut Select;
+    fn sqlite3_select_delete(_: *mut sqlite3, _: *mut Select)
+    -> ();
+    fn sqlite3_select_delete_generic(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_select_check_on_clauses(p_parse_1: *mut Parse,
+    p_select_1: *mut Select)
+    -> ();
+    fn sqlite3_src_list_lookup(_: *mut Parse, _: *mut SrcList)
+    -> *mut Table;
+    fn sqlite3_is_read_only(_: *mut Parse, _: *mut Table, _: *mut Trigger)
+    -> i32;
+    fn sqlite3_open_table(_: *mut Parse, i_cur_1: i32, i_db_1: i32,
+    _: *mut Table, _: i32)
+    -> ();
+    fn sqlite3_code_change_count(_: *mut Vdbe, _: i32, _: *const i8)
+    -> ();
+    fn sqlite3_delete_from(_: *mut Parse, _: *mut SrcList, _: *mut Expr,
+    _: *mut ExprList, _: *mut Expr)
+    -> ();
+    fn sqlite3_update(_: *mut Parse, _: *mut SrcList, _: *mut ExprList,
+    _: *mut Expr, _: i32, _: *mut ExprList, _: *mut Expr, _: *mut Upsert)
+    -> ();
+    fn sqlite3_where_begin(_: *mut Parse, _: *mut SrcList, _: *mut Expr,
+    _: *mut ExprList, _: *mut ExprList, _: *mut Select, _: u16, _: i32)
+    -> *mut WhereInfo;
+    fn sqlite3_where_end(_: *mut WhereInfo)
+    -> ();
+    fn sqlite3_where_output_row_count(_: *mut WhereInfo)
+    -> LogEst;
+    fn sqlite3_where_is_distinct(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_is_ordered(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_order_by_limit_opt_label(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_min_max_opt_early_out(_: *mut Vdbe, _: *mut WhereInfo)
+    -> ();
+    fn sqlite3_where_is_sorted(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_continue_label(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_break_label(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_where_ok_one_pass(_: *mut WhereInfo, _: *mut i32)
+    -> i32;
+    fn sqlite3_where_uses_deferred_seek(_: *mut WhereInfo)
+    -> i32;
+    fn sqlite3_expr_code_load_index_column(_: *mut Parse, _: *mut Index,
+    _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_code_get_column(_: *mut Parse, _: *mut Table, _: i32,
+    _: i32, _: i32, _: u8)
+    -> i32;
+    fn sqlite3_expr_code_get_column_of_table(_: *mut Vdbe, _: *mut Table,
+    _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_code_move(_: *mut Parse, _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_to_register(p_expr_1: *mut Expr, i_reg_1: i32)
+    -> ();
+    fn sqlite3_expr_code(_: *mut Parse, _: *mut Expr, _: i32)
+    -> ();
+    fn sqlite3_expr_code_generated_column(_: *mut Parse, _: *mut Table,
+    _: *mut Column, _: i32)
+    -> ();
+    fn sqlite3_expr_code_copy(_: *mut Parse, _: *mut Expr, _: i32)
+    -> ();
+    fn sqlite3_expr_code_factorable(_: *mut Parse, _: *mut Expr, _: i32)
+    -> ();
+    fn sqlite3_expr_code_run_just_once(_: *mut Parse, _: *mut Expr, _: i32)
+    -> i32;
+    fn sqlite3_expr_null_register_range(_: *mut Parse, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_code_temp(_: *mut Parse, _: *mut Expr, _: *mut i32)
+    -> i32;
+    fn sqlite3_expr_code_target(_: *mut Parse, _: *mut Expr, _: i32)
+    -> i32;
+    fn sqlite3_expr_code_expr_list(_: *mut Parse, _: *mut ExprList, _: i32,
+    _: i32, _: u8)
+    -> i32;
+    fn sqlite3_expr_if_true(_: *mut Parse, _: *mut Expr, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_if_false(_: *mut Parse, _: *mut Expr, _: i32, _: i32)
+    -> ();
+    fn sqlite3_expr_if_false_dup(_: *mut Parse, _: *mut Expr, _: i32, _: i32)
+    -> ();
+    fn sqlite3_find_table(_: *mut sqlite3, _: *const i8, _: *const i8)
+    -> *mut Table;
+    fn sqlite3_locate_table(_: *mut Parse, flags: u32, _: *const i8,
+    _: *const i8)
+    -> *mut Table;
+    fn sqlite3_preferred_table_name(_: *const i8)
+    -> *const i8;
+    fn sqlite3_locate_table_item(_: *mut Parse, flags: u32, _: *mut SrcItem)
+    -> *mut Table;
+    fn sqlite3_find_index(_: *mut sqlite3, _: *const i8, _: *const i8)
+    -> *mut Index;
+    fn sqlite3_unlink_and_delete_table(_: *mut sqlite3, _: i32, _: *const i8)
+    -> ();
+    fn sqlite3_unlink_and_delete_index(_: *mut sqlite3, _: i32, _: *const i8)
+    -> ();
+    fn sqlite3_vacuum(_: *mut Parse, _: *mut Token, _: *mut Expr)
+    -> ();
+    fn sqlite3_run_vacuum(_: *mut *mut i8, _: *mut sqlite3, _: i32,
+    _: *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_name_from_token(_: *mut sqlite3, _: *const Token)
+    -> *mut i8;
+    fn sqlite3_expr_compare(_: *const Parse, _: *const Expr, _: *const Expr,
+    _: i32)
+    -> i32;
+    fn sqlite3_expr_compare_skip(_: *mut Expr, _: *mut Expr, _: i32)
+    -> i32;
+    fn sqlite3_expr_list_compare(_: *const ExprList, _: *const ExprList,
+    _: i32)
+    -> i32;
+    fn sqlite3_expr_implies_expr(_: *const Parse, _: *const Expr,
+    _: *const Expr, _: i32)
+    -> i32;
+    fn sqlite3_expr_implies_non_null_row(_: *mut Expr, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_agg_info_persist_walker_init(_: *mut Walker, _: *mut Parse)
+    -> ();
+    fn sqlite3_expr_analyze_aggregates(_: *mut NameContext, _: *mut Expr)
+    -> ();
+    fn sqlite3_expr_analyze_agg_list(_: *mut NameContext, _: *mut ExprList)
+    -> ();
+    fn sqlite3_expr_covered_by_index(_: *mut Expr, i_cur_1: i32,
+    p_idx_1: *mut Index)
+    -> i32;
+    fn sqlite3_references_src_list(_: *mut Parse, _: *mut Expr,
+    _: *mut SrcList)
+    -> i32;
+    fn sqlite3_get_vdbe(_: *mut Parse)
+    -> *mut Vdbe;
+    fn sqlite3_prng_save_state()
+    -> ();
+    fn sqlite3_prng_restore_state()
+    -> ();
+    fn sqlite3_rollback_all(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_code_verify_schema(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_code_verify_named_schema(_: *mut Parse, z_db_1: *const i8)
+    -> ();
+    fn sqlite3_begin_transaction(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_end_transaction(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_savepoint(_: *mut Parse, _: i32, _: *mut Token)
+    -> ();
+    fn sqlite3_close_savepoints(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_leave_mutex_and_close_zombie(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_is_true_or_false(_: *const i8)
+    -> u32;
+    fn sqlite3_expr_id_to_true_false(_: *mut Expr)
+    -> i32;
+    fn sqlite3_expr_truth_value(_: *const Expr)
+    -> i32;
+    fn sqlite3_expr_is_constant(_: *mut Parse, _: *mut Expr)
+    -> i32;
+    fn sqlite3_expr_is_constant_or_function(_: *mut Expr, _: u8)
+    -> i32;
+    fn sqlite3_expr_is_constant_or_group_by(_: *mut Parse, _: *mut Expr,
+    _: *mut ExprList)
+    -> i32;
+    fn sqlite3_expr_is_single_table_constraint(_: *mut Expr,
+    _: *const SrcList, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_expr_is_integer(_: *const Expr, _: *mut i32, _: *mut Parse)
+    -> i32;
+    fn sqlite3_expr_can_be_null(_: *const Expr)
+    -> i32;
+    fn sqlite3_expr_needs_no_affinity_change(_: *const Expr, _: i8)
+    -> i32;
+    fn sqlite3_expr_is_like_operator(_: *const Expr)
+    -> i32;
+    fn sqlite3_is_rowid(_: *const i8)
+    -> i32;
+    fn sqlite3_rowid_alias(p_tab_1: *mut Table)
+    -> *const i8;
+    fn sqlite3_generate_row_delete(_: *mut Parse, _: *mut Table,
+    _: *mut Trigger, _: i32, _: i32, _: i32, _: i16, _: u8, _: u8, _: u8,
+    _: i32)
+    -> ();
+    fn sqlite3_generate_row_index_delete(_: *mut Parse, _: *mut Table, _: i32,
+    _: i32, _: *mut i32, _: i32)
+    -> ();
+    fn sqlite3_generate_index_key(_: *mut Parse, _: *mut Index, _: i32,
+    _: i32, _: i32, _: *mut i32, _: *mut Index, _: i32)
+    -> i32;
+    fn sqlite3_resolve_part_idx_label(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_expr_references_updated_column(_: *mut Expr, _: *mut i32,
+    _: i32)
+    -> i32;
+    fn sqlite3_generate_constraint_checks(_: *mut Parse, _: *mut Table,
+    _: *mut i32, _: i32, _: i32, _: i32, _: i32, _: u8, _: u8, _: i32,
+    _: *mut i32, _: *mut i32, _: *mut Upsert)
+    -> ();
+    fn sqlite3_complete_insertion(_: *mut Parse, _: *mut Table, _: i32,
+    _: i32, _: i32, _: *mut i32, _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_open_table_and_indices(_: *mut Parse, _: *mut Table, _: i32,
+    _: u8, _: i32, _: *mut u8, _: *mut i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_begin_write_operation(_: *mut Parse, _: i32, _: i32)
+    -> ();
+    fn sqlite3_multi_write(_: *mut Parse)
+    -> ();
+    fn sqlite3_may_abort(_: *mut Parse)
+    -> ();
+    fn sqlite3_halt_constraint(_: *mut Parse, _: i32, _: i32, _: *mut i8,
+    _: i8, _: u8)
+    -> ();
+    fn sqlite3_unique_constraint(_: *mut Parse, _: i32, _: *mut Index)
+    -> ();
+    fn sqlite3_rowid_constraint(_: *mut Parse, _: i32, _: *mut Table)
+    -> ();
+    fn sqlite3_expr_dup(_: *mut sqlite3, _: *const Expr, _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr_list_dup(_: *mut sqlite3, _: *const ExprList, _: i32)
+    -> *mut ExprList;
+    fn sqlite3_src_list_dup(_: *mut sqlite3, _: *const SrcList, _: i32)
+    -> *mut SrcList;
+    fn sqlite3_id_list_dup(_: *mut sqlite3, _: *const IdList)
+    -> *mut IdList;
+    fn sqlite3_select_dup(_: *mut sqlite3, _: *const Select, _: i32)
+    -> *mut Select;
+    fn sqlite3_function_search(_: i32, _: *const i8)
+    -> *mut FuncDef;
+    fn sqlite3_insert_builtin_funcs(_: *mut FuncDef, _: i32)
+    -> ();
+    fn sqlite3_find_function(_: *mut sqlite3, _: *const i8, _: i32, _: u8,
+    _: u8)
+    -> *mut FuncDef;
+    fn sqlite3_quote_value(_: *mut StrAccum, _: *mut sqlite3_value, _: i32)
+    -> ();
+    fn sqlite3_append_one_utf8_character(_: *mut i8, _: u32)
+    -> i32;
+    fn sqlite3_register_builtin_functions()
+    -> ();
+    fn sqlite3_register_date_time_functions()
+    -> ();
+    fn sqlite3_register_json_functions()
+    -> ();
+    fn sqlite3_register_per_connection_builtin_functions(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_json_vtab_register(_: *mut sqlite3, _: *const i8)
+    -> *mut Module;
+    fn sqlite3_safety_check_ok(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_safety_check_sick_or_ok(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_change_cookie(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_with_dup(db: *mut sqlite3, p: *mut With)
+    -> *mut With;
+    fn sqlite3_materialize_view(_: *mut Parse, _: *mut Table, _: *mut Expr,
+    _: *mut ExprList, _: *mut Expr, _: i32)
+    -> ();
+    fn sqlite3_begin_trigger(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: i32, _: i32, _: *mut IdList, _: *mut SrcList, _: *mut Expr, _: i32,
+    _: i32)
+    -> ();
+    fn sqlite3_finish_trigger(_: *mut Parse, _: *mut TriggerStep,
+    _: *mut Token)
+    -> ();
+    fn sqlite3_drop_trigger(_: *mut Parse, _: *mut SrcList, _: i32)
+    -> ();
+    fn sqlite3_drop_trigger_ptr(_: *mut Parse, _: *mut Trigger)
+    -> ();
+    fn sqlite3_triggers_exist(_: *mut Parse, _: *mut Table, _: i32,
+    _: *mut ExprList, p_mask_1: *mut i32)
+    -> *mut Trigger;
+    fn sqlite3_trigger_list(_: *mut Parse, _: *mut Table)
+    -> *mut Trigger;
+    fn sqlite3_code_row_trigger(_: *mut Parse, _: *mut Trigger, _: i32,
+    _: *mut ExprList, _: i32, _: *mut Table, _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite3_code_row_trigger_direct(_: *mut Parse, _: *mut Trigger,
+    _: *mut Table, _: i32, _: i32, _: i32)
+    -> ();
+    fn sqlite_view_triggers(_: *mut Parse, _: *mut Table, _: *mut Expr,
+    _: i32, _: *mut ExprList)
+    -> ();
+    fn sqlite3_delete_trigger_step(_: *mut sqlite3, _: *mut TriggerStep)
+    -> ();
+    fn sqlite3_trigger_select_step(_: *mut sqlite3, _: *mut Select,
+    _: *const i8, _: *const i8)
+    -> *mut TriggerStep;
+    fn sqlite3_trigger_insert_step(_: *mut Parse, _: *mut SrcList,
+    _: *mut IdList, _: *mut Select, _: u8, _: *mut Upsert, _: *const i8,
+    _: *const i8)
+    -> *mut TriggerStep;
+    fn sqlite3_trigger_update_step(_: *mut Parse, _: *mut SrcList,
+    _: *mut SrcList, _: *mut ExprList, _: *mut Expr, _: u8, _: *const i8,
+    _: *const i8)
+    -> *mut TriggerStep;
+    fn sqlite3_trigger_delete_step(_: *mut Parse, _: *mut SrcList,
+    _: *mut Expr, _: *const i8, _: *const i8)
+    -> *mut TriggerStep;
+    fn sqlite3_delete_trigger(_: *mut sqlite3, _: *mut Trigger)
+    -> ();
+    fn sqlite3_unlink_and_delete_trigger(_: *mut sqlite3, _: i32,
+    _: *const i8)
+    -> ();
+    fn sqlite3_trigger_colmask(_: *mut Parse, _: *mut Trigger,
+    _: *mut ExprList, _: i32, _: i32, _: *mut Table, _: i32)
+    -> u32;
+    fn sqlite3_join_type(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut Token)
+    -> i32;
+    fn sqlite3_column_index(p_tab_1: *mut Table, z_col_1: *const i8)
+    -> i32;
+    fn sqlite3_src_item_column_used(_: *mut SrcItem, _: i32)
+    -> ();
+    fn sqlite3_set_join_expr(_: *mut Expr, _: i32, _: u32)
+    -> ();
+    fn sqlite3_create_foreign_key(_: *mut Parse, _: *mut ExprList,
+    _: *mut Token, _: *mut ExprList, _: i32)
+    -> ();
+    fn sqlite3_defer_foreign_key(_: *mut Parse, _: i32)
+    -> ();
+    fn sqlite3_auth_read(_: *mut Parse, _: *mut Expr, _: *mut Schema,
+    _: *mut SrcList)
+    -> ();
+    fn sqlite3_auth_check(_: *mut Parse, _: i32, _: *const i8, _: *const i8,
+    _: *const i8)
+    -> i32;
+    fn sqlite3_auth_context_push(_: *mut Parse, _: *mut AuthContext,
+    _: *const i8)
+    -> ();
+    fn sqlite3_auth_context_pop(_: *mut AuthContext)
+    -> ();
+    fn sqlite3_auth_read_col(_: *mut Parse, _: *const i8, _: *const i8,
+    _: i32)
+    -> i32;
+    fn sqlite3_db_is_named(db: *mut sqlite3, i_db_1: i32, z_name_1: *const i8)
+    -> i32;
+    fn sqlite3_attach(_: *mut Parse, _: *mut Expr, _: *mut Expr, _: *mut Expr)
+    -> ();
+    fn sqlite3_detach(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_fix_init(_: *mut DbFixer, _: *mut Parse, _: i32, _: *const i8,
+    _: *const Token)
+    -> ();
+    fn sqlite3_fix_src_list(_: *mut DbFixer, _: *mut SrcList)
+    -> i32;
+    fn sqlite3_fix_select(_: *mut DbFixer, _: *mut Select)
+    -> i32;
+    fn sqlite3_fix_expr(_: *mut DbFixer, _: *mut Expr)
+    -> i32;
+    fn sqlite3_fix_trigger_step(_: *mut DbFixer, _: *mut TriggerStep)
+    -> i32;
+    fn sqlite3_int64_to_text(_: i64, _: *mut i8)
+    -> i32;
+    fn sqlite3_ato_f(z: *const i8, _: *mut f64)
+    -> i32;
+    fn sqlite3_get_int32(_: *const i8, _: *mut i32)
+    -> i32;
+    fn sqlite3_get_u_int32(_: *const i8, _: *mut u32)
+    -> i32;
+    fn sqlite3_atoi(_: *const i8)
+    -> i32;
+    fn sqlite3_utf16_byte_len(p_data_1: *const (), n_byte_1: i32,
+    n_char_1: i32)
+    -> i32;
+    fn sqlite3_utf8_char_len(p_data_1: *const i8, n_byte_1: i32)
+    -> i32;
+    fn sqlite3_utf8_read(_: *mut *const u8)
+    -> u32;
+    fn sqlite3_utf8_read_limited(_: *const u8, _: i32, _: *mut u32)
+    -> i32;
+    fn sqlite3_log_est(_: u64)
+    -> LogEst;
+    fn sqlite3_log_est_add(_: LogEst, _: LogEst)
+    -> LogEst;
+    fn sqlite3_log_est_from_double(_: f64)
+    -> LogEst;
+    fn sqlite3_log_est_to_int(_: LogEst)
+    -> u64;
+    fn sqlite3_v_list_add(_: *mut sqlite3, _: *mut VList, _: *const i8,
+    _: i32, _: i32)
+    -> *mut VList;
+    fn sqlite3_v_list_num_to_name(_: *mut VList, _: i32)
+    -> *const i8;
+    fn sqlite3_v_list_name_to_num(_: *mut VList, _: *const i8, _: i32)
+    -> i32;
+    fn sqlite3_put_varint(_: *mut u8, _: u64)
+    -> i32;
+    fn sqlite3_get_varint(_: *const u8, _: *mut u64)
+    -> u8;
+    fn sqlite3_get_varint32(_: *const u8, _: *mut u32)
+    -> u8;
+    fn sqlite3_varint_len(v: u64)
+    -> i32;
+    fn sqlite3_index_affinity_str(_: *mut sqlite3, _: *mut Index)
+    -> *const i8;
+    fn sqlite3_table_affinity_str(_: *mut sqlite3, _: *const Table)
+    -> *mut i8;
+    fn sqlite3_table_affinity(_: *mut Vdbe, _: *mut Table, _: i32)
+    -> ();
+    fn sqlite3_compare_affinity(p_expr_1: *const Expr, aff2: i8)
+    -> i8;
+    fn sqlite3_index_affinity_ok(p_expr_1: *const Expr, idx_affinity: i8)
+    -> i32;
+    fn sqlite3_table_column_affinity(_: *const Table, _: i32)
+    -> i8;
+    fn sqlite3_expr_affinity(p_expr_1: *const Expr)
+    -> i8;
+    fn sqlite3_expr_data_type(p_expr_1: *const Expr)
+    -> i32;
+    fn sqlite3_dec_or_hex_to_i64(_: *const i8, _: *mut i64)
+    -> i32;
+    fn sqlite3_error_with_msg(_: *mut sqlite3, _: i32, _: *const i8, ...)
+    -> ();
+    fn sqlite3_error(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_error_clear(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_system_error(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_hex_to_blob(_: *mut sqlite3, z: *const i8, n: i32)
+    -> *mut ();
+    fn sqlite3_hex_to_int(h: i32)
+    -> u8;
+    fn sqlite3_two_part_name(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut *mut Token)
+    -> i32;
+    fn sqlite3_memdb_init()
+    -> i32;
+    fn sqlite3_is_memdb(_: *const sqlite3_vfs)
+    -> i32;
+    fn sqlite3_err_str(_: i32)
+    -> *const i8;
+    fn sqlite3_read_schema(p_parse_1: *mut Parse)
+    -> i32;
+    fn sqlite3_find_coll_seq(_: *mut sqlite3, enc: u8, _: *const i8, _: i32)
+    -> *mut CollSeq;
+    fn sqlite3_is_binary(_: *const CollSeq)
+    -> i32;
+    fn sqlite3_locate_coll_seq(p_parse_1: *mut Parse, z_name_1: *const i8)
+    -> *mut CollSeq;
+    fn sqlite3_set_text_encoding(db: *mut sqlite3, _: u8)
+    -> ();
+    fn sqlite3_expr_coll_seq(p_parse_1: *mut Parse, p_expr_1: *const Expr)
+    -> *mut CollSeq;
+    fn sqlite3_expr_nn_coll_seq(p_parse_1: *mut Parse, p_expr_1: *const Expr)
+    -> *mut CollSeq;
+    fn sqlite3_expr_coll_seq_match(_: *mut Parse, _: *const Expr,
+    _: *const Expr)
+    -> i32;
+    fn sqlite3_expr_add_collate_token(p_parse_1: *const Parse, _: *mut Expr,
+    _: *const Token, _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr_add_collate_string(_: *const Parse, _: *mut Expr,
+    _: *const i8)
+    -> *mut Expr;
+    fn sqlite3_expr_skip_collate(_: *mut Expr)
+    -> *mut Expr;
+    fn sqlite3_expr_skip_collate_and_likely(_: *mut Expr)
+    -> *mut Expr;
+    fn sqlite3_check_coll_seq(_: *mut Parse, _: *mut CollSeq)
+    -> i32;
+    fn sqlite3_writable_schema(_: *mut sqlite3)
+    -> i32;
+    fn sqlite3_check_object_name(_: *mut Parse, _: *const i8, _: *const i8,
+    _: *const i8)
+    -> i32;
+    fn sqlite3_vdbe_set_changes(_: *mut sqlite3, _: i64)
+    -> ();
+    fn sqlite3_add_int64(_: *mut i64, _: i64)
+    -> i32;
+    fn sqlite3_sub_int64(_: *mut i64, _: i64)
+    -> i32;
+    fn sqlite3_mul_int64(_: *mut i64, _: i64)
+    -> i32;
+    fn sqlite3_abs_int32(_: i32)
+    -> i32;
+    fn sqlite3_get_boolean(z: *const i8, _: u8)
+    -> u8;
+    fn sqlite3ValueText(_: *mut sqlite3_value, _: u8)
+    -> *const ();
+    fn sqlite3_value_is_of_class(_: *const sqlite3_value,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3ValueBytes(_: *mut sqlite3_value, _: u8)
+    -> i32;
+    fn sqlite3_value_set_str(_: *mut sqlite3_value, _: i32, _: *const (),
+    _: u8, _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_value_set_null(_: *mut sqlite3_value)
+    -> ();
+    fn sqlite3ValueFree(_: *mut sqlite3_value)
+    -> ();
+    fn sqlite3_result_int_real(_: *mut sqlite3_context)
+    -> ();
+    fn sqlite3_value_new(_: *mut sqlite3)
+    -> *mut sqlite3_value;
+    fn sqlite3_utf16to8(_: *mut sqlite3, _: *const (), _: i32, _: u8)
+    -> *mut i8;
+    fn sqlite3_value_from_expr(_: *mut sqlite3, _: *const Expr, _: u8, _: u8,
+    _: *mut *mut sqlite3_value)
+    -> i32;
+    fn sqlite3_vdbe_mem_stringify(_: *mut Mem, _: u8, _: u8)
+    -> i32;
+    static sqlite3_opcode_property: [u8; 0];
+    static sqlite3_str_binary: [i8; 0];
+    static sqlite3_std_type_len: [u8; 0];
+    static sqlite3_std_type_affinity: [i8; 0];
+    static mut sqlite3_std_type: [*const i8; 0];
+    static sqlite3_upper_to_lower: [u8; 0];
+    static mut sqlite3a_l_tb: *const u8;
+    static mut sqlite3a_e_qb: *const u8;
+    static mut sqlite3a_g_tb: *const u8;
+    static sqlite3_ctype_map: [u8; 0];
+    static mut sqlite3Config: Sqlite3Config;
+    static mut sqlite3_builtin_functions: FuncDefHash;
+    static sqlite3_oom_str: sqlite3_str;
+    static mut sqlite3_pending_byte: i32;
+    fn sqlite3_root_page_moved(_: *mut sqlite3, _: i32, _: Pgno, _: Pgno)
+    -> ();
+    fn sqlite3_reindex(_: *mut Parse, _: *mut Token, _: *mut Token)
+    -> ();
+    fn sqlite3_alter_functions()
+    -> ();
+    fn sqlite3_alter_rename_table(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token)
+    -> ();
+    fn sqlite3_alter_rename_column(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token, _: *mut Token)
+    -> ();
+    fn sqlite3_alter_drop_constraint(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token, _: *mut Token)
+    -> ();
+    fn sqlite3_alter_add_constraint(p_parse_1: *mut Parse,
+    p_src_1: *mut SrcList, p_first_1: *mut Token, p_name_1: *mut Token,
+    z_expr_1: *const i8, n_expr_1: i32, p_expr_1: *mut Expr)
+    -> ();
+    fn sqlite3_alter_set_not_null(_: *mut Parse, _: *mut SrcList,
+    _: *mut Token, _: *mut Token)
+    -> ();
+    fn sqlite3_get_token(_: *const u8, _: *mut i32)
+    -> i64;
+    fn sqlite3_nested_parse(_: *mut Parse, _: *const i8, ...)
+    -> ();
+    fn sqlite3_expire_prepared_statements(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_code_rhs_of_in(_: *mut Parse, _: *mut Expr, _: i32, _: i32)
+    -> ();
+    fn sqlite3_code_subselect(_: *mut Parse, _: *mut Expr)
+    -> i32;
+    fn sqlite3_select_prep(_: *mut Parse, _: *mut Select, _: *mut NameContext)
+    -> ();
+    fn sqlite3_expand_subquery(_: *mut Parse, _: *mut SrcItem)
+    -> i32;
+    fn sqlite3_select_wrong_num_terms_error(p_parse_1: *mut Parse,
+    p: *mut Select)
+    -> ();
+    fn sqlite3_match_e_name(_: *const ExprList_item, _: *const i8,
+    _: *const i8, _: *const i8, _: *mut i32)
+    -> i32;
+    fn sqlite3_expr_col_used(_: *mut Expr)
+    -> Bitmask;
+    fn sqlite3_str_i_hash(_: *const i8)
+    -> u8;
+    fn sqlite3_resolve_expr_names(_: *mut NameContext, _: *mut Expr)
+    -> i32;
+    fn sqlite3_resolve_expr_list_names(_: *mut NameContext, _: *mut ExprList)
+    -> i32;
+    fn sqlite3_resolve_select_names(_: *mut Parse, _: *mut Select,
+    _: *mut NameContext)
+    -> ();
+    fn sqlite3_resolve_self_reference(_: *mut Parse, _: *mut Table, _: i32,
+    _: *mut Expr, _: *mut ExprList)
+    -> i32;
+    fn sqlite3_resolve_order_group_by(_: *mut Parse, _: *mut Select,
+    _: *mut ExprList, _: *const i8)
+    -> i32;
+    fn sqlite3_column_default(_: *mut Vdbe, _: *mut Table, _: i32, _: i32)
+    -> ();
+    fn sqlite3_alter_finish_add_column(_: *mut Parse, _: *mut Token)
+    -> ();
+    fn sqlite3_alter_begin_add_column(_: *mut Parse, _: *mut SrcList)
+    -> ();
+    fn sqlite3_alter_drop_column(_: *mut Parse, _: *mut SrcList,
+    _: *const Token)
+    -> ();
+    fn sqlite3_rename_token_map(_: *mut Parse, _: *const (), _: *const Token)
+    -> *const ();
+    fn sqlite3_rename_token_remap(_: *mut Parse, p_to_1: *const (),
+    p_from_1: *const ())
+    -> ();
+    fn sqlite3_rename_expr_unmap(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_rename_exprlist_unmap(_: *mut Parse, _: *mut ExprList)
+    -> ();
+    fn sqlite3_get_coll_seq(_: *mut Parse, _: u8, _: *mut CollSeq,
+    _: *const i8)
+    -> *mut CollSeq;
+    fn sqlite3_affinity_type(_: *const i8, _: *mut Column)
+    -> i8;
+    fn sqlite3_analyze(_: *mut Parse, _: *mut Token, _: *mut Token)
+    -> ();
+    fn sqlite3_invoke_busy_handler(_: *mut BusyHandler)
+    -> i32;
+    fn sqlite3_find_db(_: *mut sqlite3, _: *mut Token)
+    -> i32;
+    fn sqlite3_find_db_name(_: *mut sqlite3, _: *const i8)
+    -> i32;
+    fn sqlite3_analysis_load(_: *mut sqlite3, i_db_1: i32)
+    -> i32;
+    fn sqlite3_delete_index_samples(_: *mut sqlite3, _: *mut Index)
+    -> ();
+    fn sqlite3_default_row_est(_: *mut Index)
+    -> ();
+    fn sqlite3_register_like_functions(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_is_like_function(_: *mut sqlite3, _: *mut Expr, _: *mut i32,
+    _: *mut i8)
+    -> i32;
+    fn sqlite3_schema_clear(_: *mut ())
+    -> ();
+    fn sqlite3_schema_get(_: *mut sqlite3, _: *mut Btree)
+    -> *mut Schema;
+    fn sqlite3_schema_to_index(db: *mut sqlite3, _: *mut Schema)
+    -> i32;
+    fn sqlite3_key_info_alloc(_: *mut sqlite3, _: i32, _: i32)
+    -> *mut KeyInfo;
+    fn sqlite3_key_info_unref(_: *mut KeyInfo)
+    -> ();
+    fn sqlite3_key_info_ref(_: *mut KeyInfo)
+    -> *mut KeyInfo;
+    fn sqlite3_key_info_of_index(_: *mut Parse, _: *mut Index)
+    -> *mut KeyInfo;
+    fn sqlite3_key_info_from_expr_list(_: *mut Parse, _: *mut ExprList,
+    _: i32, _: i32)
+    -> *mut KeyInfo;
+    fn sqlite3_select_op_name(_: i32)
+    -> *const i8;
+    fn sqlite3_has_explicit_nulls(_: *mut Parse, _: *mut ExprList)
+    -> i32;
+    fn sqlite3_create_func(_: *mut sqlite3, _: *const i8, _: i32, _: i32,
+    _: *mut (),
+    _:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    _:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    _: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    _: Option<unsafe extern "C" fn(*mut sqlite3_context) -> ()>,
+    _:
+        Option<unsafe extern "C" fn(*mut sqlite3_context, i32,
+            *mut *mut sqlite3_value) -> ()>,
+    p_destructor_1: *mut FuncDestructor)
+    -> i32;
+    fn sqlite3_noop_destructor(_: *mut ())
+    -> ();
+    fn sqlite3_oom_fault(_: *mut sqlite3)
+    -> *mut ();
+    fn sqlite3_oom_clear(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_api_exit(db: *mut sqlite3, _: i32)
+    -> i32;
+    fn sqlite3_open_temp_database(_: *mut Parse)
+    -> i32;
+    fn sqlite3_rc_str_ref(_: *mut i8)
+    -> *mut i8;
+    fn sqlite3_rc_str_unref(_: *mut ())
+    -> ();
+    fn sqlite3_rc_str_new(_: u64)
+    -> *mut i8;
+    fn sqlite3_rc_str_resize(_: *mut i8, _: u64)
+    -> *mut i8;
+    fn sqlite3_str_accum_init(_: *mut StrAccum, _: *mut sqlite3, _: *mut i8,
+    _: i32, _: i32)
+    -> ();
+    fn sqlite3_str_accum_enlarge(_: *mut StrAccum, _: i64)
+    -> i32;
+    fn sqlite3_str_accum_enlarge_if_needed(_: *mut StrAccum, _: i64)
+    -> i32;
+    fn sqlite3_str_accum_finish(_: *mut StrAccum)
+    -> *mut i8;
+    fn sqlite3_str_accum_set_error(_: *mut StrAccum, _: u8)
+    -> ();
+    fn sqlite3_select_dest_init(_: *mut SelectDest, _: i32, _: i32)
+    -> ();
+    fn sqlite3_create_column_expr(_: *mut sqlite3, _: *mut SrcList, _: i32,
+    _: i32)
+    -> *mut Expr;
+    fn sqlite3_record_error_byte_offset(_: *mut sqlite3, _: *const i8)
+    -> ();
+    fn sqlite3_record_error_offset_of_expr(_: *mut sqlite3, _: *const Expr)
+    -> ();
+    fn sqlite3_backup_restart(_: *mut sqlite3_backup)
+    -> ();
+    fn sqlite3_backup_update(_: *mut sqlite3_backup, _: Pgno, _: *const u8)
+    -> ();
+    fn sqlite3_expr_check_in(_: *mut Parse, _: *mut Expr)
+    -> i32;
+    fn sqlite3_parser_alloc(_: Option<unsafe extern "C" fn(u64) -> *mut ()>,
+    _: *mut Parse)
+    -> *mut ();
+    fn sqlite3_parser_free(_: *mut (),
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_parser(_: *mut (), _: i32, _: Token)
+    -> ();
+    fn sqlite3_parser_fallback(_: i32)
+    -> i32;
+    fn sqlite3_auto_load_extensions(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_close_extensions(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_table_lock(_: *mut Parse, _: i32, _: Pgno, _: u8, _: *const i8)
+    -> ();
+    fn sqlite3_vtab_clear(db: *mut sqlite3, _: *mut Table)
+    -> ();
+    fn sqlite3_vtab_disconnect(db: *mut sqlite3, p: *mut Table)
+    -> ();
+    fn sqlite3_vtab_sync(db: *mut sqlite3, _: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vtab_rollback(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_vtab_commit(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_vtab_lock(_: *mut VTable)
+    -> ();
+    fn sqlite3_vtab_unlock(_: *mut VTable)
+    -> ();
+    fn sqlite3_vtab_module_unref(_: *mut sqlite3, _: *mut Module)
+    -> ();
+    fn sqlite3_vtab_unlock_list(_: *mut sqlite3)
+    -> ();
+    fn sqlite3_vtab_savepoint(_: *mut sqlite3, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_vtab_import_errmsg(_: *mut Vdbe, _: *mut sqlite3_vtab)
+    -> ();
+    fn sqlite3_get_v_table(_: *mut sqlite3, _: *mut Table)
+    -> *mut VTable;
+    fn sqlite3_vtab_create_module(_: *mut sqlite3, _: *const i8,
+    _: *const sqlite3_module, _: *mut (),
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> *mut Module;
+    fn sqlite3_read_only_shadow_tables(db: *mut sqlite3)
+    -> i32;
+    fn sqlite3_shadow_table_name(db: *mut sqlite3, z_name_1: *const i8)
+    -> i32;
+    fn sqlite3_is_shadow_table_of(_: *mut sqlite3, _: *mut Table,
+    _: *const i8)
+    -> i32;
+    fn sqlite3_mark_all_shadow_tables_of(_: *mut sqlite3, _: *mut Table)
+    -> ();
+    fn sqlite3_vtab_eponymous_table_init(_: *mut Parse, _: *mut Module)
+    -> i32;
+    fn sqlite3_vtab_eponymous_table_clear(_: *mut sqlite3, _: *mut Module)
+    -> ();
+    fn sqlite3_vtab_make_writable(_: *mut Parse, _: *mut Table)
+    -> ();
+    fn sqlite3_vtab_begin_parse(_: *mut Parse, _: *mut Token, _: *mut Token,
+    _: *mut Token, _: i32)
+    -> ();
+    fn sqlite3_vtab_finish_parse(_: *mut Parse, _: *mut Token)
+    -> ();
+    fn sqlite3_vtab_arg_init(_: *mut Parse)
+    -> ();
+    fn sqlite3_vtab_arg_extend(_: *mut Parse, _: *mut Token)
+    -> ();
+    fn sqlite3_vtab_call_create(_: *mut sqlite3, _: i32, _: *const i8,
+    _: *mut *mut i8)
+    -> i32;
+    fn sqlite3_vtab_call_connect(_: *mut Parse, _: *mut Table)
+    -> i32;
+    fn sqlite3_vtab_call_destroy(_: *mut sqlite3, _: i32, _: *const i8)
+    -> i32;
+    fn sqlite3_vtab_begin(_: *mut sqlite3, _: *mut VTable)
+    -> i32;
+    fn sqlite3_vtab_overload_function(_: *mut sqlite3, _: *mut FuncDef,
+    n_arg_1: i32, _: *mut Expr)
+    -> *mut FuncDef;
+    fn sqlite3_vtab_uses_all_schemas(_: *mut Parse)
+    -> ();
+    fn sqlite3_stmt_current_time(_: *mut sqlite3_context)
+    -> sqlite3_int64;
+    fn sqlite3_vdbe_parameter_index(_: *mut Vdbe, _: *const i8, _: i32)
+    -> i32;
+    fn sqlite3TransferBindings(_: *mut sqlite3_stmt, _: *mut sqlite3_stmt)
+    -> i32;
+    fn sqlite3_parse_object_init(_: *mut Parse, _: *mut sqlite3)
+    -> ();
+    fn sqlite3_parse_object_reset(_: *mut Parse)
+    -> ();
+    fn sqlite3_parser_add_cleanup(_: *mut Parse,
+    _: Option<unsafe extern "C" fn(*mut sqlite3, *mut ()) -> ()>, _: *mut ())
+    -> *mut ();
+    fn sqlite3_reprepare(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_expr_list_check_length(_: *mut Parse, _: *mut ExprList,
+    _: *const i8)
+    -> ();
+    fn sqlite3_expr_compare_coll_seq(_: *mut Parse, _: *const Expr)
+    -> *mut CollSeq;
+    fn sqlite3_binary_compare_coll_seq(_: *mut Parse, _: *const Expr,
+    _: *const Expr)
+    -> *mut CollSeq;
+    fn sqlite3_temp_in_memory(_: *const sqlite3)
+    -> i32;
+    fn sqlite3_journal_modename(_: i32)
+    -> *const i8;
+    fn sqlite3_checkpoint(_: *mut sqlite3, _: i32, _: i32, _: *mut i32,
+    _: *mut i32)
+    -> i32;
+    fn sqlite3_wal_default_hook(_: *mut (), _: *mut sqlite3, _: *const i8,
+    _: i32)
+    -> i32;
+    fn sqlite3_cte_new(_: *mut Parse, _: *mut Token, _: *mut ExprList,
+    _: *mut Select, _: u8)
+    -> *mut Cte;
+    fn sqlite3_cte_delete(_: *mut sqlite3, _: *mut Cte)
+    -> ();
+    fn sqlite3_with_add(_: *mut Parse, _: *mut With, _: *mut Cte)
+    -> *mut With;
+    fn sqlite3_with_delete(_: *mut sqlite3, _: *mut With)
+    -> ();
+    fn sqlite3_with_delete_generic(_: *mut sqlite3, _: *mut ())
+    -> ();
+    fn sqlite3_with_push(_: *mut Parse, _: *mut With, _: u8)
+    -> *mut With;
+    fn sqlite3_upsert_new(_: *mut sqlite3, _: *mut ExprList, _: *mut Expr,
+    _: *mut ExprList, _: *mut Expr, _: *mut Upsert)
+    -> *mut Upsert;
+    fn sqlite3_upsert_delete(_: *mut sqlite3, _: *mut Upsert)
+    -> ();
+    fn sqlite3_upsert_dup(_: *mut sqlite3, _: *mut Upsert)
+    -> *mut Upsert;
+    fn sqlite3_upsert_analyze_target(_: *mut Parse, _: *mut SrcList,
+    _: *mut Upsert, _: *mut Upsert)
+    -> i32;
+    fn sqlite3_upsert_do_update(_: *mut Parse, _: *mut Upsert, _: *mut Table,
+    _: *mut Index, _: i32)
+    -> ();
+    fn sqlite3_upsert_of_index(_: *mut Upsert, _: *mut Index)
+    -> *mut Upsert;
+    fn sqlite3_upsert_next_is_ipk(_: *mut Upsert)
+    -> i32;
+    fn sqlite3_fk_check(_: *mut Parse, _: *mut Table, _: i32, _: i32,
+    _: *mut i32, _: i32)
+    -> ();
+    fn sqlite3_fk_drop_table(_: *mut Parse, _: *mut SrcList, _: *mut Table)
+    -> ();
+    fn sqlite3_fk_actions(_: *mut Parse, _: *mut Table, _: *mut ExprList,
+    _: i32, _: *mut i32, _: i32)
+    -> ();
+    fn sqlite3_fk_required(_: *mut Parse, _: *mut Table, _: *mut i32, _: i32)
+    -> i32;
+    fn sqlite3_fk_oldmask(_: *mut Parse, _: *mut Table)
+    -> u32;
+    fn sqlite3_fk_references(_: *mut Table)
+    -> *mut FKey;
+    fn sqlite3_fk_clear_trigger_cache(_: *mut sqlite3, _: i32)
+    -> ();
+    fn sqlite3_fk_delete(_: *mut sqlite3, _: *mut Table)
+    -> ();
+    fn sqlite3_fk_locate_index(_: *mut Parse, _: *mut Table, _: *mut FKey,
+    _: *mut *mut Index, _: *mut *mut i32)
+    -> i32;
+    fn sqlite3_begin_benign_malloc()
+    -> ();
+    fn sqlite3_end_benign_malloc()
+    -> ();
+    fn sqlite3_find_in_index(_: *mut Parse, _: *mut Expr, _: u32, _: *mut i32,
+    _: *mut i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_journal_open(_: *mut sqlite3_vfs, _: *const i8,
+    _: *mut sqlite3_file, _: i32, _: i32)
+    -> i32;
+    fn sqlite3_journal_size(_: *mut sqlite3_vfs)
+    -> i32;
+    fn sqlite3_journal_is_in_memory(p: *mut sqlite3_file)
+    -> i32;
+    fn sqlite3_mem_journal_open(_: *mut sqlite3_file)
+    -> ();
+    fn sqlite3_expr_set_height_and_flags(p_parse_1: *mut Parse, p: *mut Expr)
+    -> ();
+    fn sqlite3_select_expr_height(_: *const Select)
+    -> i32;
+    fn sqlite3_expr_check_height(_: *mut Parse, _: i32)
+    -> i32;
+    fn sqlite3_expr_set_error_offset(_: *mut Expr, _: i32)
+    -> ();
+    fn sqlite3_get4byte(_: *const u8)
+    -> u32;
+    fn sqlite3_put4byte(_: *mut u8, _: u32)
+    -> ();
+    fn sqlite3_thread_create(_: *mut *mut SQLiteThread,
+    _: Option<unsafe extern "C" fn(*mut ()) -> *mut ()>, _: *mut ())
+    -> i32;
+    fn sqlite3_thread_join(_: *mut SQLiteThread, _: *mut *mut ())
+    -> i32;
+    fn sqlite3_expr_vector_size(p_expr_1: *const Expr)
+    -> i32;
+    fn sqlite3_expr_is_vector(p_expr_1: *const Expr)
+    -> i32;
+    fn sqlite3_vector_field_subexpr(_: *mut Expr, _: i32)
+    -> *mut Expr;
+    fn sqlite3_expr_for_vector_field(_: *mut Parse, _: *mut Expr, _: i32,
+    _: i32)
+    -> *mut Expr;
+    fn sqlite3_vector_error_msg(_: *mut Parse, _: *mut Expr)
+    -> ();
+    fn sqlite3_compile_options(pn_opt_1: *mut i32)
+    -> *mut *const i8;
+    static sqlite3_small_type_sizes: [u8; 0];
+    fn sqlite3_vdbe_error(_: *mut Vdbe, _: *const i8, ...)
+    -> ();
+    fn sqlite3_vdbe_free_cursor(_: *mut Vdbe, _: *mut VdbeCursor)
+    -> ();
+    fn sqlite3_vdbe_free_cursor_nn(_: *mut Vdbe, _: *mut VdbeCursor)
+    -> ();
+    fn sqlite_vdbe_pop_stack(_: *mut Vdbe, _: i32)
+    -> ();
+    fn sqlite3_vdbe_handle_moved_cursor(p: *mut VdbeCursor)
+    -> i32;
+    fn sqlite3_vdbe_finish_moveto(_: *mut VdbeCursor)
+    -> i32;
+    fn sqlite3_vdbe_cursor_restore(_: *mut VdbeCursor)
+    -> i32;
+    fn sqlite3_vdbe_serial_type_len(_: u32)
+    -> u32;
+    fn sqlite3_vdbe_one_byte_serial_type_len(_: u8)
+    -> u8;
+    fn sqlite3_vdbe_serial_get(_: *const u8, _: u32, _: *mut Mem)
+    -> ();
+    fn sqlite3_vdbe_delete_aux_data(_: *mut sqlite3, _: *mut *mut AuxData,
+    _: i32, _: i32)
+    -> ();
+    fn sqlite2_btree_key_compare(_: *mut BtCursor, _: *const (), _: i32,
+    _: i32, _: *mut i32)
+    -> i32;
+    fn sqlite3_vdbe_idx_key_compare(_: *mut sqlite3, _: *mut VdbeCursor,
+    _: *mut UnpackedRecord, _: *mut i32)
+    -> i32;
+    fn sqlite3_vdbe_idx_rowid(_: *mut sqlite3, _: *mut BtCursor, _: *mut i64)
+    -> i32;
+    fn sqlite3_vdbe_enter(_: *mut Vdbe)
+    -> ();
+    fn sqlite3_vdbe_frame_restore(_: *mut VdbeFrame)
+    -> i32;
+    fn sqlite3_vdbe_halt(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_mem_set_null(_: *mut Mem)
+    -> ();
+    fn sqlite3_vdbe_mem_set_str(_: *mut Mem, _: *const i8, _: i64, _: u8,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_vdbe_change_encoding(_: *mut Mem, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_mem_set_zero_blob(_: *mut Mem, _: i32)
+    -> ();
+    fn sqlite3_vdbe_mem_expand_blob(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_too_big(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_move(_: *mut Mem, _: *mut Mem)
+    -> ();
+    fn sqlite3_vdbe_mem_make_writeable(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_shallow_copy(_: *mut Mem, _: *const Mem, _: i32)
+    -> ();
+    fn sqlite3_vdbe_mem_set_int64(_: *mut Mem, _: i64)
+    -> ();
+    fn sqlite3_vdbe_check_fk_immediate(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_mem_grow(p_mem_1: *mut Mem, n: i32, preserve: i32)
+    -> i32;
+    fn sqlite3_vdbe_real_value(_: *mut Mem)
+    -> f64;
+    fn sqlite3_vdbe_int_value(_: *const Mem)
+    -> i64;
+    fn sqlite3_vdbe_mem_integerify(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_realify(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_cast(_: *mut Mem, _: u8, _: u8)
+    -> i32;
+    fn sqlite3_vdbe_boolean_value(_: *mut Mem, if_null_1: i32)
+    -> i32;
+    fn sqlite3_vdbe_mem_from_btree_zero_offset(_: *mut BtCursor, _: u32,
+    _: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_release(p: *mut Mem)
+    -> ();
+    fn sqlite3_vdbe_mem_from_btree(_: *mut BtCursor, _: u32, _: u32,
+    _: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_clear_and_resize(p_mem_1: *mut Mem, n: i32)
+    -> i32;
+    fn sqlite3_vdbe_check_fk_deferred(_: *mut Vdbe)
+    -> i32;
+    fn memset(__b: *mut (), __c: i32, __len: u64)
+    -> *mut ();
+    fn sqlite3_vdbe_sorter_init(_: *mut sqlite3, _: i32, _: *mut VdbeCursor)
+    -> i32;
+    fn sqlite3_int_float_compare(_: i64, _: f64)
+    -> i32;
+    fn sqlite3_vdbe_sorter_compare(_: *const VdbeCursor, _: *mut Mem, _: i32,
+    _: *mut i32)
+    -> i32;
+    fn sqlite3_vdbe_sorter_rowkey(_: *const VdbeCursor, _: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_sorter_rewind(_: *const VdbeCursor, _: *mut i32)
+    -> i32;
+    fn sqlite3_vdbe_sorter_next(_: *mut sqlite3, _: *const VdbeCursor)
+    -> i32;
+    fn sqlite3_vdbe_sorter_write(_: *const VdbeCursor, _: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_find_index_key(_: *mut BtCursor, _: *mut Index,
+    _: *mut UnpackedRecord, _: *mut i32, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_mem_release_malloc(p: *mut Mem)
+    -> ();
+    fn memcmp(__s1: *const (), __s2: *const (), __n: u64)
+    -> i32;
+    fn sqlite3_vdbe_mem_init(_: *mut Mem, _: *mut sqlite3, _: u16)
+    -> ();
+    fn sqlite3_vdbe_sorter_reset(_: *mut sqlite3, _: *mut VdbeSorter)
+    -> ();
+    fn sqlite3_vdbe_mem_set_row_set(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_frame_mem_del(_: *mut ())
+    -> ();
+    fn sqlite3_vdbe_mem_agg_value(_: *mut Mem, _: *mut Mem, _: *mut FuncDef)
+    -> i32;
+    fn sqlite3_vdbe_mem_finalize(_: *mut Mem, _: *mut FuncDef)
+    -> i32;
+    fn sqlite3_vdbe_mem_copy(_: *mut Mem, _: *const Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_set_pointer(_: *mut Mem, _: *mut (), _: *const i8,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> ();
+    fn sqlite3_vdbe_value_list_free(_: *mut ())
+    -> ();
+    fn sqlite3_vdbe_leave(_: *mut Vdbe)
+    -> ();
+    fn memcpy(__dst: *mut (), __src: *const (), __n: u64)
+    -> *mut ();
+    fn sqlite3_vdbe_next_opcode(_: *mut Vdbe, _: *mut Mem, _: i32,
+    _: *mut i32, _: *mut i32, _: *mut *mut Op)
+    -> i32;
+    fn sqlite3_vdbe_display_p4(_: *mut sqlite3, _: *mut Op)
+    -> *mut i8;
+    fn sqlite3_vdbe_list(_: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_mem_nul_terminate(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_set_text(_: *mut Mem, _: *const i8, _: i64,
+    _: Option<unsafe extern "C" fn(*mut ()) -> ()>)
+    -> i32;
+    fn sqlite3_vdbe_mem_set_double(_: *mut Mem, _: f64)
+    -> ();
+    fn sqlite3_vdbe_mem_zero_terminate_if_able(_: *mut Mem)
+    -> i32;
+    fn sqlite3_vdbe_mem_numerify(_: *mut Mem)
+    -> i32;
+    fn sqlite3_opcode_name(_: i32)
+    -> *const i8;
+    fn sqlite3_vdbe_close_statement(_: *mut Vdbe, _: i32)
+    -> i32;
+    fn sqlite3_vdbe_frame_delete(_: *mut VdbeFrame)
+    -> ();
+    fn sqlite3_vdbe_transfer_error(p: *mut Vdbe)
+    -> i32;
+    fn sqlite3_vdbe_sorter_close(_: *mut sqlite3, _: *mut VdbeCursor)
+    -> ();
+    fn sqlite3_vdbe_mem_translate(_: *mut Mem, _: u8)
+    -> i32;
+    fn sqlite3_vdbe_mem_handle_bom(p_mem_1: *mut Mem)
+    -> i32;
+    fn __builtin_unreachable()
+    -> ();
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CCurHint {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CheckOnCtx {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct CoveringIndexCheck {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IdxCover {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RefSrcList {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct RenameCtx {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct WhereConst {
+    _opaque: [u8; 0],
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct WindowRewrite {
+    _opaque: [u8; 0],
+}

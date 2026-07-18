@@ -1,0 +1,8 @@
+[package]
+name = "enlargedb"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "enlargedb"
+path = "hello_world.rs"

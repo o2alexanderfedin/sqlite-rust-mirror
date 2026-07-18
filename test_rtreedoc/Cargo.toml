@@ -1,0 +1,8 @@
+[package]
+name = "test_rtreedoc"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test_rtreedoc"
+path = "hello_world.rs"

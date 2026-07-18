@@ -1,0 +1,8 @@
+[package]
+name = "global"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "global"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "max_limits"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "max_limits"
+path = "hello_world.rs"

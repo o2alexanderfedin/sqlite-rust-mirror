@@ -1,0 +1,8 @@
+[package]
+name = "sqlite3expert"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sqlite3expert"
+path = "hello_world.rs"

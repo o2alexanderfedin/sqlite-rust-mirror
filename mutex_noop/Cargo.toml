@@ -1,0 +1,8 @@
+[package]
+name = "mutex_noop"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mutex_noop"
+path = "hello_world.rs"

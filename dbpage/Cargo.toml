@@ -1,0 +1,8 @@
+[package]
+name = "dbpage"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dbpage"
+path = "hello_world.rs"

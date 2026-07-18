@@ -1,0 +1,8 @@
+[package]
+name = "prepare"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "prepare"
+path = "hello_world.rs"

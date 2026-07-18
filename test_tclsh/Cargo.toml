@@ -1,0 +1,8 @@
+[package]
+name = "test_tclsh"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test_tclsh"
+path = "hello_world.rs"

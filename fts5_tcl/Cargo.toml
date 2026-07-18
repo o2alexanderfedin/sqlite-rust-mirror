@@ -1,0 +1,8 @@
+[package]
+name = "fts5_tcl"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fts5_tcl"
+path = "hello_world.rs"

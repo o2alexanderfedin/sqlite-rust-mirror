@@ -1,0 +1,8 @@
+[package]
+name = "totype"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "totype"
+path = "hello_world.rs"

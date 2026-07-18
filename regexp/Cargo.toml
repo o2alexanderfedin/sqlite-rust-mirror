@@ -1,0 +1,8 @@
+[package]
+name = "regexp"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "regexp"
+path = "hello_world.rs"

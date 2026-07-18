@@ -1,0 +1,8 @@
+[package]
+name = "loadext"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "loadext"
+path = "hello_world.rs"

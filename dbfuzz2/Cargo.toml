@@ -1,0 +1,8 @@
+[package]
+name = "dbfuzz2"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "dbfuzz2"
+path = "hello_world.rs"

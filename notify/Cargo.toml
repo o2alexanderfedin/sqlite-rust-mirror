@@ -1,0 +1,8 @@
+[package]
+name = "notify"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "notify"
+path = "hello_world.rs"

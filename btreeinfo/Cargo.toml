@@ -1,0 +1,8 @@
+[package]
+name = "btreeinfo"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "btreeinfo"
+path = "hello_world.rs"

@@ -1,0 +1,8 @@
+[package]
+name = "fts5_tokenize"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fts5_tokenize"
+path = "hello_world.rs"

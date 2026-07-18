@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Recover {
@@ -31,6 +34,7 @@ struct Sqlite3Recover {
     p_get_page: *mut Sqlite3Stmt,
     p_tbl_list: *mut RecoverTable,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverStateW1 {
@@ -47,6 +51,7 @@ struct RecoverStateW1 {
     i_prev_page: i64,
     i_prev_cell: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverTable {
@@ -58,6 +63,7 @@ struct RecoverTable {
     i_rowid_bind: i32,
     p_next: *mut RecoverTable,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverColumn {
@@ -67,6 +73,7 @@ struct RecoverColumn {
     z_col: *mut i8,
     e_hidden: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverStateLAF {
@@ -83,16 +90,19 @@ struct RecoverStateLAF {
     ap_val: *mut *mut Sqlite3Value,
     n_max_field: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverBitmap {
     n_pg: i64,
     a_elem: [u32; 0],
 }
+
 extern "C" fn recover_strlen(z_str_1: *const i8) -> i32 {
     if z_str_1 == core::ptr::null() { return 0; }
     return (unsafe { strlen(z_str_1) } & 2147483647 as u64) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn recover_init(db: *mut Sqlite3, mut z_db_1: *const i8,
     z_uri_1: *const i8,
@@ -140,11 +150,13 @@ pub extern "C" fn recover_init(db: *mut Sqlite3, mut z_db_1: *const i8,
     }
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_init(db: *mut Sqlite3, z_db_1: *const i8,
     z_uri_1: *const i8) -> *mut Sqlite3Recover {
     return recover_init(db, z_db_1, z_uri_1, None, core::ptr::null_mut());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_init_sql(db: *mut Sqlite3,
     z_db_1: *const i8,
@@ -152,6 +164,7 @@ pub extern "C" fn sqlite3_recover_init_sql(db: *mut Sqlite3,
     p_sql_ctx_1: *mut ()) -> *mut Sqlite3Recover {
     return recover_init(db, z_db_1, core::ptr::null(), x_sql_1, p_sql_ctx_1);
 }
+
 unsafe extern "C" fn recover_m_printf(p: &mut Sqlite3Recover,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -167,6 +180,7 @@ unsafe extern "C" fn recover_m_printf(p: &mut Sqlite3Recover,
     }
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_config(p: *mut Sqlite3Recover, op: i32,
     p_arg_1: *mut ()) -> i32 {
@@ -235,6 +249,7 @@ pub extern "C" fn sqlite3_recover_config(p: *mut Sqlite3Recover, op: i32,
     }
     return rc;
 }
+
 unsafe extern "C" fn recover_error(p: &mut Sqlite3Recover, err_code_1: i32,
     z_fmt_1: *const i8, mut __va0: ...) -> i32 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -247,6 +262,7 @@ unsafe extern "C" fn recover_error(p: &mut Sqlite3Recover, err_code_1: i32,
     (*p).err_code = err_code_1;
     return err_code_1;
 }
+
 extern "C" fn recover_sql_callback(p: *mut Sqlite3Recover, z_sql_1: *const i8)
     -> () {
     if unsafe { (*p).err_code } == 0 && unsafe { (*p).x_sql.is_some() } {
@@ -265,9 +281,11 @@ extern "C" fn recover_sql_callback(p: *mut Sqlite3Recover, z_sql_1: *const i8)
         }
     }
 }
+
 extern "C" fn recover_enter_mutex() -> () {
     unsafe { sqlite3_mutex_enter(unsafe { sqlite3_mutex_alloc(9) }) };
 }
+
 extern "C" fn recover_db_error(p: *mut Sqlite3Recover, db: *mut Sqlite3)
     -> i32 {
     return unsafe {
@@ -276,6 +294,7 @@ extern "C" fn recover_db_error(p: *mut Sqlite3Recover, db: *mut Sqlite3)
                 unsafe { sqlite3_errmsg(db) })
         };
 }
+
 extern "C" fn recover_prepare(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     z_sql_1: *const i8) -> *mut Sqlite3Stmt {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -289,6 +308,7 @@ extern "C" fn recover_prepare(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     }
     return p_stmt;
 }
+
 unsafe extern "C" fn recover_prepare_printf(p: *mut Sqlite3Recover,
     db: *mut Sqlite3, z_fmt_1: *const i8, mut __va0: ...)
     -> *mut Sqlite3Stmt {
@@ -308,12 +328,14 @@ unsafe extern "C" fn recover_prepare_printf(p: *mut Sqlite3Recover,
     }
     return p_stmt;
 }
+
 extern "C" fn recover_finalize(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
     if rc != 0 && unsafe { (*p).err_code } == 0 { recover_db_error(p, db); }
 }
+
 extern "C" fn recover_page_count(p: *mut Sqlite3Recover) -> i64 {
     let mut n_pg: i64 = 0 as i64;
     if unsafe { (*p).err_code } == 0 {
@@ -332,6 +354,7 @@ extern "C" fn recover_page_count(p: *mut Sqlite3Recover) -> i64 {
     }
     return n_pg;
 }
+
 extern "C" fn recover_reset(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt) -> *mut Sqlite3Stmt {
     let rc: i32 = unsafe { sqlite3_reset(p_stmt_1) };
@@ -340,6 +363,7 @@ extern "C" fn recover_reset(p: *mut Sqlite3Recover,
     }
     return p_stmt_1;
 }
+
 extern "C" fn recover_get_page(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let p: *mut Sqlite3Recover =
@@ -424,6 +448,7 @@ extern "C" fn recover_get_page(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn recover_bitmap_query(p_map_1: &RecoverBitmap, i_pg_1: i64)
     -> i32 {
     let mut ret: i32 = 1;
@@ -440,6 +465,7 @@ extern "C" fn recover_bitmap_query(p_map_1: &RecoverBitmap, i_pg_1: i64)
     }
     return ret;
 }
+
 extern "C" fn recover_page_is_used(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let p: *const Sqlite3Recover =
@@ -462,6 +488,7 @@ extern "C" fn recover_page_is_used(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
                 pgno))
     };
 }
+
 extern "C" fn recover_read_i32(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_blob: *const u8 = core::ptr::null();
@@ -492,6 +519,7 @@ extern "C" fn recover_read_i32(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_int64(context, i_val) };
     }
 }
+
 extern "C" fn recover_unused_string(z: *const i8, z_a_1: *const i8,
     z_b_1: *const i8, z_buf_1: *mut i8) -> *const i8 {
     let mut i: u32 = 0 as u32;
@@ -513,6 +541,7 @@ extern "C" fn recover_unused_string(z: *const i8, z_a_1: *const i8,
     }
     return z_buf_1 as *const i8;
 }
+
 extern "C" fn recover_escape_crlf(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_text: *const i8 =
@@ -677,6 +706,7 @@ extern "C" fn recover_escape_crlf(context: *mut Sqlite3Context, argc: i32,
         sqlite3_result_value(context, unsafe { *argv.offset(0 as isize) })
     };
 }
+
 extern "C" fn recover_open_output(p: *mut Sqlite3Recover) -> i32 {
     let a_func: [FuncN4Func; 4] =
         [FuncN4Func {
@@ -750,13 +780,16 @@ extern "C" fn recover_open_output(p: *mut Sqlite3Recover) -> i32 {
     unsafe { (*p).db_out = db };
     return unsafe { (*p).err_code };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverGlobal {
     p_methods: *const Sqlite3IoMethods,
     p: *mut Sqlite3Recover,
 }
+
 static mut recover_g: RecoverGlobal = unsafe { core::mem::zeroed() };
+
 extern "C" fn recover_vfs_close(p_fd: *mut Sqlite3File) -> i32 {
     unsafe {
         if !(unsafe { (*p_fd).p_methods } !=
@@ -776,16 +809,19 @@ extern "C" fn recover_vfs_close(p_fd: *mut Sqlite3File) -> i32 {
             };
     }
 }
+
 extern "C" fn recover_get_u16(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as u32) << 8) +
             unsafe { *a.offset(1 as isize) } as u32;
 }
+
 extern "C" fn recover_get_u32(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as u32) << 24) +
                     ((unsafe { *a.offset(1 as isize) } as u32) << 16) +
                 ((unsafe { *a.offset(2 as isize) } as u32) << 8) +
             unsafe { *a.offset(3 as isize) } as u32;
 }
+
 extern "C" fn recover_get_varint(a: *const u8, p_val_1: &mut i64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut i: i32 = 0;
@@ -813,6 +849,7 @@ extern "C" fn recover_get_varint(a: *const u8, p_val_1: &mut i64) -> i32 {
     *p_val_1 = u as Sqlite3Int64;
     return 9;
 }
+
 extern "C" fn recover_is_valid_page(a_tmp_1: *mut u8, a: &[u8]) -> i32 {
     let a_used: *mut u8 = a_tmp_1;
     let mut n_frag: i32 = 0;
@@ -927,6 +964,7 @@ extern "C" fn recover_is_valid_page(a_tmp_1: *mut u8, a: &[u8]) -> i32 {
     }
     return (n_actual == n_frag) as i32;
 }
+
 extern "C" fn recover_vfs_detect_pagesize(p: &mut Sqlite3Recover,
     p_fd_1: *mut Sqlite3File, mut n_reserve_1: u32, n_sz_1: i64) -> i32 {
     let mut rc: i32 = 0;
@@ -1020,6 +1058,7 @@ extern "C" fn recover_vfs_detect_pagesize(p: &mut Sqlite3Recover,
     unsafe { sqlite3_free(a_pg as *mut ()) };
     return rc;
 }
+
 extern "C" fn recover_malloc(p: &mut Sqlite3Recover, n_byte_1: i64)
     -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
@@ -1038,16 +1077,19 @@ extern "C" fn recover_malloc(p: &mut Sqlite3Recover, n_byte_1: i64)
     }
     return p_ret;
 }
+
 extern "C" fn recover_put_u32(a: *mut u8, v: u32) -> () {
     unsafe { *a.offset(0 as isize) = (v >> 24 & 255 as u32) as u8 };
     unsafe { *a.offset(1 as isize) = (v >> 16 & 255 as u32) as u8 };
     unsafe { *a.offset(2 as isize) = (v >> 8 & 255 as u32) as u8 };
     unsafe { *a.offset(3 as isize) = (v >> 0 & 255 as u32) as u8 };
 }
+
 extern "C" fn recover_put_u16(a: *mut u8, v: u32) -> () {
     unsafe { *a.offset(0 as isize) = (v >> 8 & 255 as u32) as u8 };
     unsafe { *a.offset(1 as isize) = (v >> 0 & 255 as u32) as u8 };
 }
+
 extern "C" fn recover_vfs_read(p_fd: *mut Sqlite3File, a_buf: *mut (),
     n_byte: i32, i_off: Sqlite3Int64) -> i32 {
     unsafe {
@@ -1203,6 +1245,7 @@ extern "C" fn recover_vfs_read(p_fd: *mut Sqlite3File, a_buf: *mut (),
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_write(p_fd: *mut Sqlite3File, a_buf: *const (),
     n_byte: i32, i_off: Sqlite3Int64) -> i32 {
     unsafe {
@@ -1231,6 +1274,7 @@ extern "C" fn recover_vfs_write(p_fd: *mut Sqlite3File, a_buf: *const (),
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_truncate(p_fd: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     unsafe {
@@ -1259,6 +1303,7 @@ extern "C" fn recover_vfs_truncate(p_fd: *mut Sqlite3File, size: Sqlite3Int64)
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_sync(p_fd: *mut Sqlite3File, flags: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1286,6 +1331,7 @@ extern "C" fn recover_vfs_sync(p_fd: *mut Sqlite3File, flags: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_file_size(p_fd: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     unsafe {
@@ -1314,6 +1360,7 @@ extern "C" fn recover_vfs_file_size(p_fd: *mut Sqlite3File,
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_lock(p_fd: *mut Sqlite3File, e_lock: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1341,6 +1388,7 @@ extern "C" fn recover_vfs_lock(p_fd: *mut Sqlite3File, e_lock: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_unlock(p_fd: *mut Sqlite3File, e_lock: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1368,6 +1416,7 @@ extern "C" fn recover_vfs_unlock(p_fd: *mut Sqlite3File, e_lock: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_check_reserved_lock(p_fd: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     unsafe {
@@ -1400,6 +1449,7 @@ extern "C" fn recover_vfs_check_reserved_lock(p_fd: *mut Sqlite3File,
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_file_control(p_fd: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     unsafe {
@@ -1432,6 +1482,7 @@ extern "C" fn recover_vfs_file_control(p_fd: *mut Sqlite3File, op: i32,
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_sector_size(p_fd: *mut Sqlite3File) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1459,6 +1510,7 @@ extern "C" fn recover_vfs_sector_size(p_fd: *mut Sqlite3File) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_device_characteristics(p_fd: *mut Sqlite3File)
     -> i32 {
     unsafe {
@@ -1491,6 +1543,7 @@ extern "C" fn recover_vfs_device_characteristics(p_fd: *mut Sqlite3File)
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_shm_map(p_fd: *mut Sqlite3File, i_pg: i32,
     pgsz: i32, b_extend: i32, pp: *mut *mut ()) -> i32 {
     unsafe {
@@ -1519,6 +1572,7 @@ extern "C" fn recover_vfs_shm_map(p_fd: *mut Sqlite3File, i_pg: i32,
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_shm_lock(p_fd: *mut Sqlite3File, offset: i32,
     n: i32, flags: i32) -> i32 {
     unsafe {
@@ -1547,6 +1601,7 @@ extern "C" fn recover_vfs_shm_lock(p_fd: *mut Sqlite3File, offset: i32,
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_shm_barrier(p_fd: *mut Sqlite3File) -> () {
     unsafe {
         if unsafe { (*p_fd).p_methods } ==
@@ -1570,6 +1625,7 @@ extern "C" fn recover_vfs_shm_barrier(p_fd: *mut Sqlite3File) -> () {
         }
     }
 }
+
 extern "C" fn recover_vfs_shm_unmap(p_fd: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     unsafe {
@@ -1598,6 +1654,7 @@ extern "C" fn recover_vfs_shm_unmap(p_fd: *mut Sqlite3File, delete_flag: i32)
         return rc;
     }
 }
+
 extern "C" fn recover_vfs_fetch(p_fd: *mut Sqlite3File, i_off: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     { let _ = p_fd; };
@@ -1606,6 +1663,7 @@ extern "C" fn recover_vfs_fetch(p_fd: *mut Sqlite3File, i_off: Sqlite3Int64,
     unsafe { *pp = core::ptr::null_mut() };
     return 0;
 }
+
 extern "C" fn recover_vfs_unfetch(p_fd: *mut Sqlite3File, i_off: Sqlite3Int64,
     p: *mut ()) -> i32 {
     { let _ = p_fd; };
@@ -1613,6 +1671,7 @@ extern "C" fn recover_vfs_unfetch(p_fd: *mut Sqlite3File, i_off: Sqlite3Int64,
     { let _ = p; };
     return 0;
 }
+
 static mut recover_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 2,
@@ -1635,6 +1694,7 @@ static mut recover_methods: Sqlite3IoMethods =
         x_fetch: Some(recover_vfs_fetch),
         x_unfetch: Some(recover_vfs_unfetch),
     };
+
 extern "C" fn recover_install_wrapper(p: *mut Sqlite3Recover) -> () {
     unsafe {
         let mut p_fd: *mut Sqlite3File = core::ptr::null_mut();
@@ -1679,6 +1739,7 @@ extern "C" fn recover_install_wrapper(p: *mut Sqlite3Recover) -> () {
         }
     }
 }
+
 extern "C" fn recover_one_stmt(db: *mut Sqlite3, z_sql_1: *const i8) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut rc: i32 = 0;
@@ -1692,6 +1753,7 @@ extern "C" fn recover_one_stmt(db: *mut Sqlite3, z_sql_1: *const i8) -> i32 {
     while 100 == unsafe { sqlite3_step(p_stmt) } {}
     return unsafe { sqlite3_finalize(p_stmt) };
 }
+
 extern "C" fn recover_exec(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     z_sql_1: *const i8) -> i32 {
     if unsafe { (*p).err_code } == 0 {
@@ -1700,6 +1762,7 @@ extern "C" fn recover_exec(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     }
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_transfer_settings(p: *mut Sqlite3Recover) -> () {
     let a_pragma: [*const i8; 5] =
         [c"encoding".as_ptr() as *const i8,
@@ -1779,6 +1842,7 @@ extern "C" fn recover_transfer_settings(p: *mut Sqlite3Recover) -> () {
         unsafe { sqlite3_close(db2) };
     }
 }
+
 extern "C" fn recover_open_recovery(p: *mut Sqlite3Recover) -> () {
     let z_sql: *mut i8 =
         unsafe {
@@ -1797,11 +1861,13 @@ extern "C" fn recover_open_recovery(p: *mut Sqlite3Recover) -> () {
         c"CREATE TABLE recovery.schema(type, name, tbl_name, rootpage, sql)".as_ptr()
                 as *mut i8 as *const i8);
 }
+
 extern "C" fn recover_cache_schema(p: *mut Sqlite3Recover) -> i32 {
     return recover_exec(p, unsafe { (*p).db_out },
             c"WITH RECURSIVE pages(p) AS (  SELECT 1    UNION  SELECT child FROM sqlite_dbptr(\'getpage()\'), pages WHERE pgno=p)INSERT INTO recovery.schema SELECT  max(CASE WHEN field=0 THEN value ELSE NULL END),  max(CASE WHEN field=1 THEN value ELSE NULL END),  max(CASE WHEN field=2 THEN value ELSE NULL END),  max(CASE WHEN field=3 THEN value ELSE NULL END),  max(CASE WHEN field=4 THEN value ELSE NULL END)FROM sqlite_dbdata(\'getpage()\') WHERE pgno IN (  SELECT p FROM pages) GROUP BY pgno, cell".as_ptr()
                     as *mut i8 as *const i8);
 }
+
 extern "C" fn recover_uninstall_wrapper(p: &Sqlite3Recover) -> () {
     unsafe {
         let mut p_fd: *mut Sqlite3File = core::ptr::null_mut();
@@ -1816,9 +1882,11 @@ extern "C" fn recover_uninstall_wrapper(p: &Sqlite3Recover) -> () {
         }
     }
 }
+
 extern "C" fn recover_leave_mutex() -> () {
     unsafe { sqlite3_mutex_leave(unsafe { sqlite3_mutex_alloc(9) }) };
 }
+
 extern "C" fn recover_add_table(p: *mut Sqlite3Recover, z_name_1: *const i8,
     i_root_1: i64) -> () {
     let mut p_stmt: *mut Sqlite3Stmt =
@@ -1975,6 +2043,7 @@ extern "C" fn recover_add_table(p: *mut Sqlite3Recover, z_name_1: *const i8,
         }
     }
 }
+
 extern "C" fn recover_write_schema1(p: *mut Sqlite3Recover) -> i32 {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut p_tblname: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2033,6 +2102,7 @@ extern "C" fn recover_write_schema1(p: *mut Sqlite3Recover) -> i32 {
     recover_finalize(p, p_tblname);
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let mut p_tbl: *const RecoverTable = core::ptr::null();
@@ -2082,6 +2152,7 @@ extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
     };
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_find_table(p: &Sqlite3Recover, i_root_1: u32)
     -> *mut RecoverTable {
     let mut p_ret: *mut RecoverTable = core::ptr::null_mut();
@@ -2098,6 +2169,7 @@ extern "C" fn recover_find_table(p: &Sqlite3Recover, i_root_1: u32)
     }
     return p_ret;
 }
+
 extern "C" fn recover_insert_stmt(p: *mut Sqlite3Recover,
     p_tab_1: &RecoverTable, n_field_1: i32) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2224,6 +2296,7 @@ extern "C" fn recover_insert_stmt(p: *mut Sqlite3Recover,
     unsafe { sqlite3_free(z_final as *mut ()) };
     return p_ret;
 }
+
 extern "C" fn recover_bind_value(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt, i_bind_1: i32, p_val_1: *const Sqlite3Value)
     -> () {
@@ -2240,6 +2313,7 @@ extern "C" fn recover_bind_value(p: *mut Sqlite3Recover,
         }
     }
 }
+
 extern "C" fn recover_write_data_step(p: *mut Sqlite3Recover) -> i32 {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let p_sel: *mut Sqlite3Stmt = unsafe { (*p1).p_sel };
@@ -2452,6 +2526,7 @@ extern "C" fn recover_write_data_step(p: *mut Sqlite3Recover) -> i32 {
     }
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_write_data_cleanup(p: *mut Sqlite3Recover) -> () {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let mut ii: i32 = 0;
@@ -2479,6 +2554,7 @@ extern "C" fn recover_write_data_cleanup(p: *mut Sqlite3Recover) -> () {
             core::mem::size_of::<RecoverStateW1>() as u64)
     };
 }
+
 extern "C" fn recover_bitmap_alloc(p: *mut Sqlite3Recover, n_pg_1: i64)
     -> *mut RecoverBitmap {
     let n_elem: i32 = ((n_pg_1 + 1 as i64 + 31 as i64) / 32 as i64) as i32;
@@ -2491,6 +2567,7 @@ extern "C" fn recover_bitmap_alloc(p: *mut Sqlite3Recover, n_pg_1: i64)
     if !(p_ret).is_null() { unsafe { (*p_ret).n_pg = n_pg_1 }; }
     return p_ret;
 }
+
 extern "C" fn recover_lost_and_found1_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2517,6 +2594,7 @@ extern "C" fn recover_lost_and_found1_init(p: *mut Sqlite3Recover) -> () {
     }
     unsafe { (*p_laf).p_used_pages = p_stmt };
 }
+
 extern "C" fn recover_bitmap_set(p_map_1: &mut RecoverBitmap, i_pg_1: i64)
     -> () {
     if i_pg_1 <= (*p_map_1).n_pg {
@@ -2528,6 +2606,7 @@ extern "C" fn recover_bitmap_set(p_map_1: &mut RecoverBitmap, i_pg_1: i64)
         };
     }
 }
+
 extern "C" fn recover_lost_and_found1_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     let mut rc: i32 = unsafe { (*p).err_code };
@@ -2548,6 +2627,7 @@ extern "C" fn recover_lost_and_found1_step(p: *mut Sqlite3Recover) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn recover_lost_and_found2_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if !(unsafe { (*p).laf.p_all_and_parent } == core::ptr::null_mut()) as i32
@@ -2604,6 +2684,7 @@ extern "C" fn recover_lost_and_found2_init(p: *mut Sqlite3Recover) -> () {
             }
     };
 }
+
 extern "C" fn recover_lost_and_found2_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if unsafe { (*p).err_code } == 0 {
@@ -2653,6 +2734,7 @@ extern "C" fn recover_lost_and_found2_step(p: *mut Sqlite3Recover) -> i32 {
     }
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_lost_and_found_create(p: *mut Sqlite3Recover,
     n_field_1: i32) -> *mut i8 {
     let mut z_tbl: *mut i8 = core::ptr::null_mut();
@@ -2749,6 +2831,7 @@ extern "C" fn recover_lost_and_found_create(p: *mut Sqlite3Recover,
     }
     return z_tbl;
 }
+
 extern "C" fn recover_lost_and_found_insert(p: *mut Sqlite3Recover,
     z_tab_1: *const i8, n_field_1: i32) -> *mut Sqlite3Stmt {
     let n_total: i32 = n_field_1 + 4;
@@ -2809,6 +2892,7 @@ extern "C" fn recover_lost_and_found_insert(p: *mut Sqlite3Recover,
     unsafe { sqlite3_free(z_bind as *mut ()) };
     return p_ret;
 }
+
 extern "C" fn recover_lost_and_found3_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if unsafe { (*p_laf).n_max_field } > 0 {
@@ -2844,6 +2928,7 @@ extern "C" fn recover_lost_and_found3_init(p: *mut Sqlite3Recover) -> () {
         };
     }
 }
+
 extern "C" fn recover_lost_and_found_find_root(p: *mut Sqlite3Recover,
     i_pg_1: i64, pi_root_1: &mut i64) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
@@ -2869,6 +2954,7 @@ extern "C" fn recover_lost_and_found_find_root(p: *mut Sqlite3Recover,
     }
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_lost_and_found_one_page(p: *mut Sqlite3Recover,
     i_page_1: i64) -> () {
     let p_laf: *const RecoverStateLAF =
@@ -2996,6 +3082,7 @@ extern "C" fn recover_lost_and_found_one_page(p: *mut Sqlite3Recover,
         }
     }
 }
+
 extern "C" fn recover_lost_and_found3_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *const RecoverStateLAF =
         unsafe { &raw mut (*p).laf } as *const RecoverStateLAF;
@@ -3025,6 +3112,7 @@ extern "C" fn recover_lost_and_found3_step(p: *mut Sqlite3Recover) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn recover_write_schema2(p: *mut Sqlite3Recover) -> i32 {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_select =
@@ -3049,9 +3137,11 @@ extern "C" fn recover_write_schema2(p: *mut Sqlite3Recover) -> i32 {
     recover_finalize(p, p_select);
     return unsafe { (*p).err_code };
 }
+
 extern "C" fn recover_bitmap_free(p_map_1: *mut RecoverBitmap) -> () {
     unsafe { sqlite3_free(p_map_1 as *mut ()) };
 }
+
 extern "C" fn recover_lost_and_found_cleanup(p: &mut Sqlite3Recover) -> () {
     recover_bitmap_free((*p).laf.p_used);
     (*p).laf.p_used = core::ptr::null_mut();
@@ -3074,6 +3164,7 @@ extern "C" fn recover_lost_and_found_cleanup(p: &mut Sqlite3Recover) -> () {
     unsafe { sqlite3_free((*p).laf.ap_val as *mut ()) };
     (*p).laf.ap_val = core::ptr::null_mut();
 }
+
 extern "C" fn recover_final_cleanup(p: *mut Sqlite3Recover) -> () {
     let mut p_tab: *mut RecoverTable = core::ptr::null_mut();
     let mut p_next: *mut RecoverTable = core::ptr::null_mut();
@@ -3110,6 +3201,7 @@ extern "C" fn recover_final_cleanup(p: *mut Sqlite3Recover) -> () {
     }
     unsafe { (*p).db_out = core::ptr::null_mut() };
 }
+
 extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
     if !(!(p).is_null() && unsafe { (*p).err_code } == 0) as i32 as i64 != 0 {
         unsafe {
@@ -3469,6 +3561,7 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_step(p: *mut Sqlite3Recover) -> i32 {
     if p == core::ptr::null_mut() { return 7; }
@@ -3478,15 +3571,18 @@ pub extern "C" fn sqlite3_recover_step(p: *mut Sqlite3Recover) -> i32 {
     }
     return unsafe { (*p).err_code };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_errcode(p: *const Sqlite3Recover) -> i32 {
     return if !(p).is_null() { unsafe { (*p).err_code } } else { 7 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_run(p: *mut Sqlite3Recover) -> i32 {
     while 0 == sqlite3_recover_step(p) {}
     return sqlite3_recover_errcode(p as *const Sqlite3Recover);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_errmsg(p: *const Sqlite3Recover)
     -> *const i8 {
@@ -3494,6 +3590,7 @@ pub extern "C" fn sqlite3_recover_errmsg(p: *const Sqlite3Recover)
                 unsafe { (*p).z_err_msg }
             } else { c"out of memory".as_ptr() as *mut i8 } as *const i8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_finish(p: *mut Sqlite3Recover) -> i32 {
     let mut rc: i32 = 0;
@@ -3520,6 +3617,7 @@ pub extern "C" fn sqlite3_recover_finish(p: *mut Sqlite3Recover) -> i32 {
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuncN4Func {
@@ -3528,6 +3626,7 @@ struct FuncN4Func {
     x_func: Option<unsafe extern "C" fn(*mut Sqlite3Context, i32,
         *mut *mut Sqlite3Value) -> ()>,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,11 +1,17 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinPthreadT = *mut OpaquePthreadT;
+
 type PthreadT = DarwinPthreadT;
+
 static mut z_db_name: *mut i8 = core::ptr::null_mut();
+
 static mut e_verbose: i32 = 0;
+
 extern "C" fn error_out(rc: i32, z_ctx_1: *const i8, lineno: i32) -> () {
     unsafe {
         if rc != 0 {
@@ -18,6 +24,7 @@ extern "C" fn error_out(rc: i32, z_ctx_1: *const i8, lineno: i32) -> () {
         }
     }
 }
+
 unsafe extern "C" fn exec(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     z_format_1: *const i8, mut __va0: ...) -> i32 {
     unsafe {
@@ -50,6 +57,7 @@ unsafe extern "C" fn exec(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
         return rc;
     }
 }
+
 unsafe extern "C" fn prepare(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     z_format_1: *const i8, mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -83,6 +91,7 @@ unsafe extern "C" fn prepare(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
         return p_stmt;
     }
 }
+
 extern "C" fn wait_on_table(db: *mut Sqlite3, z_worker_1: *const i8,
     z_table_1: *const i8) -> () {
     loop {
@@ -102,6 +111,7 @@ extern "C" fn wait_on_table(db: *mut Sqlite3, z_worker_1: *const i8,
         unsafe { sqlite3_sleep(1) };
     }
 }
+
 extern "C" fn is_prime(x: i32) -> i32 {
     let mut i: i32 = 0;
     if x < 2 { return 1; }
@@ -115,6 +125,7 @@ extern "C" fn is_prime(x: i32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn worker(p_arg_1: *mut ()) -> *mut () {
     unsafe {
         let mut rc: i32 = 0;
@@ -231,6 +242,7 @@ extern "C" fn worker(p_arg_1: *mut ()) -> *mut () {
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [options]\n".as_ptr() as *mut i8 as *const i8,
@@ -242,6 +254,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
     };
     unsafe { exit(1) };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -433,12 +446,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1234,20 +1249,25 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadT {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadAttrT {
     _opaque: [u8; 0],
 }
+
 type PthreadAttrT = OpaquePthreadAttrT;

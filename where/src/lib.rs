@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,8 +16,11 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod where_int_h;
 pub(crate) use crate::where_int_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinIntptrT = i64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -29,6 +33,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -108,6 +113,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -156,6 +162,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -292,6 +299,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -315,6 +323,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -387,6 +396,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct HiddenIndexInfo {
@@ -397,6 +407,7 @@ struct HiddenIndexInfo {
     m_handle_in: u32,
     a_rhs: [*mut Sqlite3Value; 0],
 }
+
 impl WhereInfo {
     fn b_deferred_seek(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -439,6 +450,7 @@ impl WhereInfo {
             (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
     }
 }
+
 impl WhereLoopU0S1 {
     fn need_free(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -462,6 +474,7 @@ impl WhereLoopU0S1 {
             (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
     }
 }
+
 extern "C" fn term_from_where_clause(p_wc_1: *mut WhereClause,
     mut i_term_1: i32) -> *mut WhereTerm {
     let mut p: *const WhereClause = core::ptr::null();
@@ -483,6 +496,7 @@ extern "C" fn term_from_where_clause(p_wc_1: *mut WhereClause,
     }
     return core::ptr::null_mut();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_collation(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32) -> *const i8 {
@@ -520,6 +534,7 @@ pub extern "C" fn sqlite3_vtab_collation(p_idx_info: *mut Sqlite3IndexInfo,
         return z_ret;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_distinct(p_idx_info: *mut Sqlite3IndexInfo)
     -> i32 {
@@ -529,6 +544,7 @@ pub extern "C" fn sqlite3_vtab_distinct(p_idx_info: *mut Sqlite3IndexInfo)
     { let _ = 0; };
     return unsafe { (*p_hidden).e_distinct };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_in(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32, b_handle: i32) -> i32 {
@@ -544,6 +560,7 @@ pub extern "C" fn sqlite3_vtab_in(p_idx_info: *mut Sqlite3IndexInfo,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_rhs_value(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32, pp_val: &mut *mut Sqlite3Value) -> i32 {
@@ -592,6 +609,7 @@ pub extern "C" fn sqlite3_vtab_rhs_value(p_idx_info: *mut Sqlite3IndexInfo,
     if rc == 0 && p_val == core::ptr::null_mut() { rc = 12; }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
@@ -600,6 +618,7 @@ struct CoveringIndexCheck {
     b_expr: u8,
     b_unidx: u8,
 }
+
 extern "C" fn where_loop_clear_union(db: *mut Sqlite3, p: &mut WhereLoop)
     -> () {
     unsafe {
@@ -623,6 +642,7 @@ extern "C" fn where_loop_clear_union(db: *mut Sqlite3, p: &mut WhereLoop)
         }
     }
 }
+
 extern "C" fn where_loop_clear(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     if unsafe { (*p).a_l_term } !=
             unsafe { &raw mut (*p).a_l_term_space[0 as usize] } as
@@ -645,11 +665,13 @@ extern "C" fn where_loop_clear(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     unsafe { (*p).n_l_term = 0 as u16 };
     unsafe { (*p).ws_flags = 0 as u32 };
 }
+
 extern "C" fn where_loop_delete(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     { let _ = 0; };
     where_loop_clear(db, p);
     unsafe { sqlite3_db_nn_free_nn(db, p as *mut ()) };
 }
+
 extern "C" fn where_info_free(db: *mut Sqlite3, p_w_info_1: *mut WhereInfo)
     -> () {
     { let _ = 0; };
@@ -671,6 +693,7 @@ extern "C" fn where_info_free(db: *mut Sqlite3, p_w_info_1: *mut WhereInfo)
     }
     unsafe { sqlite3_db_nn_free_nn(db, p_w_info_1 as *mut ()) };
 }
+
 extern "C" fn where_loop_init(p: &mut WhereLoop) -> () {
     (*p).a_l_term =
         &raw mut (*p).a_l_term_space[0 as usize] as *mut *mut WhereTerm;
@@ -681,6 +704,7 @@ extern "C" fn where_loop_init(p: &mut WhereLoop) -> () {
             u16;
     (*p).ws_flags = 0 as u32;
 }
+
 extern "C" fn create_mask(p_mask_set_1: &mut WhereMaskSet, i_cursor_1: i32)
     -> () {
     unsafe {
@@ -693,6 +717,7 @@ extern "C" fn create_mask(p_mask_set_1: &mut WhereMaskSet, i_cursor_1: i32)
                     } as usize] = i_cursor_1;
     }
 }
+
 extern "C" fn expr_node_is_deterministic(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     if unsafe { (*p_expr_1).op } as i32 == 172 &&
@@ -703,6 +728,7 @@ extern "C" fn expr_node_is_deterministic(p_walker_1: *mut Walker,
     }
     return 0;
 }
+
 extern "C" fn expr_is_deterministic(p: *mut Expr) -> i32 {
     let mut w: Walker = unsafe { core::mem::zeroed() };
     unsafe {
@@ -715,6 +741,7 @@ extern "C" fn expr_is_deterministic(p: *mut Expr) -> i32 {
     unsafe { sqlite3_walk_expr(&mut w, p) };
     return w.e_code as i32;
 }
+
 extern "C" fn where_right_subexpr_is_column(mut p: *mut Expr) -> *mut Expr {
     p =
         unsafe {
@@ -726,6 +753,7 @@ extern "C" fn where_right_subexpr_is_column(mut p: *mut Expr) -> *mut Expr {
     }
     return core::ptr::null_mut();
 }
+
 extern "C" fn index_in_affinity_ok(p_parse_1: *mut Parse,
     p_term_1: &WhereTerm, idxaff: u8) -> *const i8 {
     unsafe {
@@ -774,6 +802,7 @@ extern "C" fn index_in_affinity_ok(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn where_scan_next(p_scan_1: &mut WhereScan) -> *mut WhereTerm {
     unsafe {
         unsafe {
@@ -940,6 +969,7 @@ extern "C" fn where_scan_next(p_scan_1: &mut WhereScan) -> *mut WhereTerm {
         }
     }
 }
+
 extern "C" fn where_scan_init_index_expr(p_scan_1: *mut WhereScan)
     -> *mut WhereTerm {
     unsafe {
@@ -951,6 +981,7 @@ extern "C" fn where_scan_init_index_expr(p_scan_1: *mut WhereScan)
     };
     return where_scan_next(unsafe { &mut *p_scan_1 });
 }
+
 extern "C" fn where_scan_init(p_scan_1: *mut WhereScan,
     p_wc_1: *mut WhereClause, i_cur_1: i32, mut i_column_1: i32,
     op_mask_1: u32, p_idx_1: *const Index) -> *mut WhereTerm {
@@ -1006,6 +1037,7 @@ extern "C" fn where_scan_init(p_scan_1: *mut WhereScan,
     unsafe { (*p_scan_1).ai_column[0 as usize] = i_column_1 as i16 };
     return where_scan_next(unsafe { &mut *p_scan_1 });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_find_term(p_wc_1: *mut WhereClause,
     i_cur_1: i32, i_column_1: i32, not_ready_1: Bitmask, mut op: u32,
@@ -1029,6 +1061,7 @@ pub extern "C" fn sqlite3_where_find_term(p_wc_1: *mut WhereClause,
     }
     return p_result;
 }
+
 extern "C" fn find_index_col(p_parse_1: *mut Parse, p_list_1: &ExprList,
     i_base_1: i32, p_idx_1: &Index, i_col_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -1075,6 +1108,7 @@ extern "C" fn find_index_col(p_parse_1: *mut Parse, p_list_1: &ExprList,
     }
     return -1;
 }
+
 extern "C" fn index_column_not_null(p_idx_1: &Index, i_col_1: i32) -> i32 {
     let mut j: i32 = 0;
     { let _ = 0; };
@@ -1088,6 +1122,7 @@ extern "C" fn index_column_not_null(p_idx_1: &Index, i_col_1: i32) -> i32 {
                 } as i32;
     } else if j == -1 { return 1; } else { { let _ = 0; }; return 0; }
 }
+
 extern "C" fn is_distinct_redundant(p_parse_1: *mut Parse,
     p_tab_list_1: &SrcList, p_wc_1: *mut WhereClause,
     p_distinct_1: *mut ExprList) -> i32 {
@@ -1174,6 +1209,7 @@ extern "C" fn is_distinct_redundant(p_parse_1: *mut Parse,
     }
     return 0;
 }
+
 extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
     unsafe {
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
@@ -1311,6 +1347,7 @@ extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_get_mask(p_mask_set: &WhereMaskSet,
     i_cursor: i32) -> Bitmask {
@@ -1336,6 +1373,7 @@ pub extern "C" fn sqlite3_where_get_mask(p_mask_set: &WhereMaskSet,
         return 0 as Bitmask;
     }
 }
+
 extern "C" fn constraint_compatible_with_outer_join(p_term_1: &WhereTerm,
     p_src_1: &SrcItem) -> i32 {
     unsafe {
@@ -1354,6 +1392,7 @@ extern "C" fn constraint_compatible_with_outer_join(p_term_1: &WhereTerm,
         return 1;
     }
 }
+
 extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
     p_wc_1: *mut WhereClause, m_unusable_1: Bitmask, p_src_1: *const SrcItem,
     pm_no_omit_1: &mut u16) -> *mut Sqlite3IndexInfo {
@@ -1733,6 +1772,7 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
         }
     }
 }
+
 extern "C" fn where_loop_resize(db: *mut Sqlite3, p: &mut WhereLoop,
     mut n: i32) -> i32 {
     let mut pa_new: *mut *mut WhereTerm = core::ptr::null_mut();
@@ -1757,6 +1797,7 @@ extern "C" fn where_loop_resize(db: *mut Sqlite3, p: &mut WhereLoop,
     (*p).n_l_slot = n as u16;
     return 0;
 }
+
 extern "C" fn free_idx_str(p_idx_info_1: &mut Sqlite3IndexInfo) -> () {
     if (*p_idx_info_1).need_to_free_idx_str != 0 {
         unsafe { sqlite3_free((*p_idx_info_1).idx_str as *mut ()) };
@@ -1764,6 +1805,7 @@ extern "C" fn free_idx_str(p_idx_info_1: &mut Sqlite3IndexInfo) -> () {
         (*p_idx_info_1).need_to_free_idx_str = 0;
     }
 }
+
 extern "C" fn free_index_info(db: *mut Sqlite3,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> () {
     let mut p_hidden: *mut HiddenIndexInfo = core::ptr::null_mut();
@@ -1800,11 +1842,13 @@ extern "C" fn free_index_info(db: *mut Sqlite3,
     free_idx_str(unsafe { &mut *p_idx_info_1 });
     unsafe { sqlite3_db_free(db, p_idx_info_1 as *mut ()) };
 }
+
 extern "C" fn is_limit_term(p_term_1: &WhereTerm) -> i32 {
     { let _ = 0; };
     return ((*p_term_1).e_match_op as i32 >= 73 &&
                 (*p_term_1).e_match_op as i32 <= 74) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_uses_all_schemas(p_parse: *mut Parse) -> () {
     let n_db: i32 = unsafe { (*unsafe { (*p_parse).db }).n_db };
@@ -1834,6 +1878,7 @@ pub extern "C" fn sqlite3_vtab_uses_all_schemas(p_parse: *mut Parse) -> () {
         }
     }
 }
+
 extern "C" fn vtab_best_index(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p: *mut Sqlite3IndexInfo) -> i32 {
     unsafe {
@@ -1891,6 +1936,7 @@ extern "C" fn vtab_best_index(p_parse_1: *mut Parse, p_tab_1: *mut Table,
         return rc;
     }
 }
+
 extern "C" fn all_constraints_used(a_usage_1: &[Sqlite3IndexConstraintUsage])
     -> i32 {
     let mut ii: i32 = 0;
@@ -1907,6 +1953,7 @@ extern "C" fn all_constraints_used(a_usage_1: &[Sqlite3IndexConstraintUsage])
     }
     return 1;
 }
+
 extern "C" fn where_loop_cheaper_proper_subset(p_x_1: &WhereLoop,
     p_y_1: &WhereLoop) -> i32 {
     unsafe {
@@ -1964,6 +2011,7 @@ extern "C" fn where_loop_cheaper_proper_subset(p_x_1: &WhereLoop,
         return 1;
     }
 }
+
 extern "C" fn where_loop_adjust_cost(mut p: *const WhereLoop,
     p_template_1: *mut WhereLoop) -> () {
     if unsafe { (*p_template_1).ws_flags } & 512 as u32 == 0 as u32 {
@@ -2024,6 +2072,7 @@ extern "C" fn where_loop_adjust_cost(mut p: *const WhereLoop,
         }
     }
 }
+
 extern "C" fn where_or_insert(p_set_1: &mut WhereOrSet, prereq: Bitmask,
     r_run_1: LogEst, n_out_1: LogEst) -> i32 {
     unsafe {
@@ -2140,6 +2189,7 @@ extern "C" fn where_or_insert(p_set_1: &mut WhereOrSet, prereq: Bitmask,
         unreachable!();
     }
 }
+
 extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
     p_template_1: &WhereLoop) -> *mut *mut WhereLoop {
     let mut p: *mut WhereLoop = core::ptr::null_mut();
@@ -2193,6 +2243,7 @@ extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
     }
     return pp_prev_1;
 }
+
 extern "C" fn where_loop_xfer(db: *mut Sqlite3, p_to_1: *mut WhereLoop,
     p_from_1: *mut WhereLoop) -> i32 {
     unsafe {
@@ -2225,6 +2276,7 @@ extern "C" fn where_loop_xfer(db: *mut Sqlite3, p_to_1: *mut WhereLoop,
         return 0;
     }
 }
+
 extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
     p_template_1: *mut WhereLoop) -> i32 {
     unsafe {
@@ -2304,6 +2356,7 @@ extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
         return rc;
     }
 }
+
 extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_usable_1: Bitmask, m_exclude_1: u16,
     p_idx_info_1: *mut Sqlite3IndexInfo, m_no_omit_1: u16, pb_in_1: &mut i32,
@@ -2573,6 +2626,7 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
         return rc;
     }
 }
+
 extern "C" fn where_loop_add_virtual(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_unusable_1: Bitmask) -> i32 {
     unsafe {
@@ -2699,12 +2753,14 @@ extern "C" fn where_loop_add_virtual(p_builder_1: *mut WhereLoopBuilder,
         return rc;
     }
 }
+
 extern "C" fn est_log(n_1: LogEst) -> LogEst {
     return if n_1 as i32 <= 10 {
                 0
             } else { (unsafe { sqlite3_log_est(n_1 as u64) }) as i32 - 33 } as
             LogEst;
 }
+
 extern "C" fn column_is_good_index_candidate(p_tab_1: &Table, i_col_1: i32)
     -> i32 {
     let mut p_idx: *const Index = core::ptr::null();
@@ -2745,6 +2801,7 @@ extern "C" fn column_is_good_index_candidate(p_tab_1: &Table, i_col_1: i32)
     }
     return 1;
 }
+
 extern "C" fn term_can_drive_index(p_term_1: *const WhereTerm,
     p_src_1: *const SrcItem, not_ready_1: Bitmask) -> i32 {
     unsafe {
@@ -2789,6 +2846,7 @@ extern "C" fn term_can_drive_index(p_term_1: *const WhereTerm,
                 }, left_col);
     }
 }
+
 extern "C" fn where_usable_partial_index(i_tab_1: i32, jointype: u8,
     p_wc_1: *mut WhereClause, mut p_where_1: *const Expr) -> i32 {
     unsafe {
@@ -2843,6 +2901,7 @@ extern "C" fn where_usable_partial_index(i_tab_1: i32, jointype: u8,
         return 0;
     }
 }
+
 extern "C" fn index_might_help_with_order_by(p_builder_1: &WhereLoopBuilder,
     p_index_1: &Index, i_cursor_1: i32) -> i32 {
     let mut p_ob: *const ExprList = core::ptr::null();
@@ -2919,6 +2978,7 @@ extern "C" fn index_might_help_with_order_by(p_builder_1: &WhereLoopBuilder,
     }
     return 0;
 }
+
 extern "C" fn expr_node_pattern_length_est(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2980,6 +3040,7 @@ extern "C" fn expr_node_pattern_length_est(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn est_like_pattern_length(p: *mut Expr, e_code_1: u16) -> i32 {
     unsafe {
         let mut w: Walker = unsafe { core::mem::zeroed() };
@@ -2991,6 +3052,7 @@ extern "C" fn est_like_pattern_length(p: *mut Expr, e_code_1: u16) -> i32 {
         return w.u.sz;
     }
 }
+
 extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
     p_loop_1: &mut WhereLoop, n_row_1: LogEst) -> () {
     unsafe {
@@ -3128,6 +3190,7 @@ extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
         }
     }
 }
+
 extern "C" fn where_indexed_expr_cleanup(db: *mut Sqlite3,
     p_object_1: *mut ()) -> () {
     let pp: *mut *mut IndexedExpr = p_object_1 as *mut *mut IndexedExpr;
@@ -3138,6 +3201,7 @@ extern "C" fn where_indexed_expr_cleanup(db: *mut Sqlite3,
         unsafe { sqlite3_db_free_nn(db, p as *mut ()) };
     }
 }
+
 extern "C" fn where_part_idx_expr(p_parse_1: *mut Parse, p_idx_1: *mut Index,
     mut p_part_1: *const Expr, p_mask_1: *mut Bitmask, i_idx_cur_1: i32,
     p_item_1: *mut SrcItem) -> () {
@@ -3227,6 +3291,7 @@ extern "C" fn where_part_idx_expr(p_parse_1: *mut Parse, p_idx_1: *mut Index,
         }
     }
 }
+
 extern "C" fn expr_is_covered_by_index(p_expr_1: *const Expr, p_idx_1: &Index,
     i_tab_cur_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -3253,6 +3318,7 @@ extern "C" fn expr_is_covered_by_index(p_expr_1: *const Expr, p_idx_1: &Index,
     }
     return 0;
 }
+
 extern "C" fn where_is_covering_index_walk_callback(p_walk_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -3302,6 +3368,7 @@ extern "C" fn where_is_covering_index_walk_callback(p_walk_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
     p_idx_1: *mut Index, i_tab_cur_1: i32) -> u32 {
     unsafe {
@@ -3352,6 +3419,7 @@ extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
         return rc as u32;
     }
 }
+
 extern "C" fn where_range_vector_len(p_parse_1: *mut Parse, i_cur_1: i32,
     p_idx_1: &Index, n_eq_1: i32, p_term_1: &WhereTerm) -> i32 {
     unsafe {
@@ -3454,6 +3522,7 @@ extern "C" fn where_range_vector_len(p_parse_1: *mut Parse, i_cur_1: i32,
         return i;
     }
 }
+
 extern "C" fn where_range_adjust(p_term_1: *const WhereTerm, n_new_1: LogEst)
     -> LogEst {
     let mut n_ret: LogEst = n_new_1;
@@ -3467,6 +3536,7 @@ extern "C" fn where_range_adjust(p_term_1: *const WhereTerm, n_new_1: LogEst)
     }
     return n_ret;
 }
+
 extern "C" fn where_range_scan_est(p_parse_1: *const Parse,
     p_builder_1: *const WhereLoopBuilder, p_lower_1: *mut WhereTerm,
     p_upper_1: *mut WhereTerm, p_loop_1: &mut WhereLoop) -> i32 {
@@ -3493,6 +3563,7 @@ extern "C" fn where_range_scan_est(p_parse_1: *const Parse,
     (*p_loop_1).n_out = n_out as LogEst;
     return rc;
 }
+
 extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
     p_src_1: *mut SrcItem, p_probe_1: *mut Index, n_in_mul_1: LogEst) -> i32 {
     unsafe {
@@ -3947,6 +4018,7 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
         return rc;
     }
 }
+
 extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask) -> i32 {
     unsafe {
@@ -4300,6 +4372,7 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
         }
     }
 }
+
 extern "C" fn where_or_move(p_dest_1: &mut WhereOrSet, p_src_1: &WhereOrSet)
     -> () {
     unsafe {
@@ -4314,6 +4387,7 @@ extern "C" fn where_or_move(p_dest_1: &mut WhereOrSet, p_src_1: &WhereOrSet)
         };
     }
 }
+
 extern "C" fn where_loop_add_or(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_unusable_1: Bitmask) -> i32 {
     unsafe {
@@ -4496,6 +4570,7 @@ extern "C" fn where_loop_add_or(p_builder_1: *mut WhereLoopBuilder,
         return rc;
     }
 }
+
 extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
     let p_w_info: *mut WhereInfo = unsafe { (*p_builder_1).p_w_info };
     let mut m_prereq: Bitmask = 0 as Bitmask;
@@ -4637,6 +4712,7 @@ extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
     where_loop_clear(db, p_new);
     return rc;
 }
+
 extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
     let n_loop: i32 = (*p_w_info_1).n_level as i32;
     let mut p_w_loop: *mut WhereLoop = core::ptr::null_mut();
@@ -4759,6 +4835,7 @@ extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
     }
     return if (*p_w_info_1).b_star_used() != 0 { 18 } else { 12 };
 }
+
 extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
     p_loop_1: &WhereLoop, i_loop_1: i32, i_cur_1: i32,
     p_order_by_1: &ExprList, p_rev_mask_1: &mut Bitmask,
@@ -4856,6 +4933,7 @@ extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
         return (j_sub > 0) as i32;
     }
 }
+
 extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
     p_order_by_1: *mut ExprList, p_path_1: &WherePath, wctrl_flags_1: u16,
     n_loop_1: u16, p_last_1: *mut WhereLoop, p_rev_mask_1: *mut Bitmask)
@@ -5305,6 +5383,7 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
         return -1 as i8;
     }
 }
+
 extern "C" fn where_sorting_cost(p_w_info_1: &WhereInfo, mut n_row_1: LogEst,
     n_order_by_1: i32, n_sorted_1: i32) -> LogEst {
     unsafe {
@@ -5342,6 +5421,7 @@ extern "C" fn where_sorting_cost(p_w_info_1: &WhereInfo, mut n_row_1: LogEst,
         return r_sort_cost;
     }
 }
+
 extern "C" fn where_loop_is_no_better(p_candidate_1: &WhereLoop,
     p_baseline_1: &WhereLoop) -> i32 {
     unsafe {
@@ -5356,6 +5436,7 @@ extern "C" fn where_loop_is_no_better(p_candidate_1: &WhereLoop,
         return 1;
     }
 }
+
 extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
     n_row_est_1: LogEst) -> i32 {
     unsafe {
@@ -5825,6 +5906,7 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
         return 0;
     }
 }
+
 extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
     let mut i: i32 = 0;
     {
@@ -5869,6 +5951,7 @@ extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
         }
     }
 }
+
 extern "C" fn where_reverse_scan_order(p_w_info_1: &mut WhereInfo) -> () {
     unsafe {
         let mut ii: i32 = 0;
@@ -5902,6 +5985,7 @@ extern "C" fn where_reverse_scan_order(p_w_info_1: &mut WhereInfo) -> () {
         }
     }
 }
+
 extern "C" fn where_omit_noop_join(p_w_info_1: &mut WhereInfo,
     mut not_ready_1: Bitmask) -> Bitmask {
     unsafe {
@@ -6051,6 +6135,7 @@ extern "C" fn where_omit_noop_join(p_w_info_1: &mut WhereInfo,
         return not_ready_1;
     }
 }
+
 extern "C" fn where_check_if_bloom_filter_is_useful(p_w_info_1: &WhereInfo)
     -> () {
     let mut i: i32 = 0;
@@ -6096,6 +6181,7 @@ extern "C" fn where_check_if_bloom_filter_is_useful(p_w_info_1: &WhereInfo)
         }
     }
 }
+
 extern "C" fn where_add_indexed_expr(p_parse_1: *mut Parse,
     p_idx_1: *mut Index, i_idx_cur_1: i32, p_tab_item_1: &SrcItem) -> () {
     let mut i: i32 = 0;
@@ -6184,6 +6270,7 @@ extern "C" fn where_add_indexed_expr(p_parse_1: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_malloc(p_w_info_1: &mut WhereInfo,
     n_byte_1: u64) -> *mut () {
@@ -6209,6 +6296,7 @@ pub extern "C" fn sqlite3_where_malloc(p_w_info_1: &mut WhereInfo,
         return p_block as *mut ();
     }
 }
+
 extern "C" fn translate_column_to_copy(p_parse_1: &Parse, mut i_start_1: i32,
     i_tab_cur_1: i32, i_register_1: i32, i_autoidx_cur_1: i32) -> () {
     let v: *mut Vdbe = (*p_parse_1).p_vdbe;
@@ -6246,6 +6334,7 @@ extern "C" fn translate_column_to_copy(p_parse_1: &Parse, mut i_start_1: i32,
         }
     }
 }
+
 extern "C" fn construct_automatic_index(p_parse_1: *mut Parse,
     p_wc_1: &WhereClause, not_ready_1: Bitmask, p_level_1: *mut WhereLevel)
     -> () {
@@ -7051,6 +7140,7 @@ extern "C" fn construct_automatic_index(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
     mut i_level_1: i32, mut p_level_1: *mut WhereLevel, not_ready_1: Bitmask)
     -> () {
@@ -7242,6 +7332,7 @@ extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
         unsafe { (*p_parse).p_idx_part_expr = saved_p_idx_part_expr };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_begin(p_parse_1: *mut Parse,
     p_tab_list_1: *mut SrcList, p_where_1: *mut Expr,
@@ -8560,6 +8651,7 @@ pub extern "C" fn sqlite3_where_begin(p_parse_1: *mut Parse,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
     unsafe {
@@ -9027,21 +9119,25 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_output_row_count(p_w_info_1: &WhereInfo)
     -> LogEst {
     return (*p_w_info_1).n_row_out;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_distinct(p_w_info_1: &WhereInfo) -> i32 {
     return (*p_w_info_1).e_distinct as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_ordered(p_w_info_1: &WhereInfo) -> i32 {
     return if ((*p_w_info_1).n_ob_sat as i32) < 0 {
             0
         } else { (*p_w_info_1).n_ob_sat as i32 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_order_by_limit_opt_label(p_w_info_1:
         &mut WhereInfo) -> i32 {
@@ -9060,6 +9156,7 @@ pub extern "C" fn sqlite3_where_order_by_limit_opt_label(p_w_info_1:
             (*p_w_info_1).i_continue
         } else { unsafe { (*p_inner).addr_nxt } };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_min_max_opt_early_out(v: *mut Vdbe,
     p_w_info_1: &mut WhereInfo) -> () {
@@ -9091,22 +9188,26 @@ pub extern "C" fn sqlite3_where_min_max_opt_early_out(v: *mut Vdbe,
     }
     unsafe { sqlite3_vdbe_goto(v, (*p_w_info_1).i_break) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_sorted(p_w_info_1: &WhereInfo) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
     return (*p_w_info_1).sorted() as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_continue_label(p_w_info_1: &WhereInfo)
     -> i32 {
     { let _ = 0; };
     return (*p_w_info_1).i_continue;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_break_label(p_w_info_1: &WhereInfo) -> i32 {
     return (*p_w_info_1).i_break;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_ok_one_pass(p_w_info_1: &WhereInfo,
     ai_cur_1: *mut i32) -> i32 {
@@ -9117,11 +9218,13 @@ pub extern "C" fn sqlite3_where_ok_one_pass(p_w_info_1: &WhereInfo,
     };
     return (*p_w_info_1).e_one_pass as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_uses_deferred_seek(p_w_info_1: &WhereInfo)
     -> i32 {
     return (*p_w_info_1).b_deferred_seek() as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_realloc(p_w_info_1: *mut WhereInfo,
     p_old_1: *mut (), n_byte_1: u64) -> *mut () {
@@ -9146,6 +9249,7 @@ pub extern "C" fn sqlite3_where_realloc(p_w_info_1: *mut WhereInfo,
         return p_new;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -11940,36 +12044,43 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

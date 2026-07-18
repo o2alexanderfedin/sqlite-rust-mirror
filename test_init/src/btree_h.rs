@@ -1,18 +1,23 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Btree {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtCursor {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtShared {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtreePayload {

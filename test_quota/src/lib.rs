@@ -1,36 +1,63 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinTimeT = i64;
+
 type TimeT = DarwinTimeT;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -53,6 +80,7 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -64,6 +92,7 @@ struct AnonS0 {
     p_mutex: *mut Sqlite3Mutex,
     p_group: *mut QuotaGroup,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaGroup {
@@ -78,6 +107,7 @@ struct QuotaGroup {
     pp_prev: *mut *mut QuotaGroup,
     p_files: *mut QuotaFile,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaFile {
@@ -89,16 +119,20 @@ struct QuotaFile {
     p_next: *mut QuotaFile,
     pp_prev: *mut *mut QuotaFile,
 }
+
 static mut g_quota: AnonS0 = unsafe { core::mem::zeroed() };
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaConn {
     base: Sqlite3File,
     p_file: *mut QuotaFile,
 }
+
 extern "C" fn quota_enter() -> () {
     unsafe { unsafe { sqlite3_mutex_enter(g_quota.p_mutex) }; }
 }
+
 extern "C" fn quota_strglob(mut z_glob_1: *const i8, mut z: *const i8)
     -> i32 {
     let mut c: i32 = 0;
@@ -299,6 +333,7 @@ extern "C" fn quota_strglob(mut z_glob_1: *const i8, mut z: *const i8)
     }
     return (unsafe { *z } as i32 == 0) as i32;
 }
+
 extern "C" fn quota_group_find(z_filename_1: *const i8) -> *mut QuotaGroup {
     unsafe {
         let mut p: *mut QuotaGroup = core::ptr::null_mut();
@@ -317,10 +352,12 @@ extern "C" fn quota_group_find(z_filename_1: *const i8) -> *mut QuotaGroup {
         return p;
     }
 }
+
 extern "C" fn quota_sub_open(p_conn_1: *mut Sqlite3File) -> *mut Sqlite3File {
     let p: *mut QuotaConn = p_conn_1 as *mut QuotaConn;
     return unsafe { &raw mut *p.offset(1 as isize) } as *mut Sqlite3File;
 }
+
 extern "C" fn quota_find_file(p_group_1: *mut QuotaGroup, z_name_1: *const i8,
     create_flag_1: i32) -> *mut QuotaFile {
     let mut p_file: *mut QuotaFile = unsafe { (*p_group_1).p_files };
@@ -368,9 +405,11 @@ extern "C" fn quota_find_file(p_group_1: *mut QuotaGroup, z_name_1: *const i8,
     }
     return p_file;
 }
+
 extern "C" fn quota_leave() -> () {
     unsafe { unsafe { sqlite3_mutex_leave(g_quota.p_mutex) }; }
 }
+
 extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_conn_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
     unsafe {
@@ -444,6 +483,7 @@ extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn quota_remove_file(p_file_1: *mut QuotaFile) -> () {
     let p_group: *mut QuotaGroup = unsafe { (*p_file_1).p_group };
     unsafe { (*p_group).i_size -= unsafe { (*p_file_1).i_size } };
@@ -458,6 +498,7 @@ extern "C" fn quota_remove_file(p_file_1: *mut QuotaFile) -> () {
     }
     unsafe { sqlite3_free(p_file_1 as *mut ()) };
 }
+
 extern "C" fn quota_group_open_file_count(p_group_1: &QuotaGroup) -> i32 {
     let mut n: i32 = 0;
     let mut p_file: *const QuotaFile =
@@ -470,6 +511,7 @@ extern "C" fn quota_group_open_file_count(p_group_1: &QuotaGroup) -> i32 {
     }
     return n;
 }
+
 extern "C" fn quota_remove_all_files(p_group_1: &QuotaGroup) -> () {
     while !((*p_group_1).p_files).is_null() {
         if !(unsafe { (*(*p_group_1).p_files).n_ref } == 0) as i32 as i64 != 0
@@ -483,6 +525,7 @@ extern "C" fn quota_remove_all_files(p_group_1: &QuotaGroup) -> () {
         quota_remove_file((*p_group_1).p_files);
     }
 }
+
 extern "C" fn quota_group_deref(p_group_1: *mut QuotaGroup) -> () {
     if unsafe { (*p_group_1).i_limit } == 0 as i64 &&
             quota_group_open_file_count(unsafe { &*p_group_1 }) == 0 {
@@ -506,6 +549,7 @@ extern "C" fn quota_group_deref(p_group_1: *mut QuotaGroup) -> () {
         unsafe { sqlite3_free(p_group_1 as *mut ()) };
     }
 }
+
 extern "C" fn quota_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     sync_dir_1: i32) -> i32 {
     unsafe {
@@ -538,6 +582,7 @@ extern "C" fn quota_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn quota_close(p_conn_1: *mut Sqlite3File) -> i32 {
     unsafe {
         let p: *const QuotaConn =
@@ -575,6 +620,7 @@ extern "C" fn quota_close(p_conn_1: *mut Sqlite3File) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn quota_read(p_conn_1: *mut Sqlite3File, p_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -584,6 +630,7 @@ extern "C" fn quota_read(p_conn_1: *mut Sqlite3File, p_buf_1: *mut (),
                 })(p_sub_open, p_buf_1, i_amt_1, i_ofst_1)
         };
 }
+
 extern "C" fn quota_write(p_conn_1: *mut Sqlite3File, p_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -625,6 +672,7 @@ extern "C" fn quota_write(p_conn_1: *mut Sqlite3File, p_buf_1: *const (),
                 })(p_sub_open, p_buf_1, i_amt_1, i_ofst_1)
         };
 }
+
 extern "C" fn quota_truncate(p_conn_1: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -647,6 +695,7 @@ extern "C" fn quota_truncate(p_conn_1: *mut Sqlite3File, size: Sqlite3Int64)
     }
     return rc;
 }
+
 extern "C" fn quota_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -655,6 +704,7 @@ extern "C" fn quota_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
                 })(p_sub_open, flags)
         };
 }
+
 extern "C" fn quota_file_size(p_conn_1: *mut Sqlite3File,
     p_size_1: *mut Sqlite3Int64) -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -680,6 +730,7 @@ extern "C" fn quota_file_size(p_conn_1: *mut Sqlite3File,
     }
     return rc;
 }
+
 extern "C" fn quota_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -688,6 +739,7 @@ extern "C" fn quota_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
                 })(p_sub_open, lock)
         };
 }
+
 extern "C" fn quota_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -696,6 +748,7 @@ extern "C" fn quota_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
                 })(p_sub_open, lock)
         };
 }
+
 extern "C" fn quota_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -707,6 +760,7 @@ extern "C" fn quota_check_reserved_lock(p_conn_1: *mut Sqlite3File,
                 })(p_sub_open, p_res_out_1)
         };
 }
+
 extern "C" fn quota_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -729,6 +783,7 @@ extern "C" fn quota_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     }
     return rc;
 }
+
 extern "C" fn quota_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -737,6 +792,7 @@ extern "C" fn quota_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
                 })(p_sub_open)
         };
 }
+
 extern "C" fn quota_device_characteristics(p_conn_1: *mut Sqlite3File)
     -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -748,6 +804,7 @@ extern "C" fn quota_device_characteristics(p_conn_1: *mut Sqlite3File)
                 })(p_sub_open)
         };
 }
+
 extern "C" fn quota_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -757,6 +814,7 @@ extern "C" fn quota_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
                 })(p_sub_open, i_region_1, sz_region_1, b_extend_1, pp)
         };
 }
+
 extern "C" fn quota_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -766,6 +824,7 @@ extern "C" fn quota_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32, n: i32,
                 })(p_sub_open, ofst, n, flags)
         };
 }
+
 extern "C" fn quota_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     unsafe {
@@ -774,6 +833,7 @@ extern "C" fn quota_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
             })(p_sub_open)
     };
 }
+
 extern "C" fn quota_shm_unmap(p_conn_1: *mut Sqlite3File, delete_flag_1: i32)
     -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -783,6 +843,7 @@ extern "C" fn quota_shm_unmap(p_conn_1: *mut Sqlite3File, delete_flag_1: i32)
                 })(p_sub_open, delete_flag_1)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_initialize(z_orig_vfs_name: *const i8,
     make_default: i32) -> i32 {
@@ -838,6 +899,7 @@ pub extern "C" fn sqlite3_quota_initialize(z_orig_vfs_name: *const i8,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_shutdown() -> i32 {
     unsafe {
@@ -879,6 +941,7 @@ pub extern "C" fn sqlite3_quota_shutdown() -> i32 {
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_set(z_pattern: *const i8,
     i_limit: Sqlite3Int64,
@@ -945,6 +1008,7 @@ pub extern "C" fn sqlite3_quota_set(z_pattern: *const i8,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file(z_filename: *const i8) -> i32 {
     unsafe {
@@ -1008,6 +1072,7 @@ pub extern "C" fn sqlite3_quota_file(z_filename: *const i8) -> i32 {
         return rc;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaFILE {
@@ -1015,10 +1080,13 @@ struct QuotaFILE {
     i_ofst: Sqlite3Int64,
     p_file: *mut QuotaFile,
 }
+
 extern "C" fn quota_mbcs_free(z_old_1: *const i8) -> () {}
+
 extern "C" fn quota_utf8_to_mbcs(z_utf8_1: *const i8) -> *mut i8 {
     return z_utf8_1 as *mut i8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fopen(z_filename_1: *const i8,
     z_mode_1: *const i8) -> *mut QuotaFILE {
@@ -1098,11 +1166,13 @@ pub extern "C" fn sqlite3_quota_fopen(z_filename_1: *const i8,
         return core::ptr::null_mut();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fread(p_buf_1: *mut (), size: u64, nmemb: u64,
     p: &QuotaFILE) -> u64 {
     return unsafe { fread(p_buf_1, size, nmemb, (*p).f) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fwrite(p_buf_1: *const (), size: u64,
     mut nmemb: u64, p: &QuotaFILE) -> u64 {
@@ -1164,6 +1234,7 @@ pub extern "C" fn sqlite3_quota_fwrite(p_buf_1: *const (), size: u64,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fflush(p: &QuotaFILE, do_fsync_1: i32)
     -> i32 {
@@ -1174,6 +1245,7 @@ pub extern "C" fn sqlite3_quota_fflush(p: &QuotaFILE, do_fsync_1: i32)
     }
     return (rc != 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fclose(p: *mut QuotaFILE) -> i32 {
     unsafe {
@@ -1208,23 +1280,28 @@ pub extern "C" fn sqlite3_quota_fclose(p: *mut QuotaFILE) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fseek(p: &QuotaFILE, offset: i64, whence: i32)
     -> i32 {
     return unsafe { fseek((*p).f, offset, whence) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_rewind(p: &QuotaFILE) -> () {
     unsafe { rewind((*p).f) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_ftell(p: &QuotaFILE) -> i64 {
     return unsafe { ftell((*p).f) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_ferror(p: &QuotaFILE) -> i32 {
     return unsafe { ferror((*p).f) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_ftruncate(p: &QuotaFILE,
     sz_new_1: Sqlite3Int64) -> i32 {
@@ -1253,6 +1330,7 @@ pub extern "C" fn sqlite3_quota_ftruncate(p: &QuotaFILE,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_mtime(p: &QuotaFILE,
     p_time_1: *mut TimeT) -> i32 {
@@ -1262,12 +1340,14 @@ pub extern "C" fn sqlite3_quota_file_mtime(p: &QuotaFILE,
     if rc == 0 { unsafe { *p_time_1 = buf.st_mtimespec.tv_sec }; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_size(p: &QuotaFILE) -> Sqlite3Int64 {
     return if !((*p).p_file).is_null() {
             unsafe { (*(*p).p_file).i_size }
         } else { -1 as Sqlite3Int64 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_truesize(p: &QuotaFILE) -> Sqlite3Int64 {
     let mut rc: i32 = 0;
@@ -1275,6 +1355,7 @@ pub extern "C" fn sqlite3_quota_file_truesize(p: &QuotaFILE) -> Sqlite3Int64 {
     rc = unsafe { fstat(unsafe { fileno((*p).f) }, &mut buf) };
     return if rc == 0 { buf.st_size } else { -1 as OffT };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_available(p: &QuotaFILE) -> i64 {
     let f: *mut FILE = (*p).f;
@@ -1291,6 +1372,7 @@ pub extern "C" fn sqlite3_quota_file_available(p: &QuotaFILE) -> i64 {
     if rc != 0 { return -1 as i64; }
     return pos2 - pos1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_remove(z_filename: *const i8) -> i32 {
     unsafe {
@@ -1371,6 +1453,7 @@ pub extern "C" fn sqlite3_quota_remove(z_filename: *const i8) -> i32 {
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2184,9 +2267,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn index_where_clause_might_change(p_idx_1: &Index,
     a_x_ref_1: *mut i32, chng_rowid_1: i32) -> i32 {
     if (*p_idx_1).p_part_idx_where == core::ptr::null_mut() { return 0; }
@@ -392,6 +401,7 @@ extern "C" fn index_where_clause_might_change(p_idx_1: &Index,
                 a_x_ref_1, chng_rowid_1)
         };
 }
+
 extern "C" fn index_column_is_being_updated(p_idx_1: &Index, i_col_1: i32,
     a_x_ref_1: *mut i32, chng_rowid_1: i32) -> i32 {
     let i_idx_col: i16 =
@@ -410,6 +420,7 @@ extern "C" fn index_column_is_being_updated(p_idx_1: &Index, i_col_1: i32,
                 }, a_x_ref_1, chng_rowid_1)
         };
 }
+
 extern "C" fn expr_row_column(p_parse_1: *mut Parse, i_col_1: i32)
     -> *mut Expr {
     let p_ret: *mut Expr =
@@ -422,6 +433,7 @@ extern "C" fn expr_row_column(p_parse_1: *mut Parse, i_col_1: i32)
     }
     return p_ret;
 }
+
 extern "C" fn update_from_select(p_parse_1: *mut Parse, i_eph_1: i32,
     p_pk_1: *const Index, p_changes_1: *const ExprList,
     p_tab_list_1: *const SrcList, p_where_1: *const Expr,
@@ -568,6 +580,7 @@ extern "C" fn update_from_select(p_parse_1: *mut Parse, i_eph_1: i32,
     unsafe { sqlite3_select(p_parse_1, p_select, &mut dest) };
     unsafe { sqlite3_select_delete(db, p_select) };
 }
+
 extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
     p_tab: *mut Table, p_changes: &ExprList, p_rowid: *mut Expr,
     a_x_ref: *mut i32, p_where: *mut Expr, on_error: i32) -> () {
@@ -792,6 +805,7 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
         unsafe { sqlite3_vdbe_add_op2(v, 124, ephem_tab, 0) };
     } else { unsafe { sqlite3_where_end(p_w_info) }; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_update(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_changes: *mut ExprList, p_where: *mut Expr,
@@ -2728,6 +2742,7 @@ pub extern "C" fn sqlite3_update(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_default(v: *mut Vdbe, p_tab: *mut Table,
     i: i32, i_reg: i32) -> () {
@@ -2754,6 +2769,7 @@ pub extern "C" fn sqlite3_column_default(v: *mut Vdbe, p_tab: *mut Table,
         unsafe { sqlite3_vdbe_add_op1(v, 89, i_reg) };
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5537,41 +5553,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

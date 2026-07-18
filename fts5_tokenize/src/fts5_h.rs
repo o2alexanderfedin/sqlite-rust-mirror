@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5ExtensionApi {
     pub(crate) i_version: i32,
@@ -54,25 +56,30 @@ pub(crate) struct Fts5ExtensionApi {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Context {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5PhraseIter {
     pub(crate) a: *const u8,
     pub(crate) b: *const u8,
 }
+
 pub(crate) type Fts5ExtensionFunction =
     unsafe extern "C" fn(*const Fts5ExtensionApi, *mut Fts5Context,
         *mut Sqlite3Context, i32, *mut *mut Sqlite3Value) -> ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Tokenizer {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5TokenizerV2 {
@@ -86,6 +93,7 @@ pub(crate) struct Fts5TokenizerV2 {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct fts5_tokenizer {
@@ -98,6 +106,7 @@ pub(crate) struct fts5_tokenizer {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Api {

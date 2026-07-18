@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionCsr {
@@ -13,6 +16,7 @@ struct UnionCsr {
     i_max_rowid: Sqlite3Int64,
     i_tab: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionTab {
@@ -30,6 +34,7 @@ struct UnionTab {
     n_open: i32,
     n_max_open: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionSrc {
@@ -43,6 +48,7 @@ struct UnionSrc {
     db: *mut Sqlite3,
     p_next_closable: *mut UnionSrc,
 }
+
 extern "C" fn union_malloc(p_rc_1: &mut i32, n_byte_1: Sqlite3Int64)
     -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
@@ -61,6 +67,7 @@ extern "C" fn union_malloc(p_rc_1: &mut i32, n_byte_1: Sqlite3Int64)
     } else { p_ret = core::ptr::null_mut(); }
     return p_ret;
 }
+
 extern "C" fn union_strdup(p_rc_1: *mut i32, z_in_1: *const i8) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
     if !(z_in_1).is_null() {
@@ -75,6 +82,7 @@ extern "C" fn union_strdup(p_rc_1: *mut i32, z_in_1: *const i8) -> *mut i8 {
     }
     return z_ret;
 }
+
 extern "C" fn union_dequote(z: *mut i8) -> () {
     if !(z).is_null() {
         let mut q: i8 = unsafe { *z.offset(0 as isize) };
@@ -136,6 +144,7 @@ extern "C" fn union_dequote(z: *mut i8) -> () {
         }
     }
 }
+
 extern "C" fn union_prepare(p_rc_1: &mut i32, db: *mut Sqlite3,
     z_sql_1: *const i8, pz_err_1: *mut *mut i8) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -165,6 +174,7 @@ extern "C" fn union_prepare(p_rc_1: &mut i32, db: *mut Sqlite3,
     }
     return p_ret;
 }
+
 unsafe extern "C" fn union_prepare_printf(p_rc_1: *mut i32,
     pz_err_1: *mut *mut i8, db: *mut Sqlite3, z_fmt_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
@@ -186,6 +196,7 @@ unsafe extern "C" fn union_prepare_printf(p_rc_1: *mut i32,
     ();
     return p_ret;
 }
+
 extern "C" fn union_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt,
     pz_err_1: &mut *mut i8) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
@@ -201,6 +212,7 @@ extern "C" fn union_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt,
         }
     }
 }
+
 extern "C" fn union_invoke_open_close(p_tab_1: &UnionTab, p_src_1: &UnionSrc,
     b_close_1: i32, pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -235,6 +247,7 @@ extern "C" fn union_invoke_open_close(p_tab_1: &UnionTab, p_src_1: &UnionSrc,
     }
     return rc;
 }
+
 extern "C" fn union_close_sources(p_tab_1: *mut UnionTab, n_max_1: i32)
     -> () {
     while !(unsafe { (*p_tab_1).p_closable }).is_null() &&
@@ -274,6 +287,7 @@ extern "C" fn union_close_sources(p_tab_1: *mut UnionTab, n_max_1: i32)
             core::ptr::null_mut());
     }
 }
+
 extern "C" fn union_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     if !(p_vtab_1).is_null() {
         let p_tab: *mut UnionTab = p_vtab_1 as *mut UnionTab;
@@ -319,6 +333,7 @@ extern "C" fn union_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn union_is_intkey_table(db: *mut Sqlite3, p_src_1: &UnionSrc,
     pz_err_1: &mut *mut i8) -> i32 {
     let mut b_pk: i32 = 0;
@@ -354,6 +369,7 @@ extern "C" fn union_is_intkey_table(db: *mut Sqlite3, p_src_1: &UnionSrc,
     }
     return rc;
 }
+
 extern "C" fn union_source_to_str(p_rc_1: &mut i32, p_tab_1: &UnionTab,
     p_src_1: *mut UnionSrc, pz_err_1: *mut *mut i8) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -389,6 +405,7 @@ extern "C" fn union_source_to_str(p_rc_1: &mut i32, p_tab_1: &UnionTab,
     }
     return z_ret;
 }
+
 extern "C" fn union_source_check(p_tab_1: *mut UnionTab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -436,6 +453,7 @@ extern "C" fn union_source_check(p_tab_1: *mut UnionTab,
     unsafe { sqlite3_free(z0 as *mut ()) };
     return rc;
 }
+
 extern "C" fn union_open_database_inner(p_tab_1: *mut UnionTab,
     p_src_1: *mut UnionSrc, pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -496,6 +514,7 @@ extern "C" fn union_open_database_inner(p_tab_1: *mut UnionTab,
     }
     return rc;
 }
+
 extern "C" fn union_open_database(p_tab_1: *mut UnionTab, i_src_1: i32,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -559,6 +578,7 @@ extern "C" fn union_open_database(p_tab_1: *mut UnionTab, i_src_1: i32,
     }
     return rc;
 }
+
 extern "C" fn union_incr_refcount(p_tab_1: &mut UnionTab, i_tab_1: i32)
     -> () {
     if (*p_tab_1).b_swarm != 0 {
@@ -594,6 +614,7 @@ extern "C" fn union_incr_refcount(p_tab_1: &mut UnionTab, i_tab_1: i32)
         };
     }
 }
+
 extern "C" fn union_finalize_csr_stmt(p_csr_1: &mut UnionCsr) -> i32 {
     let mut rc: i32 = 0;
     if !((*p_csr_1).p_stmt).is_null() {
@@ -631,15 +652,18 @@ extern "C" fn union_finalize_csr_stmt(p_csr_1: &mut UnionCsr) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn union_isspace(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\n' as i32 ||
                     c as i32 == '\r' as i32 || c as i32 == '\t' as i32) as i32;
 }
+
 extern "C" fn union_isidchar(c: i8) -> i32 {
     return (c as i32 >= 'a' as i32 && c as i32 <= 'z' as i32 ||
                     c as i32 >= 'A' as i32 && (c as i32) < 'Z' as i32 ||
                 c as i32 >= '0' as i32 && c as i32 <= '9' as i32) as i32;
 }
+
 extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
     p_stmt_1: *mut Sqlite3Stmt, az_arg_1: &[*const i8],
     pz_err_1: *mut *mut i8) -> () {
@@ -851,6 +875,7 @@ extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
     }
     *p_rc_1 = rc;
 }
+
 extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1058,6 +1083,7 @@ extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     unsafe { *pp_vtab_1 = p_tab as *mut Sqlite3Vtab };
     return rc;
 }
+
 extern "C" fn union_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut UnionCsr = core::ptr::null_mut();
@@ -1070,12 +1096,14 @@ extern "C" fn union_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_csr).base } };
     return rc;
 }
+
 extern "C" fn union_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut UnionCsr = cur as *mut UnionCsr;
     union_finalize_csr_stmt(unsafe { &mut *p_csr });
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn do_union_next(p_csr_1: *mut UnionCsr) -> i32 {
     let mut rc: i32 = 0;
     if (unsafe { (*p_csr_1).p_stmt }).is_null() as i32 as i64 != 0 {
@@ -1142,6 +1170,7 @@ extern "C" fn do_union_next(p_csr_1: *mut UnionCsr) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn union_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
     '__b12: loop {
@@ -1153,6 +1182,7 @@ extern "C" fn union_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn union_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
@@ -1164,6 +1194,7 @@ extern "C" fn union_column(cur: *mut Sqlite3VtabCursor,
     };
     return 0;
 }
+
 extern "C" fn union_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
@@ -1173,10 +1204,12 @@ extern "C" fn union_rowid(cur: *mut Sqlite3VtabCursor,
     };
     return 0;
 }
+
 extern "C" fn union_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
     return (unsafe { (*p_csr).p_stmt } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn union_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1375,6 +1408,7 @@ extern "C" fn union_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     if rc != 0 { return rc; }
     return union_next(p_vtab_cursor_1);
 }
+
 extern "C" fn union_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const UnionTab = tab as *mut UnionTab as *const UnionTab;
@@ -1480,6 +1514,7 @@ extern "C" fn union_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn create_union_vtab(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1502,6 +1537,7 @@ extern "C" fn create_union_vtab(db: *mut Sqlite3) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_unionvtab_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1511,7 +1547,9 @@ pub extern "C" fn sqlite3_unionvtab_init(db: *mut Sqlite3,
     rc = create_union_vtab(db);
     return rc;
 }
+
 static open_flags: i32 = (1 | 64) as i32;
+
 static mut union_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1540,6 +1578,7 @@ static mut union_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

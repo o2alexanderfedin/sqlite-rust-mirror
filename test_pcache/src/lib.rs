@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TestpcacheGlobalType {
@@ -11,8 +14,10 @@ struct TestpcacheGlobalType {
     prng_seed: u32,
     high_stress: u32,
 }
+
 static mut testpcache_global: TestpcacheGlobalType =
     unsafe { core::mem::zeroed() };
+
 extern "C" fn testpcache_init(p_arg_1: *mut ()) -> i32 {
     unsafe {
         if !(p_arg_1 == &raw mut testpcache_global as *mut ()) as i32 as i64
@@ -47,6 +52,7 @@ extern "C" fn testpcache_init(p_arg_1: *mut ()) -> i32 {
             } else { 0 };
     }
 }
+
 extern "C" fn testpcache_shutdown(p_arg_1: *mut ()) -> () {
     unsafe {
         if !(p_arg_1 == &raw mut testpcache_global as *mut ()) as i32 as i64
@@ -79,6 +85,7 @@ extern "C" fn testpcache_shutdown(p_arg_1: *mut ()) -> () {
         testpcache_global.p_dummy = core::ptr::null_mut();
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Testpcache {
@@ -91,6 +98,7 @@ struct Testpcache {
     i_magic: u32,
     a: [TestpcachePage; 217],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TestpcachePage {
@@ -98,6 +106,7 @@ struct TestpcachePage {
     key: u32,
     is_pinned: i32,
 }
+
 extern "C" fn testpcache_random(p: &mut Testpcache) -> u32 {
     let mut x: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -115,6 +124,7 @@ extern "C" fn testpcache_random(p: &mut Testpcache) -> u32 {
     }
     return x;
 }
+
 extern "C" fn testpcache_create(mut sz_page_1: i32, mut sz_extra_1: i32,
     b_purgeable_1: i32) -> *mut Sqlite3Pcache {
     unsafe {
@@ -179,6 +189,7 @@ extern "C" fn testpcache_create(mut sz_page_1: i32, mut sz_extra_1: i32,
         return p as *mut Sqlite3Pcache;
     }
 }
+
 extern "C" fn testpcache_cachesize(p_cache_1: *mut Sqlite3Pcache,
     new_size_1: i32) -> () {
     unsafe {
@@ -211,6 +222,7 @@ extern "C" fn testpcache_cachesize(p_cache_1: *mut Sqlite3Pcache,
         } else { { let _ = 0; } };
     }
 }
+
 extern "C" fn testpcache_pagecount(p_cache_1: *mut Sqlite3Pcache) -> i32 {
     unsafe {
         let p: *const Testpcache =
@@ -243,6 +255,7 @@ extern "C" fn testpcache_pagecount(p_cache_1: *mut Sqlite3Pcache) -> i32 {
         return 217 - unsafe { (*p).n_free };
     }
 }
+
 extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
     create_flag_1: i32) -> *mut Sqlite3PcachePage {
     unsafe {
@@ -426,6 +439,7 @@ extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
     p_old_page_1: *mut Sqlite3PcachePage, mut discard: i32) -> () {
     unsafe {
@@ -523,6 +537,7 @@ extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
         } else { { let _ = 0; } };
     }
 }
+
 extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
     p_old_page_1: *mut Sqlite3PcachePage, old_key_1: u32, new_key_1: u32)
     -> () {
@@ -629,6 +644,7 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
         } else { { let _ = 0; } };
     }
 }
+
 extern "C" fn testpcache_truncate(p_cache_1: *mut Sqlite3Pcache,
     i_limit_1: u32) -> () {
     unsafe {
@@ -703,6 +719,7 @@ extern "C" fn testpcache_truncate(p_cache_1: *mut Sqlite3Pcache,
         }
     }
 }
+
 extern "C" fn testpcache_destroy(p_cache_1: *mut Sqlite3Pcache) -> () {
     unsafe {
         let p: *mut Testpcache = p_cache_1 as *mut Testpcache;
@@ -741,6 +758,7 @@ extern "C" fn testpcache_destroy(p_cache_1: *mut Sqlite3Pcache) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn install_test_p_cache(install_flag_1: i32,
     discard_chance_1: u32, prng_seed_1: u32, high_stress_1: u32) -> () {
@@ -809,6 +827,7 @@ pub extern "C" fn install_test_p_cache(install_flag_1: i32,
         }
     }
 }
+
 static mut test_pcache: Sqlite3PcacheMethods2 =
     Sqlite3PcacheMethods2 {
         i_version: 1,
@@ -825,9 +844,12 @@ static mut test_pcache: Sqlite3PcacheMethods2 =
         x_destroy: Some(testpcache_destroy),
         x_shrink: None,
     };
+
 static mut default_pcache: Sqlite3PcacheMethods2 =
     unsafe { core::mem::zeroed() };
+
 static mut is_installed: i32 = 0;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

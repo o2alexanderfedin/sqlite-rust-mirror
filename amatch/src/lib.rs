@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchVtab {
@@ -23,6 +26,7 @@ struct AmatchVtab {
     p_v_check: *mut Sqlite3Stmt,
     n_cursor: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchRule {
@@ -34,9 +38,13 @@ struct AmatchRule {
     n_to: AmatchLen,
     z_to: [i8; 4],
 }
+
 type AmatchCost = i32;
+
 type AmatchLangid = i32;
+
 type AmatchLen = i8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchCursor {
@@ -55,6 +63,7 @@ struct AmatchCursor {
     p_cost: *mut AmatchAvl,
     p_word: *mut AmatchAvl,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchWord {
@@ -67,6 +76,7 @@ struct AmatchWord {
     z_cost: [i8; 10],
     z_word: [i8; 4],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchAvl {
@@ -78,6 +88,7 @@ struct AmatchAvl {
     height: i32,
     imbalance: i32,
 }
+
 extern "C" fn amatch_avl_recompute_height(p: &mut AmatchAvl) -> () {
     let h_before: i32 =
         if !((*p).p_before).is_null() {
@@ -90,6 +101,7 @@ extern "C" fn amatch_avl_recompute_height(p: &mut AmatchAvl) -> () {
     (*p).imbalance = h_before - h_after;
     (*p).height = if h_before > h_after { h_before } else { h_after } + 1;
 }
+
 extern "C" fn amatch_avl_rotate_before(p_p_1: *mut AmatchAvl)
     -> *mut AmatchAvl {
     let p_b: *mut AmatchAvl = unsafe { (*p_p_1).p_before };
@@ -103,6 +115,7 @@ extern "C" fn amatch_avl_rotate_before(p_p_1: *mut AmatchAvl)
     amatch_avl_recompute_height(unsafe { &mut *p_b });
     return p_b;
 }
+
 extern "C" fn amatch_avl_rotate_after(p_p_1: *mut AmatchAvl)
     -> *mut AmatchAvl {
     let p_a: *mut AmatchAvl = unsafe { (*p_p_1).p_after };
@@ -116,6 +129,7 @@ extern "C" fn amatch_avl_rotate_after(p_p_1: *mut AmatchAvl)
     amatch_avl_recompute_height(unsafe { &mut *p_a });
     return p_a;
 }
+
 extern "C" fn amatch_avl_from_ptr(p: *mut AmatchAvl, pp: *mut *mut AmatchAvl)
     -> *mut *mut AmatchAvl {
     let p_up: *mut AmatchAvl = unsafe { (*p).p_up };
@@ -125,6 +139,7 @@ extern "C" fn amatch_avl_from_ptr(p: *mut AmatchAvl, pp: *mut *mut AmatchAvl)
     }
     return unsafe { &mut (*p_up).p_before };
 }
+
 extern "C" fn amatch_avl_balance(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     let mut p_top: *mut AmatchAvl = p;
     let mut pp: *mut *mut AmatchAvl = core::ptr::null_mut();
@@ -158,6 +173,7 @@ extern "C" fn amatch_avl_balance(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     }
     return p_top;
 }
+
 extern "C" fn amatch_avl_search(mut p: *mut AmatchAvl, z_key_1: *const i8)
     -> *mut AmatchAvl {
     let mut c: i32 = 0;
@@ -176,6 +192,7 @@ extern "C" fn amatch_avl_search(mut p: *mut AmatchAvl, z_key_1: *const i8)
     }
     return p;
 }
+
 extern "C" fn amatch_avl_first(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     if !(p).is_null() {
         while !(unsafe { (*p).p_before }).is_null() {
@@ -184,6 +201,7 @@ extern "C" fn amatch_avl_first(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     }
     return p;
 }
+
 extern "C" fn amatch_avl_insert(pp_head_1: &mut *mut AmatchAvl,
     p_new_1: *mut AmatchAvl) -> *mut AmatchAvl {
     let mut c: i32 = 0;
@@ -224,6 +242,7 @@ extern "C" fn amatch_avl_insert(pp_head_1: &mut *mut AmatchAvl,
     *pp_head_1 = amatch_avl_balance(p);
     return core::ptr::null_mut();
 }
+
 extern "C" fn amatch_avl_remove(pp_head_1: *mut *mut AmatchAvl,
     p_old_1: *mut AmatchAvl) -> () {
     let mut pp_parent: *mut *mut AmatchAvl = core::ptr::null_mut();
@@ -285,6 +304,7 @@ extern "C" fn amatch_avl_remove(pp_head_1: *mut *mut AmatchAvl,
     unsafe { (*p_old_1).p_before = core::ptr::null_mut() };
     unsafe { (*p_old_1).p_after = core::ptr::null_mut() };
 }
+
 extern "C" fn amatch_merge_rules(mut p_a_1: *mut AmatchRule,
     mut p_b_1: *mut AmatchRule) -> *mut AmatchRule {
     let mut head: AmatchRule = unsafe { core::mem::zeroed() };
@@ -306,6 +326,7 @@ extern "C" fn amatch_merge_rules(mut p_a_1: *mut AmatchRule,
     } else { unsafe { (*p_tail).p_next = p_a_1 }; }
     return head.p_next;
 }
+
 extern "C" fn amatch_load_one_rule(p: &mut AmatchVtab,
     p_stmt_1: *mut Sqlite3Stmt, pp_rule_1: &mut *mut AmatchRule,
     pz_err_1: &mut *mut i8) -> i32 {
@@ -400,6 +421,7 @@ extern "C" fn amatch_load_one_rule(p: &mut AmatchVtab,
     *pp_rule_1 = p_rule;
     return rc;
 }
+
 extern "C" fn amatch_free_rules(p: &mut AmatchVtab) -> () {
     while !((*p).p_rule).is_null() {
         let p_rule: *mut AmatchRule = (*p).p_rule;
@@ -408,6 +430,7 @@ extern "C" fn amatch_free_rules(p: &mut AmatchVtab) -> () {
     }
     (*p).p_rule = core::ptr::null_mut();
 }
+
 extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -535,6 +558,7 @@ extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
     }
     return rc;
 }
+
 extern "C" fn amatch_dequote(z_in_1: *const i8) -> *mut i8 {
     let mut n_in: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut z_out: *mut i8 = core::ptr::null_mut();
@@ -589,12 +613,14 @@ extern "C" fn amatch_dequote(z_in_1: *const i8) -> *mut i8 {
     }
     return z_out;
 }
+
 extern "C" fn amatch_v_check_clear(p: &mut AmatchVtab) -> () {
     if !((*p).p_v_check).is_null() {
         unsafe { sqlite3_finalize((*p).p_v_check) };
         (*p).p_v_check = core::ptr::null_mut();
     }
 }
+
 extern "C" fn amatch_free(p: *mut AmatchVtab) -> () {
     if !(p).is_null() {
         amatch_free_rules(unsafe { &mut *p });
@@ -612,6 +638,7 @@ extern "C" fn amatch_free(p: *mut AmatchVtab) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn amatch_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut AmatchVtab = p_vtab_1 as *mut AmatchVtab;
     if !(unsafe { (*p).n_cursor } == 0) as i32 as i64 != 0 {
@@ -624,6 +651,7 @@ extern "C" fn amatch_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     amatch_free(p);
     return 0;
 }
+
 extern "C" fn amatch_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     -> *const i8 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -659,6 +687,7 @@ extern "C" fn amatch_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     }
     return unsafe { z_str_1.offset(i as isize) };
 }
+
 extern "C" fn amatch_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -948,6 +977,7 @@ extern "C" fn amatch_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     unreachable!();
 }
+
 extern "C" fn amatch_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut AmatchVtab = p_v_tab_1 as *mut AmatchVtab;
@@ -972,6 +1002,7 @@ extern "C" fn amatch_open(p_v_tab_1: *mut Sqlite3Vtab,
     };
     return 0;
 }
+
 extern "C" fn amatch_clear_cursor(p_cur_1: &mut AmatchCursor) -> () {
     let mut p_word: *mut AmatchWord = core::ptr::null_mut();
     let mut p_next_word: *mut AmatchWord = core::ptr::null_mut();
@@ -1000,6 +1031,7 @@ extern "C" fn amatch_clear_cursor(p_cur_1: &mut AmatchCursor) -> () {
     (*p_cur_1).i_lang = 0;
     (*p_cur_1).n_word = 0;
 }
+
 extern "C" fn amatch_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut AmatchCursor = cur as *mut AmatchCursor;
     amatch_clear_cursor(unsafe { &mut *p_cur });
@@ -1012,12 +1044,14 @@ extern "C" fn amatch_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn amatch_encode_int(x: i32, z: *mut i8) -> () {
     unsafe { *z.offset(0 as isize) = a_1[(x >> 18 & 63) as usize] as i8 };
     unsafe { *z.offset(1 as isize) = a_1[(x >> 12 & 63) as usize] as i8 };
     unsafe { *z.offset(2 as isize) = a_1[(x >> 6 & 63) as usize] as i8 };
     unsafe { *z.offset(3 as isize) = a_1[(x & 63) as usize] as i8 };
 }
+
 extern "C" fn amatch_write_cost(p_word_1: &mut AmatchWord) -> () {
     amatch_encode_int((*p_word_1).r_cost,
         &raw mut (*p_word_1).z_cost[0 as usize] as *mut i8);
@@ -1028,6 +1062,7 @@ extern "C" fn amatch_write_cost(p_word_1: &mut AmatchWord) -> () {
         });
     (*p_word_1).z_cost[8 as usize] = 0 as i8;
 }
+
 extern "C" fn amatch_strcpy(mut dest: *mut i8, mut src: *const i8) -> () {
     while {
                     let __v =
@@ -1050,6 +1085,7 @@ extern "C" fn amatch_strcpy(mut dest: *mut i8, mut src: *const i8) -> () {
                     __v
                 } as i32 != 0 {}
 }
+
 extern "C" fn amatch_strcat(mut dest: *mut i8, src: *const i8) -> () {
     while unsafe { *dest } != 0 {
         {
@@ -1061,6 +1097,7 @@ extern "C" fn amatch_strcat(mut dest: *mut i8, src: *const i8) -> () {
     }
     amatch_strcpy(dest, src);
 }
+
 extern "C" fn amatch_add_word(p_cur_1: &mut AmatchCursor,
     r_cost_1: AmatchCost, n_match_1: i32, z_word_base_1: *const i8,
     z_word_tail_1: *const i8) -> () {
@@ -1185,6 +1222,7 @@ extern "C" fn amatch_add_word(p_cur_1: &mut AmatchCursor,
     } else { { let _ = 0; } };
     { let _ = p_other; };
 }
+
 extern "C" fn amatch_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut AmatchCursor = cur as *mut AmatchCursor;
     let mut p_word: *mut AmatchWord = core::ptr::null_mut();
@@ -1458,6 +1496,7 @@ extern "C" fn amatch_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(z_buf as *mut ()) };
     return 0;
 }
+
 extern "C" fn amatch_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1515,6 +1554,7 @@ extern "C" fn amatch_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     amatch_next(p_vtab_cursor_1);
     return rc;
 }
+
 extern "C" fn amatch_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const AmatchCursor =
@@ -1606,6 +1646,7 @@ extern "C" fn amatch_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn amatch_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const AmatchCursor =
@@ -1613,11 +1654,13 @@ extern "C" fn amatch_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 extern "C" fn amatch_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const AmatchCursor =
         cur as *mut AmatchCursor as *const AmatchCursor;
     return (unsafe { (*p_cur).p_current } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn amatch_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -1725,6 +1768,7 @@ extern "C" fn amatch_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_cost = 10000 as f64 };
     return 0;
 }
+
 extern "C" fn amatch_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p: *const AmatchVtab =
@@ -1783,6 +1827,7 @@ extern "C" fn amatch_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     if z_cmd == core::ptr::null() { return 0; }
     return 0;
 }
+
 static mut amatch_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1811,6 +1856,7 @@ static mut amatch_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_amatch_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1828,6 +1874,7 @@ pub extern "C" fn sqlite3_amatch_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 static a_1: [i8; 65] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 65 as i8, 66 as i8, 67 as i8,
@@ -1840,6 +1887,7 @@ static a_1: [i8; 65] =
             109 as i8, 110 as i8, 111 as i8, 112 as i8, 113 as i8, 114 as i8,
             115 as i8, 116 as i8, 117 as i8, 118 as i8, 119 as i8, 120 as i8,
             121 as i8, 122 as i8, 126 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

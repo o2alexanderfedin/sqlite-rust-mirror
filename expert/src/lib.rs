@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3expert_h;
 pub(crate) use crate::sqlite3expert_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn option_requires_argument(z_opt_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -14,9 +17,11 @@ extern "C" fn option_requires_argument(z_opt_1: *const i8) -> () {
         unsafe { exit(-3) };
     }
 }
+
 extern "C" fn option_integer_arg(z_val_1: *const i8) -> i32 {
     return unsafe { atoi(z_val_1) };
 }
+
 extern "C" fn usage(argv: *const *mut i8) -> () {
     unsafe {
         eprintln!("");
@@ -34,6 +39,7 @@ extern "C" fn usage(argv: *const *mut i8) -> () {
         unsafe { exit(-1) };
     }
 }
+
 extern "C" fn read_sql_from_file(p: *mut Sqlite3expert, z_file_1: *const i8,
     pz_err_1: *mut *mut i8) -> i32 {
     let in_: *mut FILE =
@@ -76,6 +82,7 @@ extern "C" fn read_sql_from_file(p: *mut Sqlite3expert, z_file_1: *const i8,
     unsafe { sqlite3_free(p_buf as *mut ()) };
     return rc;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut z_db: *const i8 = core::ptr::null();
@@ -257,12 +264,14 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         return Err(rc);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *mut *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1073,9 +1082,11 @@ extern "C" {
     static mut __stderrp: *mut FILE;
     static mut __stdoutp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

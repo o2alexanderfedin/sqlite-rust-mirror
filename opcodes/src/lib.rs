@@ -2,6 +2,7 @@
 pub extern "C" fn sqlite3_opcode_name(i: i32) -> *const i8 {
     unsafe { return az_name[i as usize]; }
 }
+
 static mut az_name: [*const i8; 192] =
     [c"Savepoint".as_ptr() as *const i8, c"AutoCommit".as_ptr() as *const i8,
             c"Transaction".as_ptr() as *const i8,
@@ -152,6 +153,7 @@ static mut az_name: [*const i8; 192] =
             c"ReleaseReg".as_ptr() as *const i8,
             c"Noop".as_ptr() as *const i8, c"Explain".as_ptr() as *const i8,
             c"Abortable".as_ptr() as *const i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

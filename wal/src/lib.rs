@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Wal {
@@ -412,6 +421,7 @@ struct Wal {
     z_wal_name: *const i8,
     n_ckpt: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalIndexHdr {
@@ -427,6 +437,7 @@ struct WalIndexHdr {
     a_salt: [u32; 2],
     a_cksum: [u32; 2],
 }
+
 extern "C" fn wal_index_close(p_wal_1: &Wal, is_delete_1: i32) -> () {
     if (*p_wal_1).exclusive_mode as i32 == 2 ||
             (*p_wal_1).b_shm_unreliable != 0 {
@@ -455,6 +466,7 @@ extern "C" fn wal_index_close(p_wal_1: &Wal, is_delete_1: i32) -> () {
         unsafe { sqlite3_os_shm_unmap((*p_wal_1).p_db_fd, is_delete_1) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_open(p_vfs: *mut Sqlite3Vfs,
     p_db_fd: *mut Sqlite3File, z_wal_name: *const i8, b_no_shm: i32,
@@ -527,6 +539,7 @@ pub extern "C" fn sqlite3_wal_open(p_vfs: *mut Sqlite3Vfs,
     }
     return rc;
 }
+
 extern "C" fn wal_lock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -537,6 +550,7 @@ extern "C" fn wal_lock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
         };
     return rc;
 }
+
 extern "C" fn wal_busy_lock(p_wal_1: *mut Wal,
     x_busy_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
     p_busy_arg_1: *mut (), lock_idx_1: i32, n: i32) -> i32 {
@@ -553,7 +567,9 @@ extern "C" fn wal_busy_lock(p_wal_1: *mut Wal,
     }
     return rc;
 }
+
 type HtSlot = u16;
+
 extern "C" fn wal_index_page_realloc(p_wal_1: &mut Wal, i_page_1: i32,
     pp_page_1: &mut *mut u32) -> i32 {
     let mut rc: i32 = 0;
@@ -621,6 +637,7 @@ extern "C" fn wal_index_page_realloc(p_wal_1: &mut Wal, i_page_1: i32,
     { let _ = 0; };
     return rc;
 }
+
 extern "C" fn wal_index_page(p_wal_1: *mut Wal, i_page_1: i32,
     pp_page_1: *mut *mut u32) -> i32 {
     { let _ = 0; };
@@ -638,17 +655,20 @@ extern "C" fn wal_index_page(p_wal_1: *mut Wal, i_page_1: i32,
     }
     return 0;
 }
+
 extern "C" fn wal_index_hdr(p_wal_1: &Wal) -> *mut WalIndexHdr {
     { let _ = 0; };
     { let _ = 0; };
     return unsafe { *(*p_wal_1).ap_wi_data.offset(0 as isize) } as
             *mut WalIndexHdr;
 }
+
 extern "C" fn wal_shm_barrier(p_wal_1: &Wal) -> () {
     if (*p_wal_1).exclusive_mode as i32 != 2 {
         unsafe { sqlite3_os_shm_barrier((*p_wal_1).p_db_fd) };
     }
 }
+
 extern "C" fn wal_checksum_bytes(native_cksum_1: i32, a: *mut u8,
     n_byte_1: i32, a_in_1: *const u32, a_out_1: *mut u32) -> () {
     let mut s1: u32 = 0 as u32;
@@ -872,6 +892,7 @@ extern "C" fn wal_checksum_bytes(native_cksum_1: i32, a: *mut u8,
     unsafe { *a_out_1.offset(0 as isize) = s1 };
     unsafe { *a_out_1.offset(1 as isize) = s2 };
 }
+
 extern "C" fn wal_index_try_hdr(p_wal_1: *mut Wal, p_changed_1: &mut i32)
     -> i32 {
     let mut a_cksum: [u32; 2] = [0; 2];
@@ -926,6 +947,7 @@ extern "C" fn wal_index_try_hdr(p_wal_1: *mut Wal, p_changed_1: &mut i32)
     }
     return 0;
 }
+
 extern "C" fn wal_lock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> i32 {
     let mut rc: i32 = 0;
     if (*p_wal_1).exclusive_mode != 0 { return 0; }
@@ -935,6 +957,7 @@ extern "C" fn wal_lock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> i32 {
         };
     return rc;
 }
+
 extern "C" fn wal_unlock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> () {
     if (*p_wal_1).exclusive_mode != 0 { return; }
     {
@@ -944,6 +967,7 @@ extern "C" fn wal_unlock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> () {
             };
     };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalCkptInfo {
@@ -953,6 +977,7 @@ struct WalCkptInfo {
     n_backfill_attempted: u32,
     not_used0: u32,
 }
+
 extern "C" fn wal_index_write_hdr(p_wal_1: *mut Wal) -> () {
     let a_hdr: *mut WalIndexHdr = wal_index_hdr(unsafe { &*p_wal_1 });
     let n_cksum: i32 = core::mem::offset_of!(WalIndexHdr, a_cksum) as i32;
@@ -974,6 +999,7 @@ extern "C" fn wal_index_write_hdr(p_wal_1: *mut Wal) -> () {
             core::mem::size_of::<WalIndexHdr>() as u64)
     };
 }
+
 extern "C" fn wal_ckpt_info(p_wal_1: &Wal) -> *mut WalCkptInfo {
     { let _ = 0; };
     { let _ = 0; };
@@ -985,6 +1011,7 @@ extern "C" fn wal_ckpt_info(p_wal_1: &Wal) -> *mut WalCkptInfo {
                         }
             } as *mut WalCkptInfo;
 }
+
 extern "C" fn wal_unlock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
     -> () {
     if (*p_wal_1).exclusive_mode != 0 { return; }
@@ -995,6 +1022,7 @@ extern "C" fn wal_unlock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
             };
     };
 }
+
 extern "C" fn wal_frame_page(i_frame_1: u32) -> i32 {
     let i_hash: i32 =
         (((i_frame_1 + 4096 as u32) as u64 -
@@ -1007,6 +1035,7 @@ extern "C" fn wal_frame_page(i_frame_1: u32) -> i32 {
     { let _ = 0; };
     return i_hash;
 }
+
 extern "C" fn wal_decode_frame(p_wal_1: &mut Wal, pi_page_1: &mut u32,
     pn_truncate_1: &mut u32, a_data_1: *mut u8, a_frame_1: *mut u8) -> i32 {
     let mut native_cksum: i32 = 0;
@@ -1055,6 +1084,7 @@ extern "C" fn wal_decode_frame(p_wal_1: &mut Wal, pi_page_1: &mut u32,
         };
     return 1;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalHashLoc {
@@ -1062,6 +1092,7 @@ struct WalHashLoc {
     a_pgno: *mut u32,
     i_zero: u32,
 }
+
 extern "C" fn wal_hash_get(p_wal_1: *mut Wal, i_hash_1: i32,
     p_loc_1: &mut WalHashLoc) -> i32 {
     let mut rc: i32 = 0;
@@ -1091,6 +1122,7 @@ extern "C" fn wal_hash_get(p_wal_1: *mut Wal, i_hash_1: i32,
     } else if rc == 0 { rc = 1; }
     return rc;
 }
+
 extern "C" fn wal_cleanup_hash(p_wal_1: *mut Wal) -> () {
     let mut s_loc: WalHashLoc = unsafe { core::mem::zeroed() };
     let mut i_limit: i32 = 0;
@@ -1133,14 +1165,17 @@ extern "C" fn wal_cleanup_hash(p_wal_1: *mut Wal) -> () {
                 *mut (), 0, n_byte as u64)
     };
 }
+
 extern "C" fn wal_hash(i_page_1: u32) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
     return (i_page_1 * 383 as u32 & (4096 * 2 - 1) as u32) as i32;
 }
+
 extern "C" fn wal_next_hash(i_prior_hash_1: i32) -> i32 {
     return i_prior_hash_1 + 1 & 4096 * 2 - 1;
 }
+
 extern "C" fn wal_index_append(p_wal_1: *mut Wal, i_frame_1: u32,
     i_page_1: u32) -> i32 {
     let mut rc: i32 = 0;
@@ -1200,6 +1235,7 @@ extern "C" fn wal_index_append(p_wal_1: *mut Wal, i_frame_1: u32,
     }
     return rc;
 }
+
 extern "C" fn wal_index_recover(p_wal_1: *mut Wal) -> i32 {
     let mut rc: i32 = 0;
     let mut n_size: i64 = 0 as i64;
@@ -1714,6 +1750,7 @@ extern "C" fn wal_index_recover(p_wal_1: *mut Wal) -> i32 {
     }
     unreachable!();
 }
+
 extern "C" fn wal_index_read_hdr(p_wal_1: *mut Wal, p_changed_1: *mut i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -1782,10 +1819,12 @@ extern "C" fn wal_index_read_hdr(p_wal_1: *mut Wal, p_changed_1: *mut i32)
     }
     return rc;
 }
+
 extern "C" fn wal_pagesize(p_wal_1: &Wal) -> i32 {
     return ((*p_wal_1).hdr.sz_page as i32 & 65024) +
             (((*p_wal_1).hdr.sz_page as i32 & 1) << 16);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalIterator {
@@ -1793,6 +1832,7 @@ struct WalIterator {
     n_segment: i32,
     a_segment: [WalSegment; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalSegment {
@@ -1802,6 +1842,7 @@ struct WalSegment {
     n_entry: i32,
     i_zero: i32,
 }
+
 extern "C" fn wal_merge(a_content_1: *const u32, a_left_1: *mut HtSlot,
     n_left_1: i32, pa_right_1: &mut *mut HtSlot, pn_right_1: &mut i32,
     a_tmp_1: *mut HtSlot) -> () {
@@ -1873,6 +1914,7 @@ extern "C" fn wal_merge(a_content_1: *const u32, a_left_1: *mut HtSlot,
             core::mem::size_of::<HtSlot>() as u64 * i_out as u64)
     };
 }
+
 extern "C" fn wal_mergesort(a_content_1: *const u32, a_buffer_1: *mut HtSlot,
     a_list_1: *mut HtSlot, pn_list_1: &mut i32) -> () {
     let n_list: i32 = *pn_list_1 as i32;
@@ -1947,9 +1989,11 @@ extern "C" fn wal_mergesort(a_content_1: *const u32, a_buffer_1: *mut HtSlot,
     { let _ = 0; };
     *pn_list_1 = n_merge;
 }
+
 extern "C" fn wal_iterator_free(p: *mut WalIterator) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 extern "C" fn wal_iterator_init(p_wal_1: *mut Wal, n_backfill_1: u32,
     pp: &mut *mut WalIterator) -> i32 {
     let mut p: *mut WalIterator = core::ptr::null_mut();
@@ -2054,6 +2098,7 @@ extern "C" fn wal_iterator_init(p_wal_1: *mut Wal, n_backfill_1: u32,
     *pp = p;
     return rc;
 }
+
 extern "C" fn wal_iterator_next(p: &mut WalIterator, pi_page_1: &mut u32,
     pi_frame_1: &mut u32) -> i32 {
     let mut i_min: u32 = 0 as u32;
@@ -2113,6 +2158,7 @@ extern "C" fn wal_iterator_next(p: &mut WalIterator, pi_page_1: &mut u32,
     *pi_page_1 = { (*p).i_prior = i_ret; (*p).i_prior };
     return (i_ret == 4294967295u32) as i32;
 }
+
 extern "C" fn wal_restart_hdr(p_wal_1: *mut Wal, mut salt1: u32) -> () {
     let p_info: *mut WalCkptInfo = wal_ckpt_info(unsafe { &*p_wal_1 });
     let mut i: i32 = 0;
@@ -2162,6 +2208,7 @@ extern "C" fn wal_restart_hdr(p_wal_1: *mut Wal, mut salt1: u32) -> () {
     }
     { let _ = 0; };
 }
+
 extern "C" fn wal_checkpoint(p_wal_1: *mut Wal, db: &mut Sqlite3,
     e_mode_1: i32, mut x_busy_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
     p_busy_arg_1: *mut (), sync_flags: i32, z_buf_1: *mut u8) -> i32 {
@@ -2585,6 +2632,7 @@ extern "C" fn wal_checkpoint(p_wal_1: *mut Wal, db: &mut Sqlite3,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_end_write_transaction(p_wal: *mut Wal) -> i32 {
     if unsafe { (*p_wal).write_lock } != 0 {
@@ -2595,6 +2643,7 @@ pub extern "C" fn sqlite3_wal_end_write_transaction(p_wal: *mut Wal) -> i32 {
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3WalCheckpoint(p_wal: *mut Wal, db: *mut Sqlite3,
     e_mode: i32, x_busy: unsafe extern "C" fn(*mut ()) -> i32,
@@ -2680,6 +2729,7 @@ pub extern "C" fn sqlite3WalCheckpoint(p_wal: *mut Wal, db: *mut Sqlite3,
     }
     return if rc == 0 && e_mode != e_mode2 { 5 } else { rc };
 }
+
 extern "C" fn wal_limit_size(p_wal_1: &Wal, n_max_1: i64) -> () {
     let mut sz: i64 = 0 as i64;
     let mut rx: i32 = 0;
@@ -2697,6 +2747,7 @@ extern "C" fn wal_limit_size(p_wal_1: &Wal, n_max_1: i64) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_close(p_wal: *mut Wal, db: *mut Sqlite3,
     sync_flags: i32, n_buf: i32, z_buf: *mut u8) -> i32 {
@@ -2749,10 +2800,12 @@ pub extern "C" fn sqlite3_wal_close(p_wal: *mut Wal, db: *mut Sqlite3,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_limit(p_wal: *mut Wal, i_limit: i64) -> () {
     if !(p_wal).is_null() { unsafe { (*p_wal).mx_wal_size = i_limit }; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_end_read_transaction(p_wal: *mut Wal) -> () {
     { let _ = 0; };
@@ -2763,6 +2816,7 @@ pub extern "C" fn sqlite3_wal_end_read_transaction(p_wal: *mut Wal) -> () {
         unsafe { (*p_wal).read_lock = -1 as i16 };
     }
 }
+
 extern "C" fn wal_begin_shm_unreliable(p_wal_1: *mut Wal,
     p_changed_1: &mut i32) -> i32 {
     let mut sz_wal: i64 = 0 as i64;
@@ -3010,6 +3064,7 @@ extern "C" fn wal_begin_shm_unreliable(p_wal_1: *mut Wal,
     }
     unreachable!();
 }
+
 extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
     use_wal_1: i32, p_cnt_1: &mut i32) -> i32 {
     let mut p_info: *mut WalCkptInfo = core::ptr::null_mut();
@@ -3173,6 +3228,7 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
     }
     return rc;
 }
+
 extern "C" fn wal_begin_read_transaction(p_wal_1: *mut Wal,
     p_changed_1: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -3188,6 +3244,7 @@ extern "C" fn wal_begin_read_transaction(p_wal_1: *mut Wal,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_begin_read_transaction(p_wal: *mut Wal,
     p_changed: *mut i32) -> i32 {
@@ -3196,6 +3253,7 @@ pub extern "C" fn sqlite3_wal_begin_read_transaction(p_wal: *mut Wal,
     { let _ = 0; };
     return rc;
 }
+
 extern "C" fn wal_find_frame(p_wal_1: *mut Wal, pgno: Pgno,
     pi_read_1: &mut u32) -> i32 {
     let mut i_read: u32 = 0 as u32;
@@ -3264,6 +3322,7 @@ extern "C" fn wal_find_frame(p_wal_1: *mut Wal, pgno: Pgno,
     *pi_read_1 = i_read;
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_find_frame(p_wal: *mut Wal, pgno: Pgno,
     pi_read: *mut u32) -> i32 {
@@ -3272,6 +3331,7 @@ pub extern "C" fn sqlite3_wal_find_frame(p_wal: *mut Wal, pgno: Pgno,
     { let _ = 0; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_read_frame(p_wal: &Wal, i_read: u32, n_out: i32,
     p_out: *mut u8) -> i32 {
@@ -3286,6 +3346,7 @@ pub extern "C" fn sqlite3_wal_read_frame(p_wal: &Wal, i_read: u32, n_out: i32,
                 if n_out > sz { sz } else { n_out }, i_offset)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_dbsize(p_wal: *mut Wal) -> Pgno {
     if !(p_wal).is_null() && unsafe { (*p_wal).read_lock } as i32 >= 0 {
@@ -3293,6 +3354,7 @@ pub extern "C" fn sqlite3_wal_dbsize(p_wal: *mut Wal) -> Pgno {
     }
     return 0 as Pgno;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_begin_write_transaction(p_wal: *mut Wal)
     -> i32 {
@@ -3319,6 +3381,7 @@ pub extern "C" fn sqlite3_wal_begin_write_transaction(p_wal: *mut Wal)
     }
     return rc;
 }
+
 extern "C" fn wal_frame_pgno(p_wal_1: &Wal, i_frame_1: u32) -> u32 {
     let i_hash: i32 = wal_frame_page(i_frame_1);
     { let _ = 0; };
@@ -3345,6 +3408,7 @@ extern "C" fn wal_frame_pgno(p_wal_1: &Wal, i_frame_1: u32) -> u32 {
                     }
             } as u32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
     x_undo: Option<unsafe extern "C" fn(*mut (), u32) -> i32>,
@@ -3384,6 +3448,7 @@ pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_savepoint(p_wal: &Wal, a_wal_data: *mut u32)
     -> () {
@@ -3399,6 +3464,7 @@ pub extern "C" fn sqlite3_wal_savepoint(p_wal: &Wal, a_wal_data: *mut u32)
     };
     unsafe { *a_wal_data.offset(3 as isize) = (*p_wal).n_ckpt };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_savepoint_undo(p_wal: *mut Wal,
     a_wal_data: *mut u32) -> i32 {
@@ -3433,6 +3499,7 @@ pub extern "C" fn sqlite3_wal_savepoint_undo(p_wal: *mut Wal,
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalWriter {
@@ -3442,6 +3509,7 @@ struct WalWriter {
     sync_flags: i32,
     sz_page: i32,
 }
+
 extern "C" fn wal_restart_log(p_wal_1: *mut Wal) -> i32 {
     let mut rc: i32 = 0;
     let mut cnt: i32 = 0;
@@ -3473,6 +3541,7 @@ extern "C" fn wal_restart_log(p_wal_1: *mut Wal) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn wal_encode_frame(p_wal_1: &mut Wal, i_page_1: u32,
     n_truncate_1: u32, a_data_1: *mut u8, a_frame_1: *mut u8) -> () {
     let mut native_cksum: i32 = 0;
@@ -3514,6 +3583,7 @@ extern "C" fn wal_encode_frame(p_wal_1: &mut Wal, i_page_1: u32,
         };
     }
 }
+
 extern "C" fn wal_write_to_log(p: &WalWriter, mut p_content_1: *mut (),
     mut i_amt_1: i32, mut i_offset_1: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -3542,6 +3612,7 @@ extern "C" fn wal_write_to_log(p: &WalWriter, mut p_content_1: *mut (),
         };
     return rc;
 }
+
 extern "C" fn wal_write_one_frame(p: *mut WalWriter, p_page_1: &PgHdr,
     n_truncate_1: i32, i_offset_1: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -3562,6 +3633,7 @@ extern "C" fn wal_write_one_frame(p: *mut WalWriter, p_page_1: &PgHdr,
                 Sqlite3Int64);
     return rc;
 }
+
 extern "C" fn wal_rewrite_checksums(p_wal_1: *mut Wal, i_last_1: u32) -> i32 {
     let sz_page: i32 = unsafe { (*p_wal_1).sz_page } as i32;
     let mut rc: i32 = 0;
@@ -3640,6 +3712,7 @@ extern "C" fn wal_rewrite_checksums(p_wal_1: *mut Wal, i_last_1: u32) -> i32 {
     unsafe { sqlite3_free(a_buf as *mut ()) };
     return rc;
 }
+
 extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     p_list_1: *mut PgHdr, n_truncate_1: Pgno, is_commit_1: i32,
     sync_flags: i32) -> i32 {
@@ -3879,6 +3952,7 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_frames(p_wal: *mut Wal, sz_page: i32,
     p_list: *mut PgHdr, n_truncate: Pgno, is_commit: i32, sync_flags: i32)
@@ -3892,6 +3966,7 @@ pub extern "C" fn sqlite3_wal_frames(p_wal: *mut Wal, sz_page: i32,
     { let _ = 0; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_callback(p_wal: *mut Wal) -> i32 {
     let mut ret: u32 = 0 as u32;
@@ -3901,6 +3976,7 @@ pub extern "C" fn sqlite3_wal_callback(p_wal: *mut Wal) -> i32 {
     }
     return ret as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_exclusive_mode(p_wal: *mut Wal, op: i32)
     -> i32 {
@@ -3928,21 +4004,25 @@ pub extern "C" fn sqlite3_wal_exclusive_mode(p_wal: *mut Wal, op: i32)
     } else { rc = (unsafe { (*p_wal).exclusive_mode } as i32 == 0) as i32; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_heap_memory(p_wal: *mut Wal) -> i32 {
     return (!(p_wal).is_null() &&
                 unsafe { (*p_wal).exclusive_mode } as i32 == 2) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_file(p_wal: &Wal) -> *mut Sqlite3File {
     return (*p_wal).p_wal_fd;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SublistN7Sublist {
     n_list: i32,
     a_list: *mut HtSlot,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -6737,41 +6817,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

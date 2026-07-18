@@ -1,10 +1,16 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type Int32T = i32;
+
 type DarwinPidT = Int32T;
+
 type PidT = DarwinPidT;
+
 static mut parent_pid: PidT = 0;
+
 extern "C" fn who_am_i() -> *const i8 {
     unsafe {
         return if unsafe { getpid() } == parent_pid {
@@ -12,6 +18,7 @@ extern "C" fn who_am_i() -> *const i8 {
                 } else { c"child".as_ptr() as *mut i8 } as *const i8;
     }
 }
+
 extern "C" fn exec_callback(p_not_used_1: *mut (), n_col_1: i32,
     a_val_1: *mut *mut i8, a_col_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -45,6 +52,7 @@ extern "C" fn exec_callback(p_not_used_1: *mut (), n_col_1: i32,
         return 0;
     }
 }
+
 extern "C" fn sql_exec(db: *mut Sqlite3, z_sql_1: *const i8,
     b_callback_1: i32) -> () {
     unsafe {
@@ -77,6 +85,7 @@ extern "C" fn sql_exec(db: *mut Sqlite3, z_sql_1: *const i8,
         }
     }
 }
+
 extern "C" fn vfs_trace_callback(z_msg_1: *const i8, p_not_used_1: *mut ())
     -> i32 {
     unsafe {
@@ -88,6 +97,7 @@ extern "C" fn vfs_trace_callback(z_msg_1: *const i8, p_not_used_1: *mut ())
         return 0;
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -317,12 +327,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1121,9 +1133,11 @@ extern "C" {
     -> PidT;
     static mut __stdoutp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

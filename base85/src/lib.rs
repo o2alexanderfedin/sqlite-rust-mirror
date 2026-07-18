@@ -1,10 +1,13 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 static mut b85_c_offset: [u8; 5] =
     [0 as u8, '#' as i32 as u8, 0 as u8, ('*' as i32 - 4) as u8, 0 as u8];
+
 extern "C" fn skip_non_b85(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut nc; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -16,6 +19,7 @@ extern "C" fn skip_non_b85(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     }
     return s;
 }
+
 extern "C" fn putcs(mut pc: *mut i8, mut s: *const i8) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while {
@@ -41,6 +45,7 @@ extern "C" fn putcs(mut pc: *mut i8, mut s: *const i8) -> *mut i8 {
     }
     return pc;
 }
+
 extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8, p_sep_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -129,6 +134,7 @@ extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     unsafe { *p_out_1 = 0 as i8 };
     return p_out_1;
 }
+
 extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -267,6 +273,7 @@ extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
         return p_out_1;
     }
 }
+
 extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut len; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -291,6 +298,7 @@ extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     if !(na == 1) as i32 as i64 != 0 {
@@ -328,6 +336,7 @@ extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
         }
     }
 }
+
 extern "C" fn base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -566,6 +575,7 @@ extern "C" fn base85(context: *mut Sqlite3Context, na: i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_base85_init(db: *mut Sqlite3,
     pz_err_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -588,8 +598,10 @@ pub extern "C" fn sqlite3_base85_init(db: *mut Sqlite3,
                 Some(base85), None, None)
         };
 }
+
 static mut nboi: [i8; 6] =
     [0 as i8, 0 as i8, 1 as i8, 2 as i8, 3 as i8, 4 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

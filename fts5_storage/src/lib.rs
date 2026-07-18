@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -8,7 +9,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Storage {
@@ -20,6 +23,7 @@ struct Fts5Storage {
     p_saved_row: *mut Sqlite3Stmt,
     a_stmt: [*mut Sqlite3Stmt; 12],
 }
+
 unsafe extern "C" fn fts5_exec_printf(db: *mut Sqlite3,
     pz_err_1: *mut *mut i8, z_format_1: *const i8, mut __va0: ...) -> i32 {
     let mut rc: i32 = 0;
@@ -40,6 +44,7 @@ unsafe extern "C" fn fts5_exec_printf(db: *mut Sqlite3,
     ();
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_create_table(p_config: &Fts5Config,
     z_post: *const i8, z_defn: *const i8, b_without: i32,
@@ -66,6 +71,7 @@ pub extern "C" fn sqlite3_fts5_create_table(p_config: &Fts5Config,
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_get_stmt(p: &mut Fts5Storage, e_stmt_1: i32,
     pp_stmt_1: &mut *mut Sqlite3Stmt, pz_err_msg_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -409,6 +415,7 @@ extern "C" fn fts5_storage_get_stmt(p: &mut Fts5Storage, e_stmt_1: i32,
     unsafe { sqlite3_reset(*pp_stmt_1) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_config_value(p: *mut Fts5Storage,
     z: *const i8, p_val: *mut Sqlite3Value, i_val: i32) -> i32 {
@@ -439,6 +446,7 @@ pub extern "C" fn sqlite3_fts5_storage_config_value(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_close(p: *mut Fts5Storage) -> i32 {
     let rc: i32 = 0;
@@ -465,6 +473,7 @@ pub extern "C" fn sqlite3_fts5_storage_close(p: *mut Fts5Storage) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_open(p_config: *mut Fts5Config,
     p_index: *mut Fts5Index, b_create: i32, pp: &mut *mut Fts5Storage,
@@ -581,6 +590,7 @@ pub extern "C" fn sqlite3_fts5_storage_open(p_config: *mut Fts5Config,
     if rc != 0 { sqlite3_fts5_storage_close(p); *pp = core::ptr::null_mut(); }
     return rc;
 }
+
 extern "C" fn fts5_storage_save_totals(p: &Fts5Storage) -> i32 {
     let n_col: i32 = unsafe { (*(*p).p_config).n_col };
     let mut i: i32 = 0;
@@ -617,6 +627,7 @@ extern "C" fn fts5_storage_save_totals(p: &Fts5Storage) -> i32 {
     unsafe { sqlite3_free(buf.p as *mut ()) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_sync(p: *mut Fts5Storage) -> i32 {
     let mut rc: i32 = 0;
@@ -640,6 +651,7 @@ pub extern "C" fn sqlite3_fts5_storage_sync(p: *mut Fts5Storage) -> i32 {
     };
     return rc;
 }
+
 extern "C" fn fts5_storage_rename_one(p_config_1: &Fts5Config,
     p_rc_1: &mut i32, z_tail_1: *const i8, z_name_1: *const i8) -> () {
     if *p_rc_1 == 0 {
@@ -652,6 +664,7 @@ extern "C" fn fts5_storage_rename_one(p_config_1: &Fts5Config,
             };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_rename(p_storage: *mut Fts5Storage,
     z_name: *const i8) -> i32 {
@@ -673,6 +686,7 @@ pub extern "C" fn sqlite3_fts5_storage_rename(p_storage: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_drop_all(p_config: &Fts5Config) -> i32 {
     let mut rc: i32 =
@@ -701,6 +715,7 @@ pub extern "C" fn sqlite3_fts5_drop_all(p_config: &Fts5Config) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_load_totals(p: &mut Fts5Storage, b_cache_1: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -714,6 +729,7 @@ extern "C" fn fts5_storage_load_totals(p: &mut Fts5Storage, b_cache_1: i32)
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_contentless_delete(p: *mut Fts5Storage,
     i_del_1: i64) -> i32 {
     let mut i_origin: i64 = 0 as i64;
@@ -759,6 +775,7 @@ extern "C" fn fts5_storage_contentless_delete(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_find_delete_row(p: *mut Fts5Storage,
     i_del: i64) -> i32 {
@@ -784,6 +801,7 @@ pub extern "C" fn sqlite3_fts5_storage_find_delete_row(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5InsertCtx {
@@ -791,6 +809,7 @@ struct Fts5InsertCtx {
     i_col: i32,
     sz_col: i32,
 }
+
 extern "C" fn fts5_storage_insert_callback(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -812,6 +831,7 @@ extern "C" fn fts5_storage_insert_callback(p_context_1: *mut (), tflags: i32,
                 unsafe { (*p_ctx).sz_col } - 1, p_token_1, n_token_1)
         };
 }
+
 extern "C" fn fts5_storage_delete_from_index(p: *mut Fts5Storage,
     i_del_1: i64, ap_val_1: *const *mut Sqlite3Value, b_save_row_1: i32)
     -> i32 {
@@ -993,6 +1013,7 @@ extern "C" fn fts5_storage_delete_from_index(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_delete(p: *mut Fts5Storage, i_del: i64,
     ap_val: *mut *mut Sqlite3Value, b_save_row: i32) -> i32 {
@@ -1055,6 +1076,7 @@ pub extern "C" fn sqlite3_fts5_storage_delete(p: *mut Fts5Storage, i_del: i64,
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_new_rowid(p: *mut Fts5Storage,
     pi_rowid_1: &mut i64) -> i32 {
     let mut rc: i32 = 20;
@@ -1080,6 +1102,7 @@ extern "C" fn fts5_storage_new_rowid(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
     b_replace: i32, ap_val: *mut *mut Sqlite3Value, pi_rowid: *mut i64)
@@ -1231,6 +1254,7 @@ pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_insert_docsize(p: *mut Fts5Storage, i_rowid_1: i64,
     p_buf_1: &Fts5Buffer) -> i32 {
     let mut rc: i32 = 0;
@@ -1264,6 +1288,7 @@ extern "C" fn fts5_storage_insert_docsize(p: *mut Fts5Storage, i_rowid_1: i64,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_index_insert(p: *mut Fts5Storage,
     ap_val: *mut *mut Sqlite3Value, i_rowid: i64) -> i32 {
@@ -1371,6 +1396,7 @@ pub extern "C" fn sqlite3_fts5_storage_index_insert(p: *mut Fts5Storage,
     unsafe { sqlite3_free(buf.p as *mut ()) };
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5IntegrityCtx {
@@ -1381,6 +1407,7 @@ struct Fts5IntegrityCtx {
     p_termset: *mut Fts5Termset,
     p_config: *mut Fts5Config,
 }
+
 extern "C" fn fts5_storage_decode_size_array(mut a_col_1: &mut [i32],
     a_blob_1: &[u8]) -> i32 {
     let mut i: i32 = 0;
@@ -1403,6 +1430,7 @@ extern "C" fn fts5_storage_decode_size_array(mut a_col_1: &mut [i32],
     }
     return (i_off != a_blob_1.len() as i32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_docsize(p: *mut Fts5Storage,
     i_rowid: i64, a_col: *mut i32) -> i32 {
@@ -1467,6 +1495,7 @@ pub extern "C" fn sqlite3_fts5_storage_docsize(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_integrity_callback(p_context_1: *mut (),
     tflags: i32, p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -1567,6 +1596,7 @@ extern "C" fn fts5_storage_integrity_callback(p_context_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn fts5_storage_count(p: &Fts5Storage, z_suffix_1: *const i8,
     pn_row_1: &mut i64) -> i32 {
     let p_config: *const Fts5Config = (*p).p_config as *const Fts5Config;
@@ -1597,6 +1627,7 @@ extern "C" fn fts5_storage_count(p: &Fts5Storage, z_suffix_1: *const i8,
     unsafe { sqlite3_free(z_sql as *mut ()) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_integrity(p: *mut Fts5Storage,
     i_arg: i32) -> i32 {
@@ -1775,6 +1806,7 @@ pub extern "C" fn sqlite3_fts5_storage_integrity(p: *mut Fts5Storage,
     unsafe { sqlite3_free(a_total_size as *mut ()) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_stmt(p: *mut Fts5Storage, e_stmt: i32,
     pp: *mut *mut Sqlite3Stmt, pz_err_msg: *mut *mut i8) -> i32 {
@@ -1803,6 +1835,7 @@ pub extern "C" fn sqlite3_fts5_storage_stmt(p: *mut Fts5Storage, e_stmt: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_stmt_release(p: &mut Fts5Storage,
     e_stmt: i32, p_stmt: *mut Sqlite3Stmt) -> () {
@@ -1820,6 +1853,7 @@ pub extern "C" fn sqlite3_fts5_storage_stmt_release(p: &mut Fts5Storage,
         (*p).a_stmt[e_stmt as usize] = p_stmt;
     } else { unsafe { sqlite3_finalize(p_stmt) }; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_size(p: *mut Fts5Storage, i_col: i32,
     pn_token: &mut i64) -> i32 {
@@ -1851,6 +1885,7 @@ pub extern "C" fn sqlite3_fts5_storage_size(p: *mut Fts5Storage, i_col: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_row_count(p: *mut Fts5Storage,
     pn_row: &mut i64) -> i32 {
@@ -1861,11 +1896,13 @@ pub extern "C" fn sqlite3_fts5_storage_row_count(p: *mut Fts5Storage,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_rollback(p: &mut Fts5Storage) -> i32 {
     (*p).b_totals_valid = 0;
     return unsafe { sqlite3_fts5_index_rollback((*p).p_index) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_delete_all(p: *mut Fts5Storage)
     -> i32 {
@@ -1912,6 +1949,7 @@ pub extern "C" fn sqlite3_fts5_storage_delete_all(p: *mut Fts5Storage)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_rebuild(p: *mut Fts5Storage) -> i32 {
     let mut buf: Fts5Buffer =
@@ -2016,19 +2054,23 @@ pub extern "C" fn sqlite3_fts5_storage_rebuild(p: *mut Fts5Storage) -> i32 {
     if rc == 0 { rc = fts5_storage_save_totals(unsafe { &*p }); }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_optimize(p: &Fts5Storage) -> i32 {
     return unsafe { sqlite3_fts5_index_optimize((*p).p_index) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_merge(p: &Fts5Storage, n_merge: i32)
     -> i32 {
     return unsafe { sqlite3_fts5_index_merge((*p).p_index, n_merge) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_reset(p: &Fts5Storage) -> i32 {
     return unsafe { sqlite3_fts5_index_reset((*p).p_index) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_release_delete_row(p_storage:
         &mut Fts5Storage) -> () {
@@ -2046,6 +2088,7 @@ pub extern "C" fn sqlite3_fts5_storage_release_delete_row(p_storage:
     unsafe { sqlite3_reset((*p_storage).p_saved_row) };
     (*p_storage).p_saved_row = core::ptr::null_mut();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

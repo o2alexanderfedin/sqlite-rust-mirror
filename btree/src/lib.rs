@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod btree_int_h;
@@ -16,8 +17,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinIntptrT = i64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -30,6 +34,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -109,6 +114,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -157,6 +163,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -293,6 +300,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -316,6 +324,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -388,11 +397,14 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_enable_shared_cache(enable: i32) -> i32 {
     unsafe { sqlite3Config.shared_cache_enabled = enable; return 0; }
 }
+
 static mut sqlite3_shared_cache_list: *mut BtShared = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_schema(p: *mut Btree, n_bytes_1: i32,
     x_free_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> *mut () {
@@ -415,6 +427,7 @@ pub extern "C" fn sqlite3_btree_schema(p: *mut Btree, n_bytes_1: i32,
         return unsafe { (*p_bt).p_schema };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_cache_size(p: *mut Btree, mx_page_1: i32)
     -> i32 {
@@ -427,6 +440,7 @@ pub extern "C" fn sqlite3_btree_set_cache_size(p: *mut Btree, mx_page_1: i32)
     unsafe { sqlite3_btree_leave(p) };
     return 0;
 }
+
 extern "C" fn cell_size_ptr_table_leaf(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = p_cell_1;
@@ -551,6 +565,7 @@ extern "C" fn cell_size_ptr_table_leaf(p_page_1: *mut MemPage,
     { let _ = 0; };
     return n_size as u16;
 }
+
 extern "C" fn btree_parse_cell_adjust_size_for_overflow(p_page_1: &MemPage,
     p_cell_1: *const u8, p_info_1: &mut CellInfo) -> () {
     let mut min_local: i32 = 0;
@@ -574,6 +589,7 @@ extern "C" fn btree_parse_cell_adjust_size_for_overflow(p_page_1: &MemPage,
                                 }
                             } as i64 as u16 as i32 + 4) as u16;
 }
+
 extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
     p_info_1: *mut CellInfo) -> () {
     let mut p_iter: *mut u8 = core::ptr::null_mut();
@@ -757,6 +773,7 @@ extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
             p_cell_1 as *const u8, unsafe { &mut *p_info_1 });
     }
 }
+
 extern "C" fn cell_size_ptr_idx_leaf(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = p_cell_1;
@@ -811,6 +828,7 @@ extern "C" fn cell_size_ptr_idx_leaf(p_page_1: *mut MemPage,
     { let _ = 0; };
     return n_size as u16;
 }
+
 extern "C" fn btree_parse_cell_ptr_index(p_page_1: *mut MemPage,
     p_cell_1: *mut u8, p_info_1: *mut CellInfo) -> () {
     let mut p_iter: *mut u8 = core::ptr::null_mut();
@@ -871,6 +889,7 @@ extern "C" fn btree_parse_cell_ptr_index(p_page_1: *mut MemPage,
             p_cell_1 as *const u8, unsafe { &mut *p_info_1 });
     }
 }
+
 extern "C" fn cell_size_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8)
     -> u16 {
     let mut p_iter: *mut u8 = unsafe { p_cell_1.offset(4 as isize) };
@@ -925,6 +944,7 @@ extern "C" fn cell_size_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8)
     { let _ = 0; };
     return n_size as u16;
 }
+
 extern "C" fn cell_size_ptr_no_payload(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = unsafe { p_cell_1.offset(4 as isize) };
@@ -943,6 +963,7 @@ extern "C" fn cell_size_ptr_no_payload(p_page_1: *mut MemPage,
     { let _ = 0; };
     return unsafe { p_iter.offset_from(p_cell_1) } as i64 as u16;
 }
+
 extern "C" fn btree_parse_cell_ptr_no_payload(p_page_1: *mut MemPage,
     p_cell_1: *mut u8, p_info_1: *mut CellInfo) -> () {
     { let _ = 0; };
@@ -964,6 +985,7 @@ extern "C" fn btree_parse_cell_ptr_no_payload(p_page_1: *mut MemPage,
     unsafe { (*p_info_1).p_payload = core::ptr::null_mut() };
     return;
 }
+
 extern "C" fn decode_flags(p_page_1: &mut MemPage, flag_byte_1: i32) -> i32 {
     let mut p_bt: *const BtShared = core::ptr::null();
     { let _ = 0; };
@@ -1021,6 +1043,7 @@ extern "C" fn decode_flags(p_page_1: &mut MemPage, flag_byte_1: i32) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn btree_cell_size_check(p_page_1: *mut MemPage) -> i32 {
     let mut i_cell_first: i32 = 0;
     let mut i_cell_last: i32 = 0;
@@ -1078,6 +1101,7 @@ extern "C" fn btree_cell_size_check(p_page_1: *mut MemPage) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
     let mut data: *mut u8 = core::ptr::null_mut();
     let mut p_bt: *const BtShared = core::ptr::null();
@@ -1159,6 +1183,7 @@ extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn page_reinit(p_data_1: *mut DbPage) -> () {
     let mut p_page: *mut MemPage = core::ptr::null_mut();
     p_page = unsafe { sqlite3_pager_get_extra(p_data_1) } as *mut MemPage;
@@ -1171,6 +1196,7 @@ extern "C" fn page_reinit(p_data_1: *mut DbPage) -> () {
         }
     }
 }
+
 extern "C" fn btree_invoke_busy_handler(p_arg_1: *mut ()) -> i32 {
     let p_bt: *const BtShared = p_arg_1 as *mut BtShared as *const BtShared;
     { let _ = 0; };
@@ -1181,6 +1207,7 @@ extern "C" fn btree_invoke_busy_handler(p_arg_1: *mut ()) -> i32 {
                 })
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_open(p_vfs_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8, db: *mut Sqlite3, pp_btree_1: &mut *mut Btree,
@@ -1823,6 +1850,7 @@ pub extern "C" fn sqlite3_btree_open(p_vfs_1: *mut Sqlite3Vfs,
         unreachable!();
     }
 }
+
 extern "C" fn btree_parse_cell(p_page_1: *mut MemPage, i_cell_1: i32,
     p_info_1: *mut CellInfo) -> () {
     unsafe {
@@ -1853,6 +1881,7 @@ extern "C" fn btree_parse_cell(p_page_1: *mut MemPage, i_cell_1: i32,
             }, p_info_1)
     };
 }
+
 extern "C" fn get_cell_info(p_cur_1: &mut BtCursor) -> () {
     if (*p_cur_1).info.n_size as i32 == 0 {
         (*p_cur_1).cur_flags |= 2 as u8;
@@ -1860,6 +1889,7 @@ extern "C" fn get_cell_info(p_cur_1: &mut BtCursor) -> () {
             &mut (*p_cur_1).info);
     } else {}
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_integer_key(p_cur_1: *mut BtCursor) -> i64 {
     { let _ = 0; };
@@ -1868,6 +1898,7 @@ pub extern "C" fn sqlite3_btree_integer_key(p_cur_1: *mut BtCursor) -> i64 {
     get_cell_info(unsafe { &mut *p_cur_1 });
     return unsafe { (*p_cur_1).info.n_key };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload_size(p_cur_1: *mut BtCursor) -> u32 {
     { let _ = 0; };
@@ -1875,6 +1906,7 @@ pub extern "C" fn sqlite3_btree_payload_size(p_cur_1: *mut BtCursor) -> u32 {
     get_cell_info(unsafe { &mut *p_cur_1 });
     return unsafe { (*p_cur_1).info.n_payload };
 }
+
 extern "C" fn copy_payload(p_payload_1: *mut (), p_buf_1: &mut [u8],
     e_op_1: i32, p_db_page_1: *mut DbPage) -> i32 {
     if e_op_1 != 0 {
@@ -1892,6 +1924,7 @@ extern "C" fn copy_payload(p_payload_1: *mut (), p_buf_1: &mut [u8],
     }
     return 0;
 }
+
 extern "C" fn ptrmap_pageno(p_bt_1: &BtShared, pgno: Pgno) -> Pgno {
     unsafe {
         let mut n_pages_per_map_page: i32 = 0;
@@ -1911,9 +1944,11 @@ extern "C" fn ptrmap_pageno(p_bt_1: &BtShared, pgno: Pgno) -> Pgno {
         return ret;
     }
 }
+
 extern "C" fn btree_pagecount(p_bt_1: &BtShared) -> Pgno {
     return (*p_bt_1).n_page;
 }
+
 extern "C" fn ptrmap_get(p_bt_1: *mut BtShared, key: Pgno,
     p_e_type_1: &mut u8, p_pgno_1: *mut Pgno) -> i32 {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
@@ -1954,6 +1989,7 @@ extern "C" fn ptrmap_get(p_bt_1: *mut BtShared, key: Pgno,
     }
     return 0;
 }
+
 extern "C" fn btree_page_from_db_page(p_db_page_1: *mut DbPage, pgno: Pgno,
     p_bt_1: *mut BtShared) -> *mut MemPage {
     let p_page: *mut MemPage =
@@ -1974,6 +2010,7 @@ extern "C" fn btree_page_from_db_page(p_db_page_1: *mut DbPage, pgno: Pgno,
     { let _ = 0; };
     return p_page;
 }
+
 extern "C" fn btree_get_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: &mut *mut MemPage, flags: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -1989,6 +2026,7 @@ extern "C" fn btree_get_page(p_bt_1: *mut BtShared, pgno: Pgno,
     *pp_page_1 = btree_page_from_db_page(p_db_page, pgno, p_bt_1);
     return 0;
 }
+
 extern "C" fn release_page_not_null(p_page_1: &MemPage) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -1998,9 +2036,11 @@ extern "C" fn release_page_not_null(p_page_1: &MemPage) -> () {
     { let _ = 0; };
     unsafe { sqlite3_pager_unref_not_null((*p_page_1).p_db_page) };
 }
+
 extern "C" fn release_page(p_page_1: *mut MemPage) -> () {
     if !(p_page_1).is_null() { release_page_not_null(unsafe { &*p_page_1 }); }
 }
+
 extern "C" fn get_overflow_page(p_bt_1: *mut BtShared, ovfl: Pgno,
     pp_page_1: *mut *mut MemPage, p_pgno_next_1: *mut Pgno) -> i32 {
     unsafe {
@@ -2047,6 +2087,7 @@ extern "C" fn get_overflow_page(p_bt_1: *mut BtShared, ovfl: Pgno,
         return if rc == 101 { 0 } else { rc };
     }
 }
+
 extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
     mut amt: u32, mut p_buf_1: *mut u8, e_op_1: i32) -> i32 {
     let mut a_payload: *mut u8 = core::ptr::null_mut();
@@ -2270,6 +2311,7 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload(p_cur_1: *mut BtCursor, offset: u32,
     amt: u32, p_buf_1: *mut ()) -> i32 {
@@ -2278,6 +2320,7 @@ pub extern "C" fn sqlite3_btree_payload(p_cur_1: *mut BtCursor, offset: u32,
     { let _ = 0; };
     return access_payload(p_cur_1, offset, amt, p_buf_1 as *mut u8, 0);
 }
+
 extern "C" fn save_cursor_key(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -2318,6 +2361,7 @@ extern "C" fn save_cursor_key(p_cur_1: *mut BtCursor) -> i32 {
     { let _ = 0; };
     return rc;
 }
+
 extern "C" fn btree_release_all_cursor_pages(p_cur_1: &mut BtCursor) -> () {
     let mut i: i32 = 0;
     if (*p_cur_1).i_page as i32 >= 0 {
@@ -2340,6 +2384,7 @@ extern "C" fn btree_release_all_cursor_pages(p_cur_1: &mut BtCursor) -> () {
         (*p_cur_1).i_page = -1 as i8;
     }
 }
+
 extern "C" fn save_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -2359,6 +2404,7 @@ extern "C" fn save_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     unsafe { (*p_cur_1).cur_flags &= !(2 | 4 | 8) as u8 };
     return rc;
 }
+
 extern "C" fn save_cursors_on_list(mut p: *mut BtCursor, i_root_1: Pgno,
     p_except_1: *mut BtCursor) -> i32 {
     '__b12: loop {
@@ -2379,6 +2425,7 @@ extern "C" fn save_cursors_on_list(mut p: *mut BtCursor, i_root_1: Pgno,
     }
     return 0;
 }
+
 extern "C" fn save_all_cursors(p_bt_1: &BtShared, i_root_1: Pgno,
     p_except_1: *mut BtCursor) -> i32 {
     let mut p: *mut BtCursor = core::ptr::null_mut();
@@ -2407,6 +2454,7 @@ extern "C" fn save_all_cursors(p_bt_1: &BtShared, i_root_1: Pgno,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_cursor(p_cur_1: &mut BtCursor) -> () {
     { let _ = 0; };
@@ -2414,6 +2462,7 @@ pub extern "C" fn sqlite3_btree_clear_cursor(p_cur_1: &mut BtCursor) -> () {
     (*p_cur_1).p_key = core::ptr::null_mut();
     (*p_cur_1).e_state = 1 as u8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_trip_all_cursors(p_btree_1: *mut Btree,
     err_code_1: i32, write_only_1: i32) -> i32 {
@@ -2454,6 +2503,7 @@ pub extern "C" fn sqlite3_btree_trip_all_cursors(p_btree_1: *mut Btree,
     }
     return rc;
 }
+
 extern "C" fn btree_set_n_page(p_bt_1: &mut BtShared, p_page1_1: &MemPage)
     -> () {
     let mut n_page: i32 =
@@ -2467,6 +2517,7 @@ extern "C" fn btree_set_n_page(p_bt_1: &mut BtShared, p_page1_1: &MemPage)
     }
     (*p_bt_1).n_page = n_page as u32;
 }
+
 extern "C" fn release_page_one(p_page_1: &MemPage) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -2477,10 +2528,12 @@ extern "C" fn release_page_one(p_page_1: &MemPage) -> () {
     { let _ = 0; };
     unsafe { sqlite3_pager_unref_page_one((*p_page_1).p_db_page) };
 }
+
 extern "C" fn btree_clear_has_content(p_bt_1: &mut BtShared) -> () {
     unsafe { sqlite3_bitvec_destroy((*p_bt_1).p_has_content) };
     (*p_bt_1).p_has_content = core::ptr::null_mut();
 }
+
 extern "C" fn downgrade_all_shared_cache_table_locks(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     if unsafe { (*p_bt).p_writer } == p {
@@ -2501,6 +2554,7 @@ extern "C" fn downgrade_all_shared_cache_table_locks(p: *mut Btree) -> () {
         }
     }
 }
+
 extern "C" fn clear_all_shared_cache_table_locks(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     let mut pp_iter: *mut *mut BtLock = unsafe { &mut (*p_bt).p_lock };
@@ -2527,6 +2581,7 @@ extern "C" fn clear_all_shared_cache_table_locks(p: *mut Btree) -> () {
         unsafe { (*p_bt).bts_flags &= !128 as u16 };
     }
 }
+
 extern "C" fn unlock_btree_if_unused(p_bt_1: &mut BtShared) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -2539,6 +2594,7 @@ extern "C" fn unlock_btree_if_unused(p_bt_1: &mut BtShared) -> () {
         release_page_one(unsafe { &*p_page1 });
     }
 }
+
 extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     let db: *const Sqlite3 = unsafe { (*p).db } as *const Sqlite3;
@@ -2567,6 +2623,7 @@ extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
     { let _ = 0; };
     { let _ = 0; };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_rollback(p: *mut Btree, mut trip_code_1: i32,
     mut write_only_1: i32) -> i32 {
@@ -2611,6 +2668,7 @@ pub extern "C" fn sqlite3_btree_rollback(p: *mut Btree, mut trip_code_1: i32,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn remove_from_sharing_list(p_bt_1: *mut BtShared) -> i32 {
     unsafe {
         let mut p_main_mtx: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -2647,6 +2705,7 @@ extern "C" fn remove_from_sharing_list(p_bt_1: *mut BtShared) -> i32 {
         return removed;
     }
 }
+
 extern "C" fn free_temp_space(p_bt_1: &mut BtShared) -> () {
     if !((*p_bt_1).p_tmp_space).is_null() {
         {
@@ -2658,6 +2717,7 @@ extern "C" fn free_temp_space(p_bt_1: &mut BtShared) -> () {
         (*p_bt_1).p_tmp_space = core::ptr::null_mut();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_close(p: *mut Btree) -> i32 {
     unsafe {
@@ -2705,6 +2765,7 @@ pub extern "C" fn sqlite3_btree_close(p: *mut Btree) -> i32 {
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_spill_size(p: *mut Btree, mx_page_1: i32)
     -> i32 {
@@ -2719,6 +2780,7 @@ pub extern "C" fn sqlite3_btree_set_spill_size(p: *mut Btree, mx_page_1: i32)
     unsafe { sqlite3_btree_leave(p) };
     return res;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_mmap_limit(p: *mut Btree,
     sz_mmap_1: Sqlite3Int64) -> i32 {
@@ -2731,6 +2793,7 @@ pub extern "C" fn sqlite3_btree_set_mmap_limit(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_pager_flags(p: *mut Btree,
     pg_flags_1: u32) -> i32 {
@@ -2743,6 +2806,7 @@ pub extern "C" fn sqlite3_btree_set_pager_flags(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_page_size(p: *mut Btree,
     mut page_size_1: i32, mut n_reserve_1: i32, i_fix_1: i32) -> i32 {
@@ -2788,10 +2852,12 @@ pub extern "C" fn sqlite3_btree_set_page_size(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_page_size(p: &Btree) -> i32 {
     return unsafe { (*(*p).p_bt).page_size } as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_max_page_count(p: *mut Btree, mx_page_1: Pgno)
     -> Pgno {
@@ -2806,11 +2872,13 @@ pub extern "C" fn sqlite3_btree_max_page_count(p: *mut Btree, mx_page_1: Pgno)
     unsafe { sqlite3_btree_leave(p) };
     return n;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_last_page(p: &Btree) -> Pgno {
     { let _ = 0; };
     return btree_pagecount(unsafe { &*(*p).p_bt });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_secure_delete(p: *mut Btree, new_flag_1: i32)
     -> i32 {
@@ -2830,6 +2898,7 @@ pub extern "C" fn sqlite3_btree_secure_delete(p: *mut Btree, new_flag_1: i32)
     unsafe { sqlite3_btree_leave(p) };
     return b;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_reserve_no_mutex(p: &Btree) -> i32 {
     let mut n: i32 = 0;
@@ -2839,6 +2908,7 @@ pub extern "C" fn sqlite3_btree_get_reserve_no_mutex(p: &Btree) -> i32 {
                 unsafe { (*(*p).p_bt).usable_size }) as i32;
     return n;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_requested_reserve(p: *mut Btree) -> i32 {
     let mut n1: i32 = 0;
@@ -2849,6 +2919,7 @@ pub extern "C" fn sqlite3_btree_get_requested_reserve(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return if n1 > n2 { n1 } else { n2 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_auto_vacuum(p: *mut Btree,
     auto_vacuum_1: i32) -> i32 {
@@ -2869,6 +2940,7 @@ pub extern "C" fn sqlite3_btree_set_auto_vacuum(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_auto_vacuum(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -2885,6 +2957,7 @@ pub extern "C" fn sqlite3_btree_get_auto_vacuum(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
     e_lock_1: u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
@@ -2923,10 +2996,12 @@ extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
     }
     return 0;
 }
+
 static z_magic_header: [i8; 16] =
     [83 as i8, 81 as i8, 76 as i8, 105 as i8, 116 as i8, 101 as i8, 32 as i8,
             102 as i8, 111 as i8, 114 as i8, 109 as i8, 97 as i8, 116 as i8,
             32 as i8, 51 as i8, 0 as i8];
+
 extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
     let mut rc: i32 = 0;
     let mut p_page1: *mut MemPage = core::ptr::null_mut();
@@ -3111,6 +3186,7 @@ extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
     unsafe { (*p_bt_1).p_page1 = core::ptr::null_mut() };
     return rc;
 }
+
 extern "C" fn zero_page(p_page_1: *mut MemPage, flags: i32) -> () {
     let data: *mut u8 = unsafe { (*p_page_1).a_data };
     let p_bt: *const BtShared =
@@ -3173,6 +3249,7 @@ extern "C" fn zero_page(p_page_1: *mut MemPage, flags: i32) -> () {
     unsafe { (*p_page_1).n_cell = 0 as u16 };
     unsafe { (*p_page_1).is_init = 1 as u8 };
 }
+
 extern "C" fn new_database(p_bt_1: &mut BtShared) -> i32 {
     let mut p_p1: *mut MemPage = core::ptr::null_mut();
     let mut data: *mut u8 = core::ptr::null_mut();
@@ -3228,6 +3305,7 @@ extern "C" fn new_database(p_bt_1: &mut BtShared) -> i32 {
     unsafe { *data.offset(31 as isize) = 1 as u8 };
     return 0;
 }
+
 extern "C" fn btree_begin_trans(p: *mut Btree, wrflag: i32,
     p_schema_version_1: *mut i32) -> i32 {
     let mut p_bt: *mut BtShared = core::ptr::null_mut();
@@ -3528,6 +3606,7 @@ extern "C" fn btree_begin_trans(p: *mut Btree, wrflag: i32,
     }
     unreachable!();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_begin_trans(p: *mut Btree, wrflag: i32,
     p_schema_version_1: *mut i32) -> i32 {
@@ -3556,6 +3635,7 @@ pub extern "C" fn sqlite3_btree_begin_trans(p: *mut Btree, wrflag: i32,
             };
     } else { return 0; }
 }
+
 extern "C" fn invalidate_all_overflow_cache(p_bt_1: &BtShared) -> () {
     let mut p: *mut BtCursor = core::ptr::null_mut();
     { let _ = 0; };
@@ -3571,6 +3651,7 @@ extern "C" fn invalidate_all_overflow_cache(p_bt_1: &BtShared) -> () {
         }
     }
 }
+
 extern "C" fn final_db_size(p_bt_1: *mut BtShared, n_orig_1: Pgno,
     n_free_1: Pgno) -> Pgno {
     unsafe {
@@ -3600,6 +3681,7 @@ extern "C" fn final_db_size(p_bt_1: *mut BtShared, n_orig_1: Pgno,
         return n_fin;
     }
 }
+
 extern "C" fn btree_get_unused_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: *mut *mut MemPage, flags: i32) -> i32 {
     let rc: i32 =
@@ -3618,6 +3700,7 @@ extern "C" fn btree_get_unused_page(p_bt_1: *mut BtShared, pgno: Pgno,
     } else { unsafe { *pp_page_1 = core::ptr::null_mut() }; }
     return rc;
 }
+
 extern "C" fn btree_get_has_content(p_bt_1: &BtShared, pgno: Pgno) -> i32 {
     let p: *mut Bitvec = (*p_bt_1).p_has_content;
     return (!(p).is_null() &&
@@ -3625,6 +3708,7 @@ extern "C" fn btree_get_has_content(p_bt_1: &BtShared, pgno: Pgno) -> i32 {
                     unsafe { sqlite3_bitvec_test_not_null(p, pgno) } != 0)) as
             i32;
 }
+
 extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
     pp_page_1: *mut *mut MemPage, p_pgno_1: *mut Pgno, nearby: Pgno,
     e_mode_1: u8) -> i32 {
@@ -4384,6 +4468,7 @@ extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
         unreachable!();
     }
 }
+
 extern "C" fn ptrmap_put(p_bt_1: *mut BtShared, key: Pgno, e_type_1: u8,
     parent: Pgno, p_rc_1: &mut i32) -> () {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
@@ -4447,6 +4532,7 @@ extern "C" fn ptrmap_put(p_bt_1: *mut BtShared, key: Pgno, e_type_1: u8,
     }
     unsafe { sqlite3_pager_unref(p_db_page) };
 }
+
 extern "C" fn ptrmap_put_ovfl_ptr(p_page_1: *mut MemPage, p_src_1: &MemPage,
     p_cell_1: *mut u8, p_rc_1: *mut i32) -> () {
     let mut info: CellInfo = unsafe { core::mem::zeroed() };
@@ -4475,6 +4561,7 @@ extern "C" fn ptrmap_put_ovfl_ptr(p_page_1: *mut MemPage, p_src_1: &MemPage,
             unsafe { (*p_page_1).pgno }, unsafe { &mut *p_rc_1 });
     }
 }
+
 extern "C" fn set_child_ptrmaps(p_page_1: *mut MemPage) -> i32 {
     let mut i: i32 = 0;
     let mut n_cell: i32 = 0;
@@ -4542,6 +4629,7 @@ extern "C" fn set_child_ptrmaps(p_page_1: *mut MemPage) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn modify_page_pointer(p_page_1: *mut MemPage, i_from_1: Pgno,
     i_to_1: Pgno, e_type_1: u8) -> i32 {
     { let _ = 0; };
@@ -4673,6 +4761,7 @@ extern "C" fn modify_page_pointer(p_page_1: *mut MemPage, i_from_1: Pgno,
     }
     return 0;
 }
+
 extern "C" fn relocate_page(p_bt_1: *mut BtShared, p_db_page_1: *mut MemPage,
     e_type_1: u8, i_ptr_page_1: Pgno, i_free_page_1: Pgno, is_commit_1: i32)
     -> i32 {
@@ -4725,6 +4814,7 @@ extern "C" fn relocate_page(p_bt_1: *mut BtShared, p_db_page_1: *mut MemPage,
     }
     return rc;
 }
+
 extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
     mut i_last_pg_1: Pgno, b_commit_1: i32) -> i32 {
     unsafe {
@@ -4829,6 +4919,7 @@ extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
         return 0;
     }
 }
+
 extern "C" fn auto_vacuum_commit(p: *mut Btree) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -4954,6 +5045,7 @@ extern "C" fn auto_vacuum_commit(p: *mut Btree) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_commit_phase_one(p: *mut Btree,
     z_super_jrnl_1: *const i8) -> i32 {
@@ -4980,6 +5072,7 @@ pub extern "C" fn sqlite3_btree_commit_phase_one(p: *mut Btree,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_commit_phase_two(p: *mut Btree,
     b_cleanup_1: i32) -> i32 {
@@ -5013,6 +5106,7 @@ pub extern "C" fn sqlite3_btree_commit_phase_two(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_commit(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5022,6 +5116,7 @@ pub extern "C" fn sqlite3_btree_commit(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_begin_stmt(p: *mut Btree, i_statement_1: i32)
     -> i32 {
@@ -5041,6 +5136,7 @@ pub extern "C" fn sqlite3_btree_begin_stmt(p: *mut Btree, i_statement_1: i32)
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_meta(p: *mut Btree, idx: i32,
     p_meta_1: &mut u32) -> () {
@@ -5068,6 +5164,7 @@ pub extern "C" fn sqlite3_btree_get_meta(p: *mut Btree, idx: i32,
     }
     unsafe { sqlite3_btree_leave(p) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_update_meta(p: *mut Btree, idx: i32,
     i_meta_1: u32) -> i32 {
@@ -5100,6 +5197,7 @@ pub extern "C" fn sqlite3_btree_update_meta(p: *mut Btree, idx: i32,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
     create_tab_flags_1: i32) -> i32 {
     unsafe {
@@ -5184,6 +5282,7 @@ extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_create_table(p: *mut Btree,
     pi_table_1: *mut Pgno, flags: i32) -> i32 {
@@ -5193,17 +5292,20 @@ pub extern "C" fn sqlite3_btree_create_table(p: *mut Btree,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_txn_state(p: *const Btree) -> i32 {
     { let _ = 0; };
     return if !(p).is_null() { (unsafe { (*p).in_trans }) as i32 } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_in_backup(p: &Btree) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
     return ((*p).n_backup != 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_schema_locked(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5215,6 +5317,7 @@ pub extern "C" fn sqlite3_btree_schema_locked(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
     e_lock_1: u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
@@ -5258,6 +5361,7 @@ extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_lock_table(p: *mut Btree, i_tab_1: i32,
     is_write_lock_1: u8) -> i32 {
@@ -5276,6 +5380,7 @@ pub extern "C" fn sqlite3_btree_lock_table(p: *mut Btree, i_tab_1: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_savepoint(p: *mut Btree, op: i32,
     i_savepoint_1: i32) -> i32 {
@@ -5311,6 +5416,7 @@ pub extern "C" fn sqlite3_btree_savepoint(p: *mut Btree, op: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_checkpoint(p: *mut Btree, e_mode_1: i32,
     pn_log_1: *mut i32, pn_ckpt_1: *mut i32) -> i32 {
@@ -5331,6 +5437,7 @@ pub extern "C" fn sqlite3_btree_checkpoint(p: *mut Btree, e_mode_1: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_filename(p: &Btree) -> *const i8 {
     { let _ = 0; };
@@ -5339,6 +5446,7 @@ pub extern "C" fn sqlite3_btree_get_filename(p: &Btree) -> *const i8 {
                     *const Pager, 1)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_journalname(p: &Btree) -> *const i8 {
     { let _ = 0; };
@@ -5346,6 +5454,7 @@ pub extern "C" fn sqlite3_btree_get_journalname(p: &Btree) -> *const i8 {
             sqlite3_pager_journalname(unsafe { (*(*p).p_bt).p_pager })
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_incr_vacuum(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5395,6 +5504,7 @@ pub extern "C" fn sqlite3_btree_incr_vacuum(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn invalidate_incrblob_cursors(p_btree_1: &mut Btree,
     pgno_root_1: Pgno, i_row_1: i64, is_clear_table_1: i32) -> () {
     let mut p: *mut BtCursor = core::ptr::null_mut();
@@ -5420,6 +5530,7 @@ extern "C" fn invalidate_incrblob_cursors(p_btree_1: &mut Btree,
         }
     }
 }
+
 extern "C" fn get_and_init_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: &mut *mut MemPage, b_read_only_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -5451,6 +5562,7 @@ extern "C" fn get_and_init_page(p_bt_1: *mut BtShared, pgno: Pgno,
     *pp_page_1 = p_page;
     return 0;
 }
+
 extern "C" fn btree_page_lookup(p_bt_1: *mut BtShared, pgno: Pgno)
     -> *mut MemPage {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
@@ -5462,6 +5574,7 @@ extern "C" fn btree_page_lookup(p_bt_1: *mut BtShared, pgno: Pgno)
     }
     return core::ptr::null_mut();
 }
+
 extern "C" fn btree_set_has_content(p_bt_1: &mut BtShared, pgno: Pgno)
     -> i32 {
     let mut rc: i32 = 0;
@@ -5477,6 +5590,7 @@ extern "C" fn btree_set_has_content(p_bt_1: &mut BtShared, pgno: Pgno)
     }
     return rc;
 }
+
 extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
     i_page_1: Pgno) -> i32 {
     let mut p_trunk: *mut MemPage = core::ptr::null_mut();
@@ -5631,6 +5745,7 @@ extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
     release_page(p_trunk);
     return rc;
 }
+
 extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
     p_info_1: &CellInfo) -> i32 {
     let mut p_bt: *mut BtShared = core::ptr::null_mut();
@@ -5687,6 +5802,7 @@ extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
     }
     return 0;
 }
+
 extern "C" fn free_page(p_page_1: *mut MemPage, p_rc_1: &mut i32) -> () {
     if *p_rc_1 == 0 {
         *p_rc_1 =
@@ -5694,6 +5810,7 @@ extern "C" fn free_page(p_page_1: *mut MemPage, p_rc_1: &mut i32) -> () {
                 unsafe { (*p_page_1).pgno });
     }
 }
+
 extern "C" fn clear_database_page(p_bt_1: *mut BtShared, pgno: Pgno,
     free_page_flag_1: i32, mut pn_change_1: *mut i64) -> i32 {
     let mut p_page: *mut MemPage = core::ptr::null_mut();
@@ -5886,6 +6003,7 @@ extern "C" fn clear_database_page(p_bt_1: *mut BtShared, pgno: Pgno,
     }
     unreachable!();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_table(p: *mut Btree, i_table_1: i32,
     pn_change_1: *mut i64) -> i32 {
@@ -5906,6 +6024,7 @@ pub extern "C" fn sqlite3_btree_clear_table(p: *mut Btree, i_table_1: i32,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn btree_drop_table(p: *mut Btree, i_table_1: Pgno,
     pi_moved_1: &mut i32) -> i32 {
     unsafe {
@@ -5968,6 +6087,7 @@ extern "C" fn btree_drop_table(p: *mut Btree, i_table_1: Pgno,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_drop_table(p: *mut Btree, i_table_1: i32,
     pi_moved_1: *mut i32) -> i32 {
@@ -5977,12 +6097,14 @@ pub extern "C" fn sqlite3_btree_drop_table(p: *mut Btree, i_table_1: i32,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_table_of_cursor(p_cur_1: &BtCursor)
     -> i32 {
     return sqlite3_btree_clear_table((*p_cur_1).p_btree,
             (*p_cur_1).pgno_root as i32, core::ptr::null_mut());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_new_db(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5992,6 +6114,7 @@ pub extern "C" fn sqlite3_btree_new_db(p: *mut Btree) -> i32 {
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 extern "C" fn allocate_temp_space(p_bt_1: &mut BtShared) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
@@ -6015,6 +6138,7 @@ extern "C" fn allocate_temp_space(p_bt_1: &mut BtShared) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn btree_cursor(p: *mut Btree, mut i_table_1: Pgno, wr_flag_1: i32,
     p_key_info_1: *mut KeyInfo, p_cur_1: *mut BtCursor) -> i32 {
     unsafe {
@@ -6069,6 +6193,7 @@ extern "C" fn btree_cursor(p: *mut Btree, mut i_table_1: Pgno, wr_flag_1: i32,
         return 0;
     }
 }
+
 extern "C" fn btree_cursor_with_lock(p: *mut Btree, i_table_1: Pgno,
     wr_flag_1: i32, p_key_info_1: *mut KeyInfo, p_cur_1: *mut BtCursor)
     -> i32 {
@@ -6078,6 +6203,7 @@ extern "C" fn btree_cursor_with_lock(p: *mut Btree, i_table_1: Pgno,
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor(p: *mut Btree, i_table_1: Pgno,
     wr_flag_1: i32, p_key_info_1: *mut KeyInfo, p_cur_1: *mut BtCursor)
@@ -6089,27 +6215,32 @@ pub extern "C" fn sqlite3_btree_cursor(p: *mut Btree, i_table_1: Pgno,
         return btree_cursor(p, i_table_1, wr_flag_1, p_key_info_1, p_cur_1);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_fake_valid_cursor() -> *mut BtCursor {
     unsafe { { let _ = 0; }; return &raw mut fake_cursor as *mut BtCursor; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_size() -> i32 {
     return (core::mem::size_of::<BtCursor>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_zero(p: *mut BtCursor) -> () {
     unsafe {
         memset(p as *mut (), 0, core::mem::offset_of!(BtCursor, p_bt) as u64)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_hint_flags(p_cur_1: &mut BtCursor,
     x: u32) -> () {
     { let _ = 0; };
     (*p_cur_1).hints = x as u8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_close_cursor(p_cur_1: *mut BtCursor) -> i32 {
     let p_btree: *mut Btree = unsafe { (*p_cur_1).p_btree };
@@ -6146,6 +6277,7 @@ pub extern "C" fn sqlite3_btree_close_cursor(p_cur_1: *mut BtCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn cursor_on_last_page(p_cur_1: &BtCursor) -> i32 {
     let mut i: i32 = 0;
     { let _ = 0; };
@@ -6167,6 +6299,7 @@ extern "C" fn cursor_on_last_page(p_cur_1: &BtCursor) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn index_cell_compare(p_page_1: &MemPage, idx: i32,
     p_idx_key_1: *mut UnpackedRecord,
     x_record_compare_1:
@@ -6223,6 +6356,7 @@ extern "C" fn index_cell_compare(p_page_1: &MemPage, idx: i32,
     } else { c = 99; }
     return c;
 }
+
 extern "C" fn move_to_child(p_cur_1: &mut BtCursor, new_pgno_1: u32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -6259,6 +6393,7 @@ extern "C" fn move_to_child(p_cur_1: &mut BtCursor, new_pgno_1: u32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn move_to_root(p_cur_1: *mut BtCursor) -> i32 {
     unsafe {
         let mut p_root: *const MemPage = core::ptr::null();
@@ -6455,6 +6590,7 @@ extern "C" fn move_to_root(p_cur_1: *mut BtCursor) -> i32 {
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_index_moveto(p_cur_1: *mut BtCursor,
     p_idx_key_1: *mut UnpackedRecord, p_res_1: &mut i32) -> i32 {
@@ -6915,6 +7051,7 @@ pub extern "C" fn sqlite3_btree_index_moveto(p_cur_1: *mut BtCursor,
     }
     unreachable!();
 }
+
 extern "C" fn btree_moveto(p_cur_1: *mut BtCursor, p_key_1: *const (),
     n_key_1: i64, bias: i32, p_res_1: *mut i32) -> i32 {
     unsafe {
@@ -6956,6 +7093,7 @@ extern "C" fn btree_moveto(p_cur_1: *mut BtCursor, p_key_1: *const (),
         return rc;
     }
 }
+
 extern "C" fn btree_restore_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut skip_next: i32 = 0;
@@ -6984,6 +7122,7 @@ extern "C" fn btree_restore_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn move_to_leftmost(p_cur_1: *mut BtCursor) -> i32 {
     let mut pgno: Pgno = 0 as Pgno;
     let mut rc: i32 = 0;
@@ -7026,6 +7165,7 @@ extern "C" fn move_to_leftmost(p_cur_1: *mut BtCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn move_to_parent(p_cur_1: &mut BtCursor) -> () {
     let mut p_leaf: *mut MemPage = core::ptr::null_mut();
     { let _ = 0; };
@@ -7045,6 +7185,7 @@ extern "C" fn move_to_parent(p_cur_1: &mut BtCursor) -> () {
                 } as usize];
     release_page_not_null(unsafe { &*p_leaf });
 }
+
 extern "C" fn btree_next(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut idx: i32 = 0;
@@ -7109,6 +7250,7 @@ extern "C" fn btree_next(p_cur_1: *mut BtCursor) -> i32 {
         return 0;
     } else { return move_to_leftmost(p_cur_1); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_next(p_cur_1: *mut BtCursor, flags: i32)
     -> i32 {
@@ -7136,6 +7278,7 @@ pub extern "C" fn sqlite3_btree_next(p_cur_1: *mut BtCursor, flags: i32)
         return 0;
     } else { return move_to_leftmost(p_cur_1); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_table_moveto(p_cur_1: *mut BtCursor,
     int_key_1: i64, bias_right_1: i32, p_res_1: &mut i32) -> i32 {
@@ -7430,6 +7573,7 @@ pub extern "C" fn sqlite3_btree_table_moveto(p_cur_1: *mut BtCursor,
     }
     unreachable!();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_has_moved(p_cur_1: *mut BtCursor)
     -> i32 {
@@ -7438,6 +7582,7 @@ pub extern "C" fn sqlite3_btree_cursor_has_moved(p_cur_1: *mut BtCursor)
     { let _ = 0; };
     return (0 != unsafe { *(p_cur_1 as *mut u8) } as i32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_restore(p_cur_1: *mut BtCursor,
     p_different_row_1: &mut i32) -> i32 {
@@ -7454,6 +7599,7 @@ pub extern "C" fn sqlite3_btree_cursor_restore(p_cur_1: *mut BtCursor,
     } else { *p_different_row_1 = 0; }
     return 0;
 }
+
 extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
     let mut pc: i32 = 0;
     let mut hdr: u8 = 0 as u8;
@@ -7545,6 +7691,7 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
     (*p_page_1).n_free = (n_free - i_cell_first) as u16 as i32;
     return 0;
 }
+
 extern "C" fn move_to_rightmost(p_cur_1: *mut BtCursor) -> i32 {
     let mut pgno: Pgno = 0 as Pgno;
     let mut rc: i32 = 0;
@@ -7574,6 +7721,7 @@ extern "C" fn move_to_rightmost(p_cur_1: *mut BtCursor) -> i32 {
     { let _ = 0; };
     return 0;
 }
+
 extern "C" fn btree_previous(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut p_page: *mut MemPage = core::ptr::null_mut();
@@ -7653,6 +7801,7 @@ extern "C" fn btree_previous(p_cur_1: *mut BtCursor) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_previous(p_cur_1: *mut BtCursor, flags: i32)
     -> i32 {
@@ -7674,6 +7823,7 @@ pub extern "C" fn sqlite3_btree_previous(p_cur_1: *mut BtCursor, flags: i32)
     };
     return 0;
 }
+
 extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
     mut i_size_1: i32) -> i32 {
     let mut i_ptr: i32 = 0;
@@ -7860,6 +8010,7 @@ extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
     (*p_page_1).n_free += i_orig_size;
     return 0;
 }
+
 extern "C" fn drop_cell(p_page_1: *mut MemPage, idx: i32, sz: i32,
     p_rc_1: &mut i32) -> () {
     let mut pc: u32 = 0 as u32;
@@ -7942,6 +8093,7 @@ extern "C" fn drop_cell(p_page_1: *mut MemPage, idx: i32, sz: i32,
         unsafe { (*p_page_1).n_free += 2 };
     }
 }
+
 extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
     p_rc_1: &mut i32) -> *mut u8 {
     let hdr: i32 = (*p_pg_1).hdr_offset as i32;
@@ -8011,6 +8163,7 @@ extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
     }
     return core::ptr::null_mut();
 }
+
 extern "C" fn defragment_page(p_page_1: *mut MemPage, n_max_frag_1: i32)
     -> i32 {
     let mut i: i32 = 0;
@@ -8430,6 +8583,7 @@ extern "C" fn defragment_page(p_page_1: *mut MemPage, n_max_frag_1: i32)
     }
     unreachable!();
 }
+
 extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
     p_idx_1: &mut i32) -> i32 {
     let hdr: i32 = unsafe { (*p_page_1).hdr_offset } as i32;
@@ -8520,6 +8674,7 @@ extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
     *p_idx_1 = top;
     return 0;
 }
+
 extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
     mut p_cell_1: *mut u8, sz: i32, p_temp_1: *mut u8, i_child_1: Pgno)
     -> i32 {
@@ -8629,6 +8784,7 @@ extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
     }
     return 0;
 }
+
 extern "C" fn another_valid_cursor(p_cur_1: *mut BtCursor) -> i32 {
     let mut p_other: *mut BtCursor = core::ptr::null_mut();
     {
@@ -8649,6 +8805,7 @@ extern "C" fn another_valid_cursor(p_cur_1: *mut BtCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
     p_rc_1: &mut i32) -> () {
     if *p_rc_1 == 0 {
@@ -8699,6 +8856,7 @@ extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
         }
     }
 }
+
 extern "C" fn balance_deeper(p_root_1: *mut MemPage,
     pp_child_1: &mut *mut MemPage) -> i32 {
     let mut rc: i32 = 0;
@@ -8757,6 +8915,7 @@ extern "C" fn balance_deeper(p_root_1: *mut MemPage,
     *pp_child_1 = p_child;
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CellArray {
@@ -8767,6 +8926,7 @@ struct CellArray {
     ap_end: [*mut u8; 6],
     ix_nx: [i32; 6],
 }
+
 extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
     n_cell_1: i32, p_pg_1: &mut MemPage) -> i32 {
     let hdr: i32 = (*p_pg_1).hdr_offset as i32;
@@ -8902,6 +9062,7 @@ extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
     unsafe { *a_data.offset((hdr + 7) as isize) = 0 as u8 };
     return 0;
 }
+
 extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
     p_space_1: *mut u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p_page_1).p_bt };
@@ -9032,6 +9193,7 @@ extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
     }
     return rc;
 }
+
 extern "C" fn compute_cell_size(p: &CellArray, n_1: i32) -> u16 {
     { let _ = 0; };
     { let _ = 0; };
@@ -9046,6 +9208,7 @@ extern "C" fn compute_cell_size(p: &CellArray, n_1: i32) -> u16 {
     };
     return unsafe { *(*p).sz_cell.offset(n_1 as isize) };
 }
+
 extern "C" fn cached_cell_size(p: *mut CellArray, n_1: i32) -> u16 {
     { let _ = 0; };
     if unsafe { *unsafe { (*p).sz_cell.offset(n_1 as isize) } } != 0 {
@@ -9053,6 +9216,7 @@ extern "C" fn cached_cell_size(p: *mut CellArray, n_1: i32) -> u16 {
     }
     return compute_cell_size(unsafe { &*p }, n_1);
 }
+
 extern "C" fn page_free_array(p_pg_1: *mut MemPage, i_first_1: i32,
     n_cell_1: i32, p_c_array_1: &CellArray) -> i32 {
     let a_data: *mut u8 = unsafe { (*p_pg_1).a_data };
@@ -9158,6 +9322,7 @@ extern "C" fn page_free_array(p_pg_1: *mut MemPage, i_first_1: i32,
     }
     return n_ret;
 }
+
 extern "C" fn page_insert_array(p_pg_1: *mut MemPage, p_begin_1: *const u8,
     pp_data_1: &mut *mut u8, mut p_cellptr_1: *mut u8, i_first_1: i32,
     n_cell_1: i32, p_c_array_1: &CellArray) -> i32 {
@@ -9244,6 +9409,7 @@ extern "C" fn page_insert_array(p_pg_1: *mut MemPage, p_begin_1: *const u8,
     *pp_data_1 = p_data;
     return 0;
 }
+
 extern "C" fn populate_cell_cache(p: &CellArray, mut idx: i32, mut n_1: i32)
     -> () {
     let p_ref: *mut MemPage = (*p).p_ref;
@@ -9265,6 +9431,7 @@ extern "C" fn populate_cell_cache(p: &CellArray, mut idx: i32, mut n_1: i32)
         { let __p = &mut n_1; let __t = *__p; *__p -= 1; __t };
     }
 }
+
 extern "C" fn edit_page(p_pg_1: *mut MemPage, i_old_1: i32, i_new_1: i32,
     n_new_1: i32, p_c_array_1: *mut CellArray) -> i32 {
     let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -9552,6 +9719,7 @@ extern "C" fn edit_page(p_pg_1: *mut MemPage, i_old_1: i32, i_new_1: i32,
     }
     unreachable!();
 }
+
 extern "C" fn balance_nonroot(p_parent_1: *mut MemPage, i_parent_idx_1: i32,
     a_ovfl_space_1: *mut u8, is_root_1: i32, b_bulk_1: i32) -> i32 {
     unsafe {
@@ -11195,6 +11363,7 @@ extern "C" fn balance_nonroot(p_parent_1: *mut MemPage, i_parent_idx_1: i32,
         unreachable!();
     }
 }
+
 extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut a_balance_quick_space: [u8; 13] = [0; 13];
@@ -11301,6 +11470,7 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
     -> i32 {
@@ -11542,6 +11712,7 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
         return rc;
     }
 }
+
 extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
     p_dest_1: *mut u8, p_x_1: *const BtreePayload, i_offset_1: i32,
     mut i_amt_1: i32) -> i32 {
@@ -11602,6 +11773,7 @@ extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
     }
     return 0;
 }
+
 extern "C" fn btree_overwrite_overflow_cell(p_cur_1: &BtCursor,
     p_x_1: *const BtreePayload) -> i32 {
     let mut i_offset: i32 = 0;
@@ -11657,6 +11829,7 @@ extern "C" fn btree_overwrite_overflow_cell(p_cur_1: &BtCursor,
     }
     return 0;
 }
+
 extern "C" fn btree_overwrite_cell(p_cur_1: *mut BtCursor,
     p_x_1: *const BtreePayload) -> i32 {
     let n_total: i32 =
@@ -11686,6 +11859,7 @@ extern "C" fn btree_overwrite_cell(p_cur_1: *mut BtCursor,
         return btree_overwrite_overflow_cell(unsafe { &*p_cur_1 }, p_x_1);
     }
 }
+
 extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
     p_x_1: &BtreePayload, pn_size_1: &mut i32) -> i32 {
     unsafe {
@@ -11868,6 +12042,7 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
         return 0;
     }
 }
+
 extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
     p_cell_1: *mut u8, sz: i32) -> i32 {
     let mut idx: i32 = 0;
@@ -11962,6 +12137,7 @@ extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
     p_x_1: *const BtreePayload, flags: i32, seek_result_1: i32) -> i32 {
@@ -12235,6 +12411,7 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_first(p_cur_1: *mut BtCursor,
     p_res_1: &mut i32) -> i32 {
@@ -12249,6 +12426,7 @@ pub extern "C" fn sqlite3_btree_first(p_cur_1: *mut BtCursor,
     } else if rc == 16 { { let _ = 0; }; *p_res_1 = 1; rc = 0; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_empty(p_cur_1: *mut BtCursor,
     p_res_1: &mut i32) -> i32 {
@@ -12260,6 +12438,7 @@ pub extern "C" fn sqlite3_btree_is_empty(p_cur_1: *mut BtCursor,
     if rc == 16 { *p_res_1 = 1; rc = 0; } else { *p_res_1 = 0; }
     return rc;
 }
+
 extern "C" fn btree_last(p_cur_1: *mut BtCursor, p_res_1: &mut i32) -> i32 {
     let mut rc: i32 = move_to_root(p_cur_1);
     if rc == 0 {
@@ -12272,6 +12451,7 @@ extern "C" fn btree_last(p_cur_1: *mut BtCursor, p_res_1: &mut i32) -> i32 {
     } else if rc == 16 { { let _ = 0; }; *p_res_1 = 1; rc = 0; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_last(p_cur_1: *mut BtCursor,
     p_res_1: *mut i32) -> i32 {
@@ -12285,20 +12465,24 @@ pub extern "C" fn sqlite3_btree_last(p_cur_1: *mut BtCursor,
     }
     return btree_last(p_cur_1, unsafe { &mut *p_res_1 });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_eof(p_cur_1: &BtCursor) -> i32 {
     return (0 != (*p_cur_1).e_state as i32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_pin(p_cur_1: &mut BtCursor) -> () {
     { let _ = 0; };
     (*p_cur_1).cur_flags |= 64 as u8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_unpin(p_cur_1: &mut BtCursor) -> () {
     { let _ = 0; };
     (*p_cur_1).cur_flags &= !64 as u8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_offset(p_cur_1: *mut BtCursor) -> i64 {
     { let _ = 0; };
@@ -12315,6 +12499,7 @@ pub extern "C" fn sqlite3_btree_offset(p_cur_1: *mut BtCursor) -> i64 {
                         }
                     } as i64 as i64;
 }
+
 extern "C" fn fetch_payload(p_cur_1: &mut BtCursor, p_amt_1: &mut u32)
     -> *const () {
     let mut amt: i32 = 0;
@@ -12353,11 +12538,13 @@ extern "C" fn fetch_payload(p_cur_1: &mut BtCursor, p_amt_1: &mut u32)
     *p_amt_1 = amt as u32;
     return (*p_cur_1).info.p_payload as *mut () as *const ();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload_fetch(p_cur_1: *mut BtCursor,
     p_amt_1: *mut u32) -> *const () {
     return fetch_payload(unsafe { &mut *p_cur_1 }, unsafe { &mut *p_amt_1 });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_max_record_size(p_cur_1: &BtCursor)
     -> Sqlite3Int64 {
@@ -12366,6 +12553,7 @@ pub extern "C" fn sqlite3_btree_max_record_size(p_cur_1: &BtCursor)
     return unsafe { (*(*p_cur_1).p_bt).page_size } as Sqlite3Int64 *
             unsafe { (*(*p_cur_1).p_bt).n_page } as Sqlite3Int64;
 }
+
 extern "C" fn check_oom(p_check_1: &mut IntegrityCk) -> () {
     (*p_check_1).rc = 7;
     (*p_check_1).mx_err = 0;
@@ -12373,6 +12561,7 @@ extern "C" fn check_oom(p_check_1: &mut IntegrityCk) -> () {
         { let __p = &mut (*p_check_1).n_err; let __t = *__p; *__p += 1; __t };
     }
 }
+
 extern "C" fn set_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
     -> () {
     { let _ = 0; };
@@ -12382,6 +12571,7 @@ extern "C" fn set_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
             (1 << (i_pg_1 & 7 as Pgno)) as u8
     };
 }
+
 extern "C" fn check_progress(p_check_1: &mut IntegrityCk) -> () {
     unsafe {
         let db: *mut Sqlite3 = (*p_check_1).db;
@@ -12426,6 +12616,7 @@ extern "C" fn check_progress(p_check_1: &mut IntegrityCk) -> () {
         }
     }
 }
+
 unsafe extern "C" fn check_append_msg(p_check_1: *mut IntegrityCk,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -12467,6 +12658,7 @@ unsafe extern "C" fn check_append_msg(p_check_1: *mut IntegrityCk,
         check_oom(unsafe { &mut *p_check_1 });
     }
 }
+
 extern "C" fn get_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
     -> i32 {
     { let _ = 0; };
@@ -12475,6 +12667,7 @@ extern "C" fn get_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
                     *(*p_check_1).a_pg_ref.add((i_pg_1 / 8 as Pgno) as usize)
                 } as i32 & 1 << (i_pg_1 & 7 as Pgno);
 }
+
 extern "C" fn check_ref(p_check_1: *mut IntegrityCk, i_page_1: Pgno) -> i32 {
     if i_page_1 > unsafe { (*p_check_1).n_ck_page } || i_page_1 == 0 as u32 {
         unsafe {
@@ -12495,6 +12688,7 @@ extern "C" fn check_ref(p_check_1: *mut IntegrityCk, i_page_1: Pgno) -> i32 {
     set_page_referenced(unsafe { &*p_check_1 }, i_page_1);
     return 0;
 }
+
 extern "C" fn check_ptrmap(p_check_1: *mut IntegrityCk, i_child_1: Pgno,
     e_type_1: u8, i_parent_1: Pgno) -> () {
     let mut rc: i32 = 0;
@@ -12524,6 +12718,7 @@ extern "C" fn check_ptrmap(p_check_1: *mut IntegrityCk, i_child_1: Pgno,
         };
     }
 }
+
 extern "C" fn check_list(p_check_1: *mut IntegrityCk, is_free_list_1: i32,
     mut i_page_1: Pgno, mut n_1: u32) -> () {
     let mut i: i32 = 0;
@@ -12613,6 +12808,7 @@ extern "C" fn check_list(p_check_1: *mut IntegrityCk, is_free_list_1: i32,
         };
     }
 }
+
 extern "C" fn btree_heap_insert(a_heap_1: *mut u32, mut x: u32) -> () {
     let mut j: u32 = 0 as u32;
     let mut i: u32 = 0 as u32;
@@ -12635,6 +12831,7 @@ extern "C" fn btree_heap_insert(a_heap_1: *mut u32, mut x: u32) -> () {
         i = j;
     }
 }
+
 extern "C" fn btree_heap_pull(a_heap_1: *mut u32, p_out_1: &mut u32) -> i32 {
     let mut j: u32 = 0 as u32;
     let mut i: u32 = 0 as u32;
@@ -12672,6 +12869,7 @@ extern "C" fn btree_heap_pull(a_heap_1: *mut u32, p_out_1: &mut u32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn check_tree_page(p_check_1: *mut IntegrityCk, i_page_1: Pgno,
     pi_min_key_1: *mut i64, mut max_key_1: i64) -> i32 {
     unsafe {
@@ -13338,6 +13536,7 @@ extern "C" fn check_tree_page(p_check_1: *mut IntegrityCk, i_page_1: Pgno,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_integrity_check(db: *mut Sqlite3,
     p: *mut Btree, a_root_1: *const Pgno, a_cnt_1: *mut Mem, n_root_1: i32,
@@ -13710,10 +13909,12 @@ pub extern "C" fn sqlite3_btree_integrity_check(db: *mut Sqlite3,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_pager(p: &Btree) -> *mut Pager {
     return unsafe { (*(*p).p_bt).p_pager };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_row_count_est(p_cur_1: &BtCursor) -> i64 {
     let mut n: i64 = 0 as i64;
@@ -13738,6 +13939,7 @@ pub extern "C" fn sqlite3_btree_row_count_est(p_cur_1: &BtCursor) -> i64 {
     }
     return n;
 }
+
 extern "C" fn access_payload_checked(p_cur_1: *mut BtCursor, offset: u32,
     amt: u32, p_buf_1: *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -13750,6 +13952,7 @@ extern "C" fn access_payload_checked(p_cur_1: *mut BtCursor, offset: u32,
             access_payload(p_cur_1, offset, amt, p_buf_1 as *mut u8, 0)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload_checked(p_cur_1: *mut BtCursor,
     offset: u32, amt: u32, p_buf_1: *mut ()) -> i32 {
@@ -13758,6 +13961,7 @@ pub extern "C" fn sqlite3_btree_payload_checked(p_cur_1: *mut BtCursor,
         return access_payload(p_cur_1, offset, amt, p_buf_1 as *mut u8, 0);
     } else { return access_payload_checked(p_cur_1, offset, amt, p_buf_1); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_put_data(p_csr_1: *mut BtCursor, offset: u32,
     amt: u32, z: *mut ()) -> i32 {
@@ -13782,12 +13986,14 @@ pub extern "C" fn sqlite3_btree_put_data(p_csr_1: *mut BtCursor, offset: u32,
     { let _ = 0; };
     return access_payload(p_csr_1, offset, amt, z as *mut u8, 1);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_incrblob_cursor(p_cur_1: &mut BtCursor)
     -> () {
     (*p_cur_1).cur_flags |= 16 as u8;
     unsafe { (*(*p_cur_1).p_btree).has_incrblob_cur = 1 as u8 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_version(p_btree_1: *mut Btree,
     i_version_1: i32) -> i32 {
@@ -13823,26 +14029,31 @@ pub extern "C" fn sqlite3_btree_set_version(p_btree_1: *mut Btree,
     unsafe { (*p_bt).bts_flags &= !32 as u16 };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_has_hint(p_csr_1: &BtCursor, mask: u32)
     -> i32 {
     return ((*p_csr_1).hints as u32 & mask != 0 as u32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_readonly(p: &Btree) -> i32 {
     return (unsafe { (*(*p).p_bt).bts_flags } as i32 & 1 != 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_header_size_btree() -> i32 {
     return (core::mem::size_of::<MemPage>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_is_valid_nn(p_cur_1: &BtCursor)
     -> i32 {
     { let _ = 0; };
     return ((*p_cur_1).e_state as i32 == 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
     p_cur_1: *mut BtCursor, pn_entry_1: &mut i64) -> i32 {
@@ -13930,6 +14141,7 @@ pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" fn btree_payload_to_local(p_page_1: &MemPage, n_payload_1: i64)
     -> i32 {
     let mut max_local: i32 = 0;
@@ -13949,6 +14161,7 @@ extern "C" fn btree_payload_to_local(p_page_1: &MemPage, n_payload_1: i64)
         return if surplus <= max_local { surplus } else { min_local };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
     p_src_1: *mut BtCursor, i_key_1: i64) -> i32 {
@@ -14130,6 +14343,7 @@ pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_cache(p: &Btree) -> () {
     let p_bt: *const BtShared = (*p).p_bt as *const BtShared;
@@ -14137,15 +14351,19 @@ pub extern "C" fn sqlite3_btree_clear_cache(p: &Btree) -> () {
         unsafe { sqlite3_pager_clear_cache(unsafe { (*p_bt).p_pager }) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_sharable(p: &Btree) -> i32 {
     return (*p).sharable as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_connection_count(p: &Btree) -> i32 {
     return unsafe { (*(*p).p_bt).n_ref };
 }
+
 static mut fake_cursor: u8 = 0 as u8;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -16766,41 +16984,49 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

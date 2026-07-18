@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod where_int_h;
 pub(crate) use crate::where_int_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl WhereInfo {
     fn b_deferred_seek(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -428,6 +437,7 @@ impl WhereInfo {
             (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
     }
 }
+
 impl WhereLoopU0S1 {
     fn need_free(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -451,6 +461,7 @@ impl WhereLoopU0S1 {
             (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_like_operator(p_expr: &Expr) -> i32 {
     unsafe {
@@ -482,6 +493,7 @@ pub extern "C" fn sqlite3_expr_is_like_operator(p_expr: &Expr) -> i32 {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_clause_init(p_wc: &mut WhereClause,
     p_w_info: *mut WhereInfo) -> () {
@@ -495,16 +507,19 @@ pub extern "C" fn sqlite3_where_clause_init(p_wc: &mut WhereClause,
                 core::mem::size_of::<WhereTerm>() as u64) as i32;
     (*p_wc).a = &raw mut (*p_wc).a_static[0 as usize] as *mut WhereTerm;
 }
+
 extern "C" fn where_or_info_delete(db: *mut Sqlite3, p: *mut WhereOrInfo)
     -> () {
     sqlite3_where_clause_clear(unsafe { &(*p).wc });
     unsafe { sqlite3_db_free(db, p as *mut ()) };
 }
+
 extern "C" fn where_and_info_delete(db: *mut Sqlite3, p: *mut WhereAndInfo)
     -> () {
     sqlite3_where_clause_clear(unsafe { &(*p).wc });
     unsafe { sqlite3_db_free(db, p as *mut ()) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_clause_clear(p_wc: &WhereClause) -> () {
     unsafe {
@@ -542,6 +557,7 @@ pub extern "C" fn sqlite3_where_clause_clear(p_wc: &WhereClause) -> () {
         }
     }
 }
+
 extern "C" fn where_clause_insert(p_wc_1: *mut WhereClause, p: *mut Expr,
     wt_flags_1: u16) -> i32 {
     let mut p_term: *mut WhereTerm = core::ptr::null_mut();
@@ -612,6 +628,7 @@ extern "C" fn where_clause_insert(p_wc_1: *mut WhereClause, p: *mut Expr,
     };
     return idx;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_split(p_wc: *mut WhereClause,
     p_expr: *mut Expr, op: u8) -> () {
@@ -628,6 +645,7 @@ pub extern "C" fn sqlite3_where_split(p_wc: *mut WhereClause,
         sqlite3_where_split(p_wc, unsafe { (*p_e2).p_right }, op);
     }
 }
+
 extern "C" fn where_add_limit_expr(p_wc_1: *mut WhereClause, i_reg_1: i32,
     p_expr_1: *const Expr, i_csr_1: i32, e_match_op_1: i32) -> () {
     let p_parse: *mut Parse =
@@ -665,6 +683,7 @@ extern "C" fn where_add_limit_expr(p_wc_1: *mut WhereClause, i_reg_1: i32,
         unsafe { (*p_term).e_match_op = e_match_op_1 as u8 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
     -> () {
@@ -774,6 +793,7 @@ pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_expr_list_usage(p_mask_set: *mut WhereMaskSet,
     p_list: *mut ExprList) -> Bitmask {
@@ -799,6 +819,7 @@ pub extern "C" fn sqlite3_where_expr_list_usage(p_mask_set: *mut WhereMaskSet,
     }
     return mask;
 }
+
 extern "C" fn expr_select_usage(p_mask_set_1: *mut WhereMaskSet,
     mut p_s_1: *const Select) -> Bitmask {
     unsafe {
@@ -874,6 +895,7 @@ extern "C" fn expr_select_usage(p_mask_set_1: *mut WhereMaskSet,
         return mask;
     }
 }
+
 extern "C" fn sqlite3_where_expr_usage_full(p_mask_set_1: *mut WhereMaskSet,
     p: &Expr) -> Bitmask {
     unsafe {
@@ -915,6 +937,7 @@ extern "C" fn sqlite3_where_expr_usage_full(p_mask_set_1: *mut WhereMaskSet,
         return mask;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_expr_usage_nn(p_mask_set: *mut WhereMaskSet,
     p: *mut Expr) -> Bitmask {
@@ -929,6 +952,7 @@ pub extern "C" fn sqlite3_where_expr_usage_nn(p_mask_set: *mut WhereMaskSet,
     }
     return sqlite3_where_expr_usage_full(p_mask_set, unsafe { &*p });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_expr_usage(p_mask_set: *mut WhereMaskSet,
     p: *mut Expr) -> Bitmask {
@@ -936,6 +960,7 @@ pub extern "C" fn sqlite3_where_expr_usage(p_mask_set: *mut WhereMaskSet,
             sqlite3_where_expr_usage_nn(p_mask_set, p)
         } else { 0 as Bitmask };
 }
+
 extern "C" fn allowed_op(op: i32) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
@@ -948,6 +973,7 @@ extern "C" fn allowed_op(op: i32) -> i32 {
     if op >= 54 { return 1; }
     return (op == 50 || op == 51 || op == 45) as i32;
 }
+
 extern "C" fn expr_might_be_indexed2(p_from_1: &SrcList,
     ai_cur_col_1: *mut i32, p_expr_1: *mut Expr, mut j: i32) -> i32 {
     let mut p_idx: *const Index = core::ptr::null();
@@ -1023,6 +1049,7 @@ extern "C" fn expr_might_be_indexed2(p_from_1: &SrcList,
     }
     return 0;
 }
+
 extern "C" fn expr_might_be_indexed(p_from_1: *mut SrcList,
     ai_cur_col_1: *mut i32, mut p_expr_1: *mut Expr, op: i32) -> i32 {
     unsafe {
@@ -1083,6 +1110,7 @@ extern "C" fn expr_might_be_indexed(p_from_1: *mut SrcList,
         return 0;
     }
 }
+
 extern "C" fn operator_mask(op: i32) -> u16 {
     let mut c: u16 = 0 as u16;
     { let _ = 0; };
@@ -1104,6 +1132,7 @@ extern "C" fn operator_mask(op: i32) -> u16 {
     { let _ = 0; };
     return c;
 }
+
 extern "C" fn mark_term_as_child(p_wc_1: &WhereClause, i_child_1: i32,
     i_parent_1: i32) -> () {
     unsafe {
@@ -1124,6 +1153,7 @@ extern "C" fn mark_term_as_child(p_wc_1: &WhereClause, i_child_1: i32,
         __t
     };
 }
+
 extern "C" fn term_is_equivalence(p_parse_1: *mut Parse, p_expr_1: &Expr,
     p_src_1: &SrcList) -> i32 {
     let mut aff1: i8 = 0 as i8;
@@ -1162,6 +1192,7 @@ extern "C" fn term_is_equivalence(p_parse_1: *mut Parse, p_expr_1: &Expr,
     }
     return 1;
 }
+
 extern "C" fn expr_commute(p_parse_1: *mut Parse, p_expr_1: &mut Expr)
     -> u16 {
     if unsafe { (*(*p_expr_1).p_left).op } as i32 == 177 ||
@@ -1193,6 +1224,7 @@ extern "C" fn expr_commute(p_parse_1: *mut Parse, p_expr_1: &mut Expr)
     }
     return 0 as u16;
 }
+
 extern "C" fn transfer_join_markings(p_derived_1: *mut Expr, p_base_1: &Expr)
     -> () {
     unsafe {
@@ -1205,6 +1237,7 @@ extern "C" fn transfer_join_markings(p_derived_1: *mut Expr, p_base_1: &Expr)
         }
     }
 }
+
 extern "C" fn where_nth_subterm(p_term_1: *mut WhereTerm, n_1: i32)
     -> *mut WhereTerm {
     unsafe {
@@ -1223,6 +1256,7 @@ extern "C" fn where_nth_subterm(p_term_1: *mut WhereTerm, n_1: i32)
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn where_combine_disjuncts(p_src_1: *mut SrcList,
     p_wc_1: *mut WhereClause, p_one_1: &WhereTerm, p_two_1: &WhereTerm)
     -> () {
@@ -1293,6 +1327,7 @@ extern "C" fn where_combine_disjuncts(p_src_1: *mut SrcList,
     idx_new = where_clause_insert(p_wc_1, p_new, (2 | 1) as u16);
     expr_analyze(p_src_1, p_wc_1, idx_new);
 }
+
 extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
     p_wc_1: *mut WhereClause, idx_term_1: i32) -> () {
     unsafe {
@@ -1696,6 +1731,7 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
         }
     }
 }
+
 extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     pp_prefix_1: &mut *mut Expr, pis_complete_1: &mut i32,
     pno_case_1: *mut i32) -> i32 {
@@ -1890,6 +1926,7 @@ extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
         return rc;
     }
 }
+
 extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
     p_expr_1: *const Expr, pe_op2_1: &mut u8, pp_left_1: &mut *mut Expr,
     pp_right_1: &mut *mut Expr) -> i32 {
@@ -2018,6 +2055,7 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
         return 0;
     }
 }
+
 extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
     idx_term: i32) -> () {
     unsafe {
@@ -2617,6 +2655,7 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_expr_analyze(p_tab_list: *mut SrcList,
     p_wc: *mut WhereClause) -> () {
@@ -2630,6 +2669,7 @@ pub extern "C" fn sqlite3_where_expr_analyze(p_tab_list: *mut SrcList,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_tab_func_args(p_parse: *mut Parse,
     p_item: &mut SrcItem, p_wc: *mut WhereClause) -> () {
@@ -2717,12 +2757,14 @@ pub extern "C" fn sqlite3_where_tab_func_args(p_parse: *mut Parse,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3ExprIsLikeOperatorS0N32sqlite3ExprIsLikeOperatorS0 {
     z_op: *const i8,
     e_op: u8,
 }
+
 static mut a_op:
     [Sqlite3ExprIsLikeOperatorS0N32sqlite3ExprIsLikeOperatorS0; 4] =
     [Sqlite3ExprIsLikeOperatorS0N32sqlite3ExprIsLikeOperatorS0 {
@@ -2741,7 +2783,9 @@ static mut a_op:
                 z_op: c"regexp".as_ptr() as *const i8,
                 e_op: 67 as u8,
             }];
+
 static ops: [u8; 2] = [58 as u8, 56 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5558,41 +5602,49 @@ extern "C" {
     fn memset(__b: *mut (), __c: i32, __len: u64)
     -> *mut ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

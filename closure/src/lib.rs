@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ClosureVtab {
@@ -16,6 +19,7 @@ struct ClosureVtab {
     db: *mut Sqlite3,
     n_cursor: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ClosureCursor {
@@ -27,6 +31,7 @@ struct ClosureCursor {
     p_current: *mut ClosureAvl,
     p_closure: *mut ClosureAvl,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ClosureAvl {
@@ -39,12 +44,14 @@ struct ClosureAvl {
     height: i16,
     imbalance: i16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ClosureQueue {
     p_first: *mut ClosureAvl,
     p_last: *mut ClosureAvl,
 }
+
 extern "C" fn closure_avl_recompute_height(p: &mut ClosureAvl) -> () {
     let h_before: i16 =
         if !((*p).p_before).is_null() {
@@ -60,6 +67,7 @@ extern "C" fn closure_avl_recompute_height(p: &mut ClosureAvl) -> () {
                     h_before as i32
                 } else { h_after as i32 } + 1) as i16;
 }
+
 extern "C" fn closure_avl_rotate_before(p_p_1: *mut ClosureAvl)
     -> *mut ClosureAvl {
     let p_b: *mut ClosureAvl = unsafe { (*p_p_1).p_before };
@@ -73,6 +81,7 @@ extern "C" fn closure_avl_rotate_before(p_p_1: *mut ClosureAvl)
     closure_avl_recompute_height(unsafe { &mut *p_b });
     return p_b;
 }
+
 extern "C" fn closure_avl_rotate_after(p_p_1: *mut ClosureAvl)
     -> *mut ClosureAvl {
     let p_a: *mut ClosureAvl = unsafe { (*p_p_1).p_after };
@@ -86,6 +95,7 @@ extern "C" fn closure_avl_rotate_after(p_p_1: *mut ClosureAvl)
     closure_avl_recompute_height(unsafe { &mut *p_a });
     return p_a;
 }
+
 extern "C" fn closure_avl_from_ptr(p: *mut ClosureAvl,
     pp: *mut *mut ClosureAvl) -> *mut *mut ClosureAvl {
     let p_up: *mut ClosureAvl = unsafe { (*p).p_up };
@@ -95,6 +105,7 @@ extern "C" fn closure_avl_from_ptr(p: *mut ClosureAvl,
     }
     return unsafe { &mut (*p_up).p_before };
 }
+
 extern "C" fn closure_avl_balance(mut p: *mut ClosureAvl) -> *mut ClosureAvl {
     let mut p_top: *mut ClosureAvl = p;
     let mut pp: *mut *mut ClosureAvl = core::ptr::null_mut();
@@ -128,6 +139,7 @@ extern "C" fn closure_avl_balance(mut p: *mut ClosureAvl) -> *mut ClosureAvl {
     }
     return p_top;
 }
+
 extern "C" fn closure_avl_search(mut p: *mut ClosureAvl, id: Sqlite3Int64)
     -> *mut ClosureAvl {
     while !(p).is_null() && id != unsafe { (*p).id } {
@@ -138,6 +150,7 @@ extern "C" fn closure_avl_search(mut p: *mut ClosureAvl, id: Sqlite3Int64)
     }
     return p;
 }
+
 extern "C" fn closure_avl_first(mut p: *mut ClosureAvl) -> *mut ClosureAvl {
     if !(p).is_null() {
         while !(unsafe { (*p).p_before }).is_null() {
@@ -146,6 +159,7 @@ extern "C" fn closure_avl_first(mut p: *mut ClosureAvl) -> *mut ClosureAvl {
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn closure_avl_next(mut p: *mut ClosureAvl)
     -> *mut ClosureAvl {
@@ -159,6 +173,7 @@ pub extern "C" fn closure_avl_next(mut p: *mut ClosureAvl)
     }
     return p;
 }
+
 extern "C" fn closure_avl_insert(pp_head_1: &mut *mut ClosureAvl,
     p_new_1: *mut ClosureAvl) -> *mut ClosureAvl {
     let mut p: *mut ClosureAvl = *pp_head_1;
@@ -193,6 +208,7 @@ extern "C" fn closure_avl_insert(pp_head_1: &mut *mut ClosureAvl,
     *pp_head_1 = closure_avl_balance(p);
     return core::ptr::null_mut();
 }
+
 extern "C" fn closure_avl_destroy(p: *mut ClosureAvl,
     x_destroy_1: Option<unsafe extern "C" fn(*mut ClosureAvl) -> ()>) -> () {
     if !(p).is_null() {
@@ -201,6 +217,7 @@ extern "C" fn closure_avl_destroy(p: *mut ClosureAvl,
         unsafe { x_destroy_1.unwrap()(p) };
     }
 }
+
 extern "C" fn queue_push(p_queue_1: &mut ClosureQueue,
     p_node_1: *mut ClosureAvl) -> () {
     unsafe { (*p_node_1).p_list = core::ptr::null_mut() };
@@ -209,6 +226,7 @@ extern "C" fn queue_push(p_queue_1: &mut ClosureQueue,
     } else { (*p_queue_1).p_first = p_node_1; }
     (*p_queue_1).p_last = p_node_1;
 }
+
 extern "C" fn queue_pull(p_queue_1: &mut ClosureQueue) -> *mut ClosureAvl {
     let p: *mut ClosureAvl = (*p_queue_1).p_first;
     if !(p).is_null() {
@@ -219,6 +237,7 @@ extern "C" fn queue_pull(p_queue_1: &mut ClosureQueue) -> *mut ClosureAvl {
     }
     return p;
 }
+
 extern "C" fn closure_dequote(z_in_1: *const i8) -> *mut i8 {
     let mut n_in: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut z_out: *mut i8 = core::ptr::null_mut();
@@ -274,6 +293,7 @@ extern "C" fn closure_dequote(z_in_1: *const i8) -> *mut i8 {
     }
     return z_out;
 }
+
 extern "C" fn closure_free(p: *mut ClosureVtab) -> () {
     if !(p).is_null() {
         unsafe { sqlite3_free(unsafe { (*p).z_db } as *mut ()) };
@@ -288,6 +308,7 @@ extern "C" fn closure_free(p: *mut ClosureVtab) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn closure_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut ClosureVtab = p_vtab_1 as *mut ClosureVtab;
     if !(unsafe { (*p).n_cursor } == 0) as i32 as i64 != 0 {
@@ -300,6 +321,7 @@ extern "C" fn closure_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     closure_free(p);
     return 0;
 }
+
 extern "C" fn closure_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     -> *const i8 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -335,6 +357,7 @@ extern "C" fn closure_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     }
     return unsafe { z_str_1.offset(i as isize) };
 }
+
 extern "C" fn closure_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -553,6 +576,7 @@ extern "C" fn closure_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     unreachable!();
 }
+
 extern "C" fn closure_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut ClosureVtab = p_v_tab_1 as *mut ClosureVtab;
@@ -577,9 +601,11 @@ extern "C" fn closure_open(p_v_tab_1: *mut Sqlite3Vtab,
     };
     return 0;
 }
+
 extern "C" fn closure_mem_free(p: *mut ClosureAvl) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 extern "C" fn closure_clear_cursor(p_cur_1: &mut ClosureCursor) -> () {
     closure_avl_destroy((*p_cur_1).p_closure, Some(closure_mem_free));
     unsafe { sqlite3_free((*p_cur_1).z_table_name as *mut ()) };
@@ -591,6 +617,7 @@ extern "C" fn closure_clear_cursor(p_cur_1: &mut ClosureCursor) -> () {
     (*p_cur_1).p_current = core::ptr::null_mut();
     (*p_cur_1).p_closure = core::ptr::null_mut();
 }
+
 extern "C" fn closure_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut ClosureCursor = cur as *mut ClosureCursor;
     closure_clear_cursor(unsafe { &mut *p_cur });
@@ -603,6 +630,7 @@ extern "C" fn closure_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn closure_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut ClosureCursor = cur as *mut ClosureCursor;
     unsafe {
@@ -610,6 +638,7 @@ extern "C" fn closure_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn closure_insert_node(p_queue_1: *mut ClosureQueue,
     p_cur_1: &mut ClosureCursor, id: Sqlite3Int64, i_generation_1: i32)
     -> i32 {
@@ -628,6 +657,7 @@ extern "C" fn closure_insert_node(p_queue_1: *mut ClosureQueue,
     queue_push(unsafe { &mut *p_queue_1 }, p_new);
     return 0;
 }
+
 extern "C" fn closure_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -773,6 +803,7 @@ extern "C" fn closure_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
     return rc;
 }
+
 extern "C" fn closure_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const ClosureCursor =
@@ -1061,6 +1092,7 @@ extern "C" fn closure_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn closure_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const ClosureCursor =
@@ -1068,11 +1100,13 @@ extern "C" fn closure_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*unsafe { (*p_cur).p_current }).id } };
     return 0;
 }
+
 extern "C" fn closure_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const ClosureCursor =
         cur as *mut ClosureCursor as *const ClosureCursor;
     return (unsafe { (*p_cur).p_current } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn closure_best_index(p_tab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -1240,6 +1274,7 @@ extern "C" fn closure_best_index(p_tab_1: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_cost = r_cost };
     return 0;
 }
+
 static mut closure_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1268,6 +1303,7 @@ static mut closure_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_closure_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1276,6 +1312,7 @@ pub extern "C" fn sqlite3_closure_init(db: *const Sqlite3,
     { let _ = pz_err_msg_1; };
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

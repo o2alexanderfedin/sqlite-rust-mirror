@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Bitvec {
@@ -392,6 +401,7 @@ struct Bitvec {
     i_divisor: u32,
     u: BitvecU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union BitvecU0 {
@@ -399,6 +409,7 @@ union BitvecU0 {
     a_hash: [u32; 124],
     ap_sub: [*mut Bitvec; 62],
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_create(i_size: u32) -> *mut Bitvec {
     let mut p: *mut Bitvec = core::ptr::null_mut();
@@ -409,6 +420,7 @@ pub extern "C" fn sqlite3_bitvec_create(i_size: u32) -> *mut Bitvec {
     if !(p).is_null() { unsafe { (*p).i_size = i_size }; }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_test_not_null(mut p: *mut Bitvec, mut i: u32)
     -> i32 {
@@ -452,11 +464,13 @@ pub extern "C" fn sqlite3_bitvec_test_not_null(mut p: *mut Bitvec, mut i: u32)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_test(p: *mut Bitvec, i: u32) -> i32 {
     return (p != core::ptr::null_mut() &&
                 sqlite3_bitvec_test_not_null(p, i) != 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_set(mut p: *mut Bitvec, mut i: u32) -> i32 {
     unsafe {
@@ -738,6 +752,7 @@ pub extern "C" fn sqlite3_bitvec_set(mut p: *mut Bitvec, mut i: u32) -> i32 {
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_clear(mut p: *mut Bitvec, mut i: u32,
     p_buf: *mut ()) -> () {
@@ -824,6 +839,7 @@ pub extern "C" fn sqlite3_bitvec_clear(mut p: *mut Bitvec, mut i: u32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_destroy(p: *mut Bitvec) -> () {
     unsafe {
@@ -854,10 +870,12 @@ pub extern "C" fn sqlite3_bitvec_destroy(p: *mut Bitvec) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_size(p: &Bitvec) -> u32 {
     return (*p).i_size;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_builtin_test(sz: i32, a_op: *mut i32)
     -> i32 {
@@ -1062,6 +1080,7 @@ pub extern "C" fn sqlite3_bitvec_builtin_test(sz: i32, a_op: *mut i32)
     }
     unreachable!();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3838,41 +3857,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

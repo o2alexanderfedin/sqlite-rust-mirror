@@ -1,14 +1,17 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stmtrand {
     x: u32,
     y: u32,
 }
+
 extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Stmtrand = core::ptr::null_mut();
@@ -56,6 +59,7 @@ extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
                 i32)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmtrand_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -78,6 +82,7 @@ pub extern "C" fn sqlite3_stmtrand_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

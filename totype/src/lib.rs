@@ -1,19 +1,25 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 static totype_one: i32 = 1 as i32;
+
 extern "C" fn totype_isspace(c: u8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                             c as i32 == '\n' as i32 || c as i32 == '\u{b}' as i32 ||
                     c as i32 == '\u{c}' as i32 || c as i32 == '\r' as i32) as
             i32;
 }
+
 extern "C" fn totype_isdigit(c: u8) -> i32 {
     return (c as i32 >= '0' as i32 && c as i32 <= '9' as i32) as i32;
 }
+
 extern "C" fn totype_compare2pow63(z_num_1: *const i8) -> i32 {
     let mut c: i32 = 0;
     let mut i: i32 = 0;
@@ -37,6 +43,7 @@ extern "C" fn totype_compare2pow63(z_num_1: *const i8) -> i32 {
     }
     return c;
 }
+
 extern "C" fn totype_atoi64(mut z_num_1: *const i8,
     p_num_1: &mut Sqlite3Int64, length: i32) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -165,6 +172,7 @@ extern "C" fn totype_atoi64(mut z_num_1: *const i8,
         }
     }
 }
+
 extern "C" fn totype_ato_f(mut z: *const i8, p_result_1: &mut f64,
     length: i32) -> i32 {
     let mut z_end: *const i8 = core::ptr::null();
@@ -570,11 +578,13 @@ extern "C" fn totype_ato_f(mut z: *const i8, p_result_1: &mut f64,
     }
     unreachable!();
 }
+
 extern "C" fn totype_double_to_int(r: f64) -> Sqlite3Int64 {
     if r < -9.223372036854775e18 { return 0 as Sqlite3Int64; }
     if r > 9.223372036854775e18 { return 0 as Sqlite3Int64; }
     return r as Sqlite3Int64;
 }
+
 extern "C" fn tointeger_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -938,6 +948,7 @@ extern "C" fn tointeger_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn toreal_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -1313,6 +1324,7 @@ extern "C" fn toreal_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_totype_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1337,6 +1349,7 @@ pub extern "C" fn sqlite3_totype_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wasm_extra_init(z: *const i8) -> i32 {
     unsafe {
@@ -13,6 +15,7 @@ pub extern "C" fn sqlite3_wasm_extra_init(z: *const i8) -> i32 {
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -788,9 +791,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

@@ -1,5 +1,7 @@
 #![feature(c_variadic)]
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct State {
@@ -15,6 +17,7 @@ struct State {
     p_dflt_reduce: *mut Rule,
     auto_reduce: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Config {
@@ -27,6 +30,7 @@ struct Config {
     next: *mut Config,
     bp: *mut Config,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Rule {
@@ -52,6 +56,7 @@ struct Rule {
     nextlhs: *mut Rule,
     next: *mut Rule,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Symbol {
@@ -72,24 +77,38 @@ struct Symbol {
     nsubsym: i32,
     subsym: *mut *mut Symbol,
 }
+
 const TERMINAL: u32 = 0;
+
 const NONTERMINAL: u32 = 1;
+
 const MULTITERMINAL: u32 = 2;
+
 const LEFT: u32 = 0;
+
 const RIGHT: u32 = 1;
+
 const NONE: u32 = 2;
+
 const UNK: u32 = 3;
+
 const LEMON_FALSE: u32 = 0;
+
 const LEMON_TRUE: u32 = 1;
+
 type Boolean = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Plink {
     cfp: *mut Config,
     next: *mut Plink,
 }
+
 const COMPLETE: u32 = 0;
+
 const INCOMPLETE: u32 = 1;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Action {
@@ -100,22 +119,35 @@ struct Action {
     next: *mut Action,
     collide: *mut Action,
 }
+
 const REDUCE: u32 = 2;
+
 const SHIFTREDUCE: u32 = 10;
+
 const SHIFT: u32 = 0;
+
 const ACCEPT: u32 = 1;
+
 const ERROR: u32 = 3;
+
 const SSCONFLICT: u32 = 4;
+
 const SRCONFLICT: u32 = 5;
+
 const RRCONFLICT: u32 = 6;
+
 const SH_RESOLVED: u32 = 7;
+
 const RD_RESOLVED: u32 = 8;
+
 const NOT_USED: u32 = 9;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union ActionU0 {
     rp: *mut Rule,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Lemon {
@@ -170,7 +202,9 @@ struct Lemon {
     argc: i32,
     argv: *mut *mut i8,
 }
+
 static mut basis: *mut Config = core::ptr::null_mut();
+
 extern "C" fn merge(mut a: *mut i8, mut b: *mut i8,
     cmp: Option<unsafe extern "C" fn(*const i8, *const i8) -> i32>,
     offset: i32) -> *mut i8 {
@@ -236,6 +270,7 @@ extern "C" fn merge(mut a: *mut i8, mut b: *mut i8,
     }
     return head;
 }
+
 extern "C" fn msort(mut list: *mut i8, next: *mut *mut i8,
     cmp: Option<unsafe extern "C" fn(*const i8, *const i8) -> i32>)
     -> *mut i8 {
@@ -300,7 +335,9 @@ extern "C" fn msort(mut list: *mut i8, next: *mut *mut i8,
     }
     return ep;
 }
+
 static mut current: *mut Config = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configcmp(_a: *const i8, _b: *const i8) -> i32 {
     unsafe {
@@ -314,7 +351,9 @@ pub extern "C" fn configcmp(_a: *const i8, _b: *const i8) -> i32 {
         return x;
     }
 }
+
 static mut basisend: *mut *mut Config = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_sortbasis() -> () {
     unsafe {
@@ -326,14 +365,18 @@ pub extern "C" fn configlist_sortbasis() -> () {
         return;
     }
 }
+
 static mut show_precedence_conflict: i32 = 0;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemChunk {
     p_next: *mut MemChunk,
     sz: u64,
 }
+
 static mut mem_chunk_list: *mut MemChunk = core::ptr::null_mut();
+
 extern "C" fn lemon_malloc(n_byte_1: u64) -> *mut () {
     unsafe {
         let mut p: *mut MemChunk = core::ptr::null_mut();
@@ -352,11 +395,13 @@ extern "C" fn lemon_malloc(n_byte_1: u64) -> *mut () {
         return unsafe { &raw mut *p.offset(1 as isize) } as *mut ();
     }
 }
+
 extern "C" fn lemon_calloc(n_elem_1: u64, sz: u64) -> *mut () {
     let p: *mut () = lemon_malloc(n_elem_1 * sz);
     unsafe { memset(p, 0, n_elem_1 * sz) };
     return p;
 }
+
 extern "C" fn lemon_free(p_old_1: *mut ()) -> () {
     if !(p_old_1).is_null() {
         let mut p: *const MemChunk =
@@ -370,6 +415,7 @@ extern "C" fn lemon_free(p_old_1: *mut ()) -> () {
         unsafe { memset(p_old_1, 0, unsafe { (*p).sz }) };
     }
 }
+
 extern "C" fn lemon_realloc(p_old_1: *mut (), n_new_1: u64) -> *mut () {
     let mut p_new: *mut () = core::ptr::null_mut();
     let mut p: *const MemChunk = core::ptr::null();
@@ -386,6 +432,7 @@ extern "C" fn lemon_realloc(p_old_1: *mut (), n_new_1: u64) -> *mut () {
     unsafe { memcpy(p_new, p_old_1 as *const (), unsafe { (*p).sz }) };
     return p_new;
 }
+
 extern "C" fn lemon_free_all() -> () {
     unsafe {
         while !(mem_chunk_list).is_null() {
@@ -395,6 +442,7 @@ extern "C" fn lemon_free_all() -> () {
         }
     }
 }
+
 extern "C" fn lemon_addtext(z_buf_1: *mut i8, pn_used_1: &mut i32,
     z_in_1: *const i8, mut n_in_1: i32, mut i_width_1: i32) -> () {
     if n_in_1 < 0 {
@@ -439,6 +487,7 @@ extern "C" fn lemon_addtext(z_buf_1: *mut i8, pn_used_1: &mut i32,
     }
     unsafe { *z_buf_1.offset(*pn_used_1 as isize) = 0 as i8 };
 }
+
 extern "C" fn lemon_vsprintf(str: *mut i8, z_format_1: *const i8,
     mut ap: *const i8) -> i32 {
     let mut i: i32 = 0;
@@ -567,6 +616,7 @@ extern "C" fn lemon_vsprintf(str: *mut i8, z_format_1: *const i8,
         unsafe { &*z_format_1.offset(j as isize) }, i - j, 0);
     return n_used;
 }
+
 unsafe extern "C" fn lemon_sprintf(str: *mut i8, format: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -576,6 +626,7 @@ unsafe extern "C" fn lemon_sprintf(str: *mut i8, format: *const i8,
     ();
     return rc;
 }
+
 extern "C" fn lemon_strcpy(mut dest: *mut i8, mut src: *const i8) -> () {
     while {
                     let __v =
@@ -598,6 +649,7 @@ extern "C" fn lemon_strcpy(mut dest: *mut i8, mut src: *const i8) -> () {
                     __v
                 } as i32 != 0 {}
 }
+
 extern "C" fn lemon_strcat(mut dest: *mut i8, src: *const i8) -> () {
     while unsafe { *dest } != 0 {
         {
@@ -609,6 +661,7 @@ extern "C" fn lemon_strcat(mut dest: *mut i8, src: *const i8) -> () {
     }
     lemon_strcpy(dest, src);
 }
+
 extern "C" fn action_new() -> *mut Action {
     unsafe {
         let mut newaction: *mut Action = core::ptr::null_mut();
@@ -646,6 +699,7 @@ extern "C" fn action_new() -> *mut Action {
         return newaction;
     }
 }
+
 extern "C" fn actioncmp(ap1: *mut Action, ap2: *mut Action) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -668,6 +722,7 @@ extern "C" fn actioncmp(ap1: *mut Action, ap2: *mut Action) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn action_sort(mut ap: *mut Action) -> *mut Action {
     ap =
         msort(ap as *mut i8, unsafe { &raw mut (*ap).next } as *mut *mut i8,
@@ -678,7 +733,9 @@ extern "C" fn action_sort(mut ap: *mut Action) -> *mut Action {
                     })) as *mut Action;
     return ap;
 }
+
 static mut currentend: *mut *mut Config = core::ptr::null_mut();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX4 {
@@ -687,6 +744,7 @@ struct SX4 {
     tbl: *mut SX4node,
     ht: *mut *mut SX4node,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX4node {
@@ -694,8 +752,11 @@ struct SX4node {
     next: *mut SX4node,
     from: *mut *mut SX4node,
 }
+
 static mut x4a: *mut SX4 = unsafe { core::mem::zeroed() };
+
 type X4node = SX4node;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_init() -> () {
     unsafe {
@@ -740,6 +801,7 @@ pub extern "C" fn configtable_init() -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_init() -> () {
     unsafe {
@@ -751,6 +813,7 @@ pub extern "C" fn configlist_init() -> () {
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_sort() -> () {
     unsafe {
@@ -762,6 +825,7 @@ pub extern "C" fn configlist_sort() -> () {
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_clear(f:
         Option<unsafe extern "C" fn(*mut Config) -> i32>) -> () {
@@ -805,6 +869,7 @@ pub extern "C" fn configtable_clear(f:
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_reset() -> () {
     unsafe {
@@ -816,6 +881,7 @@ pub extern "C" fn configlist_reset() -> () {
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn error_msg(filename: *const i8, lineno: i32,
     format: *const i8, mut __va0: ...) -> () {
@@ -831,14 +897,23 @@ pub unsafe extern "C" fn error_msg(filename: *const i8, lineno: i32,
         eprintln!("");
     }
 }
+
 const OPT_FLAG: u32 = 1;
+
 const OPT_INT: u32 = 2;
+
 const OPT_DBL: u32 = 3;
+
 const OPT_STR: u32 = 4;
+
 const OPT_FFLAG: u32 = 5;
+
 const OPT_FINT: u32 = 6;
+
 const OPT_FDBL: u32 = 7;
+
 const OPT_FSTR: u32 = 8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SOptions {
@@ -847,15 +922,20 @@ struct SOptions {
     arg: *mut i8,
     message: *const i8,
 }
+
 static mut g_argv: *mut *mut i8 = unsafe { core::mem::zeroed() };
+
 static mut op: *mut SOptions = unsafe { core::mem::zeroed() };
+
 static mut errstream: *mut FILE = unsafe { core::mem::zeroed() };
+
 static mut emsg: [i8; 28] =
     [67 as i8, 111 as i8, 109 as i8, 109 as i8, 97 as i8, 110 as i8,
             100 as i8, 32 as i8, 108 as i8, 105 as i8, 110 as i8, 101 as i8,
             32 as i8, 115 as i8, 121 as i8, 110 as i8, 116 as i8, 97 as i8,
             120 as i8, 32 as i8, 101 as i8, 114 as i8, 114 as i8, 111 as i8,
             114 as i8, 58 as i8, 32 as i8, 0 as i8];
+
 extern "C" fn errline(n: i32, k: i32, err: *mut FILE) -> () {
     unsafe {
         let mut spcnt: i32 = 0;
@@ -922,6 +1002,7 @@ extern "C" fn errline(n: i32, k: i32, err: *mut FILE) -> () {
         }
     }
 }
+
 extern "C" fn handleflags(i: i32, err: *mut FILE) -> i32 {
     unsafe {
         let mut v: i32 = 0;
@@ -1006,6 +1087,7 @@ extern "C" fn handleflags(i: i32, err: *mut FILE) -> i32 {
         return errcnt;
     }
 }
+
 extern "C" fn handleswitch(i: i32, err: *mut FILE) -> i32 {
     unsafe {
         let mut lv: i32 = 0;
@@ -1237,6 +1319,7 @@ extern "C" fn handleswitch(i: i32, err: *mut FILE) -> i32 {
         return errcnt;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn opt_print() -> () {
     unsafe {
@@ -1376,6 +1459,7 @@ pub extern "C" fn opt_print() -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn opt_init(a: *mut *mut i8, o: *mut SOptions, err: *mut FILE)
     -> i32 {
@@ -1425,6 +1509,7 @@ pub extern "C" fn opt_init(a: *mut *mut i8, o: *mut SOptions, err: *mut FILE)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn opt_n_args() -> i32 {
     unsafe {
@@ -1469,6 +1554,7 @@ pub extern "C" fn opt_n_args() -> i32 {
         return cnt;
     }
 }
+
 extern "C" fn argindex(mut n: i32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -1511,6 +1597,7 @@ extern "C" fn argindex(mut n: i32) -> i32 {
         return -1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn opt_arg(n: i32) -> *mut i8 {
     unsafe {
@@ -1521,6 +1608,7 @@ pub extern "C" fn opt_arg(n: i32) -> *mut i8 {
             } else { core::ptr::null_mut() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn opt_err(n: i32) -> () {
     unsafe {
@@ -1529,7 +1617,9 @@ pub extern "C" fn opt_err(n: i32) -> () {
         if i >= 0 { errline(i, 0, errstream); }
     }
 }
+
 static mut plink_freelist: *mut Plink = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_new() -> *mut Plink {
     unsafe {
@@ -1568,6 +1658,7 @@ pub extern "C" fn plink_new() -> *mut Plink {
         return newlink;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_copy(to: &mut *mut Plink, mut from: *mut Plink)
     -> () {
@@ -1579,6 +1670,7 @@ pub extern "C" fn plink_copy(to: &mut *mut Plink, mut from: *mut Plink)
         from = nextpl;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_delete(mut plp: *mut Plink) -> () {
     unsafe {
@@ -1591,11 +1683,15 @@ pub extern "C" fn plink_delete(mut plp: *mut Plink) -> () {
         }
     }
 }
+
 static mut size: i32 = 0;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn set_size(n: i32) -> () { unsafe { size = n + 1; } }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn set_free(s: *mut i8) -> () { lemon_free(s as *mut ()); }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn set_add(s: *mut i8, e: i32) -> i32 {
     unsafe {
@@ -1612,6 +1708,7 @@ pub extern "C" fn set_add(s: *mut i8, e: i32) -> i32 {
         return (rv == 0) as i32 as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn set_union(s1: *mut i8, s2: *mut i8) -> i32 {
     unsafe {
@@ -1638,6 +1735,7 @@ pub extern "C" fn set_union(s1: *mut i8, s2: *mut i8) -> i32 {
         return progress;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX1node {
@@ -1645,14 +1743,18 @@ struct SX1node {
     next: *mut SX1node,
     from: *mut *mut SX1node,
 }
+
 type X1node = SX1node;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX1 {
     size: i32,
     count: i32,
 }
+
 static mut x1a: *mut SX1 = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn strhash(mut x: *const i8) -> u32 {
     let mut h: u32 = 0 as u32;
@@ -1670,6 +1772,7 @@ pub extern "C" fn strhash(mut x: *const i8) -> u32 {
     }
     return h;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX2node {
@@ -1678,14 +1781,18 @@ struct SX2node {
     next: *mut SX2node,
     from: *mut *mut SX2node,
 }
+
 type X2node = SX2node;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX2 {
     size: i32,
     count: i32,
 }
+
 static mut x2a: *mut SX2 = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn symbolcmpp(_a: *const (), _b: *const ()) -> i32 {
     let a: *const Symbol = unsafe { *(_a as *mut *const Symbol) };
@@ -1712,12 +1819,14 @@ pub extern "C" fn symbolcmpp(_a: *const (), _b: *const ()) -> i32 {
             (unsafe { (*a).index }) - unsafe { (*b).index } as i32
         } else { i1 - i2 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn symbol_count() -> i32 {
     unsafe {
         return if !(x2a).is_null() { unsafe { (*x2a).count } } else { 0 };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX3 {
@@ -1726,6 +1835,7 @@ struct SX3 {
     tbl: *mut SX3node,
     ht: *mut *mut SX3node,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX3node {
@@ -1734,8 +1844,11 @@ struct SX3node {
     next: *mut SX3node,
     from: *mut *mut SX3node,
 }
+
 static mut x3a: *mut SX3 = unsafe { core::mem::zeroed() };
+
 type X3node = SX3node;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn state_init() -> () {
     unsafe {
@@ -1780,6 +1893,7 @@ pub extern "C" fn state_init() -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn statehash(mut a: *const Config) -> u32 {
     unsafe {
@@ -1794,6 +1908,7 @@ pub extern "C" fn statehash(mut a: *const Config) -> u32 {
         return h;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn statecmp(mut a: *const Config, mut b: *const Config)
     -> i32 {
@@ -1824,6 +1939,7 @@ pub extern "C" fn statecmp(mut a: *const Config, mut b: *const Config)
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
     unsafe {
@@ -1939,6 +2055,7 @@ pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn state_find(key: *mut Config) -> *mut State {
     unsafe {
@@ -1961,6 +2078,7 @@ pub extern "C" fn state_find(key: *mut Config) -> *mut State {
             } else { core::ptr::null_mut() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn state_arrayof() -> *mut *mut State {
     unsafe {
@@ -1992,6 +2110,7 @@ pub extern "C" fn state_arrayof() -> *mut *mut State {
         return array;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn confighash(a: &Config) -> u32 {
     unsafe {
@@ -2000,6 +2119,7 @@ pub extern "C" fn confighash(a: &Config) -> u32 {
         return h;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
     unsafe {
@@ -2112,6 +2232,7 @@ pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_find(key: *mut Config) -> *mut Config {
     unsafe {
@@ -2136,12 +2257,14 @@ pub extern "C" fn configtable_find(key: *mut Config) -> *mut Config {
             } else { core::ptr::null_mut() };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct LookaheadAction {
     lookahead: i32,
     action: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Acttab {
@@ -2157,12 +2280,14 @@ struct Acttab {
     nterminal: i32,
     nsymbol: i32,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_free(p: *mut Acttab) -> () {
     lemon_free(unsafe { (*p).a_action } as *mut ());
     lemon_free(unsafe { (*p).a_lookahead } as *mut ());
     lemon_free(p as *mut ());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_alloc(nsymbol: i32, nterminal: i32) -> *mut Acttab {
     let p: *mut Acttab =
@@ -2177,6 +2302,7 @@ pub extern "C" fn acttab_alloc(nsymbol: i32, nterminal: i32) -> *mut Acttab {
     unsafe { (*p).nterminal = nterminal };
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_action(p: &mut Acttab, lookahead: i32, action: i32)
     -> () {
@@ -2211,6 +2337,7 @@ pub extern "C" fn acttab_action(p: &mut Acttab, lookahead: i32, action: i32)
     };
     { let __p = &mut (*p).n_lookahead; let __t = *__p; *__p += 1; __t };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -2390,6 +2517,7 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
     (*p).n_lookahead = 0;
     return i - (*p).mn_lookahead;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_action_size(p: &Acttab) -> i32 {
     let mut n: i32 = (*p).n_action;
@@ -2400,6 +2528,7 @@ pub extern "C" fn acttab_action_size(p: &Acttab) -> i32 {
     }
     return n;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn same_symbol(a: *mut Symbol, b: *mut Symbol) -> i32 {
     let mut i: i32 = 0;
@@ -2423,6 +2552,7 @@ pub extern "C" fn same_symbol(a: *mut Symbol, b: *mut Symbol) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn resolve_conflict(apx: &mut Action, apy: &mut Action) -> i32 {
     unsafe {
         let mut spx: *const Symbol = core::ptr::null();
@@ -2499,20 +2629,28 @@ extern "C" fn resolve_conflict(apx: &mut Action, apy: &mut Action) -> i32 {
         return errcnt;
     }
 }
+
 static mut freelist: *mut Config = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn newconfig() -> *mut Config {
     return lemon_calloc(1 as u64, core::mem::size_of::<Config>() as u64) as
             *mut Config;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn deleteconfig(old: *mut Config) -> () {
     unsafe { unsafe { (*old).next = freelist }; freelist = old; }
 }
+
 static mut n_define: i32 = 0;
+
 static mut n_define_used: i32 = 0;
+
 static mut az_define: *mut *mut i8 = core::ptr::null_mut();
+
 static mut b_define_used: *mut i8 = core::ptr::null_mut();
+
 extern "C" fn handle_d_option_1(mut z: *mut i8) -> () {
     unsafe {
         let mut paz: *mut *mut i8 = core::ptr::null_mut();
@@ -2563,6 +2701,7 @@ extern "C" fn handle_d_option_1(mut z: *mut i8) -> () {
         unsafe { *z = 0 as i8 };
     }
 }
+
 extern "C" fn handle_u_option(z: *const i8) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -2595,7 +2734,9 @@ extern "C" fn handle_u_option(z: *const i8) -> () {
         }
     }
 }
+
 static mut output_dir: *mut i8 = 0 as *mut () as *mut i8;
+
 extern "C" fn handle_d_option(z: *const i8) -> () {
     unsafe {
         output_dir =
@@ -2608,7 +2749,9 @@ extern "C" fn handle_d_option(z: *const i8) -> () {
         lemon_strcpy(output_dir, z as *const i8);
     }
 }
+
 static mut user_templatename: *mut i8 = 0 as *mut () as *mut i8;
+
 extern "C" fn rule_merge(mut p_a_1: *mut Rule, mut p_b_1: *mut Rule)
     -> *mut Rule {
     let mut p_first: *mut Rule = core::ptr::null_mut();
@@ -2629,6 +2772,7 @@ extern "C" fn rule_merge(mut p_a_1: *mut Rule, mut p_b_1: *mut Rule)
     } else { unsafe { *pp_prev = p_b_1 }; }
     return p_first;
 }
+
 extern "C" fn rule_sort(mut rp: *mut Rule) -> *mut Rule {
     let mut i: u32 = 0 as u32;
     let mut p_next: *mut Rule = core::ptr::null_mut();
@@ -2675,6 +2819,7 @@ extern "C" fn rule_sort(mut rp: *mut Rule) -> *mut Rule {
     }
     return rp;
 }
+
 extern "C" fn minimum_size_type(lwr: i32, upr: i32, pn_byte: *mut i32)
     -> *const i8 {
     let mut z_type: *const i8 = c"int".as_ptr() as *mut i8 as *const i8;
@@ -2700,6 +2845,7 @@ extern "C" fn minimum_size_type(lwr: i32, upr: i32, pn_byte: *mut i32)
     if !(pn_byte).is_null() { unsafe { *pn_byte = n_byte }; }
     return z_type;
 }
+
 extern "C" fn stats_line(z_label_1: *const i8, i_value_1: i32) -> () {
     let n_label: i32 = unsafe { strlen(z_label_1) } as i32;
     unsafe {
@@ -2709,34 +2855,59 @@ extern "C" fn stats_line(z_label_1: *const i8, i_value_1: i32) -> () {
             i_value_1)
     };
 }
+
 extern "C" fn define_cmp(p_a_1: *const (), p_b_1: *const ()) -> i32 {
     let z_a: *const i8 = unsafe { *(p_a_1 as *mut *const i8) };
     let z_b: *const i8 = unsafe { *(p_b_1 as *mut *const i8) };
     return unsafe { strcmp(z_a, z_b) };
 }
+
 const INITIALIZE: u32 = 0;
+
 const WAITING_FOR_DECL_OR_RULE: u32 = 1;
+
 const WAITING_FOR_DECL_KEYWORD: u32 = 2;
+
 const WAITING_FOR_DECL_ARG: u32 = 3;
+
 const WAITING_FOR_PRECEDENCE_SYMBOL: u32 = 4;
+
 const WAITING_FOR_ARROW: u32 = 5;
+
 const IN_RHS: u32 = 6;
+
 const LHS_ALIAS_1: u32 = 7;
+
 const LHS_ALIAS_2: u32 = 8;
+
 const LHS_ALIAS_3: u32 = 9;
+
 const RHS_ALIAS_1: u32 = 10;
+
 const RHS_ALIAS_2: u32 = 11;
+
 const PRECEDENCE_MARK_1: u32 = 12;
+
 const PRECEDENCE_MARK_2: u32 = 13;
+
 const RESYNC_AFTER_RULE_ERROR: u32 = 14;
+
 const RESYNC_AFTER_DECL_ERROR: u32 = 15;
+
 const WAITING_FOR_DESTRUCTOR_SYMBOL: u32 = 16;
+
 const WAITING_FOR_DATATYPE_SYMBOL: u32 = 17;
+
 const WAITING_FOR_FALLBACK_ID: u32 = 18;
+
 const WAITING_FOR_WILDCARD_ID: u32 = 19;
+
 const WAITING_FOR_CLASS_ID: u32 = 20;
+
 const WAITING_FOR_CLASS_TOKEN: u32 = 21;
+
 const WAITING_FOR_TOKEN_NAME: u32 = 22;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Pstate {
@@ -2763,6 +2934,7 @@ struct Pstate {
     firstrule: *mut Rule,
     lastrule: *mut Rule,
 }
+
 extern "C" fn eval_preprocessor_boolean(z: *mut i8, lineno: i32) -> i32 {
     unsafe {
         let mut neg: i32 = 0;
@@ -3046,6 +3218,7 @@ extern "C" fn eval_preprocessor_boolean(z: *mut i8, lineno: i32) -> i32 {
         unreachable!();
     }
 }
+
 extern "C" fn preprocess_input(z: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -3226,6 +3399,7 @@ extern "C" fn preprocess_input(z: *mut i8) -> () {
         unsafe { exit(1) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn file_makename(lemp: &Lemon, suffix: *const i8) -> *mut i8 {
     unsafe {
@@ -3262,6 +3436,7 @@ pub extern "C" fn file_makename(lemp: &Lemon, suffix: *const i8) -> *mut i8 {
         return name;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn file_open(lemp: *mut Lemon, suffix: *const i8,
     mode: *const i8) -> *mut FILE {
@@ -3290,6 +3465,7 @@ pub extern "C" fn file_open(lemp: *mut Lemon, suffix: *const i8,
         return fp;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn rule_print(out: *mut FILE, rp: &Rule) -> () {
     let mut i: i32 = 0;
@@ -3345,6 +3521,7 @@ pub extern "C" fn rule_print(out: *mut FILE, rp: &Rule) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn RulePrint(fp: *mut FILE, rp: &Rule, i_cursor_1: i32) -> () {
     let mut sp: *const Symbol = core::ptr::null();
@@ -3405,10 +3582,12 @@ pub extern "C" fn RulePrint(fp: *mut FILE, rp: &Rule, i_cursor_1: i32) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn config_print(fp: *mut FILE, cfp: &Config) -> () {
     unsafe { RulePrint(fp, unsafe { &*(*cfp).rp }, (*cfp).dot); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn pathsearch(argv0: *mut i8, name: *mut i8, modemask: i32)
     -> *mut i8 {
@@ -3478,6 +3657,7 @@ pub extern "C" fn pathsearch(argv0: *mut i8, name: *mut i8, modemask: i32)
     }
     return path;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_xfer(name: *mut i8, in__1: *mut FILE, out: *mut FILE,
     lineno: &mut i32) -> () {
@@ -3529,6 +3709,7 @@ pub extern "C" fn tplt_xfer(name: *mut i8, in__1: *mut FILE, out: *mut FILE,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_skip_header(in__1: *mut FILE) -> () {
     let mut line: [i8; 10000] = [0; 10000];
@@ -3538,6 +3719,7 @@ pub extern "C" fn tplt_skip_header(in__1: *mut FILE) -> () {
             (line[0 as usize] as i32 != '%' as i32 ||
                 line[1 as usize] as i32 != '%' as i32) {}
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_open(lemp: &mut Lemon) -> *mut FILE {
     unsafe {
@@ -3651,6 +3833,7 @@ pub extern "C" fn tplt_open(lemp: &mut Lemon) -> *mut FILE {
         return in_;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_linedir(out: *mut FILE, lineno: i32,
     mut filename: *const i8) -> () {
@@ -3672,6 +3855,7 @@ pub extern "C" fn tplt_linedir(out: *mut FILE, lineno: i32,
     unsafe { fprintf(out, c"\"\n".as_ptr() as *mut i8 as *const i8) };
     unsafe { fflush(out) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_print(out: *mut FILE, lemp: &Lemon, mut str: *const i8,
     lineno: &mut i32) -> () {
@@ -3700,6 +3884,7 @@ pub extern "C" fn tplt_print(out: *mut FILE, lemp: &Lemon, mut str: *const i8,
     unsafe { fflush(out) };
     return;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn emit_destructor_code(out: *mut FILE, sp: &Symbol,
     lemp: &Lemon, lineno: &mut i32) -> () {
@@ -3775,6 +3960,7 @@ pub extern "C" fn emit_destructor_code(out: *mut FILE, sp: &Symbol,
     { let __p = &mut *lineno; let __t = *__p; *__p += 1; __t };
     return;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn has_destructor(sp: &Symbol, lemp: &Lemon) -> i32 {
     let mut ret: i32 = 0;
@@ -3787,6 +3973,7 @@ pub extern "C" fn has_destructor(sp: &Symbol, lemp: &Lemon) -> i32 {
     }
     return ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn append_str(mut z_text_1: *const i8, mut n: i32, mut p1: i32,
     p2: i32) -> *mut i8 {
@@ -3870,6 +4057,7 @@ pub extern "C" fn append_str(mut z_text_1: *const i8, mut n: i32, mut p1: i32,
         return z_1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn emit_code(out: *mut FILE, rp: &Rule, lemp: &Lemon,
     lineno: &mut i32) -> () {
@@ -3963,6 +4151,7 @@ pub extern "C" fn emit_code(out: *mut FILE, rp: &Rule, lemp: &Lemon,
     }
     return;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn print_stack_union(out: *mut FILE, lemp: &Lemon,
     plineno: &mut i32, mhflag: i32) -> () {
@@ -4209,6 +4398,7 @@ pub extern "C" fn print_stack_union(out: *mut FILE, lemp: &Lemon,
     { let __p = &mut lineno; let __t = *__p; *__p += 1; __t };
     *plineno = lineno;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Axset {
@@ -4217,6 +4407,7 @@ struct Axset {
     n_action: i32,
     i_order: i32,
 }
+
 extern "C" fn axset_compare(a: *const (), b: *const ()) -> i32 {
     let p1: *mut Axset = a as *mut Axset;
     let p2: *mut Axset = b as *mut Axset;
@@ -4232,6 +4423,7 @@ extern "C" fn axset_compare(a: *const (), b: *const ()) -> i32 {
     } else { { let _ = 0; } };
     return c;
 }
+
 extern "C" fn write_rule_text(out: *mut FILE, rp: &Rule) -> () {
     let mut j: i32 = 0;
     unsafe {
@@ -4285,9 +4477,11 @@ extern "C" fn write_rule_text(out: *mut FILE, rp: &Rule) -> () {
         }
     }
 }
+
 extern "C" fn notnull(z: *const i8) -> i32 {
     return (!(z).is_null() && unsafe { *z.offset(0 as isize) } != 0) as i32;
 }
+
 extern "C" fn state_resort_compare(a: *const (), b: *const ()) -> i32 {
     let p_a: *const State = unsafe { *(a as *mut *const State) };
     let p_b: *const State = unsafe { *(b as *mut *const State) };
@@ -4310,14 +4504,21 @@ extern "C" fn state_resort_compare(a: *const (), b: *const ()) -> i32 {
     } else { { let _ = 0; } };
     return n;
 }
+
 static mut actionfreelist: *mut Action = core::ptr::null_mut();
+
 static mut templatename: [i8; 9] =
     [108 as i8, 101 as i8, 109 as i8, 112 as i8, 97 as i8, 114 as i8,
             46 as i8, 99 as i8, 0 as i8];
+
 static mut empty: [i8; 1] = [0 as i8];
+
 static mut z_1: *mut i8 = core::ptr::null_mut();
+
 static mut alloced: i32 = 0;
+
 static mut used: i32 = 0;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4417,9 +4618,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

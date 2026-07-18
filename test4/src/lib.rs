@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,10 +14,15 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinPthreadT = *mut OpaquePthreadT;
+
 type PthreadT = DarwinPthreadT;
+
 type ClientData = *mut ();
+
 type TclCommand = *mut Tcl_Command_;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -29,6 +35,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -108,6 +115,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -156,6 +164,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -292,6 +301,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -315,6 +325,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -387,6 +398,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Thread {
@@ -405,12 +417,15 @@ struct Thread {
     argv: [*const i8; 100],
     colv: [*const i8; 100],
 }
+
 static mut threadset: [Thread; 26] = unsafe { core::mem::zeroed() };
+
 extern "C" fn test_barrier() -> () {
     let p_mutex: *mut Sqlite3Mutex = unsafe { sqlite3_mutex_alloc(8) };
     unsafe { sqlite3_mutex_enter(p_mutex) };
     unsafe { sqlite3_mutex_leave(p_mutex) };
 }
+
 extern "C" fn test_thread_main(p_arg_1: *mut ()) -> *mut () {
     let p: *mut Thread = p_arg_1 as *mut Thread;
     if !(unsafe { (*p).db }).is_null() {
@@ -479,6 +494,7 @@ extern "C" fn test_thread_main(p_arg_1: *mut ()) -> *mut () {
     unsafe { sqlite3_thread_cleanup() };
     return core::ptr::null_mut();
 }
+
 extern "C" fn parse_thread_id(interp: *mut TclInterp, z_arg_1: *const i8)
     -> i32 {
     if z_arg_1 == core::ptr::null() ||
@@ -496,6 +512,7 @@ extern "C" fn parse_thread_id(interp: *mut TclInterp, z_arg_1: *const i8)
     }
     return unsafe { *z_arg_1.offset(0 as isize) } as i32 - 'A' as i32;
 }
+
 extern "C" fn tcl_thread_create(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -551,11 +568,13 @@ extern "C" fn tcl_thread_create(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn test_thread_wait(p: &Thread) -> () {
     test_barrier();
     while (*p).opnum > (*p).completed { unsafe { sched_yield() }; }
     test_barrier();
 }
+
 extern "C" fn tcl_thread_wait(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -582,6 +601,7 @@ extern "C" fn tcl_thread_wait(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn test_stop_thread(p: *mut Thread) -> () {
     test_thread_wait(unsafe { &*p });
     unsafe { (*p).x_op = None };
@@ -593,6 +613,7 @@ extern "C" fn test_stop_thread(p: *mut Thread) -> () {
     unsafe { (*p).z_filename = core::ptr::null_mut() };
     unsafe { (*p).busy = 0 };
 }
+
 extern "C" fn tcl_thread_halt(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -640,6 +661,7 @@ extern "C" fn tcl_thread_halt(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_argc(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -677,6 +699,7 @@ extern "C" fn tcl_thread_argc(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_argv(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -722,6 +745,7 @@ extern "C" fn tcl_thread_argv(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_colname(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -767,6 +791,7 @@ extern "C" fn tcl_thread_colname(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_result(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -796,6 +821,7 @@ extern "C" fn tcl_thread_result(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_error(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -826,6 +852,7 @@ extern "C" fn tcl_thread_error(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn do_compile(p: *mut Thread) -> () {
     if unsafe { (*p).db } == core::ptr::null_mut() {
         unsafe {
@@ -854,6 +881,7 @@ extern "C" fn do_compile(p: *mut Thread) -> () {
             }
     };
 }
+
 extern "C" fn tcl_thread_compile(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -894,6 +922,7 @@ extern "C" fn tcl_thread_compile(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn do_step(p: *mut Thread) -> () {
     let mut i: i32 = 0;
     if unsafe { (*p).p_stmt } == core::ptr::null_mut() {
@@ -950,6 +979,7 @@ extern "C" fn do_step(p: *mut Thread) -> () {
         }
     }
 }
+
 extern "C" fn tcl_thread_step(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -984,6 +1014,7 @@ extern "C" fn tcl_thread_step(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn do_finalize(p: *mut Thread) -> () {
     if unsafe { (*p).p_stmt } == core::ptr::null_mut() {
         unsafe {
@@ -1002,6 +1033,7 @@ extern "C" fn do_finalize(p: *mut Thread) -> () {
     unsafe { (*p).rc = unsafe { sqlite3_finalize(unsafe { (*p).p_stmt }) } };
     unsafe { (*p).p_stmt = core::ptr::null_mut() };
 }
+
 extern "C" fn tcl_thread_finalize(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1038,6 +1070,7 @@ extern "C" fn tcl_thread_finalize(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_swap(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1079,6 +1112,7 @@ extern "C" fn tcl_thread_swap(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_stmt_get(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1116,6 +1150,7 @@ extern "C" fn tcl_thread_stmt_get(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_db_put(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1149,6 +1184,7 @@ extern "C" fn tcl_thread_db_put(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn tcl_thread_db_get(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1186,6 +1222,7 @@ extern "C" fn tcl_thread_db_get(not_used_1: *mut (), interp: *mut TclInterp,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest4_init(interp: *mut TclInterp) -> i32 {
     unsafe {
@@ -1221,6 +1258,7 @@ pub extern "C" fn sqlitetest4_init(interp: *mut TclInterp) -> i32 {
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlitetest4InitS0N19sqlitetest4InitS0 {
@@ -1228,6 +1266,7 @@ struct Sqlitetest4InitS0N19sqlitetest4InitS0 {
     x_proc: Option<unsafe extern "C" fn(*mut (), *mut TclInterp, i32,
         *mut *const i8) -> i32>,
 }
+
 static mut a_cmd: [Sqlitetest4InitS0N19sqlitetest4InitS0; 15] =
     [Sqlitetest4InitS0N19sqlitetest4InitS0 {
                 z_name: c"thread_create".as_ptr() as *mut i8,
@@ -1349,6 +1388,7 @@ static mut a_cmd: [Sqlitetest4InitS0N19sqlitetest4InitS0; 15] =
                                     *mut *const i8) -> i32>(tcl_thread_stmt_get as *const ())
                     }),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4163,64 +4203,77 @@ extern "C" {
     deleteProc: unsafe extern "C" fn(*mut ()) -> ())
     -> TclCommand;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_Command_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadT {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadAttrT {
     _opaque: [u8; 0],
 }
+
 type PthreadAttrT = OpaquePthreadAttrT;

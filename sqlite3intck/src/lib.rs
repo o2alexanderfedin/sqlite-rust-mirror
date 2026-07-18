@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Intck {
@@ -18,6 +21,7 @@ struct Sqlite3Intck {
     z_err: *mut i8,
     z_test_sql: *mut i8,
 }
+
 extern "C" fn intck_get_token(z: *const i8) -> i32 {
     let c: i8 = unsafe { *z.offset(0 as isize) } as i8;
     let mut i_ret: i32 = 1;
@@ -53,10 +57,12 @@ extern "C" fn intck_get_token(z: *const i8) -> i32 {
     }
     return i_ret;
 }
+
 extern "C" fn intck_is_space(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                     c as i32 == '\n' as i32 || c as i32 == '\r' as i32) as i32;
 }
+
 extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     pn_byte_1: &mut i32) -> *const i8 {
     let mut i_off: i32 = 0;
@@ -166,6 +172,7 @@ extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     *pn_byte_1 = n_ret;
     return z_ret;
 }
+
 extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
     n_val_1: i32, ap_val_1: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const i8 =
@@ -194,6 +201,7 @@ extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
     if !(p).is_null() {
@@ -211,6 +219,7 @@ pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     pp_out: &mut *mut Sqlite3Intck) -> i32 {
@@ -257,6 +266,7 @@ pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     *pp_out = p_new;
     return rc;
 }
+
 extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
     (*p).rc = unsafe { sqlite3_errcode((*p).db) };
     unsafe { sqlite3_free((*p).z_err as *mut ()) };
@@ -266,6 +276,7 @@ extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
                 unsafe { sqlite3_errmsg((*p).db) })
         };
 }
+
 extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -290,6 +301,7 @@ extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     }
     return p_ret;
 }
+
 unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -305,6 +317,7 @@ unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     ();
     return p_ret;
 }
+
 unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -320,6 +333,7 @@ unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     ();
     return z_ret;
 }
+
 extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
@@ -327,6 +341,7 @@ extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
         intck_save_errmsg(unsafe { &mut *p });
     }
 }
+
 extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let z_prev: *mut i8 = unsafe { (*p).z_obj };
@@ -385,11 +400,13 @@ extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     }
     unsafe { sqlite3_free(z_prev as *mut ()) };
 }
+
 extern "C" fn intck_step(p: &Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> i32 {
     if (*p).rc != 0 { return (*p).rc; }
     return unsafe { sqlite3_step(p_stmt_1) };
 }
+
 extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     let mut b_ret: i32 = 0;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -402,12 +419,14 @@ extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     intck_finalize(p, p_stmt);
     return b_ret;
 }
+
 extern "C" fn intck_exec(p: *mut Sqlite3Intck, z_sql_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt = intck_prepare(p, z_sql_1);
     intck_step(unsafe { &*p }, p_stmt);
     intck_finalize(p, p_stmt);
 }
+
 extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     -> i32 {
     let mut b_ret: i32 = 0;
@@ -424,6 +443,7 @@ extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     intck_finalize(p, p_stmt);
     return b_ret;
 }
+
 extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     z_prev_1: *const i8, pn_key_val_1: *mut i32) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -480,6 +500,7 @@ extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     }
     return z_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 {
@@ -549,6 +570,7 @@ pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     }
     return unsafe { (*p).rc };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     if !((*p).p_check == core::ptr::null_mut() ||
@@ -567,6 +589,7 @@ pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     }
     return core::ptr::null();
 }
+
 extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     let mut ii: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -769,6 +792,7 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     unsafe { sqlite3_free(z_sql as *mut ()) };
     intck_finalize(p, p_xinfo);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 && !(unsafe { (*p).p_check }).is_null() {
@@ -787,12 +811,14 @@ pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     }
     return unsafe { (*p).rc };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_error(p: &Sqlite3Intck,
     pz_err: *mut *const i8) -> i32 {
     if !(pz_err).is_null() { unsafe { *pz_err = (*p).z_err as *const i8 }; }
     return if (*p).rc == 101 { 0 } else { (*p).rc };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_test_sql(p: *mut Sqlite3Intck,
     z_obj: *const i8) -> *const i8 {
@@ -818,6 +844,7 @@ pub extern "C" fn sqlite3_intck_test_sql(p: *mut Sqlite3Intck,
     }
     return unsafe { (*p).z_test_sql } as *const i8;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

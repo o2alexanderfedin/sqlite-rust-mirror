@@ -1,20 +1,25 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TemplatevtabVtab {
     base: Sqlite3Vtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TemplatevtabCursor {
     base: Sqlite3VtabCursor,
     i_rowid: Sqlite3Int64,
 }
+
 extern "C" fn templatevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -40,11 +45,13 @@ extern "C" fn templatevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn templatevtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut TemplatevtabVtab = p_vtab_1 as *mut TemplatevtabVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn templatevtab_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut TemplatevtabCursor = core::ptr::null_mut();
@@ -61,11 +68,13 @@ extern "C" fn templatevtab_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn templatevtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut TemplatevtabCursor = cur as *mut TemplatevtabCursor;
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn templatevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut TemplatevtabCursor = cur as *mut TemplatevtabCursor;
     {
@@ -76,6 +85,7 @@ extern "C" fn templatevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn templatevtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const TemplatevtabCursor =
@@ -106,6 +116,7 @@ extern "C" fn templatevtab_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn templatevtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const TemplatevtabCursor =
@@ -113,11 +124,13 @@ extern "C" fn templatevtab_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 extern "C" fn templatevtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const TemplatevtabCursor =
         cur as *mut TemplatevtabCursor as *const TemplatevtabCursor;
     return (unsafe { (*p_cur).i_rowid } >= 10 as i64) as i32;
 }
+
 extern "C" fn templatevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -126,12 +139,14 @@ extern "C" fn templatevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { (*p_cur).i_rowid = 1 as Sqlite3Int64 };
     return 0;
 }
+
 extern "C" fn templatevtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe { (*p_idx_info_1).estimated_cost = 10 as f64 };
     unsafe { (*p_idx_info_1).estimated_rows = 10 as Sqlite3Int64 };
     return 0;
 }
+
 static mut templatevtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -160,6 +175,7 @@ static mut templatevtab_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_templatevtab_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -176,6 +192,7 @@ pub extern "C" fn sqlite3_templatevtab_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

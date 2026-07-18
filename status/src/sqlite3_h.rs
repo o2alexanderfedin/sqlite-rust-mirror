@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Vfs {
     pub(crate) i_version: i32,
@@ -40,12 +42,15 @@ pub(crate) struct Sqlite3Vfs {
     pub(crate) x_next_system_call: Option<unsafe extern "C" fn(*mut Sqlite3Vfs,
         *const i8) -> *const i8>,
 }
+
 pub(crate) type Sqlite3Filename = *const i8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3File {
     pub(crate) p_methods: *const Sqlite3IoMethods,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3IoMethods {
@@ -86,10 +91,15 @@ pub(crate) struct Sqlite3IoMethods {
     pub(crate) x_unfetch: Option<unsafe extern "C" fn(*mut Sqlite3File, i64,
         *mut ()) -> i32>,
 }
+
 pub(crate) type SqliteInt64 = i64;
+
 pub(crate) type Sqlite3Int64 = SqliteInt64;
+
 pub(crate) type Sqlite3SyscallPtr = unsafe extern "C" fn() -> ();
+
 pub(crate) type SqliteUint64 = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Module {
@@ -142,6 +152,7 @@ pub(crate) struct Sqlite3Module {
     pub(crate) x_integrity: Option<unsafe extern "C" fn(*mut Sqlite3Vtab,
         *const i8, *const i8, i32, *mut *mut i8) -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Vtab {
@@ -149,6 +160,7 @@ pub(crate) struct Sqlite3Vtab {
     pub(crate) n_ref: i32,
     pub(crate) z_err_msg: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3IndexInfo {
@@ -166,6 +178,7 @@ pub(crate) struct Sqlite3IndexInfo {
     pub(crate) idx_flags: i32,
     pub(crate) col_used: Sqlite3Uint64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3IndexConstraint {
@@ -174,36 +187,44 @@ pub(crate) struct Sqlite3IndexConstraint {
     pub(crate) usable: u8,
     pub(crate) i_term_offset: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3IndexOrderby {
     pub(crate) i_column: i32,
     pub(crate) desc: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3IndexConstraintUsage {
     pub(crate) argv_index: i32,
     pub(crate) omit: u8,
 }
+
 pub(crate) type Sqlite3Uint64 = SqliteUint64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3VtabCursor {
     pub(crate) p_vtab: *mut Sqlite3Vtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Mutex {
     pub(crate) _opaque: [u8; 0],
 }
+
 pub(crate) type Sqlite3Callback =
     unsafe extern "C" fn(*mut (), i32, *mut *mut i8, *mut *mut i8) -> i32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3ApiRoutines {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3MemMethods {
@@ -217,17 +238,21 @@ pub(crate) struct Sqlite3MemMethods {
     pub(crate) x_shutdown: Option<unsafe extern "C" fn(*mut ()) -> ()>,
     pub(crate) p_app_data: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Stmt {
     pub(crate) _opaque: [u8; 0],
 }
+
 pub(crate) type Sqlite3DestructorType = unsafe extern "C" fn(*mut ()) -> ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Blob {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3MutexMethods {
@@ -248,6 +273,7 @@ pub(crate) struct Sqlite3MutexMethods {
     pub(crate) x_mutex_notheld: Option<unsafe extern "C" fn(*mut Sqlite3Mutex)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3PcacheMethods2 {
@@ -274,17 +300,20 @@ pub(crate) struct Sqlite3PcacheMethods2 {
     pub(crate) x_shrink: Option<unsafe extern "C" fn(*mut Sqlite3Pcache)
         -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Pcache {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3PcachePage {
     pub(crate) p_buf: *mut (),
     pub(crate) p_extra: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3PcacheMethods {
@@ -308,16 +337,19 @@ pub(crate) struct Sqlite3PcacheMethods {
     pub(crate) x_destroy: Option<unsafe extern "C" fn(*mut Sqlite3Pcache)
         -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Backup {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Snapshot {
     pub(crate) hidden: [u8; 48],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3RtreeGeometry {
@@ -327,7 +359,9 @@ pub(crate) struct Sqlite3RtreeGeometry {
     pub(crate) p_user: *mut (),
     pub(crate) x_del_user: Option<unsafe extern "C" fn(*mut ()) -> ()>,
 }
+
 pub(crate) type Sqlite3RtreeDbl = f64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3RtreeQueryInfo {
@@ -348,6 +382,7 @@ pub(crate) struct Sqlite3RtreeQueryInfo {
     pub(crate) r_score: Sqlite3RtreeDbl,
     pub(crate) ap_sql_param: *mut *mut Sqlite3Value,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5ExtensionApi {
@@ -404,25 +439,30 @@ pub(crate) struct Fts5ExtensionApi {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Context {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5PhraseIter {
     pub(crate) a: *const u8,
     pub(crate) b: *const u8,
 }
+
 pub(crate) type Fts5ExtensionFunction =
     unsafe extern "C" fn(*const Fts5ExtensionApi, *mut Fts5Context,
         *mut Sqlite3Context, i32, *mut *mut Sqlite3Value) -> ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Tokenizer {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5TokenizerV2 {
@@ -436,6 +476,7 @@ pub(crate) struct Fts5TokenizerV2 {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct fts5_tokenizer {
@@ -448,6 +489,7 @@ pub(crate) struct fts5_tokenizer {
         unsafe extern "C" fn(*mut (), i32, *const i8, i32, i32, i32) -> i32)
         -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Api {

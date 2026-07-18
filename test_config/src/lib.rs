@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,6 +14,7 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -25,6 +27,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -104,6 +107,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -152,6 +156,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -288,6 +293,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -311,6 +317,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -383,6 +390,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn set_options(interp: *mut TclInterp) -> () {
     unsafe {
         Tcl_SetVar2(interp,
@@ -1320,33 +1328,57 @@ extern "C" fn set_options(interp: *mut TclInterp) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqliteconfig_init(interp: *mut TclInterp) -> i32 {
     set_options(interp);
     return 0;
 }
+
 static cv_max_length: i32 = 1000000000 as i32;
+
 static cv_max_column: i32 = 2000 as i32;
+
 static cv_max_sql_length: i32 = 1000000000 as i32;
+
 static cv_max_expr_depth: i32 = 1000 as i32;
+
 static cv_max_compound_select: i32 = 500 as i32;
+
 static cv_max_vdbe_op: i32 = 250000000 as i32;
+
 static cv_max_function_arg: i32 = 1000 as i32;
+
 static cv_max_variable_number: i32 = 32766 as i32;
+
 static cv_max_page_size: i32 = 65536 as i32;
+
 static cv_max_page_count: i32 = 4294967294u32 as i32;
+
 static cv_max_like_pattern_length: i32 = 50000 as i32;
+
 static cv_max_trigger_depth: i32 = 1000 as i32;
+
 static cv_default_cache_size: i32 = -2000 as i32;
+
 static cv_default_page_size: i32 = 4096 as i32;
+
 static cv_default_file_format: i32 = 4 as i32;
+
 static cv_default_synchronous: i32 = 2 as i32;
+
 static cv_default_wal_synchronous: i32 = 2 as i32;
+
 static cv_max_attached: i32 = 10 as i32;
+
 static cv_max_default_page_size: i32 = 8192 as i32;
+
 static cv_max_worker_threads: i32 = 8 as i32;
+
 static cv_temp_store: i32 = 1 as i32;
+
 static cv___gnuc__: i32 = 1 as i32;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4139,46 +4171,55 @@ extern "C" {
     r#type: i32)
     -> i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

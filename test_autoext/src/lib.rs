@@ -1,10 +1,13 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
+
 extern "C" fn sqr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -19,6 +22,7 @@ extern "C" fn sqr_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn sqr_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -42,6 +46,7 @@ extern "C" fn sqr_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
         return 0;
     }
 }
+
 extern "C" fn cube_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -58,6 +63,7 @@ extern "C" fn cube_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn cube_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -81,6 +87,7 @@ extern "C" fn cube_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
         return 0;
     }
 }
+
 extern "C" fn broken_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -96,6 +103,7 @@ extern "C" fn broken_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
         return 1;
     }
 }
+
 extern "C" fn auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -112,6 +120,7 @@ extern "C" fn auto_ext_sqr_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn cancel_auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -128,6 +137,7 @@ extern "C" fn cancel_auto_ext_sqr_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn auto_ext_cube_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -144,6 +154,7 @@ extern "C" fn auto_ext_cube_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn cancel_auto_ext_cube_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -160,6 +171,7 @@ extern "C" fn cancel_auto_ext_cube_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn auto_ext_broken_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -176,6 +188,7 @@ extern "C" fn auto_ext_broken_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn cancel_auto_ext_broken_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -192,6 +205,7 @@ extern "C" fn cancel_auto_ext_broken_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn reset_auto_ext_obj_cmd(client_data_1: *mut (),
     interp: *const TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -201,6 +215,7 @@ extern "C" fn reset_auto_ext_obj_cmd(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -977,11 +992,13 @@ extern "C" {
     fn Tcl_SetObjResult(interp: *mut TclInterp, resultObjPtr: *mut TclObj)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {

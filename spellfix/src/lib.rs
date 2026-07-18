@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 static mid_class: [u8; 128] =
     [12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8,
             12 as u8, 12 as u8, 11 as u8, 12 as u8, 12 as u8, 11 as u8,
@@ -26,6 +29,7 @@ static mid_class: [u8; 128] =
             8 as u8, 8 as u8, 1 as u8, 2 as u8, 3 as u8, 7 as u8, 3 as u8,
             4 as u8, 1 as u8, 2 as u8, 2 as u8, 3 as u8, 1 as u8, 3 as u8,
             12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8];
+
 static init_class: [u8; 128] =
     [12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8,
             12 as u8, 12 as u8, 11 as u8, 12 as u8, 12 as u8, 11 as u8,
@@ -47,10 +51,12 @@ static init_class: [u8; 128] =
             8 as u8, 8 as u8, 1 as u8, 2 as u8, 3 as u8, 7 as u8, 3 as u8,
             4 as u8, 1 as u8, 2 as u8, 2 as u8, 3 as u8, 9 as u8, 3 as u8,
             12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8];
+
 static class_name: [u8; 14] =
     [46 as u8, 65 as u8, 66 as u8, 67 as u8, 68 as u8, 72 as u8, 76 as u8,
             82 as u8, 77 as u8, 89 as u8, 57 as u8, 32 as u8, 63 as u8,
             0 as u8];
+
 extern "C" fn phonetic_hash(mut z_in_1: *const u8, mut n_in_1: i32)
     -> *mut u8 {
     let z_out: *mut u8 =
@@ -168,6 +174,7 @@ extern "C" fn phonetic_hash(mut z_in_1: *const u8, mut n_in_1: i32)
     unsafe { *z_out.offset(n_out as isize) = 0 as u8 };
     return z_out;
 }
+
 extern "C" fn phonetic_hash_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_in: *const u8 = core::ptr::null();
@@ -188,11 +195,13 @@ extern "C" fn phonetic_hash_sql_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn character_class(c_prev_1: i8, c: i8) -> i8 {
     return if c_prev_1 as i32 == 0 {
                 init_class[(c as i32 & 127) as usize] as i32
             } else { mid_class[(c as i32 & 127) as usize] as i32 } as i8;
 }
+
 extern "C" fn insert_or_delete_cost(c_prev_1: i8, c: i8, c_next_1: i8)
     -> i32 {
     let class_c: i8 = character_class(c_prev_1, c);
@@ -209,6 +218,7 @@ extern "C" fn insert_or_delete_cost(c_prev_1: i8, c: i8, c_next_1: i8)
     }
     return 100;
 }
+
 extern "C" fn substitute_cost(c_prev_1: i8, c_from_1: i8, c_to_1: i8) -> i32 {
     let mut class_from: i8 = 0 as i8;
     let mut class_to: i8 = 0 as i8;
@@ -227,6 +237,7 @@ extern "C" fn substitute_cost(c_prev_1: i8, c_from_1: i8, c_to_1: i8) -> i32 {
     }
     return 100;
 }
+
 extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
     pn_match_1: *mut i32) -> i32 {
     let mut n_a: u32 = 0 as u32;
@@ -472,6 +483,7 @@ extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
     unsafe { sqlite3_free(to_free as *mut ()) };
     return res;
 }
+
 extern "C" fn editdist_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let res: i32 =
@@ -500,6 +512,7 @@ extern "C" fn editdist_sql_func(context: *mut Sqlite3Context, argc: i32,
         }
     } else { unsafe { sqlite3_result_int(context, res) }; }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Cost {
@@ -509,12 +522,14 @@ struct EditDist3Cost {
     i_cost: u16,
     a: [i8; 4],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Config {
     n_lang: i32,
     a: *mut EditDist3Lang,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Lang {
@@ -524,11 +539,13 @@ struct EditDist3Lang {
     i_sub_cost: i32,
     p_cost: *mut EditDist3Cost,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Point {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3From {
@@ -538,6 +555,7 @@ struct EditDist3From {
     ap_subst: *mut *mut EditDist3Cost,
     ap_del: *mut *mut EditDist3Cost,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3FromString {
@@ -546,6 +564,7 @@ struct EditDist3FromString {
     is_prefix: i32,
     a: *mut EditDist3From,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3To {
@@ -553,6 +572,7 @@ struct EditDist3To {
     n_byte: i32,
     ap_ins: *mut *mut EditDist3Cost,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3ToString {
@@ -560,6 +580,7 @@ struct EditDist3ToString {
     n: i32,
     a: *mut EditDist3To,
 }
+
 static mut edit_dist3_lang: EditDist3Lang =
     EditDist3Lang {
         i_lang: 0,
@@ -568,6 +589,7 @@ static mut edit_dist3_lang: EditDist3Lang =
         i_sub_cost: 150,
         p_cost: core::ptr::null_mut(),
     };
+
 extern "C" fn edit_dist3_config_clear(p: *mut EditDist3Config) -> () {
     let mut i: i32 = 0;
     if p == core::ptr::null_mut() { return; }
@@ -596,11 +618,13 @@ extern "C" fn edit_dist3_config_clear(p: *mut EditDist3Config) -> () {
             core::mem::size_of::<EditDist3Config>() as u64)
     };
 }
+
 extern "C" fn edit_dist3_config_delete(p_in_1: *mut ()) -> () {
     let p: *mut EditDist3Config = p_in_1 as *mut EditDist3Config;
     edit_dist3_config_clear(p);
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 extern "C" fn edit_dist3_cost_compare(p_a_1: &EditDist3Cost,
     p_b_1: &EditDist3Cost) -> i32 {
     let mut n: i32 = (*p_a_1).n_from as i32;
@@ -615,6 +639,7 @@ extern "C" fn edit_dist3_cost_compare(p_a_1: &EditDist3Cost,
     if rc == 0 { rc = (*p_a_1).n_from as i32 - (*p_b_1).n_from as i32; }
     return rc;
 }
+
 extern "C" fn edit_dist3_cost_merge(mut p_a_1: *mut EditDist3Cost,
     mut p_b_1: *mut EditDist3Cost) -> *mut EditDist3Cost {
     let mut p_head: *mut EditDist3Cost = core::ptr::null_mut();
@@ -634,6 +659,7 @@ extern "C" fn edit_dist3_cost_merge(mut p_a_1: *mut EditDist3Cost,
     } else { unsafe { *pp_tail = p_b_1 }; }
     return p_head;
 }
+
 extern "C" fn edit_dist3_cost_sort(mut p_list_1: *mut EditDist3Cost)
     -> *mut EditDist3Cost {
     let mut ap: [*mut EditDist3Cost; 60] = [core::ptr::null_mut(); 60];
@@ -677,6 +703,7 @@ extern "C" fn edit_dist3_cost_sort(mut p_list_1: *mut EditDist3Cost)
     }
     return p;
 }
+
 extern "C" fn edit_dist3_config_load(p: *mut EditDist3Config,
     db: *mut Sqlite3, z_table_1: *const i8) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -807,6 +834,7 @@ extern "C" fn edit_dist3_config_load(p: *mut EditDist3Config,
     }
     return rc;
 }
+
 extern "C" fn utf8_len(c: u8, n_1: i32) -> i32 {
     let mut len: i32 = 1;
     if c as i32 > 127 {
@@ -817,6 +845,7 @@ extern "C" fn utf8_len(c: u8, n_1: i32) -> i32 {
     if len > n_1 { len = n_1; }
     return len;
 }
+
 extern "C" fn match_to(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     { let _ = 0; };
     if (*p).a[(*p).n_from as usize] as i32 !=
@@ -834,6 +863,7 @@ extern "C" fn match_to(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn match_from(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     { let _ = 0; };
     if (*p).n_from != 0 {
@@ -850,6 +880,7 @@ extern "C" fn match_from(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn match_from_to(p_str_1: &EditDist3FromString, n1: i32,
     z2: *const i8, n2: i32) -> i32 {
     let b1: i32 = unsafe { (*(*p_str_1).a.offset(n1 as isize)).n_byte };
@@ -867,6 +898,7 @@ extern "C" fn match_from_to(p_str_1: &EditDist3FromString, n1: i32,
     }
     return 1;
 }
+
 extern "C" fn edit_dist3_from_string_delete(p: *mut EditDist3FromString)
     -> () {
     let mut i: i32 = 0;
@@ -894,6 +926,7 @@ extern "C" fn edit_dist3_from_string_delete(p: *mut EditDist3FromString)
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn edit_dist3_from_string_new(p_lang_1: &EditDist3Lang,
     z: *const i8, mut n: i32) -> *mut EditDist3FromString {
     let mut p_str: *mut EditDist3FromString = core::ptr::null_mut();
@@ -1018,6 +1051,7 @@ extern "C" fn edit_dist3_from_string_new(p_lang_1: &EditDist3Lang,
     }
     return p_str;
 }
+
 extern "C" fn update_cost(m: *mut u32, i: i32, j: i32, i_cost_1: i32) -> () {
     let mut b: u32 = 0 as u32;
     { let _ = 0; };
@@ -1027,6 +1061,7 @@ extern "C" fn update_cost(m: *mut u32, i: i32, j: i32, i_cost_1: i32) -> () {
         unsafe { *m.offset(i as isize) = b };
     }
 }
+
 extern "C" fn edit_dist3_core(p_from_1: &EditDist3FromString, z2: *const i8,
     n2: i32, p_lang_1: &EditDist3Lang, pn_match_1: *mut i32) -> i32 {
     let mut k: i32 = 0;
@@ -1470,6 +1505,7 @@ extern "C" fn edit_dist3_core(p_from_1: &EditDist3FromString, z2: *const i8,
     }
     unreachable!();
 }
+
 extern "C" fn edit_dist3_find_lang(p_config_1: &EditDist3Config,
     i_lang_1: i32) -> *const EditDist3Lang {
     unsafe {
@@ -1493,6 +1529,7 @@ extern "C" fn edit_dist3_find_lang(p_config_1: &EditDist3Config,
         return &edit_dist3_lang;
     }
 }
+
 extern "C" fn edit_dist3_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_config: *mut EditDist3Config =
@@ -1546,6 +1583,7 @@ extern "C" fn edit_dist3_sql_func(context: *mut Sqlite3Context, argc: i32,
         } else { unsafe { sqlite3_result_int(context, dist) }; }
     }
 }
+
 extern "C" fn edit_dist3_install(db: *mut Sqlite3) -> i32 {
     let mut rc: i32 = 0;
     let p_config: *mut EditDist3Config =
@@ -1585,6 +1623,7 @@ extern "C" fn edit_dist3_install(db: *mut Sqlite3) -> i32 {
     } else { unsafe { sqlite3_free(p_config as *mut ()) }; }
     return rc;
 }
+
 static sqlite3_utf8_trans1: [u8; 64] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -1596,6 +1635,7 @@ static sqlite3_utf8_trans1: [u8; 64] =
             14 as u8, 15 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8,
             5 as u8, 6 as u8, 7 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8,
             0 as u8, 1 as u8, 0 as u8, 0 as u8];
+
 extern "C" fn utf8_read(z: &[u8], p_size_1: &mut i32) -> i32 {
     let mut c: i32 = 0;
     let mut i: i32 = 0;
@@ -1618,6 +1658,7 @@ extern "C" fn utf8_read(z: &[u8], p_size_1: &mut i32) -> i32 {
     *p_size_1 = i;
     return c;
 }
+
 extern "C" fn utf8_charlen(z_in_1: &[i8]) -> i32 {
     let mut i: i32 = 0;
     let mut n_char: i32 = 0;
@@ -1645,6 +1686,7 @@ extern "C" fn utf8_charlen(z_in_1: &[i8]) -> i32 {
     }
     return n_char;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Transliteration {
@@ -1654,6 +1696,7 @@ struct Transliteration {
     c_to2: u8,
     c_to3: u8,
 }
+
 static translit: [Transliteration; 389] =
     [Transliteration {
                 c_from: 160 as u16,
@@ -4378,6 +4421,7 @@ static translit: [Transliteration; 389] =
                 c_to2: 0 as u8,
                 c_to3: 0 as u8,
             }];
+
 extern "C" fn spellfix_find_translit(c: i32, px_top_1: &mut i32)
     -> *const Transliteration {
     *px_top_1 =
@@ -4386,6 +4430,7 @@ extern "C" fn spellfix_find_translit(c: i32, px_top_1: &mut i32)
             as i32;
     return &raw const translit[0 as usize] as *const Transliteration;
 }
+
 extern "C" fn transliterate(mut z_in_1: *const u8, mut n_in_1: i32)
     -> *mut u8 {
     let z_out: *mut u8 =
@@ -4495,6 +4540,7 @@ extern "C" fn transliterate(mut z_in_1: *const u8, mut n_in_1: i32)
     unsafe { *z_out.offset(n_out as isize) = 0 as u8 };
     return z_out;
 }
+
 extern "C" fn translen_to_charlen(z_in_1: &[i8], n_trans_1: i32) -> i32 {
     let mut i: i32 = 0;
     let mut c: i32 = 0;
@@ -4555,6 +4601,7 @@ extern "C" fn translen_to_charlen(z_in_1: &[i8], n_trans_1: i32) -> i32 {
     }
     return n_char;
 }
+
 extern "C" fn transliterate_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_in: *const u8 =
@@ -4571,6 +4618,7 @@ extern "C" fn transliterate_sql_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn script_code_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_in: *const u8 =
@@ -4623,6 +4671,7 @@ extern "C" fn script_code_sql_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_int(context, res) };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Spellfix1Vtab {
@@ -4633,6 +4682,7 @@ struct Spellfix1Vtab {
     z_cost_table: *mut i8,
     p_config3: *mut EditDist3Config,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Spellfix1Cursor {
@@ -4650,6 +4700,7 @@ struct Spellfix1Cursor {
     p_full_scan: *mut Sqlite3Stmt,
     a: *mut Spellfix1Row,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Spellfix1Row {
@@ -4661,6 +4712,7 @@ struct Spellfix1Row {
     i_matchlen: i32,
     z_hash: [i8; 32],
 }
+
 unsafe extern "C" fn spellfix1_db_exec(p_rc_1: &mut i32, db: *mut Sqlite3,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -4680,6 +4732,7 @@ unsafe extern "C" fn spellfix1_db_exec(p_rc_1: &mut i32, db: *mut Sqlite3,
         unsafe { sqlite3_free(z_sql as *mut ()) };
     }
 }
+
 extern "C" fn spellfix1_uninit(is_destroy_1: i32, p_v_tab_1: *mut Sqlite3Vtab)
     -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -4701,12 +4754,15 @@ extern "C" fn spellfix1_uninit(is_destroy_1: i32, p_v_tab_1: *mut Sqlite3Vtab)
     }
     return rc;
 }
+
 extern "C" fn spellfix1_disconnect(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     return spellfix1_uninit(0, p_v_tab_1);
 }
+
 extern "C" fn spellfix1_destroy(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     return spellfix1_uninit(1, p_v_tab_1);
 }
+
 extern "C" fn spellfix1_dequote(mut z_in_1: *const i8) -> *mut i8 {
     let mut z_out: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -4769,6 +4825,7 @@ extern "C" fn spellfix1_dequote(mut z_in_1: *const i8) -> *mut i8 {
     }
     return z_out;
 }
+
 extern "C" fn spellfix1_init(is_create_1: i32, db: *mut Sqlite3,
     p_aux_1: *mut (), argc: i32, argv: *const *const i8,
     pp_v_tab_1: &mut *mut Sqlite3Vtab, pz_err_1: &mut *mut i8) -> i32 {
@@ -4873,18 +4930,21 @@ extern "C" fn spellfix1_init(is_create_1: i32, db: *mut Sqlite3,
     } else { *pp_v_tab_1 = p_new as *mut Sqlite3Vtab; }
     return rc;
 }
+
 extern "C" fn spellfix1_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_v_tab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     return spellfix1_init(0, db, p_aux_1, argc, argv,
             unsafe { &mut *pp_v_tab_1 }, unsafe { &mut *pz_err_1 });
 }
+
 extern "C" fn spellfix1_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_v_tab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     return spellfix1_init(1, db, p_aux_1, argc, argv,
             unsafe { &mut *pp_v_tab_1 }, unsafe { &mut *pz_err_1 });
 }
+
 extern "C" fn spellfix1_reset_cursor(p_cur_1: &mut Spellfix1Cursor) -> () {
     let mut i: i32 = 0;
     {
@@ -4910,6 +4970,7 @@ extern "C" fn spellfix1_reset_cursor(p_cur_1: &mut Spellfix1Cursor) -> () {
         (*p_cur_1).p_full_scan = core::ptr::null_mut();
     }
 }
+
 extern "C" fn spellfix1_resize_cursor(p_cur_1: *mut Spellfix1Cursor, n_1: i32)
     -> () {
     let mut a_new: *mut Spellfix1Row = core::ptr::null_mut();
@@ -4929,6 +4990,7 @@ extern "C" fn spellfix1_resize_cursor(p_cur_1: *mut Spellfix1Cursor, n_1: i32)
         unsafe { (*p_cur_1).a = a_new };
     }
 }
+
 extern "C" fn spellfix1_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
     spellfix1_reset_cursor(unsafe { &mut *p_cur });
@@ -4937,6 +4999,7 @@ extern "C" fn spellfix1_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn spellfix1_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -5119,6 +5182,7 @@ extern "C" fn spellfix1_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn spellfix1_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -5137,6 +5201,7 @@ extern "C" fn spellfix1_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn spellfix1_score(i_distance_1: i32, mut i_rank_1: i32) -> i32 {
     let mut i_log2: i32 = 0;
     {
@@ -5152,11 +5217,13 @@ extern "C" fn spellfix1_score(i_distance_1: i32, mut i_rank_1: i32) -> i32 {
     }
     return i_distance_1 + 32 - i_log2;
 }
+
 extern "C" fn spellfix1_row_compare(a_1: *const (), b_1: *const ()) -> i32 {
     let a: *const Spellfix1Row = a_1 as *const Spellfix1Row;
     let b: *const Spellfix1Row = b_1 as *const Spellfix1Row;
     return unsafe { (*a).i_score } - unsafe { (*b).i_score } as i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MatchQuery {
@@ -5175,6 +5242,7 @@ struct MatchQuery {
     n_run: i32,
     az_prior: [[i8; 32]; 1],
 }
+
 extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
     n_query_1: i32) -> () {
     let mut z_k1: *const i8 = core::ptr::null();
@@ -5360,6 +5428,7 @@ extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
     rc = unsafe { sqlite3_reset(p_stmt) };
     if rc != 0 { (*p).rc = rc; }
 }
+
 extern "C" fn spellfix1_filter_for_match(p_cur_1: *mut Spellfix1Cursor,
     argc: i32, argv: *const *mut Sqlite3Value) -> i32 {
     let mut p_match_str3: *mut EditDist3FromString = core::ptr::null_mut();
@@ -5553,6 +5622,7 @@ extern "C" fn spellfix1_filter_for_match(p_cur_1: *mut Spellfix1Cursor,
     edit_dist3_from_string_delete(p_match_str3);
     return x.rc;
 }
+
 extern "C" fn spellfix1_filter_for_full_scan(p_cur_1: *mut Spellfix1Cursor,
     argc: i32, argv: *const *mut Sqlite3Value) -> i32 {
     let mut rc: i32 = 0;
@@ -5598,6 +5668,7 @@ extern "C" fn spellfix1_filter_for_full_scan(p_cur_1: *mut Spellfix1Cursor,
     } else { unsafe { (*p_cur_1).i_row = 0 }; }
     return rc;
 }
+
 extern "C" fn spellfix1_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
@@ -5614,6 +5685,7 @@ extern "C" fn spellfix1_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     }
     return rc;
 }
+
 extern "C" fn spellfix1_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
     let mut rc: i32 = 0;
@@ -5635,11 +5707,13 @@ extern "C" fn spellfix1_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn spellfix1_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const Spellfix1Cursor =
         cur as *mut Spellfix1Cursor as *const Spellfix1Cursor;
     return (unsafe { (*p_cur).i_row } >= unsafe { (*p_cur).n_row }) as i32;
 }
+
 extern "C" fn spellfix1_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const Spellfix1Cursor =
@@ -6419,6 +6493,7 @@ extern "C" fn spellfix1_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn spellfix1_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const Spellfix1Cursor =
@@ -6442,6 +6517,7 @@ extern "C" fn spellfix1_rowid(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn spellfix1_get_conflict(db: *mut Sqlite3) -> *const i8 {
     unsafe {
         let e_conflict: i32 = unsafe { sqlite3_vtab_on_conflict(db) };
@@ -6454,6 +6530,7 @@ extern "C" fn spellfix1_get_conflict(db: *mut Sqlite3) -> *const i8 {
         return az_conflict[(e_conflict - 1) as usize];
     }
 }
+
 extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let mut rc: i32 = 0;
@@ -6659,6 +6736,7 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     }
     return rc;
 }
+
 extern "C" fn spellfix1_rename(p_v_tab_1: *mut Sqlite3Vtab,
     z_new_1: *const i8) -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -6681,6 +6759,7 @@ extern "C" fn spellfix1_rename(p_v_tab_1: *mut Sqlite3Vtab,
     } else { unsafe { sqlite3_free(z_new_name as *mut ()) }; }
     return rc;
 }
+
 static mut spellfix1_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -6709,6 +6788,7 @@ static mut spellfix1_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn spellfix1_register(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -6772,6 +6852,7 @@ extern "C" fn spellfix1_register(db: *mut Sqlite3) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_spellfix_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -6779,10 +6860,12 @@ pub extern "C" fn sqlite3_spellfix_init(db: *mut Sqlite3,
     return spellfix1_register(db);
     return 0;
 }
+
 static mut az_conflict: [*const i8; 5] =
     [c"ROLLBACK".as_ptr() as *const i8, c"IGNORE".as_ptr() as *const i8,
             c"ABORT".as_ptr() as *const i8, c"ABORT".as_ptr() as *const i8,
             c"REPLACE".as_ptr() as *const i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

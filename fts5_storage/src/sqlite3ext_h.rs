@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3ApiRoutines {
     pub(crate) aggregate_context: Option<unsafe extern "C" fn(*mut Sqlite3Context,
@@ -559,6 +561,7 @@ pub(crate) struct Sqlite3ApiRoutines {
     pub(crate) result_str: Option<unsafe extern "C" fn(*mut Sqlite3Context,
         *mut Sqlite3Str, i32) -> ()>,
 }
+
 pub(crate) type Sqlite3LoadextEntry =
     unsafe extern "C" fn(*mut Sqlite3, *mut *mut i8,
         *const Sqlite3ApiRoutines) -> i32;

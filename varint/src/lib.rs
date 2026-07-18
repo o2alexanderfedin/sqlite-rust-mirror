@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 extern "C" fn hex_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -11,12 +12,14 @@ extern "C" fn hex_value(c: i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn to_hex(c: u8) -> i8 {
     return unsafe {
             *(c"0123456789abcdef".as_ptr() as
                         *mut i8).offset((c as i32 & 15) as isize)
         };
 }
+
 extern "C" fn put_varint(p: *mut u8, mut v: u64) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -68,6 +71,7 @@ extern "C" fn put_varint(p: *mut u8, mut v: u64) -> i32 {
     }
     return n;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -231,12 +235,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -252,9 +258,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

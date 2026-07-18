@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -7,7 +8,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct HighlightContext {
@@ -23,6 +26,7 @@ struct HighlightContext {
     b_open: i32,
     z_out: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CInstIter {
@@ -34,6 +38,7 @@ struct CInstIter {
     i_start: i32,
     i_end: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5SFinder {
@@ -43,6 +48,7 @@ struct Fts5SFinder {
     a_first: *mut i32,
     z_doc: *const i8,
 }
+
 extern "C" fn fts5_value_to_text(p_val_1: *mut Sqlite3Value) -> *const i8 {
     let z_ret: *const i8 =
         unsafe { sqlite3_value_text(p_val_1) } as *const i8;
@@ -50,6 +56,7 @@ extern "C" fn fts5_value_to_text(p_val_1: *mut Sqlite3Value) -> *const i8 {
             z_ret
         } else { c"".as_ptr() as *mut i8 as *const i8 };
 }
+
 extern "C" fn fts5_sentence_finder_add(p: &mut Fts5SFinder, i_add_1: i32)
     -> i32 {
     if (*p).n_first_alloc == (*p).n_first {
@@ -75,6 +82,7 @@ extern "C" fn fts5_sentence_finder_add(p: &mut Fts5SFinder, i_add_1: i32)
     };
     return 0;
 }
+
 extern "C" fn fts5_sentence_finder_cb(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_start_off_1: i32,
     i_end_off_1: i32) -> i32 {
@@ -118,6 +126,7 @@ extern "C" fn fts5_sentence_finder_cb(p_context_1: *mut (), tflags: i32,
     }
     return rc;
 }
+
 extern "C" fn fts5_snippet_score(p_api_1: &Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, n_docsize_1: i32, a_seen_1: *mut u8,
     i_col_1: i32, i_pos_1: i32, n_token_1: i32, pn_score_1: &mut i32,
@@ -173,6 +182,7 @@ extern "C" fn fts5_snippet_score(p_api_1: &Fts5ExtensionApi,
     }
     return rc;
 }
+
 extern "C" fn fts5_c_inst_iter_next(p_iter_1: &mut CInstIter) -> i32 {
     let mut rc: i32 = 0;
     (*p_iter_1).i_start = -1;
@@ -214,6 +224,7 @@ extern "C" fn fts5_c_inst_iter_next(p_iter_1: &mut CInstIter) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn fts5_c_inst_iter_init(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, i_col_1: i32, p_iter_1: *mut CInstIter)
     -> i32 {
@@ -234,6 +245,7 @@ extern "C" fn fts5_c_inst_iter_init(p_api_1: *const Fts5ExtensionApi,
     if rc == 0 { rc = fts5_c_inst_iter_next(unsafe { &mut *p_iter_1 }); }
     return rc;
 }
+
 extern "C" fn fts5_highlight_append(p_rc_1: &mut i32,
     p: *mut HighlightContext, z: *const i8, mut n: i32) -> () {
     if *p_rc_1 == 0 && !(z).is_null() {
@@ -248,6 +260,7 @@ extern "C" fn fts5_highlight_append(p_rc_1: &mut i32,
         if unsafe { (*p).z_out } == core::ptr::null_mut() { *p_rc_1 = 7; }
     }
 }
+
 extern "C" fn fts5_highlight_cb(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_start_off_1: i32,
     i_end_off_1: i32) -> i32 {
@@ -331,6 +344,7 @@ extern "C" fn fts5_highlight_cb(p_context_1: *mut (), tflags: i32,
     }
     return rc;
 }
+
 extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -593,6 +607,7 @@ extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
     unsafe { sqlite3_free(a_seen as *mut ()) };
     unsafe { sqlite3_free(s_finder.a_first as *mut ()) };
 }
+
 extern "C" fn fts5_highlight_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -675,6 +690,7 @@ extern "C" fn fts5_highlight_function(p_api_1: *const Fts5ExtensionApi,
     }
     if rc != 0 { unsafe { sqlite3_result_error_code(p_ctx_1, rc) }; }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Bm25Data {
@@ -683,6 +699,7 @@ struct Fts5Bm25Data {
     a_idf: *mut f64,
     a_freq: *mut f64,
 }
+
 extern "C" fn fts5_count_cb(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_user_data_1: *mut ()) -> i32 {
     let pn: *mut Sqlite3Int64 = p_user_data_1 as *mut Sqlite3Int64;
@@ -690,6 +707,7 @@ extern "C" fn fts5_count_cb(p_api_1: *const Fts5ExtensionApi,
     { let __p = unsafe { &mut *pn }; let __t = *__p; *__p += 1; __t };
     return 0;
 }
+
 extern "C" fn fts5_bm25_get_data(p_api_1: &Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, pp_data_1: &mut *mut Fts5Bm25Data) -> i32 {
     let mut rc: i32 = 0;
@@ -784,6 +802,7 @@ extern "C" fn fts5_bm25_get_data(p_api_1: &Fts5ExtensionApi,
     *pp_data_1 = p;
     return rc;
 }
+
 extern "C" fn fts5_bm25_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -872,6 +891,7 @@ extern "C" fn fts5_bm25_function(p_api_1: *const Fts5ExtensionApi,
         unsafe { sqlite3_result_double(p_ctx_1, -1.0 * score) };
     } else { unsafe { sqlite3_result_error_code(p_ctx_1, rc) }; }
 }
+
 extern "C" fn fts5_get_locale_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -933,6 +953,7 @@ extern "C" fn fts5_get_locale_function(p_api_1: *const Fts5ExtensionApi,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_aux_init(p_api: *mut Fts5Api) -> i32 {
     let a_builtin: [BuiltinN7Builtin; 4] =
@@ -998,6 +1019,7 @@ pub extern "C" fn sqlite3_fts5_aux_init(p_api: *mut Fts5Api) -> i32 {
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuiltinN7Builtin {
@@ -1008,6 +1030,7 @@ struct BuiltinN7Builtin {
         -> ()>,
     x_destroy: Option<unsafe extern "C" fn(*mut ()) -> ()>,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

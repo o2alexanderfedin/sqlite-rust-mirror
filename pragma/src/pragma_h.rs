@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PragmaName {
     pub(crate) z_name: *const i8,
@@ -8,6 +10,7 @@ pub(crate) struct PragmaName {
     pub(crate) n_prag_c_name: u8,
     pub(crate) i_arg: u64,
 }
+
 pub(crate) static mut a_pragma_name: [PragmaName; 67] =
     [PragmaName {
                 z_name: c"analysis_limit".as_ptr() as *const i8,
@@ -545,6 +548,7 @@ pub(crate) static mut a_pragma_name: [PragmaName; 67] =
                 n_prag_c_name: 0 as u8,
                 i_arg: (1 | 134217728) as u64,
             }];
+
 pub(crate) static mut prag_c_name: [*const i8; 57] =
     [c"id".as_ptr() as *const i8, c"seq".as_ptr() as *const i8,
             c"table".as_ptr() as *const i8, c"from".as_ptr() as *const i8,

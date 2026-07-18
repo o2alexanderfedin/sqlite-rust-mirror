@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,8 +16,11 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinIntptrT = i64;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -64,6 +68,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -136,6 +141,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -148,6 +154,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -227,6 +234,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -363,6 +371,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -411,6 +420,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -446,6 +456,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VdbeSorter {
@@ -468,6 +479,7 @@ struct VdbeSorter {
     type_mask: u8,
     a_task: [SortSubtask; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PmaReader {
@@ -483,6 +495,7 @@ struct PmaReader {
     a_map: *mut u8,
     p_incr: *mut IncrMerger,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IncrMerger {
@@ -494,6 +507,7 @@ struct IncrMerger {
     b_use_thread: i32,
     a_file: [SorterFile; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SortSubtask {
@@ -509,6 +523,7 @@ struct SortSubtask {
     file2: SorterFile,
     n_spill: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterList {
@@ -516,27 +531,32 @@ struct SorterList {
     a_memory: *mut u8,
     sz_pma: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterRecord {
     n_val: i32,
     u: SorterRecordU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union SorterRecordU0 {
     p_next: *mut SorterRecord,
     i_next: i32,
 }
+
 type SorterCompare =
     unsafe extern "C" fn(*mut SortSubtask, *mut i32, *const (), i32,
         *const (), i32) -> i32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterFile {
     p_fd: *mut Sqlite3File,
     i_eof: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MergeEngine {
@@ -545,6 +565,7 @@ struct MergeEngine {
     a_tree: *mut i32,
     a_readr: *mut PmaReader,
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -568,6 +589,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
     p_csr_1: &mut VdbeCursor) -> i32 {
@@ -719,6 +741,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
         }
     }
 }
+
 extern "C" fn vdbe_sorter_join_thread(p_task_1: &mut SortSubtask) -> i32 {
     let mut rc: i32 = 0;
     if !((*p_task_1).p_thread).is_null() {
@@ -736,6 +759,7 @@ extern "C" fn vdbe_sorter_join_thread(p_task_1: &mut SortSubtask) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vdbe_sorter_join_all(p_sorter_1: &mut VdbeSorter, rcin: i32)
     -> i32 {
     let mut rc: i32 = rcin;
@@ -760,6 +784,7 @@ extern "C" fn vdbe_sorter_join_all(p_sorter_1: &mut VdbeSorter, rcin: i32)
     }
     return rc;
 }
+
 extern "C" fn vdbe_merge_engine_free(p_merger_1: *mut MergeEngine) -> () {
     let mut i: i32 = 0;
     if !(p_merger_1).is_null() {
@@ -779,6 +804,7 @@ extern "C" fn vdbe_merge_engine_free(p_merger_1: *mut MergeEngine) -> () {
     }
     unsafe { sqlite3_free(p_merger_1 as *mut ()) };
 }
+
 extern "C" fn vdbe_incr_free(p_incr_1: *mut IncrMerger) -> () {
     if !(p_incr_1).is_null() {
         if unsafe { (*p_incr_1).b_use_thread } != 0 {
@@ -804,6 +830,7 @@ extern "C" fn vdbe_incr_free(p_incr_1: *mut IncrMerger) -> () {
         unsafe { sqlite3_free(p_incr_1 as *mut ()) };
     }
 }
+
 extern "C" fn vdbe_pma_reader_clear(p_readr_1: *mut PmaReader) -> () {
     unsafe { sqlite3_free(unsafe { (*p_readr_1).a_alloc } as *mut ()) };
     unsafe { sqlite3_free(unsafe { (*p_readr_1).a_buffer } as *mut ()) };
@@ -819,6 +846,7 @@ extern "C" fn vdbe_pma_reader_clear(p_readr_1: *mut PmaReader) -> () {
             core::mem::size_of::<PmaReader>() as u64)
     };
 }
+
 extern "C" fn vdbe_sorter_record_free(db: *mut Sqlite3,
     p_record_1: *mut SorterRecord) -> () {
     unsafe {
@@ -838,6 +866,7 @@ extern "C" fn vdbe_sorter_record_free(db: *mut Sqlite3,
         }
     }
 }
+
 extern "C" fn vdbe_sort_subtask_cleanup(db: *mut Sqlite3,
     p_task_1: *mut SortSubtask) -> () {
     unsafe {
@@ -869,6 +898,7 @@ extern "C" fn vdbe_sort_subtask_cleanup(db: *mut Sqlite3,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_reset(db: *mut Sqlite3,
     p_sorter_1: *mut VdbeSorter) -> () {
@@ -921,6 +951,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_reset(db: *mut Sqlite3,
         unsafe { (*p_sorter_1).p_unpacked = core::ptr::null_mut() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_close(db: *mut Sqlite3,
     p_csr_1: &mut VdbeCursor) -> () {
@@ -958,6 +989,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_close(db: *mut Sqlite3,
         }
     }
 }
+
 extern "C" fn vdbe_sorter_rowkey(p_sorter_1: &VdbeSorter, pn_key_1: &mut i32)
     -> *mut () {
     unsafe {
@@ -991,6 +1023,7 @@ extern "C" fn vdbe_sorter_rowkey(p_sorter_1: &VdbeSorter, pn_key_1: &mut i32)
         return p_key;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_rowkey(p_csr_1: &VdbeCursor,
     p_out_1: *mut Mem) -> i32 {
@@ -1017,6 +1050,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_rowkey(p_csr_1: &VdbeCursor,
         return 0;
     }
 }
+
 extern "C" fn vdbe_sorter_create_thread(p_task_1: &mut SortSubtask,
     x_task_1: Option<unsafe extern "C" fn(*mut ()) -> *mut ()>,
     p_in_1: *mut ()) -> i32 {
@@ -1025,6 +1059,7 @@ extern "C" fn vdbe_sorter_create_thread(p_task_1: &mut SortSubtask,
             sqlite3_thread_create(&mut (*p_task_1).p_thread, x_task_1, p_in_1)
         };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PmaWriter {
@@ -1037,6 +1072,7 @@ struct PmaWriter {
     p_fd: *mut Sqlite3File,
     n_pma_spill: u64,
 }
+
 extern "C" fn vdbe_pma_writer_init(p_fd_1: *mut Sqlite3File,
     p: *mut PmaWriter, n_buf_1: i32, i_start_1: i64) -> () {
     unsafe {
@@ -1064,6 +1100,7 @@ extern "C" fn vdbe_pma_writer_init(p_fd_1: *mut Sqlite3File,
         unsafe { (*p).p_fd = p_fd_1 };
     }
 }
+
 extern "C" fn vdbe_pma_write_blob(p: &mut PmaWriter, mut p_data_1: &mut [u8])
     -> () {
     let mut n_rem: i32 = p_data_1.len() as i32;
@@ -1097,6 +1134,7 @@ extern "C" fn vdbe_pma_write_blob(p: &mut PmaWriter, mut p_data_1: &mut [u8])
         n_rem -= n_copy;
     }
 }
+
 extern "C" fn vdbe_pma_write_varint(p: *mut PmaWriter, i_val_1: u64) -> () {
     let mut n_byte: i32 = 0;
     let mut a_byte: [u8; 10] = [0; 10];
@@ -1107,6 +1145,7 @@ extern "C" fn vdbe_pma_write_varint(p: *mut PmaWriter, i_val_1: u64) -> () {
         };
     vdbe_pma_write_blob(unsafe { &mut *p }, &mut a_byte[..n_byte as usize]);
 }
+
 extern "C" fn vdbe_merge_engine_step(p_merger_1: &MergeEngine,
     pb_eof_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -1195,6 +1234,7 @@ extern "C" fn vdbe_merge_engine_step(p_merger_1: &MergeEngine,
             (unsafe { (*unsafe { (*p_task).p_unpacked }).err_code }) as i32
         } else { rc };
 }
+
 extern "C" fn vdbe_pma_writer_finish(p: *mut PmaWriter, pi_eof_1: &mut i64,
     pn_spill_1: &mut u64) -> i32 {
     let mut rc: i32 = 0;
@@ -1230,6 +1270,7 @@ extern "C" fn vdbe_pma_writer_finish(p: *mut PmaWriter, pi_eof_1: &mut i64,
     };
     return rc;
 }
+
 extern "C" fn vdbe_incr_populate(p_incr_1: &mut IncrMerger) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1284,6 +1325,7 @@ extern "C" fn vdbe_incr_populate(p_incr_1: &mut IncrMerger) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn vdbe_incr_populate_thread(p_ctx_1: *mut ()) -> *mut () {
     let p_incr: *mut IncrMerger = p_ctx_1 as *mut IncrMerger;
     let p_ret: *mut () =
@@ -1291,6 +1333,7 @@ extern "C" fn vdbe_incr_populate_thread(p_ctx_1: *mut ()) -> *mut () {
     unsafe { (*unsafe { (*p_incr).p_task }).b_done = 1 };
     return p_ret;
 }
+
 extern "C" fn vdbe_incr_bg_populate(p_incr_1: *mut IncrMerger) -> i32 {
     let p: *mut () = p_incr_1 as *mut ();
     { let _ = 0; };
@@ -1298,6 +1341,7 @@ extern "C" fn vdbe_incr_bg_populate(p_incr_1: *mut IncrMerger) -> i32 {
                 &mut *unsafe { (*p_incr_1).p_task }
             }, Some(vdbe_incr_populate_thread), p);
 }
+
 extern "C" fn vdbe_incr_swap(p_incr_1: *mut IncrMerger) -> i32 {
     let mut rc: i32 = 0;
     if unsafe { (*p_incr_1).b_use_thread } != 0 {
@@ -1332,6 +1376,7 @@ extern "C" fn vdbe_incr_swap(p_incr_1: *mut IncrMerger) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vdbe_sorter_map_file(p_task_1: &SortSubtask,
     p_file_1: &SorterFile, pp: *mut *mut u8) -> i32 {
     unsafe {
@@ -1353,6 +1398,7 @@ extern "C" fn vdbe_sorter_map_file(p_task_1: &SortSubtask,
         return rc;
     }
 }
+
 extern "C" fn vdbe_pma_reader_seek(p_task_1: *mut SortSubtask,
     p_readr_1: &mut PmaReader, p_file_1: *mut SorterFile, i_off_1: i64)
     -> i32 {
@@ -1402,6 +1448,7 @@ extern "C" fn vdbe_pma_reader_seek(p_task_1: *mut SortSubtask,
         return rc;
     }
 }
+
 extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
     pp_out_1: &mut *mut u8) -> i32 {
     let mut i_buf: i32 = 0;
@@ -1501,6 +1548,7 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
     }
     return 0;
 }
+
 extern "C" fn vdbe_pma_read_varint(p: *mut PmaReader, pn_out_1: *mut u64)
     -> i32 {
     let mut i_buf: i32 = 0;
@@ -1557,6 +1605,7 @@ extern "C" fn vdbe_pma_read_varint(p: *mut PmaReader, pn_out_1: *mut u64)
     }
     return 0;
 }
+
 extern "C" fn vdbe_pma_reader_next(p_readr_1: *mut PmaReader) -> i32 {
     let mut rc: i32 = 0;
     let mut n_rec: u64 = 0 as u64;
@@ -1585,6 +1634,7 @@ extern "C" fn vdbe_pma_reader_next(p_readr_1: *mut PmaReader) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_next(db: *mut Sqlite3,
     p_csr_1: &VdbeCursor) -> i32 {
@@ -1633,6 +1683,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_next(db: *mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" fn vdbe_sort_alloc_unpacked(p_task_1: &mut SortSubtask) -> i32 {
     unsafe {
         if (*p_task_1).p_unpacked == core::ptr::null_mut() {
@@ -1654,6 +1705,7 @@ extern "C" fn vdbe_sort_alloc_unpacked(p_task_1: &mut SortSubtask) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn vdbe_sorter_compare_tail(p_task_1: &SortSubtask,
     pb_key2_cached_1: &mut i32, p_key1_1: &[u8], p_key2_1: &[u8]) -> i32 {
     let r2: *mut UnpackedRecord = (*p_task_1).p_unpacked;
@@ -1669,6 +1721,7 @@ extern "C" fn vdbe_sorter_compare_tail(p_task_1: &SortSubtask,
                 p_key1_1.as_ptr() as *const (), r2, 1)
         };
 }
+
 extern "C" fn vdbe_sorter_compare_int(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1766,6 +1819,7 @@ extern "C" fn vdbe_sorter_compare_int(p_task_1: *mut SortSubtask,
         return res;
     }
 }
+
 extern "C" fn vdbe_sorter_compare_text(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1841,6 +1895,7 @@ extern "C" fn vdbe_sorter_compare_text(p_task_1: *mut SortSubtask,
         return res;
     }
 }
+
 extern "C" fn vdbe_sorter_compare(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1851,6 +1906,7 @@ extern "C" fn vdbe_sorter_compare(p_task_1: *mut SortSubtask,
     }
     return unsafe { sqlite3_vdbe_record_compare(n_key1_1, p_key1_1, r2) };
 }
+
 extern "C" fn vdbe_sorter_get_compare(p: &VdbeSorter)
     ->
         unsafe extern "C" fn(*mut SortSubtask, *mut i32, *const (), i32,
@@ -1860,6 +1916,7 @@ extern "C" fn vdbe_sorter_get_compare(p: &VdbeSorter)
     } else if (*p).type_mask as i32 == 2 { return vdbe_sorter_compare_text; }
     return vdbe_sorter_compare;
 }
+
 extern "C" fn vdbe_sorter_merge(p_task_1: *mut SortSubtask,
     mut p1: *mut SorterRecord, mut p2: *mut SorterRecord)
     -> *mut SorterRecord {
@@ -1907,6 +1964,7 @@ extern "C" fn vdbe_sorter_merge(p_task_1: *mut SortSubtask,
         return p_final;
     }
 }
+
 extern "C" fn vdbe_sorter_sort(p_task_1: *mut SortSubtask,
     p_list_1: &mut SorterList) -> i32 {
     unsafe {
@@ -1988,6 +2046,7 @@ extern "C" fn vdbe_sorter_sort(p_task_1: *mut SortSubtask,
                 i32;
     }
 }
+
 extern "C" fn vdbe_sorter_extend_file(db: &Sqlite3, p_fd_1: *mut Sqlite3File,
     mut n_byte_1: i64) -> () {
     if n_byte_1 <= (*db).n_max_sorter_mmap as i64 &&
@@ -2011,6 +2070,7 @@ extern "C" fn vdbe_sorter_extend_file(db: &Sqlite3, p_fd_1: *mut Sqlite3File,
         }
     }
 }
+
 extern "C" fn vdbe_sorter_open_temp_file(db: *mut Sqlite3, n_extend_1: i64,
     pp_fd_1: *mut *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
@@ -2033,6 +2093,7 @@ extern "C" fn vdbe_sorter_open_temp_file(db: *mut Sqlite3, n_extend_1: i64,
     }
     return rc;
 }
+
 extern "C" fn vdbe_sorter_list_to_pma(p_task_1: *mut SortSubtask,
     p_list_1: *mut SorterList) -> i32 {
     unsafe {
@@ -2117,6 +2178,7 @@ extern "C" fn vdbe_sorter_list_to_pma(p_task_1: *mut SortSubtask,
         return rc;
     }
 }
+
 extern "C" fn vdbe_sorter_flush_thread(p_ctx_1: *mut ()) -> *mut () {
     let p_task: *mut SortSubtask = p_ctx_1 as *mut SortSubtask;
     let mut rc: i32 = 0;
@@ -2125,6 +2187,7 @@ extern "C" fn vdbe_sorter_flush_thread(p_ctx_1: *mut ()) -> *mut () {
     unsafe { (*p_task).b_done = 1 };
     return rc as i64 as *mut ();
 }
+
 extern "C" fn vdbe_sorter_flush_pma(p_sorter_1: &mut VdbeSorter) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -2200,6 +2263,7 @@ extern "C" fn vdbe_sorter_flush_pma(p_sorter_1: &mut VdbeSorter) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn vdbe_merge_engine_new(n_reader_1: i32) -> *mut MergeEngine {
     let mut n: i32 = 2;
     let mut n_byte: i64 = 0 as i64;
@@ -2235,6 +2299,7 @@ extern "C" fn vdbe_merge_engine_new(n_reader_1: i32) -> *mut MergeEngine {
     }
     return p_new;
 }
+
 extern "C" fn vdbe_sorter_tree_depth(n_pma_1: i32) -> i32 {
     let mut n_depth: i32 = 0;
     let mut n_div: i64 = 16 as i64;
@@ -2244,6 +2309,7 @@ extern "C" fn vdbe_sorter_tree_depth(n_pma_1: i32) -> i32 {
     }
     return n_depth;
 }
+
 extern "C" fn vdbe_pma_reader_init(p_task_1: *mut SortSubtask,
     p_file_1: *mut SorterFile, i_start_1: i64, p_readr_1: *mut PmaReader,
     pn_byte_1: &mut i64) -> i32 {
@@ -2267,6 +2333,7 @@ extern "C" fn vdbe_pma_reader_init(p_task_1: *mut SortSubtask,
     if rc == 0 { rc = vdbe_pma_reader_next(p_readr_1); }
     return rc;
 }
+
 extern "C" fn vdbe_merge_engine_level0(p_task_1: *mut SortSubtask,
     n_pma_1: i32, pi_offset_1: &mut i64, pp_out_1: &mut *mut MergeEngine)
     -> i32 {
@@ -2303,6 +2370,7 @@ extern "C" fn vdbe_merge_engine_level0(p_task_1: *mut SortSubtask,
     *pi_offset_1 = i_off;
     return rc;
 }
+
 extern "C" fn vdbe_incr_merger_new(p_task_1: *mut SortSubtask,
     p_merger_1: *mut MergeEngine, pp_out_1: &mut *mut IncrMerger) -> i32 {
     unsafe {
@@ -2344,6 +2412,7 @@ extern "C" fn vdbe_incr_merger_new(p_task_1: *mut SortSubtask,
         return rc;
     }
 }
+
 extern "C" fn vdbe_sorter_add_to_tree(p_task_1: *mut SortSubtask,
     n_depth_1: i32, i_seq_1: i32, p_root_1: *mut MergeEngine,
     p_leaf_1: *mut MergeEngine) -> i32 {
@@ -2398,6 +2467,7 @@ extern "C" fn vdbe_sorter_add_to_tree(p_task_1: *mut SortSubtask,
     } else { vdbe_incr_free(p_incr); }
     return rc;
 }
+
 extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
     pp_out_1: &mut *mut MergeEngine) -> i32 {
     let mut p_main: *mut MergeEngine = core::ptr::null_mut();
@@ -2487,10 +2557,12 @@ extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
     *pp_out_1 = p_main;
     return rc;
 }
+
 extern "C" fn vdbe_incr_merger_set_threads(p_incr_1: &mut IncrMerger) -> () {
     (*p_incr_1).b_use_thread = 1;
     unsafe { (*(*p_incr_1).p_task).file2.i_eof -= (*p_incr_1).mx_sz as i64 };
 }
+
 extern "C" fn vdbe_merge_engine_compare(p_merger_1: &MergeEngine,
     i_out_1: i32) -> () {
     let mut i1: i32 = 0;
@@ -2532,6 +2604,7 @@ extern "C" fn vdbe_merge_engine_compare(p_merger_1: &MergeEngine,
     }
     unsafe { *(*p_merger_1).a_tree.offset(i_out_1 as isize) = i_res };
 }
+
 extern "C" fn vdbe_merge_engine_init(p_task_1: *mut SortSubtask,
     p_merger_1: *mut MergeEngine, e_mode_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -2581,6 +2654,7 @@ extern "C" fn vdbe_merge_engine_init(p_task_1: *mut SortSubtask,
     }
     return unsafe { (*unsafe { (*p_task_1).p_unpacked }).err_code } as i32;
 }
+
 extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
     e_mode_1: i32) -> i32 {
     unsafe {
@@ -2634,6 +2708,7 @@ extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
         return rc;
     }
 }
+
 extern "C" fn vdbe_pma_reader_bg_incr_init(p_ctx_1: *mut ()) -> *mut () {
     let p_reader: *mut PmaReader = p_ctx_1 as *mut PmaReader;
     let p_ret: *mut () =
@@ -2643,6 +2718,7 @@ extern "C" fn vdbe_pma_reader_bg_incr_init(p_ctx_1: *mut ()) -> *mut () {
     };
     return p_ret;
 }
+
 extern "C" fn vdbe_pma_reader_incr_init(p_readr_1: *mut PmaReader,
     e_mode_1: i32) -> i32 {
     let p_incr: *const IncrMerger =
@@ -2660,6 +2736,7 @@ extern "C" fn vdbe_pma_reader_incr_init(p_readr_1: *mut PmaReader,
     }
     return rc;
 }
+
 extern "C" fn vdbe_sorter_setup_merge(p_sorter_1: *mut VdbeSorter) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -2784,6 +2861,7 @@ extern "C" fn vdbe_sorter_setup_merge(p_sorter_1: *mut VdbeSorter) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_rewind(p_csr_1: &VdbeCursor,
     pb_eof_1: &mut i32) -> i32 {
@@ -2812,6 +2890,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_rewind(p_csr_1: &VdbeCursor,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_write(p_csr_1: &VdbeCursor,
     p_val_1: &Mem) -> i32 {
@@ -2948,6 +3027,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_write(p_csr_1: &VdbeCursor,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_compare(p_csr_1: &VdbeCursor,
     p_val_1: &Mem, n_key_col_1: i32, p_res_1: &mut i32) -> i32 {
@@ -3001,9 +3081,11 @@ pub extern "C" fn sqlite3_vdbe_sorter_compare(p_csr_1: &VdbeCursor,
         return 0;
     }
 }
+
 static a_len: [u8; 10] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 6 as u8, 8 as u8, 0 as u8,
             0 as u8, 0 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5947,41 +6029,49 @@ extern "C" {
     fn sqlite3_vdbe_mem_expand_blob(_: *mut Mem)
     -> i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

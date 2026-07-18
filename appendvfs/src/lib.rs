@@ -1,10 +1,14 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type ApndVfs = Sqlite3Vfs;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ApndFile {
@@ -12,6 +16,7 @@ struct ApndFile {
     i_pg_one: Sqlite3Int64,
     i_mark: Sqlite3Int64,
 }
+
 extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -22,6 +27,7 @@ extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
                 })(p_file)
         };
 }
+
 extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -34,6 +40,7 @@ extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
                 })(p_file, z_buf, i_amt, unsafe { (*paf).i_pg_one } + i_ofst)
         };
 }
+
 extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     mut i_write_end_1: SqliteInt64) -> i32 {
     let mut i_pg_one: SqliteInt64 = unsafe { (*paf).i_pg_one };
@@ -73,6 +80,7 @@ extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     }
     return rc;
 }
+
 extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -93,6 +101,7 @@ extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
                 })(p_file, z_buf, i_amt, unsafe { (*paf).i_pg_one } + i_ofst)
         };
 }
+
 extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -107,6 +116,7 @@ extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
                 unsafe { (*paf).i_mark } + (17 + 8) as Sqlite3Int64)
         };
 }
+
 extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -117,6 +127,7 @@ extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
                 })(p_file, flags)
         };
 }
+
 extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -128,6 +139,7 @@ extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     };
     return 0;
 }
+
 extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -138,6 +150,7 @@ extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
                 })(p_file, e_lock)
         };
 }
+
 extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -148,6 +161,7 @@ extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
                 })(p_file, e_lock)
         };
 }
+
 extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -161,6 +175,7 @@ extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
                 })(p_file, p_res_out)
         };
 }
+
 extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -191,6 +206,7 @@ extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     }
     return rc;
 }
+
 extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -201,6 +217,7 @@ extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
                 })(p_file)
         };
 }
+
 extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     p_file =
@@ -214,6 +231,7 @@ extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
                 })(p_file)
         };
 }
+
 extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
     b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -225,6 +243,7 @@ extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
                 })(p_file, i_pg, pgsz, b_extend, pp)
         };
 }
+
 extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
     flags: i32) -> i32 {
     p_file =
@@ -236,6 +255,7 @@ extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
                 })(p_file, offset, n, flags)
         };
 }
+
 extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -246,6 +266,7 @@ extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
             })(p_file)
     };
 }
+
 extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -257,6 +278,7 @@ extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
                 })(p_file, delete_flag)
         };
 }
+
 extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -273,6 +295,7 @@ extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
                 })(p_file, i_ofst + unsafe { (*p).i_pg_one }, i_amt, pp)
         };
 }
+
 extern "C" fn apnd_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -285,6 +308,7 @@ extern "C" fn apnd_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
                 })(p_file, i_ofst + unsafe { (*p).i_pg_one }, p_page)
         };
 }
+
 static apnd_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -307,6 +331,7 @@ static apnd_io_methods: Sqlite3IoMethods =
         x_fetch: Some(apnd_fetch),
         x_unfetch: Some(apnd_unfetch),
     };
+
 extern "C" fn apnd_read_mark(sz: Sqlite3Int64, p_file_1: *mut Sqlite3File)
     -> Sqlite3Int64 {
     let mut rc: i32 = 0;
@@ -351,10 +376,12 @@ extern "C" fn apnd_read_mark(sz: Sqlite3Int64, p_file_1: *mut Sqlite3File)
     if i_mark & 511 as Sqlite3Int64 != 0 { return -1 as Sqlite3Int64; }
     return i_mark;
 }
+
 static apvfs_sqlite_hdr: [i8; 16] =
     [83 as i8, 81 as i8, 76 as i8, 105 as i8, 116 as i8, 101 as i8, 32 as i8,
             102 as i8, 111 as i8, 114 as i8, 109 as i8, 97 as i8, 116 as i8,
             32 as i8, 51 as i8, 0 as i8];
+
 extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
@@ -381,6 +408,7 @@ extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     }
     return 0;
 }
+
 extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut z_hdr: [i8; 16] = [0; 16];
@@ -402,6 +430,7 @@ extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
         return 0;
     } else { return 1; }
 }
+
 extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let p_apnd_file: *mut ApndFile = p_file as *mut ApndFile;
@@ -479,6 +508,7 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     }
     return rc;
 }
+
 extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     return unsafe {
@@ -489,6 +519,7 @@ extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 dir_sync)
         };
 }
+
 extern "C" fn apnd_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     return unsafe {
@@ -499,6 +530,7 @@ extern "C" fn apnd_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 flags, p_res_out)
         };
 }
+
 extern "C" fn apnd_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -509,6 +541,7 @@ extern "C" fn apnd_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 n_out, z_out)
         };
 }
+
 extern "C" fn apnd_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -518,6 +551,7 @@ extern "C" fn apnd_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_path)
         };
 }
+
 extern "C" fn apnd_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -528,6 +562,7 @@ extern "C" fn apnd_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
             z_err_msg)
     };
 }
+
 extern "C" fn apnd_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -538,6 +573,7 @@ extern "C" fn apnd_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
                 z_sym)
         };
 }
+
 extern "C" fn apnd_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
     unsafe {
         (unsafe {
@@ -546,6 +582,7 @@ extern "C" fn apnd_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
             })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, p_handle)
     };
 }
+
 extern "C" fn apnd_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -556,6 +593,7 @@ extern "C" fn apnd_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
                 z_buf_out)
         };
 }
+
 extern "C" fn apnd_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -564,6 +602,7 @@ extern "C" fn apnd_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, n_micro)
         };
 }
+
 extern "C" fn apnd_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
     -> i32 {
     return unsafe {
@@ -574,6 +613,7 @@ extern "C" fn apnd_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
                 p_time_out)
         };
 }
+
 extern "C" fn apnd_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
     -> i32 {
     return unsafe {
@@ -583,6 +623,7 @@ extern "C" fn apnd_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, a, b)
         };
 }
+
 extern "C" fn apnd_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p: *mut Sqlite3Int64) -> i32 {
     return unsafe {
@@ -592,6 +633,7 @@ extern "C" fn apnd_current_time_int64(p_vfs: *mut Sqlite3Vfs,
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, p)
         };
 }
+
 extern "C" fn apnd_set_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_call: unsafe extern "C" fn() -> ()) -> i32 {
     return unsafe {
@@ -602,6 +644,7 @@ extern "C" fn apnd_set_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
                 p_call)
         };
 }
+
 extern "C" fn apnd_get_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
     -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -611,6 +654,7 @@ extern "C" fn apnd_get_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_name)
         };
 }
+
 extern "C" fn apnd_next_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
     -> *const i8 {
     return unsafe {
@@ -620,6 +664,7 @@ extern "C" fn apnd_next_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_name)
         };
 }
+
 static mut apnd_vfs: Sqlite3Vfs =
     Sqlite3Vfs {
         i_version: 3,
@@ -645,6 +690,7 @@ static mut apnd_vfs: Sqlite3Vfs =
         x_get_system_call: Some(apnd_get_system_call),
         x_next_system_call: Some(apnd_next_system_call),
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_appendvfs_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -666,6 +712,7 @@ pub extern "C" fn sqlite3_appendvfs_init(db: *const Sqlite3,
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

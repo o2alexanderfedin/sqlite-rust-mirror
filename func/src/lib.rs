@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -16,8 +17,11 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 type DarwinIntptrT = i64;
+
 type DarwinSizeT = u64;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -65,6 +69,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -137,6 +142,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -149,6 +155,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -228,6 +235,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -364,6 +372,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -412,6 +421,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -447,6 +457,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -470,6 +481,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CompareInfo {
@@ -478,6 +490,7 @@ struct CompareInfo {
     match_set: u8,
     no_case: u8,
 }
+
 extern "C" fn pattern_compare(mut z_pattern_1: *const u8,
     mut z_string_1: *const u8, p_info_1: *const CompareInfo,
     match_other_1: u32) -> i32 {
@@ -698,6 +711,7 @@ extern "C" fn pattern_compare(mut z_pattern_1: *const u8,
         return if unsafe { *z_string_1 } as i32 == 0 { 0 } else { 1 };
     }
 }
+
 static glob_info: CompareInfo =
     CompareInfo {
         match_all: '*' as i32 as u8,
@@ -705,6 +719,7 @@ static glob_info: CompareInfo =
         match_set: '[' as i32 as u8,
         no_case: 0 as u8,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_strglob(z_glob_pattern: *const i8,
     z_string: *const i8) -> i32 {
@@ -718,6 +733,7 @@ pub extern "C" fn sqlite3_strglob(z_glob_pattern: *const i8,
                 '[' as i32 as u32);
     }
 }
+
 static like_info_norm: CompareInfo =
     CompareInfo {
         match_all: '%' as i32 as u8,
@@ -725,6 +741,7 @@ static like_info_norm: CompareInfo =
         match_set: 0 as u8,
         no_case: 1 as u8,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_strlike(z_pattern: *const i8, z_str: *const i8,
     esc: u32) -> i32 {
@@ -737,12 +754,14 @@ pub extern "C" fn sqlite3_strlike(z_pattern: *const i8, z_str: *const i8,
                 z_str as *mut u8 as *const u8, &like_info_norm, esc);
     }
 }
+
 static hexdigits: [i8; 16] =
     ['0' as i32 as i8, '1' as i32 as i8, '2' as i32 as i8, '3' as i32 as i8,
             '4' as i32 as i8, '5' as i32 as i8, '6' as i32 as i8,
             '7' as i32 as i8, '8' as i32 as i8, '9' as i32 as i8,
             'A' as i32 as i8, 'B' as i32 as i8, 'C' as i32 as i8,
             'D' as i32 as i8, 'E' as i32 as i8, 'F' as i32 as i8];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
     p_value_1: *mut Sqlite3Value, b_escape_1: i32) -> () {
@@ -1018,6 +1037,7 @@ pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
         }
     }
 }
+
 extern "C" fn version_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
@@ -1026,6 +1046,7 @@ extern "C" fn version_func(context: *mut Sqlite3Context, not_used_1: i32,
             None)
     };
 }
+
 extern "C" fn load_ext(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_file: *const i8 =
@@ -1054,6 +1075,7 @@ extern "C" fn load_ext(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_free(z_err_msg as *mut ()) };
     }
 }
+
 extern "C" fn compileoptionused_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_opt_name: *const i8 = core::ptr::null();
@@ -1072,6 +1094,7 @@ extern "C" fn compileoptionused_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn compileoptionget_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
@@ -1083,6 +1106,7 @@ extern "C" fn compileoptionget_func(context: *mut Sqlite3Context, argc: i32,
             -1, None)
     };
 }
+
 extern "C" fn context_malloc(context: *mut Sqlite3Context, n_byte_1: i64)
     -> *mut () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1100,6 +1124,7 @@ extern "C" fn context_malloc(context: *mut Sqlite3Context, n_byte_1: i64)
     }
     return z as *mut ();
 }
+
 extern "C" fn trim_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1294,6 +1319,7 @@ extern "C" fn trim_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn sqlite3_get_func_coll_seq(context: &Sqlite3Context)
     -> *mut CollSeq {
     unsafe {
@@ -1311,6 +1337,7 @@ extern "C" fn sqlite3_get_func_coll_seq(context: &Sqlite3Context)
         return unsafe { (*p_op).p4.p_coll };
     }
 }
+
 extern "C" fn minmax_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -1358,12 +1385,14 @@ extern "C" fn minmax_func(context: *mut Sqlite3Context, argc: i32,
             unsafe { *argv.offset(i_best as isize) })
     };
 }
+
 extern "C" fn sqlite3_skip_accumulator_load(context: &mut Sqlite3Context)
     -> () {
     { let _ = 0; };
     (*context).is_error = -1;
     (*context).skip_flag = 1 as u8;
 }
+
 extern "C" fn minmax_step(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_arg: *mut Mem = unsafe { *argv.offset(0 as isize) } as *mut Mem;
@@ -1402,6 +1431,7 @@ extern "C" fn minmax_step(context: *mut Sqlite3Context, not_used_1: i32,
         unsafe { sqlite3_vdbe_mem_copy(p_best, p_arg as *const Mem) };
     }
 }
+
 extern "C" fn min_max_value_finalize(context: *mut Sqlite3Context,
     b_value_1: i32) -> () {
     let mut p_res: *mut Sqlite3Value = core::ptr::null_mut();
@@ -1416,12 +1446,15 @@ extern "C" fn min_max_value_finalize(context: *mut Sqlite3Context,
         }
     }
 }
+
 extern "C" fn min_max_finalize(context: *mut Sqlite3Context) -> () {
     min_max_value_finalize(context, 0);
 }
+
 extern "C" fn min_max_value(context: *mut Sqlite3Context) -> () {
     min_max_value_finalize(context, 1);
 }
+
 extern "C" fn typeof_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1440,6 +1473,7 @@ extern "C" fn typeof_func(context: *mut Sqlite3Context, not_used_1: i32,
         };
     }
 }
+
 extern "C" fn subtype_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -1450,6 +1484,7 @@ extern "C" fn subtype_func(context: *mut Sqlite3Context, argc: i32,
                 } as i32)
     };
 }
+
 extern "C" fn length_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -1696,6 +1731,7 @@ extern "C" fn length_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn bytelength_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -1857,6 +1893,7 @@ extern "C" fn bytelength_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn instr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_haystack: *const u8 = core::ptr::null();
@@ -2085,6 +2122,7 @@ extern "C" fn instr_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn printf_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: PrintfArguments = unsafe { core::mem::zeroed() };
@@ -2116,6 +2154,7 @@ extern "C" fn printf_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn unicode_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *const u8 =
@@ -2128,6 +2167,7 @@ extern "C" fn unicode_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn char_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *mut u8 = core::ptr::null_mut();
@@ -2256,6 +2296,7 @@ extern "C" fn char_func(context: *mut Sqlite3Context, argc: i32,
             Some(sqlite3_free), 16 as u8)
     };
 }
+
 extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -2323,6 +2364,7 @@ extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn round_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i64 = 0 as i64;
@@ -2366,6 +2408,7 @@ extern "C" fn round_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_double(context, r) };
 }
+
 extern "C" fn upper_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2412,6 +2455,7 @@ extern "C" fn upper_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn lower_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2457,6 +2501,7 @@ extern "C" fn lower_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn hex_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -2522,6 +2567,7 @@ extern "C" fn hex_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn str_contains_char(z_str_1: *const u8, n_str_1: i32, ch: u32)
     -> i32 {
     let z_end: *const u8 = unsafe { &*z_str_1.offset(n_str_1 as isize) };
@@ -2542,6 +2588,7 @@ extern "C" fn str_contains_char(z_str_1: *const u8, n_str_1: i32, ch: u32)
     }
     return 0;
 }
+
 extern "C" fn unhex_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2726,6 +2773,7 @@ extern "C" fn unhex_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn concat_func_core(context: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, n_sep_1: i32, z_sep_1: *const i8) -> () {
     let mut j: i64 = 0 as i64;
@@ -2800,11 +2848,13 @@ extern "C" fn concat_func_core(context: *mut Sqlite3Context, argc: i32,
             Some(sqlite3_free), 16 as u8)
     };
 }
+
 extern "C" fn concat_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     concat_func_core(context, argc, argv as *const *mut Sqlite3Value, 0,
         c"".as_ptr() as *mut i8 as *const i8);
 }
+
 extern "C" fn concatws_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let n_sep: i32 =
@@ -2817,6 +2867,7 @@ extern "C" fn concatws_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { argv.offset(1 as isize) } as *const *mut Sqlite3Value, n_sep,
         z_sep);
 }
+
 extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let mut r: SqliteInt64 = 0 as SqliteInt64;
@@ -2830,6 +2881,7 @@ extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     }
     unsafe { sqlite3_result_int64(context, r) };
 }
+
 extern "C" fn random_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -2847,6 +2899,7 @@ extern "C" fn random_blob(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn nullif_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_coll: *const CollSeq =
@@ -2863,6 +2916,7 @@ extern "C" fn nullif_func(context: *mut Sqlite3Context, not_used_1: i32,
         };
     }
 }
+
 extern "C" fn sourceid_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
@@ -2870,6 +2924,7 @@ extern "C" fn sourceid_func(context: *mut Sqlite3Context, not_used_1: i32,
         sqlite3_result_text(context, unsafe { sqlite3_sourceid() }, -1, None)
     };
 }
+
 extern "C" fn errlog_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -2883,6 +2938,7 @@ extern "C" fn errlog_func(context: *mut Sqlite3Context, argc: i32,
             })
     };
 }
+
 extern "C" fn is_n_hex(z: *const i8, n_1: i32, p_val_1: &mut u32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -2913,6 +2969,7 @@ extern "C" fn is_n_hex(z: *const i8, n_1: i32, p_val_1: &mut u32) -> i32 {
         return 1;
     }
 }
+
 extern "C" fn unistr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -3165,6 +3222,7 @@ extern "C" fn unistr_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn quote_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut str: Sqlite3Str = unsafe { core::mem::zeroed() };
@@ -3180,6 +3238,7 @@ extern "C" fn quote_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_user_data(context) } as i64 as i32);
     unsafe { sqlite3_result_str(context, &mut str, 1) };
 }
+
 extern "C" fn last_insert_rowid(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -3189,6 +3248,7 @@ extern "C" fn last_insert_rowid(context: *mut Sqlite3Context, not_used_1: i32,
             unsafe { sqlite3_last_insert_rowid(db) })
     };
 }
+
 extern "C" fn changes(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -3197,6 +3257,7 @@ extern "C" fn changes(context: *mut Sqlite3Context, not_used_1: i32,
         sqlite3_result_int64(context, unsafe { sqlite3_changes64(db) })
     };
 }
+
 extern "C" fn total_changes(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -3205,6 +3266,7 @@ extern "C" fn total_changes(context: *mut Sqlite3Context, not_used_1: i32,
         sqlite3_result_int64(context, unsafe { sqlite3_total_changes64(db) })
     };
 }
+
 extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_str: *const u8 = core::ptr::null();
@@ -3335,6 +3397,7 @@ extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
             Some(sqlite3_free))
     };
 }
+
 extern "C" fn zeroblob_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i64 = 0 as i64;
@@ -3346,6 +3409,7 @@ extern "C" fn zeroblob_func(context: *mut Sqlite3Context, argc: i32,
     rc = unsafe { sqlite3_result_zeroblob64(context, n as Sqlite3Uint64) };
     if rc != 0 { unsafe { sqlite3_result_error_code(context, rc) }; }
 }
+
 extern "C" fn substr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *const u8 = core::ptr::null();
@@ -3546,6 +3610,7 @@ extern "C" fn substr_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SumCtx {
@@ -3556,6 +3621,7 @@ struct SumCtx {
     approx: u8,
     ovrfl: u8,
 }
+
 extern "C" fn kahan_babuska_neumaier_init(p: *mut SumCtx, i_val_1: i64)
     -> () {
     if i_val_1 <= -4503599627370496i64 || i_val_1 >= 4503599627370496i64 {
@@ -3567,6 +3633,7 @@ extern "C" fn kahan_babuska_neumaier_init(p: *mut SumCtx, i_val_1: i64)
         unsafe { (*p).r_err = 0.0 };
     }
 }
+
 extern "C" fn kahan_babuska_neumaier_step(p_sum_1: *mut SumCtx, r: f64)
     -> () {
     let s: f64 = unsafe { (*p_sum_1).r_sum } as f64;
@@ -3576,6 +3643,7 @@ extern "C" fn kahan_babuska_neumaier_step(p_sum_1: *mut SumCtx, r: f64)
     } else { unsafe { (*p_sum_1).r_err += r - t as f64 + s as f64 }; }
     unsafe { (*p_sum_1).r_sum = t as f64 };
 }
+
 extern "C" fn kahan_babuska_neumaier_step_int64(p_sum_1: *mut SumCtx,
     i_val_1: i64) -> () {
     if i_val_1 <= -4503599627370496i64 || i_val_1 >= 4503599627370496i64 {
@@ -3587,6 +3655,7 @@ extern "C" fn kahan_babuska_neumaier_step_int64(p_sum_1: *mut SumCtx,
         kahan_babuska_neumaier_step(p_sum_1, i_sm as f64);
     } else { kahan_babuska_neumaier_step(p_sum_1, i_val_1 as f64 as f64); }
 }
+
 extern "C" fn sum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SumCtx = core::ptr::null_mut();
@@ -3652,6 +3721,7 @@ extern "C" fn sum_step(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn sum_finalize(context: *mut Sqlite3Context) -> () {
     let mut p: *const SumCtx = core::ptr::null();
     p = unsafe { sqlite3_aggregate_context(context, 0) } as *mut SumCtx;
@@ -3678,6 +3748,7 @@ extern "C" fn sum_finalize(context: *mut Sqlite3Context) -> () {
         }
     }
 }
+
 extern "C" fn sum_inverse(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SumCtx = core::ptr::null_mut();
@@ -3738,6 +3809,7 @@ extern "C" fn sum_inverse(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn total_finalize(context: *mut Sqlite3Context) -> () {
     let mut p: *const SumCtx = core::ptr::null();
     let mut r: f64 = 0.0;
@@ -3753,6 +3825,7 @@ extern "C" fn total_finalize(context: *mut Sqlite3Context) -> () {
     }
     unsafe { sqlite3_result_double(context, r) };
 }
+
 extern "C" fn avg_finalize(context: *mut Sqlite3Context) -> () {
     let mut p: *const SumCtx = core::ptr::null();
     p = unsafe { sqlite3_aggregate_context(context, 0) } as *mut SumCtx;
@@ -3770,11 +3843,13 @@ extern "C" fn avg_finalize(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CountCtx {
     n: i64,
 }
+
 extern "C" fn count_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -3799,6 +3874,7 @@ extern "C" fn count_step(context: *mut Sqlite3Context, argc: i32,
         { let _ = 0; };
     }
 }
+
 extern "C" fn count_finalize(context: *mut Sqlite3Context) -> () {
     unsafe {
         let mut p: *const CountCtx = core::ptr::null();
@@ -3809,6 +3885,7 @@ extern "C" fn count_finalize(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 extern "C" fn count_inverse(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -3832,6 +3909,7 @@ extern "C" fn count_inverse(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GroupConcatCtx {
@@ -3840,6 +3918,7 @@ struct GroupConcatCtx {
     n_first_sep_length: i32,
     pn_sep_lengths: *mut i32,
 }
+
 extern "C" fn group_concat_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_val: *const i8 = core::ptr::null();
@@ -3959,6 +4038,7 @@ extern "C" fn group_concat_step(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn group_concat_finalize(context: *mut Sqlite3Context) -> () {
     let p_gcc: *mut GroupConcatCtx =
         unsafe { sqlite3_aggregate_context(context, 0) } as
@@ -3973,6 +4053,7 @@ extern "C" fn group_concat_finalize(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 extern "C" fn group_concat_value(context: *mut Sqlite3Context) -> () {
     let p_gcc: *mut GroupConcatCtx =
         unsafe { sqlite3_aggregate_context(context, 0) } as
@@ -3984,6 +4065,7 @@ extern "C" fn group_concat_value(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 extern "C" fn group_concat_inverse(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_gcc: *mut GroupConcatCtx = core::ptr::null_mut();
@@ -4047,6 +4129,7 @@ extern "C" fn group_concat_inverse(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Percentile {
@@ -4058,6 +4141,7 @@ struct Percentile {
     r_pct: f64,
     a: *mut f64,
 }
+
 unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg1: *mut i8 = core::ptr::null_mut();
@@ -4079,10 +4163,12 @@ unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg1 as *mut ()) };
     unsafe { sqlite3_free(z_msg2 as *mut ()) };
 }
+
 extern "C" fn percent_same_value(mut a: f64, b: f64) -> i32 {
     a -= b;
     return (a >= -0.001 && a <= 0.001) as i32;
 }
+
 extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     { let _ = 0; };
@@ -4092,6 +4178,7 @@ extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     };
     return (u >> 52 & 2047 as Sqlite3Uint64 == 2047 as u64) as i32;
 }
+
 extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     -> i64 {
     let mut i_first: i64 = 0 as i64;
@@ -4106,6 +4193,7 @@ extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     if b_exact_1 != 0 { return -1 as i64; }
     return i_first;
 }
+
 extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -4259,6 +4347,7 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         unsafe { (*p).b_sorted = 0 as i8 };
     }
 }
+
 extern "C" fn percent_sort(mut a: *mut f64, mut n: u32, mut i_req_1: i32)
     -> () {
     let mut i_lt: i32 = 0;
@@ -4378,6 +4467,7 @@ extern "C" fn percent_sort(mut a: *mut f64, mut n: u32, mut i_req_1: i32)
         if !(n >= 2 as u32) { break '__b46; }
     }
 }
+
 extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
     -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -4424,12 +4514,15 @@ extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
         };
     } else { unsafe { (*p).b_keep_sorted = 1 as i8 }; }
 }
+
 extern "C" fn percent_final(p_ctx_1: *mut Sqlite3Context) -> () {
     percent_compute(p_ctx_1, 1);
 }
+
 extern "C" fn percent_value(p_ctx_1: *mut Sqlite3Context) -> () {
     percent_compute(p_ctx_1, 0);
 }
+
 extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -4477,6 +4570,7 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_a: *const u8 = core::ptr::null();
@@ -4539,7 +4633,9 @@ extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn x_ceil(x: f64) -> f64 { return unsafe { ceil(x) }; }
+
 extern "C" fn ceiling_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -4603,7 +4699,9 @@ extern "C" fn ceiling_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn x_floor(x: f64) -> f64 { return unsafe { floor(x) }; }
+
 extern "C" fn log_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: f64 = 0.0;
@@ -4676,6 +4774,7 @@ extern "C" fn log_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_double(context, ans) };
 }
+
 extern "C" fn math1_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4698,6 +4797,7 @@ extern "C" fn math1_func(context: *mut Sqlite3Context, argc: i32,
     ans = unsafe { x.unwrap()(v0) };
     unsafe { sqlite3_result_double(context, ans) };
 }
+
 extern "C" fn math2_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4728,18 +4828,22 @@ extern "C" fn math2_func(context: *mut Sqlite3Context, argc: i32,
     ans = unsafe { x.unwrap()(v0, v1) };
     unsafe { sqlite3_result_double(context, ans) };
 }
+
 extern "C" fn deg_to_rad(x: f64) -> f64 {
     return x * (3.141592653589793 / 180.0);
 }
+
 extern "C" fn rad_to_deg(x: f64) -> f64 {
     return x * (180.0 / 3.141592653589793);
 }
+
 extern "C" fn pi_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
     { let _ = argv; };
     unsafe { sqlite3_result_double(context, 3.141592653589793) };
 }
+
 extern "C" fn sign_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4757,6 +4861,7 @@ extern "C" fn sign_func(context: *mut Sqlite3Context, argc: i32,
             if x < 0.0 { -1 } else { if x > 0.0 { 1 } else { 0 } })
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_builtin_functions() -> () {
     unsafe {
@@ -4772,6 +4877,7 @@ pub extern "C" fn sqlite3_register_builtin_functions() -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_per_connection_builtin_functions(db:
         *mut Sqlite3) -> () {
@@ -4783,6 +4889,7 @@ pub extern "C" fn sqlite3_register_per_connection_builtin_functions(db:
     { let _ = 0; };
     if rc == 7 { unsafe { sqlite3_oom_fault(db) }; }
 }
+
 static like_info_alt: CompareInfo =
     CompareInfo {
         match_all: '%' as i32 as u8,
@@ -4790,6 +4897,7 @@ static like_info_alt: CompareInfo =
         match_set: 0 as u8,
         no_case: 0 as u8,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_like_functions(db: *mut Sqlite3,
     case_sensitive_1: i32) -> () {
@@ -4830,6 +4938,7 @@ pub extern "C" fn sqlite3_register_like_functions(db: *mut Sqlite3,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_like_function(db: *mut Sqlite3, p_expr_1: &Expr,
     p_is_nocase_1: &mut i32, a_wc_1: *mut i8) -> i32 {
@@ -4892,12 +5001,16 @@ pub extern "C" fn sqlite3_is_like_function(db: *mut Sqlite3, p_expr_1: &Expr,
         return 1;
     }
 }
+
 static len_one: [u32; 1] = [1 as u32];
+
 static mut az_one: [*mut u8; 1] = [c" ".as_ptr() as *mut u8];
+
 static mut az_type: [*const i8; 5] =
     [c"integer".as_ptr() as *const i8, c"real".as_ptr() as *const i8,
             c"text".as_ptr() as *const i8, c"blob".as_ptr() as *const i8,
             c"null".as_ptr() as *const i8];
+
 static mut a_builtin_func: [FuncDef; 108] =
     [FuncDef {
                 n_arg: 2 as i16,
@@ -6204,6 +6317,7 @@ static mut a_builtin_func: [FuncDef; 108] =
                 z_name: c"if".as_ptr() as *const i8,
                 u: FuncDefU0 { p_hash: core::ptr::null_mut() },
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -9207,41 +9321,49 @@ extern "C" {
     fn sqrt(_: f64)
     -> f64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

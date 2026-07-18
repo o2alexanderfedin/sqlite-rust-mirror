@@ -1,17 +1,22 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SchemaVtab {
     base: Sqlite3Vtab,
     db: *mut Sqlite3,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SchemaCursor {
@@ -21,6 +26,7 @@ struct SchemaCursor {
     p_column_list: *mut Sqlite3Stmt,
     rowid: i32,
 }
+
 extern "C" fn schema_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe {
         unsafe {
@@ -29,6 +35,7 @@ extern "C" fn schema_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn schema_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -59,6 +66,7 @@ extern "C" fn schema_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
         return rc;
     }
 }
+
 extern "C" fn schema_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -81,6 +89,7 @@ extern "C" fn schema_open(p_v_tab_1: *mut Sqlite3Vtab,
         return rc;
     }
 }
+
 extern "C" fn schema_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p_cur: *mut SchemaCursor = cur as *mut SchemaCursor;
@@ -105,6 +114,7 @@ extern "C" fn schema_close(cur: *mut Sqlite3VtabCursor) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn schema_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -154,6 +164,7 @@ extern "C" fn schema_column(cur: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn schema_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SchemaCursor =
@@ -161,6 +172,7 @@ extern "C" fn schema_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).rowid } as SqliteInt64 };
     return 0;
 }
+
 extern "C" fn finalize(pp_stmt_1: &mut *mut Sqlite3Stmt) -> i32 {
     unsafe {
         let rc: i32 =
@@ -171,11 +183,13 @@ extern "C" fn finalize(pp_stmt_1: &mut *mut Sqlite3Stmt) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn schema_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SchemaCursor =
         cur as *mut SchemaCursor as *const SchemaCursor;
     return if !(unsafe { (*p_cur).p_db_list }).is_null() { 0 } else { 1 };
 }
+
 extern "C" fn schema_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -394,6 +408,7 @@ extern "C" fn schema_next(cur: *mut Sqlite3VtabCursor) -> i32 {
         unreachable!();
     }
 }
+
 extern "C" fn schema_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -419,10 +434,12 @@ extern "C" fn schema_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return if rc == 0 { schema_next(p_vtab_cursor_1) } else { rc };
     }
 }
+
 extern "C" fn schema_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     return 0;
 }
+
 static mut schema_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -451,6 +468,7 @@ static mut schema_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_schema_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -466,6 +484,7 @@ pub extern "C" fn sqlite3_schema_init(db: *mut Sqlite3,
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

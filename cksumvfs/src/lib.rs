@@ -1,10 +1,14 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type CksmVfs = Sqlite3Vfs;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CksmFile {
@@ -14,6 +18,7 @@ struct CksmFile {
     verify_cksm: i8,
     p_partner: *mut CksmFile,
 }
+
 extern "C" fn cksm_close(mut p_file: *mut Sqlite3File) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
     if !(unsafe { (*p).p_partner }).is_null() {
@@ -40,6 +45,7 @@ extern "C" fn cksm_close(mut p_file: *mut Sqlite3File) -> i32 {
                 })(p_file)
         };
 }
+
 extern "C" fn cksm_set_flags(p: &mut CksmFile,
     has_correct_reserve_size_1: i32) -> () {
     if has_correct_reserve_size_1 != (*p).compute_cksm as i32 {
@@ -60,6 +66,7 @@ extern "C" fn cksm_set_flags(p: &mut CksmFile,
         }
     }
 }
+
 extern "C" fn cksm_compute(a: *mut u8, n_byte_1: i32, a_out_1: *mut u8)
     -> () {
     let mut s1: u32 = 0 as u32;
@@ -159,6 +166,7 @@ extern "C" fn cksm_compute(a: *mut u8, n_byte_1: i32, a_out_1: *mut u8)
             &raw mut s2 as *const (), 4 as u64)
     };
 }
+
 extern "C" fn cksm_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -215,6 +223,7 @@ extern "C" fn cksm_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     }
     return rc;
 }
+
 extern "C" fn cksm_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
@@ -251,6 +260,7 @@ extern "C" fn cksm_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
                 })(p_file, z_buf, i_amt, i_ofst)
         };
 }
+
 extern "C" fn cksm_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     p_file =
@@ -262,6 +272,7 @@ extern "C" fn cksm_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
                 })(p_file, size)
         };
 }
+
 extern "C" fn cksm_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -272,6 +283,7 @@ extern "C" fn cksm_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
                 })(p_file, flags)
         };
 }
+
 extern "C" fn cksm_file_size(mut p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
@@ -284,6 +296,7 @@ extern "C" fn cksm_file_size(mut p_file: *mut Sqlite3File,
                 })(p_file, p_size)
         };
 }
+
 extern "C" fn cksm_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -294,6 +307,7 @@ extern "C" fn cksm_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
                 })(p_file, e_lock)
         };
 }
+
 extern "C" fn cksm_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -304,6 +318,7 @@ extern "C" fn cksm_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
                 })(p_file, e_lock)
         };
 }
+
 extern "C" fn cksm_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -317,6 +332,7 @@ extern "C" fn cksm_check_reserved_lock(mut p_file: *mut Sqlite3File,
                 })(p_file, p_res_out)
         };
 }
+
 extern "C" fn cksm_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -401,6 +417,7 @@ extern "C" fn cksm_file_control(mut p_file: *mut Sqlite3File, op: i32,
     }
     return rc;
 }
+
 extern "C" fn cksm_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -411,6 +428,7 @@ extern "C" fn cksm_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
                 })(p_file)
         };
 }
+
 extern "C" fn cksm_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     let mut devchar: i32 = 0;
@@ -427,6 +445,7 @@ extern "C" fn cksm_device_characteristics(mut p_file: *mut Sqlite3File)
         };
     return devchar & !32768;
 }
+
 extern "C" fn cksm_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
     b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -438,6 +457,7 @@ extern "C" fn cksm_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
                 })(p_file, i_pg, pgsz, b_extend, pp)
         };
 }
+
 extern "C" fn cksm_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
     flags: i32) -> i32 {
     p_file =
@@ -449,6 +469,7 @@ extern "C" fn cksm_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
                 })(p_file, offset, n, flags)
         };
 }
+
 extern "C" fn cksm_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -459,6 +480,7 @@ extern "C" fn cksm_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
             })(p_file)
     };
 }
+
 extern "C" fn cksm_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -470,6 +492,7 @@ extern "C" fn cksm_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
                 })(p_file, delete_flag)
         };
 }
+
 extern "C" fn cksm_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     let p: *const CksmFile = p_file as *mut CksmFile as *const CksmFile;
@@ -491,6 +514,7 @@ extern "C" fn cksm_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     unsafe { *pp = core::ptr::null_mut() };
     return 0;
 }
+
 extern "C" fn cksm_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     p_file =
@@ -506,6 +530,7 @@ extern "C" fn cksm_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     }
     return 0;
 }
+
 static cksm_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -528,6 +553,7 @@ static cksm_io_methods: Sqlite3IoMethods =
         x_fetch: Some(cksm_fetch),
         x_unfetch: Some(cksm_unfetch),
     };
+
 extern "C" fn cksm_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -568,6 +594,7 @@ extern "C" fn cksm_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     if rc != 0 { unsafe { (*p_file).p_methods = core::ptr::null() }; }
     return rc;
 }
+
 extern "C" fn cksm_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     return unsafe {
@@ -578,6 +605,7 @@ extern "C" fn cksm_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 dir_sync)
         };
 }
+
 extern "C" fn cksm_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     return unsafe {
@@ -588,6 +616,7 @@ extern "C" fn cksm_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 flags, p_res_out)
         };
 }
+
 extern "C" fn cksm_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -598,6 +627,7 @@ extern "C" fn cksm_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 n_out, z_out)
         };
 }
+
 extern "C" fn cksm_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -607,6 +637,7 @@ extern "C" fn cksm_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_path)
         };
 }
+
 extern "C" fn cksm_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -617,6 +648,7 @@ extern "C" fn cksm_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
             z_err_msg)
     };
 }
+
 extern "C" fn cksm_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -627,6 +659,7 @@ extern "C" fn cksm_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
                 z_sym)
         };
 }
+
 extern "C" fn cksm_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
     unsafe {
         (unsafe {
@@ -635,6 +668,7 @@ extern "C" fn cksm_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
             })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, p_handle)
     };
 }
+
 extern "C" fn cksm_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -645,6 +679,7 @@ extern "C" fn cksm_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
                 z_buf_out)
         };
 }
+
 extern "C" fn cksm_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -653,6 +688,7 @@ extern "C" fn cksm_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, n_micro)
         };
 }
+
 extern "C" fn cksm_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
     -> i32 {
     return unsafe {
@@ -663,6 +699,7 @@ extern "C" fn cksm_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
                 p_time_out)
         };
 }
+
 extern "C" fn cksm_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
     -> i32 {
     return unsafe {
@@ -672,6 +709,7 @@ extern "C" fn cksm_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, a, b)
         };
 }
+
 extern "C" fn cksm_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p: *mut Sqlite3Int64) -> i32 {
     let p_orig: *mut Sqlite3Vfs =
@@ -701,6 +739,7 @@ extern "C" fn cksm_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     }
     return rc;
 }
+
 extern "C" fn cksm_set_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_call: unsafe extern "C" fn() -> ()) -> i32 {
     return unsafe {
@@ -711,6 +750,7 @@ extern "C" fn cksm_set_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
                 p_call)
         };
 }
+
 extern "C" fn cksm_get_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
     -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -720,6 +760,7 @@ extern "C" fn cksm_get_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_name)
         };
 }
+
 extern "C" fn cksm_next_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
     -> *const i8 {
     return unsafe {
@@ -729,6 +770,7 @@ extern "C" fn cksm_next_system_call(p_vfs: *mut Sqlite3Vfs, z_name: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_name)
         };
 }
+
 static mut cksm_vfs: Sqlite3Vfs =
     Sqlite3Vfs {
         i_version: 3,
@@ -754,6 +796,7 @@ static mut cksm_vfs: Sqlite3Vfs =
         x_get_system_call: Some(cksm_get_system_call),
         x_next_system_call: Some(cksm_next_system_call),
     };
+
 extern "C" fn cksm_verify_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n_byte: i32 = 0;
@@ -784,6 +827,7 @@ extern "C" fn cksm_verify_func(context: *mut Sqlite3Context, argc: i32,
                     } == 0) as i32)
     };
 }
+
 extern "C" fn cksm_register_func(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
@@ -797,6 +841,7 @@ extern "C" fn cksm_register_func(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
         };
     return rc;
 }
+
 extern "C" fn cksm_register_vfs() -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -822,6 +867,7 @@ extern "C" fn cksm_register_vfs() -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_cksumvfs_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -833,6 +879,7 @@ pub extern "C" fn sqlite3_cksumvfs_init(db: *mut Sqlite3,
     if rc == 0 { rc = 0 | 1 << 8; }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

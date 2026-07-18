@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct YyParser {
@@ -393,6 +402,7 @@ struct YyParser {
     yystack: *mut YyStackEntry,
     yystk0: [YyStackEntry; 50],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct YyStackEntry {
@@ -400,6 +410,7 @@ struct YyStackEntry {
     major: u16,
     minor: YYMINORTYPE,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union YYMINORTYPE {
@@ -424,24 +435,28 @@ union YYMINORTYPE {
     yy509: FrameBound,
     yy555: *mut Select,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TrigEvent {
     a: i32,
     b: *mut IdList,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct YYMINORTYPES0 {
     value: i32,
     mask: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FrameBound {
     e_type: i32,
     p_expr: *mut Expr,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_init(yyp_raw_parser_1: *mut (),
     p_parse_1: *mut Parse) -> () {
@@ -468,6 +483,7 @@ pub extern "C" fn sqlite3_parser_init(yyp_raw_parser_1: *mut (),
             0 as u16
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_alloc(malloc_proc:
         Option<unsafe extern "C" fn(u64) -> *mut ()>, p_parse: *mut Parse)
@@ -483,6 +499,7 @@ pub extern "C" fn sqlite3_parser_alloc(malloc_proc:
     }
     return yyp_parser as *mut ();
 }
+
 extern "C" fn yy_destructor(yyp_parser_1: &YyParser, yymajor: u16,
     yypminor: &YYMINORTYPE) -> () {
     unsafe {
@@ -895,11 +912,13 @@ extern "C" fn yy_destructor(yyp_parser_1: &YyParser, yymajor: u16,
         }
     }
 }
+
 extern "C" fn parser_stack_free(p_old_1: *mut (), p_parse_1: *const Parse)
     -> () {
     { let _ = p_parse_1; };
     unsafe { sqlite3_free(p_old_1) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_finalize(p: *mut ()) -> () {
     let p_parser: *mut YyParser = p as *mut YyParser;
@@ -923,12 +942,14 @@ pub extern "C" fn sqlite3_parser_finalize(p: *mut ()) -> () {
             unsafe { (*p_parser).p_parse } as *const Parse);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_free(p: *mut (),
     free_proc: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> () {
     sqlite3_parser_finalize(p);
     unsafe { free_proc.unwrap()(p) };
 }
+
 static yy_shift_ofst: [u16; 600] =
     [2201 as u16, 1973 as u16, 2215 as u16, 1552 as u16, 1552 as u16,
             33 as u16, 368 as u16, 1668 as u16, 1741 as u16, 1814 as u16,
@@ -1050,6 +1071,7 @@ static yy_shift_ofst: [u16; 600] =
             2161 as u16, 2162 as u16, 2160 as u16, 2165 as u16, 2163 as u16,
             2050 as u16, 2049 as u16, 2051 as u16, 2052 as u16, 2167 as u16,
             2172 as u16, 2181 as u16, 2197 as u16, 2204 as u16];
+
 static yy_lookahead: [u16; 2566] =
     [277 as u16, 278 as u16, 279 as u16, 241 as u16, 242 as u16, 225 as u16,
             195 as u16, 227 as u16, 195 as u16, 312 as u16, 195 as u16,
@@ -1550,6 +1572,7 @@ static yy_lookahead: [u16; 2566] =
             187 as u16, 187 as u16, 187 as u16, 187 as u16, 187 as u16,
             187 as u16, 187 as u16, 187 as u16, 187 as u16, 187 as u16,
             187 as u16];
+
 static yy_fallback: [u16; 187] =
     [0 as u16, 0 as u16, 60 as u16, 60 as u16, 60 as u16, 60 as u16, 0 as u16,
             60 as u16, 60 as u16, 60 as u16, 0 as u16, 60 as u16, 60 as u16,
@@ -1582,6 +1605,7 @@ static yy_fallback: [u16; 187] =
             0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16,
             0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16,
             0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16, 0 as u16];
+
 static yy_action: [u16; 2379] =
     [134 as u16, 131 as u16, 238 as u16, 290 as u16, 290 as u16, 1353 as u16,
             593 as u16, 1332 as u16, 478 as u16, 1606 as u16, 593 as u16,
@@ -2059,6 +2083,7 @@ static yy_action: [u16; 2379] =
             1281 as u16, 1281 as u16, 1281 as u16, 1281 as u16, 1281 as u16,
             1281 as u16, 1281 as u16, 1281 as u16, 1281 as u16, 1281 as u16,
             476 as u16];
+
 static yy_default: [u16; 600] =
     [1691 as u16, 1691 as u16, 1691 as u16, 1516 as u16, 1279 as u16,
             1392 as u16, 1279 as u16, 1279 as u16, 1279 as u16, 1279 as u16,
@@ -2180,6 +2205,7 @@ static yy_default: [u16; 600] =
             1279 as u16, 1279 as u16, 1279 as u16, 1279 as u16, 1279 as u16,
             1663 as u16, 1371 as u16, 1463 as u16, 1279 as u16, 1466 as u16,
             1301 as u16, 1279 as u16, 1291 as u16, 1279 as u16, 1279 as u16];
+
 extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
     -> u16 {
     let mut i: i32 = 0;
@@ -2218,6 +2244,7 @@ extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
         }
     }
 }
+
 static yy_rule_info_n_rhs: [i8; 412] =
     [-1 as i8, -3 as i8, -1 as i8, -3 as i8, 0 as i8, -1 as i8, -1 as i8,
             -1 as i8, -2 as i8, -2 as i8, -2 as i8, -3 as i8, -5 as i8,
@@ -2287,9 +2314,11 @@ static yy_rule_info_n_rhs: [i8; 412] =
             -1 as i8, 0 as i8, -3 as i8, 0 as i8, -1 as i8, 0 as i8, 0 as i8,
             -1 as i8, -1 as i8, -3 as i8, -2 as i8, 0 as i8, -4 as i8,
             -2 as i8, 0 as i8, -1 as i8, -1 as i8];
+
 extern "C" fn parser_stack_size_limit(p_parse_1: &Parse) -> i32 {
     return unsafe { (*(*p_parse_1).db).a_limit[12 as usize] };
 }
+
 extern "C" fn parser_stack_realloc(p_old_1: *mut (),
     new_size_1: Sqlite3Uint64, p_parse_1: &Parse) -> *mut () {
     let p: *mut () =
@@ -2301,6 +2330,7 @@ extern "C" fn parser_stack_realloc(p_old_1: *mut (),
     }
     return p;
 }
+
 extern "C" fn yy_grow_stack(p: &mut YyParser) -> i32 {
     let old_size: i32 =
         1 +
@@ -2341,6 +2371,7 @@ extern "C" fn yy_grow_stack(p: &mut YyParser) -> i32 {
         unsafe { (*p).yystack.offset((new_size - 1) as isize) };
     return 0;
 }
+
 extern "C" fn yy_pop_parser_stack(p_parser_1: *mut YyParser) -> () {
     let mut yytos: *mut YyStackEntry = core::ptr::null_mut();
     { let _ = 0; };
@@ -2355,6 +2386,7 @@ extern "C" fn yy_pop_parser_stack(p_parser_1: *mut YyParser) -> () {
     yy_destructor(unsafe { &*p_parser_1 }, unsafe { (*yytos).major },
         unsafe { &(*yytos).minor });
 }
+
 extern "C" fn yy_stack_overflow(yyp_parser_1: *mut YyParser) -> () {
     let p_parse: *mut Parse = unsafe { (*yyp_parser_1).p_parse };
     while unsafe { (*yyp_parser_1).yytos } >
@@ -2369,6 +2401,7 @@ extern "C" fn yy_stack_overflow(yyp_parser_1: *mut YyParser) -> () {
     }
     unsafe { (*yyp_parser_1).p_parse = p_parse };
 }
+
 extern "C" fn disable_lookaside(p_parse_1: &mut Parse) -> () {
     unsafe {
         let db: *mut Sqlite3 = (*p_parse_1).db;
@@ -2388,6 +2421,7 @@ extern "C" fn disable_lookaside(p_parse_1: &mut Parse) -> () {
         unsafe { (*db).lookaside.sz = 0 as u16 };
     }
 }
+
 extern "C" fn token_expr(p_parse_1: *mut Parse, op: i32, mut t: Token)
     -> *mut Expr {
     unsafe {
@@ -2454,6 +2488,7 @@ extern "C" fn token_expr(p_parse_1: *mut Parse, op: i32, mut t: Token)
         }
     }
 }
+
 extern "C" fn parser_double_link_select(p_parse_1: *mut Parse, p: *mut Select)
     -> () {
     { let _ = 0; };
@@ -2502,6 +2537,7 @@ extern "C" fn parser_double_link_select(p_parse_1: *mut Parse, p: *mut Select)
         }
     }
 }
+
 extern "C" fn attach_with_to_select(p_parse_1: *mut Parse,
     p_select_1: *mut Select, p_with_1: *mut With) -> *mut Select {
     if !(p_select_1).is_null() {
@@ -2512,6 +2548,7 @@ extern "C" fn attach_with_to_select(p_parse_1: *mut Parse,
     }
     return p_select_1;
 }
+
 extern "C" fn parser_syntax_error(p_parse_1: *mut Parse, p: *mut Token)
     -> () {
     unsafe {
@@ -2519,6 +2556,7 @@ extern "C" fn parser_syntax_error(p_parse_1: *mut Parse, p: *mut Token)
             c"near \"%T\": syntax error".as_ptr() as *mut i8 as *const i8, p)
     };
 }
+
 extern "C" fn sqlite3_p_expr_is_null(p_parse_1: *mut Parse, op: i32,
     p_left_1: *mut Expr) -> *mut Expr {
     let mut p: *const Expr = p_left_1 as *const Expr;
@@ -2567,6 +2605,7 @@ extern "C" fn sqlite3_p_expr_is_null(p_parse_1: *mut Parse, op: i32,
             sqlite3_p_expr(p_parse_1, op, p_left_1, core::ptr::null_mut())
         };
 }
+
 extern "C" fn sqlite3_p_expr_is(p_parse_1: *mut Parse, op: i32,
     p_left_1: *mut Expr, p_right_1: *mut Expr) -> *mut Expr {
     if !(p_right_1).is_null() && unsafe { (*p_right_1).op } as i32 == 122 {
@@ -2576,6 +2615,7 @@ extern "C" fn sqlite3_p_expr_is(p_parse_1: *mut Parse, op: i32,
     }
     return unsafe { sqlite3_p_expr(p_parse_1, op, p_left_1, p_right_1) };
 }
+
 extern "C" fn parser_add_expr_id_list_term(p_parse_1: *mut Parse,
     p_prior_1: *mut ExprList, p_id_token_1: *const Token, has_collate_1: i32,
     sort_order_1: i32) -> *mut ExprList {
@@ -2602,6 +2642,7 @@ extern "C" fn parser_add_expr_id_list_term(p_parse_1: *mut Parse,
         return p;
     }
 }
+
 static yy_rule_info_lhs: [u16; 412] =
     [191 as u16, 191 as u16, 190 as u16, 192 as u16, 193 as u16, 193 as u16,
             193 as u16, 193 as u16, 192 as u16, 192 as u16, 192 as u16,
@@ -2686,6 +2727,7 @@ static yy_rule_info_lhs: [u16; 412] =
             299 as u16, 299 as u16, 301 as u16, 301 as u16, 302 as u16,
             305 as u16, 305 as u16, 305 as u16, 269 as u16, 309 as u16,
             311 as u16];
+
 static yy_reduce_ofst: [i16; 424] =
     [-67 as i16, 345 as i16, -64 as i16, -178 as i16, -181 as i16, 143 as i16,
             435 as i16, -78 as i16, -183 as i16, 163 as i16, -185 as i16,
@@ -2772,6 +2814,7 @@ static yy_reduce_ofst: [i16; 424] =
             1714 as i16, 1811 as i16, 1806 as i16, 1808 as i16, 1809 as i16,
             1810 as i16, 1813 as i16, 1802 as i16, 1803 as i16, 1812 as i16,
             1815 as i16, 1817 as i16, 1820 as i16];
+
 extern "C" fn yy_find_reduce_action(stateno: u16, i_look_ahead_1: u16)
     -> u16 {
     let mut i: i32 = 0;
@@ -2783,6 +2826,7 @@ extern "C" fn yy_find_reduce_action(stateno: u16, i_look_ahead_1: u16)
     { let _ = 0; };
     return yy_action[i as usize] as u16;
 }
+
 extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
     yy_lookahead_1: i32, yy_lookahead_token_1: Token, p_parse_1: *mut Parse)
     -> u16 {
@@ -7371,6 +7415,7 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
         }
     }
 }
+
 extern "C" fn yy_shift(yyp_parser_1: *mut YyParser, mut yy_new_state_1: u16,
     yy_major_1: u16, yy_minor_1: Token) -> () {
     unsafe {
@@ -7404,11 +7449,13 @@ extern "C" fn yy_shift(yyp_parser_1: *mut YyParser, mut yy_new_state_1: u16,
         unsafe { (*yytos).minor.yy0 = yy_minor_1 };
     }
 }
+
 extern "C" fn yy_accept(yyp_parser_1: &mut YyParser) -> () {
     let p_parse: *mut Parse = (*yyp_parser_1).p_parse;
     { let _ = 0; };
     (*yyp_parser_1).p_parse = p_parse;
 }
+
 extern "C" fn yy_syntax_error(yyp_parser_1: &mut YyParser, yymajor: i32,
     mut yyminor: Token) -> () {
     unsafe {
@@ -7425,6 +7472,7 @@ extern "C" fn yy_syntax_error(yyp_parser_1: &mut YyParser, yymajor: i32,
         (*yyp_parser_1).p_parse = p_parse;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser(yyp: *mut (), yymajor: i32, yyminor: Token)
     -> () {
@@ -7478,11 +7526,13 @@ pub extern "C" fn sqlite3_parser(yyp: *mut (), yymajor: i32, yyminor: Token)
         return;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_fallback(i_token: i32) -> i32 {
     { let _ = 0; };
     return yy_fallback[i_token as usize] as i32;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -10263,41 +10313,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

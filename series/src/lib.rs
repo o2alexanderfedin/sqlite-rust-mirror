@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SeriesCursor {
@@ -18,6 +21,7 @@ struct SeriesCursor {
     b_desc: u8,
     b_done: u8,
 }
+
 extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
     -> Sqlite3Uint64 {
     if !(a >= b) as i32 as i64 != 0 {
@@ -30,18 +34,21 @@ extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
     return unsafe { *(&raw mut a as *mut Sqlite3Uint64) } -
             unsafe { *(&raw mut b as *mut Sqlite3Uint64) };
 }
+
 extern "C" fn add64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     let mut x: Sqlite3Uint64 =
         unsafe { core::ptr::read(&raw mut a as *mut Sqlite3Uint64) };
     x += b;
     return unsafe { *(&raw mut x as *mut Sqlite3Int64) };
 }
+
 extern "C" fn sub64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     let mut x: Sqlite3Uint64 =
         unsafe { core::ptr::read(&raw mut a as *mut Sqlite3Uint64) };
     x -= b;
     return unsafe { *(&raw mut x as *mut Sqlite3Int64) };
 }
+
 extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     argc_unused_1: i32, argv_unused_1: *const *const i8,
     pp_vtab_1: *mut *mut Sqlite3Vtab, pz_err_unused_1: *mut *mut i8) -> i32 {
@@ -78,10 +85,12 @@ extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn series_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
@@ -99,10 +108,12 @@ extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn series_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut SeriesCursor = cur as *mut SeriesCursor;
     if unsafe { (*p_cur).i_value } == unsafe { (*p_cur).i_term } {
@@ -138,6 +149,7 @@ extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -155,6 +167,7 @@ extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     unsafe { sqlite3_result_int64(ctx, x) };
     return 0;
 }
+
 extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -162,11 +175,13 @@ extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_value } };
     return 0;
 }
+
 extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SeriesCursor =
         cur as *mut SeriesCursor as *const SeriesCursor;
     return unsafe { (*p_cur).b_done } as i32;
 }
+
 extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
     if (*p_cur_1).b_desc != 0 {
         if !((*p_cur_1).i_base >= (*p_cur_1).i_term) as i32 as i64 != 0 {
@@ -192,8 +207,11 @@ extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
                 (*p_cur_1).i_step;
     }
 }
+
 extern "C" fn series_ceil(r: f64) -> f64 { return unsafe { ceil(r) }; }
+
 extern "C" fn series_floor(r: f64) -> f64 { return unsafe { floor(r) }; }
+
 extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     if r < -9.223372036854775e18 {
         return 9223372036854775808u64 as Sqlite3Int64;
@@ -203,6 +221,7 @@ extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     }
     return r as Sqlite3Int64;
 }
+
 extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_unused_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -974,6 +993,7 @@ extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
     unreachable!();
 }
+
 extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -1323,6 +1343,7 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).idx_flags = 2 };
     return 0;
 }
+
 static mut series_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1351,6 +1372,7 @@ static mut series_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_series_init(db: *mut Sqlite3,
     pz_err_msg_1: *mut *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1378,6 +1400,7 @@ pub extern "C" fn sqlite3_series_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

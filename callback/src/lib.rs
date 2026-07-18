@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_function_search(h: i32, z_func: *const i8)
     -> *mut FuncDef {
@@ -410,6 +419,7 @@ pub extern "C" fn sqlite3_function_search(h: i32, z_func: *const i8)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_insert_builtin_funcs(a_def: *mut FuncDef,
     n_def: i32) -> () {
@@ -458,6 +468,7 @@ pub extern "C" fn sqlite3_insert_builtin_funcs(a_def: *mut FuncDef,
         }
     }
 }
+
 extern "C" fn match_quality(p: &FuncDef, n_arg_1: i32, enc: u8) -> i32 {
     let mut match_: i32 = 0;
     { let _ = 0; };
@@ -479,6 +490,7 @@ extern "C" fn match_quality(p: &FuncDef, n_arg_1: i32, enc: u8) -> i32 {
     }
     return match_;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_find_function(db: *mut Sqlite3, z_name: *const i8,
     n_arg: i32, enc: u8, create_flag: u8) -> *mut FuncDef {
@@ -582,6 +594,7 @@ pub extern "C" fn sqlite3_find_function(db: *mut Sqlite3, z_name: *const i8,
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn find_coll_seq_entry(db: *mut Sqlite3, z_name_1: *const i8,
     create: i32) -> *mut CollSeq {
     let mut p_coll: *mut CollSeq = core::ptr::null_mut();
@@ -635,6 +648,7 @@ extern "C" fn find_coll_seq_entry(db: *mut Sqlite3, z_name_1: *const i8,
     }
     return p_coll;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_find_coll_seq(db: *mut Sqlite3, enc: u8,
     z_name: *const i8, create: i32) -> *mut CollSeq {
@@ -653,6 +667,7 @@ pub extern "C" fn sqlite3_find_coll_seq(db: *mut Sqlite3, enc: u8,
     } else { p_coll = unsafe { (*db).p_dflt_coll }; }
     return p_coll;
 }
+
 extern "C" fn call_coll_needed(db: *mut Sqlite3, enc: i32,
     z_name_1: *const i8) -> () {
     { let _ = 0; };
@@ -687,6 +702,7 @@ extern "C" fn call_coll_needed(db: *mut Sqlite3, enc: i32,
         unsafe { sqlite3ValueFree(p_tmp) };
     }
 }
+
 extern "C" fn synth_coll_seq(db: *mut Sqlite3, p_coll_1: *mut CollSeq)
     -> i32 {
     let mut p_coll2: *const CollSeq = core::ptr::null();
@@ -715,6 +731,7 @@ extern "C" fn synth_coll_seq(db: *mut Sqlite3, p_coll_1: *mut CollSeq)
     }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_coll_seq(p_parse: *mut Parse, enc: u8,
     p_coll: *mut CollSeq, z_name: *const i8) -> *mut CollSeq {
@@ -744,6 +761,7 @@ pub extern "C" fn sqlite3_get_coll_seq(p_parse: *mut Parse, enc: u8,
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_locate_coll_seq(p_parse: *mut Parse,
     z_name: *const i8) -> *mut CollSeq {
@@ -759,6 +777,7 @@ pub extern "C" fn sqlite3_locate_coll_seq(p_parse: *mut Parse,
     }
     return p_coll;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_text_encoding(db: *mut Sqlite3, enc: u8) -> () {
     unsafe {
@@ -772,6 +791,7 @@ pub extern "C" fn sqlite3_set_text_encoding(db: *mut Sqlite3, enc: u8) -> () {
         unsafe { sqlite3_expire_prepared_statements(db, 1) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_check_coll_seq(p_parse: *mut Parse,
     p_coll: *mut CollSeq) -> i32 {
@@ -787,6 +807,7 @@ pub extern "C" fn sqlite3_check_coll_seq(p_parse: *mut Parse,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_schema_clear(p: *mut ()) -> () {
     let mut temp1: Hash = unsafe { core::mem::zeroed() };
@@ -844,6 +865,7 @@ pub extern "C" fn sqlite3_schema_clear(p: *mut ()) -> () {
     }
     unsafe { (*p_schema).schema_flags &= !(1 | 8) as u16 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_schema_get(db: *mut Sqlite3, p_bt: *mut Btree)
     -> *mut Schema {
@@ -873,7 +895,9 @@ pub extern "C" fn sqlite3_schema_get(db: *mut Sqlite3, p_bt: *mut Btree)
     }
     return p;
 }
+
 static a_enc: [u8; 3] = [3 as u8, 2 as u8, 1 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3642,41 +3666,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtreePayload {
     pub(crate) p_key: *const (),

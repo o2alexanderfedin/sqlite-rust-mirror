@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VLogLog {
@@ -12,12 +15,14 @@ struct VLogLog {
     z_filename: *mut i8,
     out: *mut FILE,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VLogVfs {
     base: Sqlite3Vfs,
     p_vfs: *mut Sqlite3Vfs,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VLogFile {
@@ -25,7 +30,9 @@ struct VLogFile {
     p_real: *mut Sqlite3File,
     p_log: *mut VLogLog,
 }
+
 extern "C" fn vlog_time() -> Sqlite3Uint64 { return 0 as Sqlite3Uint64; }
+
 extern "C" fn vlog_log_print(p_log_1: *const VLogLog, t_start_1: Sqlite3Int64,
     t_elapse_1: Sqlite3Int64, z_op_1: *const i8, i_arg1_1: Sqlite3Int64,
     i_arg2_1: Sqlite3Int64, z_arg3_1: *const i8, i_res_1: i32) -> () {
@@ -66,6 +73,7 @@ extern "C" fn vlog_log_print(p_log_1: *const VLogLog, t_start_1: Sqlite3Int64,
             &raw mut z3[0 as usize] as *mut i8, i_res_1)
     };
 }
+
 extern "C" fn vlog_log_close(p: *mut VLogLog) -> () {
     if !(p).is_null() {
         let mut p_mutex: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -92,6 +100,7 @@ extern "C" fn vlog_log_close(p: *mut VLogLog) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn vlog_close(p_file: *mut Sqlite3File) -> i32 {
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut t_elapse: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -116,6 +125,7 @@ extern "C" fn vlog_close(p_file: *mut Sqlite3File) -> i32 {
     vlog_log_close(unsafe { (*p).p_log });
     return rc;
 }
+
 extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     let mut s0: u32 = 0 as u32;
     let mut s1: u32 = 0 as u32;
@@ -180,12 +190,14 @@ extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
         };
     }
 }
+
 extern "C" fn big_to_native(x: *const u8) -> i32 {
     return ((unsafe { *x.offset(0 as isize) } as i32) << 24) +
                     ((unsafe { *x.offset(1 as isize) } as i32) << 16) +
                 ((unsafe { *x.offset(2 as isize) } as i32) << 8) +
             unsafe { *x.offset(3 as isize) } as i32;
 }
+
 extern "C" fn vlog_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -245,6 +257,7 @@ extern "C" fn vlog_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     }
     return rc;
 }
+
 extern "C" fn vlog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -301,6 +314,7 @@ extern "C" fn vlog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     }
     return rc;
 }
+
 extern "C" fn vlog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let mut rc: i32 = 0;
@@ -323,6 +337,7 @@ extern "C" fn vlog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 extern "C" fn vlog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -344,6 +359,7 @@ extern "C" fn vlog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 extern "C" fn vlog_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -366,6 +382,7 @@ extern "C" fn vlog_file_size(p_file: *mut Sqlite3File,
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 extern "C" fn vlog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -387,6 +404,7 @@ extern "C" fn vlog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 extern "C" fn vlog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -406,6 +424,7 @@ extern "C" fn vlog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
     return rc;
 }
+
 extern "C" fn vlog_check_reserved_lock(p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -429,6 +448,7 @@ extern "C" fn vlog_check_reserved_lock(p_file: *mut Sqlite3File,
         c"".as_ptr() as *mut i8 as *const i8, rc);
     return rc;
 }
+
 extern "C" fn vlog_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let p: *const VLogFile = p_file as *mut VLogFile as *const VLogFile;
@@ -482,6 +502,7 @@ extern "C" fn vlog_file_control(p_file: *mut Sqlite3File, op: i32,
     }
     return rc;
 }
+
 extern "C" fn vlog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -503,6 +524,7 @@ extern "C" fn vlog_sector_size(p_file: *mut Sqlite3File) -> i32 {
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 extern "C" fn vlog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -524,7 +546,9 @@ extern "C" fn vlog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
         -1 as Sqlite3Int64, core::ptr::null(), rc);
     return rc;
 }
+
 static mut all_logs: *mut VLogLog = core::ptr::null_mut();
+
 extern "C" fn vlog_log_open(z_filename_1: *const i8) -> *mut VLogLog {
     unsafe {
         let mut n_name: i32 = unsafe { strlen(z_filename_1) } as i32;
@@ -653,6 +677,7 @@ extern "C" fn vlog_log_open(z_filename_1: *const i8) -> *mut VLogLog {
         return p_log;
     }
 }
+
 static mut vlog_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -675,6 +700,7 @@ static mut vlog_io_methods: Sqlite3IoMethods =
         x_fetch: None,
         x_unfetch: None,
     };
+
 extern "C" fn vlog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -723,6 +749,7 @@ extern "C" fn vlog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         return rc;
     }
 }
+
 extern "C" fn vlog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -747,6 +774,7 @@ extern "C" fn vlog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     vlog_log_close(p_log);
     return rc;
 }
+
 extern "C" fn vlog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -772,6 +800,7 @@ extern "C" fn vlog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     vlog_log_close(p_log);
     return rc;
 }
+
 extern "C" fn vlog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -783,6 +812,7 @@ extern "C" fn vlog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 z_out)
         };
 }
+
 extern "C" fn vlog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -793,6 +823,7 @@ extern "C" fn vlog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, z_path)
         };
 }
+
 extern "C" fn vlog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -803,6 +834,7 @@ extern "C" fn vlog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
             })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, n_byte, z_err_msg)
     };
 }
+
 extern "C" fn vlog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -813,6 +845,7 @@ extern "C" fn vlog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, p, z_sym)
         };
 }
+
 extern "C" fn vlog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
     unsafe {
         (unsafe {
@@ -822,6 +855,7 @@ extern "C" fn vlog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
             })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, p_handle)
     };
 }
+
 extern "C" fn vlog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -833,6 +867,7 @@ extern "C" fn vlog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
                 z_buf_out)
         };
 }
+
 extern "C" fn vlog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -842,6 +877,7 @@ extern "C" fn vlog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, n_micro)
         };
 }
+
 extern "C" fn vlog_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
     -> i32 {
     return unsafe {
@@ -852,6 +888,7 @@ extern "C" fn vlog_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, p_time_out)
         };
 }
+
 extern "C" fn vlog_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
     -> i32 {
     return unsafe {
@@ -862,6 +899,7 @@ extern "C" fn vlog_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, a, b)
         };
 }
+
 extern "C" fn vlog_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p: *mut Sqlite3Int64) -> i32 {
     return unsafe {
@@ -872,6 +910,7 @@ extern "C" fn vlog_current_time_int64(p_vfs: *mut Sqlite3Vfs,
                 })(unsafe { (*(p_vfs as *mut VLogVfs)).p_vfs }, p)
         };
 }
+
 static mut vlog_vfs: VLogVfs =
     VLogVfs {
         base: Sqlite3Vfs {
@@ -900,6 +939,7 @@ static mut vlog_vfs: VLogVfs =
         },
         p_vfs: core::ptr::null_mut(),
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_vfslog(z_arg_1: *const i8) -> i32 {
     unsafe {
@@ -911,6 +951,7 @@ pub extern "C" fn sqlite3_register_vfslog(z_arg_1: *const i8) -> i32 {
         return unsafe { sqlite3_vfs_register(&mut vlog_vfs.base, 1) };
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1697,9 +1738,11 @@ extern "C" {
     fn fopen(__filename: *const i8, __mode: *const i8)
     -> *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

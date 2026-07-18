@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,6 +16,7 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -62,6 +64,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -134,6 +137,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -146,6 +150,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -225,6 +230,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -361,6 +367,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -409,6 +416,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -444,6 +452,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -467,21 +476,26 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3StatType {
     now_value: [i64; 10],
     mx_value: [i64; 10],
 }
+
 type Sqlite3StatValueType = Sqlite3Int64;
+
 static mut sqlite3_stat: Sqlite3StatType =
     Sqlite3StatType {
         now_value: [0 as i64, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         mx_value: [0 as i64, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
+
 static stat_mutex: [i8; 10] =
     [0 as i8, 1 as i8, 1 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 1 as i8,
             0 as i8, 0 as i8];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status64(op: i32, p_current: &mut Sqlite3Int64,
     p_highwater: &mut Sqlite3Int64, reset_flag: i32) -> i32 {
@@ -510,6 +524,7 @@ pub extern "C" fn sqlite3_status64(op: i32, p_current: &mut Sqlite3Int64,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status(op: i32, p_current: &mut i32,
     p_highwater: &mut i32, reset_flag: i32) -> i32 {
@@ -520,6 +535,7 @@ pub extern "C" fn sqlite3_status(op: i32, p_current: &mut i32,
     if rc == 0 { *p_current = i_cur as i32; *p_highwater = i_hwtr as i32; }
     return rc;
 }
+
 extern "C" fn count_lookaside_slots(mut p: *const LookasideSlot) -> u32 {
     let mut cnt: u32 = 0 as u32;
     while !(p).is_null() {
@@ -528,6 +544,7 @@ extern "C" fn count_lookaside_slots(mut p: *const LookasideSlot) -> u32 {
     }
     return cnt;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_lookaside_used(db: &Sqlite3,
     p_highwater_1: *mut i32) -> i32 {
@@ -547,6 +564,7 @@ pub extern "C" fn sqlite3_lookaside_used(db: &Sqlite3,
     }
     return ((*db).lookaside.n_slot - (n_init + n_free)) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
     p_current_1: &mut Sqlite3Int64, p_highwtr_1: &mut Sqlite3Int64,
@@ -2669,6 +2687,7 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_status(db: *mut Sqlite3, op: i32,
     p_current_1: &mut i32, p_highwtr_1: &mut i32, reset_flag_1: i32) -> i32 {
@@ -2682,6 +2701,7 @@ pub extern "C" fn sqlite3_db_status(db: *mut Sqlite3, op: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_value(op: i32) -> Sqlite3Int64 {
     unsafe {
@@ -2691,6 +2711,7 @@ pub extern "C" fn sqlite3_status_value(op: i32) -> Sqlite3Int64 {
         return sqlite3_stat.now_value[op as usize];
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_up(op: i32, n: i32) -> () {
     unsafe {
@@ -2705,6 +2726,7 @@ pub extern "C" fn sqlite3_status_up(op: i32, n: i32) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_down(op: i32, n: i32) -> () {
     unsafe {
@@ -2715,6 +2737,7 @@ pub extern "C" fn sqlite3_status_down(op: i32, n: i32) -> () {
         sqlite3_stat.now_value[op as usize] -= n as Sqlite3StatValueType;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_highwater(op: i32, x: i32) -> () {
     unsafe {
@@ -2730,6 +2753,7 @@ pub extern "C" fn sqlite3_status_highwater(op: i32, x: i32) -> () {
         }
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5662,41 +5686,49 @@ extern "C" {
     fn sqlite3_vdbe_mem_expand_blob(_: *mut Mem)
     -> i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

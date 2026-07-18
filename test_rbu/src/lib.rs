@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod qrf_h;
 pub(crate) use crate::qrf_h::*;
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Qrf {
@@ -23,6 +26,7 @@ struct Qrf {
     actual_width: *mut i32,
     spec: Sqlite3QrfSpec,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union QrfU0 {
@@ -31,12 +35,14 @@ union QrfU0 {
     s_expln: QrfU0S1,
     n_ins: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfU0S0 {
     mx_col_wth: i32,
     az_col: *mut *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfEQPGraph {
@@ -45,6 +51,7 @@ struct QrfEQPGraph {
     n_width: i32,
     z_prefix: [i8; 400],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfEQPGraphRow {
@@ -53,6 +60,7 @@ struct QrfEQPGraphRow {
     p_next: *mut QrfEQPGraphRow,
     z_text: [i8; 1],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfU0S1 {
@@ -60,6 +68,7 @@ struct QrfU0S1 {
     i_indent: i32,
     ai_indent: *mut i32,
 }
+
 unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
     z_format_1: *const i8, mut __va0: ...) -> () {
     (*p).i_err = i_code_1;
@@ -76,12 +85,14 @@ unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
         }
     }
 }
+
 extern "C" fn qrf_oom(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 7,
             c"out of memory".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn qrf_initialize(p: *mut Qrf, p_stmt_1: *mut Sqlite3Stmt,
     p_spec_1: *const Sqlite3QrfSpec, pz_err_1: *mut *mut i8) -> () {
     unsafe {
@@ -659,6 +670,7 @@ extern "C" fn qrf_initialize(p: *mut Qrf, p_stmt_1: *mut Sqlite3Stmt,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfColData {
@@ -674,6 +686,7 @@ struct QrfColData {
     ab_num: *mut u8,
     a: *mut QrfPerCol,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QrfPerCol {
@@ -684,6 +697,7 @@ struct QrfPerCol {
     fx: u8,
     b_num: u8,
 }
+
 extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -709,6 +723,7 @@ extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
         memset(p as *mut (), 0, core::mem::size_of::<QrfColData>() as u64)
     };
 }
+
 extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     let mut az_data: *mut *mut i8 = core::ptr::null_mut();
     let mut ai_wth: *mut i32 = core::ptr::null_mut();
@@ -755,6 +770,7 @@ extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     unsafe { (*p).ab_num = ab_num };
     return 0;
 }
+
 static qrf_c_type: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 0 as i8,
@@ -793,6 +809,7 @@ static qrf_c_type: [i8; 256] =
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8];
+
 extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     let mut i: u64 = 0 as u64;
     let mut n: u64 = 0 as u64;
@@ -864,6 +881,7 @@ extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     }
     return (unsafe { *z.add(i as usize) } as i32 != 0) as i32;
 }
+
 static qrf_csv_quote: [i8; 256] =
     [1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
@@ -902,6 +920,7 @@ static qrf_csv_quote: [i8; 256] =
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8];
+
 extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
     i_start_1: i32) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1026,6 +1045,7 @@ extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
         }
     }
 }
+
 extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     z_txt_1: *const i8) -> () {
     let i_start: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -2084,6 +2104,7 @@ extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
         qrf_escape(unsafe { (*p).spec.e_esc } as i32, p_out_1, i_start);
     }
 }
+
 extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
     let rc: i32 =
         if !(p_str_1).is_null() {
@@ -2095,6 +2116,7 @@ extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
         };
     }
 }
+
 extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     let mut i: i32 = 0;
     if unsafe { *z.offset(1 as isize) } as i32 != '[' as i32 { return 0; }
@@ -2113,6 +2135,7 @@ extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     }
     return i + 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     -> i32 {
@@ -2146,12 +2169,14 @@ pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     *p_u_1 = 0;
     return 1;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
     w: u8,
     i_first: i32,
 }
+
 static a_qrf_u_width: [AnonS0; 303] =
     [AnonS0 { w: 0 as u8, i_first: 768 }, AnonS0 { w: 1 as u8, i_first: 880 },
             AnonS0 { w: 0 as u8, i_first: 1155 },
@@ -2455,6 +2480,7 @@ static a_qrf_u_width: [AnonS0; 303] =
             AnonS0 { w: 1 as u8, i_first: 917632 },
             AnonS0 { w: 0 as u8, i_first: 917760 },
             AnonS0 { w: 1 as u8, i_first: 918000 }];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     let mut i_first: i32 = 0;
@@ -2477,6 +2503,7 @@ pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     }
     return a_qrf_u_width[i_last as usize].w as i32;
 }
+
 extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     let mut z: *mut u8 = z_in_1 as *mut u8;
     let mut n: i32 = 0;
@@ -2546,6 +2573,7 @@ extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     }
     return n;
 }
+
 extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     pn_nl_1: *mut i32) -> i32 {
     let mut z: *const u8 = core::ptr::null();
@@ -2608,6 +2636,7 @@ extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     if !(pn_nl_1).is_null() { unsafe { *pn_nl_1 = n_nl }; }
     return n;
 }
+
 extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
     -> i32 {
     let mut x: u8 = 0 as u8;
@@ -2637,6 +2666,7 @@ extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
     return (sz + n as Sqlite3Uint64 + 1 as Sqlite3Uint64 ==
                 n_blob_1 as Sqlite3Uint64) as i32;
 }
+
 extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
     let mut n_byte: i32 = 0;
     let mut p_blob: *const () = core::ptr::null();
@@ -2676,6 +2706,7 @@ extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
         return unsafe { sqlite3_column_text((*p).p_j_trans, 0) } as *const i8;
     } else { return core::ptr::null(); }
 }
+
 extern "C" fn qrf_write(p: *mut Qrf) -> () {
     let mut n: i32 = 0;
     if unsafe { (*p).spec.x_write.is_some() } &&
@@ -2699,6 +2730,7 @@ extern "C" fn qrf_write(p: *mut Qrf) -> () {
         }
     }
 }
+
 extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     i_col_1: i32) -> () {
     let i_start_len: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -5302,6 +5334,7 @@ extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
         }
     }
 }
+
 extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -5341,6 +5374,7 @@ extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
         }
     }
 }
+
 extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     n_col_1: i32, n_sw_1: i32) -> *mut i32 {
     let mut i: i32 = 0;
@@ -5398,6 +5432,7 @@ extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     }
     return aw;
 }
+
 extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
     let mut n_col: i32 = 1;
     let mut aw: *mut i32 = core::ptr::null_mut();
@@ -5579,6 +5614,7 @@ extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
         unsafe { (*p_data_1).n_margin = 5 as u8 };
     }
 }
+
 extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     -> () {
     let mut sep_w: i32 = 0;
@@ -5655,6 +5691,7 @@ extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
         (*p_data_1).b_multi_row = 1 as u8;
     }
 }
+
 extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
     -> () {
     let az_dash: [*const i8; 2] =
@@ -5674,6 +5711,7 @@ extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
         sqlite3_str_append(p_out_1, az_dash[b_dbl_1 as usize], nn as i32)
     };
 }
+
 extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     z_sep1_1: *const i8, z_sep2_1: *const i8, z_sep3_1: *const i8,
     b_dbl_1: i32) -> () {
@@ -5709,6 +5747,7 @@ extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
         sqlite3_str_append(p_out_1, c"\n".as_ptr() as *mut i8 as *const i8, 1)
     };
 }
+
 extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     mut c_sep_1: i8) -> () {
     let mut i: i32 = 0;
@@ -5754,6 +5793,7 @@ extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
         sqlite3_str_append(p_out_1, c"\n".as_ptr() as *mut i8 as *const i8, 1)
     };
 }
+
 extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     pn_this_1: &mut i32, pn_wide_1: &mut i32, pi_next_1: &mut i32) -> () {
     let mut i: i32 = 0;
@@ -5887,6 +5927,7 @@ extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     }
     *pi_next_1 = i;
 }
+
 extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     z_val_1: *const i8, mut n_val_1: i32) -> () {
     let mut i: i32 = 0;
@@ -5967,6 +6008,7 @@ extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     }
     unsafe { sqlite3_str_append(p_out_1, z as *const i8, i) };
 }
+
 extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
     n_val_1: i32, n_ws_1: i32) -> () {
     let mut e_align: u8 = ((*p_col_1).e as i32 & 3) as u8;
@@ -5988,6 +6030,7 @@ extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
         unsafe { sqlite3_str_appendchar(p_out_1, n_ws_1, ' ' as i32 as i8) };
     }
 }
+
 extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     let mut n_byte: i32 = unsafe { sqlite3_str_length(p_out_1) };
     let z_out: *const i8 = unsafe { sqlite3_str_value(p_out_1) } as *const i8;
@@ -5998,6 +6041,7 @@ extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     }
     unsafe { sqlite3_str_truncate(p_out_1, n_byte) };
 }
+
 extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -6744,6 +6788,7 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     qrf_col_data_free(&mut data);
     return;
 }
+
 extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     az_array_1: *const *const i8) -> i32 {
     let mut i: i32 = 0;
@@ -6768,6 +6813,7 @@ extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     }
     return 0;
 }
+
 extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
     mut w: i32, z_utf_1: *const i8) -> () {
     let mut a: *const u8 = z_utf_1 as *const u8;
@@ -6819,6 +6865,7 @@ extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     let mut z: *const u8 = z_in as *const u8;
@@ -6862,6 +6909,7 @@ pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     }
     return n;
 }
+
 extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     let mut ab_yield: *mut i32 = core::ptr::null_mut();
     let mut ai_indent: *mut i32 = core::ptr::null_mut();
@@ -7175,6 +7223,7 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     }
     unsafe { sqlite3_free(ai_indent as *mut ()) };
 }
+
 extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
     unsafe {
         let p_orig_stmt: *mut Sqlite3Stmt = unsafe { (*p).p_stmt };
@@ -7205,12 +7254,14 @@ extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
         unsafe { (*p).p_stmt = p_orig_stmt };
     }
 }
+
 extern "C" fn qrf_eqp_stats(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 1,
             c"not available in this build".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     let mut i: i32 = 0;
     let mut n_item: i32 = 0;
@@ -7242,6 +7293,7 @@ extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     }
     qrf_write(p);
 }
+
 extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let z: *const u8 = z_name_1 as *const u8;
@@ -7266,6 +7318,7 @@ extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     }
     return (unsafe { sqlite3_keyword_check(z_name_1, i) } != 0) as i32;
 }
+
 extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7288,6 +7341,7 @@ extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
         }
     }
 }
+
 extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
     let mut i: i32 = 0;
     if n_1 < 0 as i64 {
@@ -7359,6 +7413,7 @@ extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
         }
     }
 }
+
 extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
     p_old_1: *const QrfEQPGraphRow) -> *mut QrfEQPGraphRow {
     unsafe {
@@ -7373,6 +7428,7 @@ extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
         return p_row;
     }
 }
+
 extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7428,6 +7484,7 @@ extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7523,6 +7580,7 @@ extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
         }
     }
 }
+
 extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
     z_text_1: *const i8) -> () {
     unsafe {
@@ -7570,6 +7628,7 @@ extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
         unsafe { (*unsafe { (*p).u.p_graph }).p_last = p_new };
     }
 }
+
 extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -10284,6 +10343,7 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
         };
     }
 }
+
 extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
     let rc: i32 = unsafe { sqlite3_reset(unsafe { (*p).p_stmt }) };
     if rc != 0 && unsafe { (*p).i_err } == 0 {
@@ -10294,6 +10354,7 @@ extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
         };
     }
 }
+
 extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
     unsafe {
         '__s95:
@@ -10649,6 +10710,7 @@ extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
     p_spec: *const Sqlite3QrfSpec, pz_err: *mut *mut i8) -> i32 {
@@ -10770,19 +10832,28 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
     qrf_finalize(&mut qrf);
     return qrf.i_err;
 }
+
 static z_space: [i8; 6] =
     [32 as i8, 32 as i8, 32 as i8, 32 as i8, 32 as i8, 0 as i8];
+
 static mx_w_1: i32 = 10000000 as i32;
+
 static a_explain_width: [i32; 8] = [4, 13, 4, 4, 4, 13, 2, 13];
+
 static a_explain_map: [i32; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
+
 static a_scan_exp_width: [i32; 10] = [4, 15, 6, 13, 4, 4, 4, 13, 2, 13];
+
 static a_scan_exp_map: [i32; 10] = [0, 9, 8, 1, 2, 3, 4, 5, 6, 7];
+
 static mut z_sql: *const i8 =
     c"  SELECT addr, opcode, p1, p2, p3, p4, p5, comment, nexec,   format(\'% 6s (%.2f%%)\',      CASE WHEN ncycle<100_000 THEN ncycle || \' \'         WHEN ncycle<100_000_000 THEN (ncycle/1_000) || \'K\'         WHEN ncycle<100_000_000_000 THEN (ncycle/1_000_000) || \'M\'         ELSE (ncycle/1000_000_000) || \'G\' END,       ncycle*100.0/(sum(ncycle) OVER ())   )  AS cycles   FROM bytecode(?1)".as_ptr()
             as *mut i8 as *const i8;
+
 static a_suffix: [i8; 6] =
     ['K' as i32 as i8, 'M' as i32 as i8, 'G' as i32 as i8, 'T' as i32 as i8,
             'P' as i32 as i8, 'E' as i32 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

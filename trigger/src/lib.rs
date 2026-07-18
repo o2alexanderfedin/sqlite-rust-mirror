@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_trigger_step(db: *mut Sqlite3,
     mut p_trigger_step: *mut TriggerStep) -> () {
@@ -412,6 +421,7 @@ pub extern "C" fn sqlite3_delete_trigger_step(db: *mut Sqlite3,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_trigger(db: *mut Sqlite3,
     p_trigger: *mut Trigger) -> () {
@@ -426,6 +436,7 @@ pub extern "C" fn sqlite3_delete_trigger(db: *mut Sqlite3,
     unsafe { sqlite3_id_list_delete(db, unsafe { (*p_trigger).p_columns }) };
     unsafe { sqlite3_db_free(db, p_trigger as *mut ()) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_begin_trigger(p_parse: *mut Parse,
     p_name1: *mut Token, p_name2: *mut Token, mut tr_tm: i32, op: i32,
@@ -918,6 +929,7 @@ pub extern "C" fn sqlite3_begin_trigger(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_finish_trigger(p_parse: *mut Parse,
     mut p_step_list: *mut TriggerStep, p_all: &mut Token) -> () {
@@ -1201,6 +1213,7 @@ pub extern "C" fn sqlite3_finish_trigger(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn table_of_trigger(p_trigger_1: &Trigger) -> *mut Table {
     return unsafe {
                 sqlite3_hash_find(unsafe {
@@ -1208,6 +1221,7 @@ extern "C" fn table_of_trigger(p_trigger_1: &Trigger) -> *mut Table {
                         } as *const Hash, (*p_trigger_1).table as *const i8)
             } as *mut Table;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_trigger_ptr(p_parse: *mut Parse,
     p_trigger: *mut Trigger) -> () {
@@ -1266,6 +1280,7 @@ pub extern "C" fn sqlite3_drop_trigger_ptr(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_trigger(p_parse: *mut Parse,
     p_name: *mut SrcList, no_err: i32) -> () {
@@ -1396,6 +1411,7 @@ pub extern "C" fn sqlite3_drop_trigger(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn temp_triggers_exist(db: &Sqlite3) -> i32 {
     unsafe {
         if unsafe { (*(*db).a_db.offset(1 as isize)).p_schema } ==
@@ -1414,6 +1430,7 @@ extern "C" fn temp_triggers_exist(db: &Sqlite3) -> i32 {
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_list(p_parse: &Parse, p_tab: &Table)
     -> *mut Trigger {
@@ -1458,6 +1475,7 @@ pub extern "C" fn sqlite3_trigger_list(p_parse: &Parse, p_tab: &Table)
         return p_list;
     }
 }
+
 extern "C" fn check_column_overlap(p_id_list_1: *mut IdList,
     p_e_list_1: *const ExprList) -> i32 {
     let mut e: i32 = 0;
@@ -1486,6 +1504,7 @@ extern "C" fn check_column_overlap(p_id_list_1: *mut IdList,
     }
     return 0;
 }
+
 extern "C" fn triggers_really_exist(p_parse_1: *mut Parse,
     p_tab_1: *mut Table, op: i32, p_changes_1: *mut ExprList,
     p_mask_1: *mut i32) -> *mut Trigger {
@@ -1623,6 +1642,7 @@ extern "C" fn triggers_really_exist(p_parse_1: *mut Parse,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_triggers_exist(p_parse: *mut Parse,
     p_tab: *mut Table, op: i32, p_changes: *mut ExprList, p_mask: *mut i32)
@@ -1637,6 +1657,7 @@ pub extern "C" fn sqlite3_triggers_exist(p_parse: *mut Parse,
     }
     return triggers_really_exist(p_parse, p_tab, op, p_changes, p_mask);
 }
+
 extern "C" fn code_trigger_program(p_parse_1: *mut Parse,
     p_step_list_1: *mut TriggerStep, orconf: i32) -> i32 {
     unsafe {
@@ -1851,6 +1872,7 @@ extern "C" fn code_trigger_program(p_parse_1: *mut Parse,
         return 0;
     }
 }
+
 extern "C" fn transfer_parse_error(p_to_1: &mut Parse, p_from_1: &Parse)
     -> () {
     { let _ = 0; };
@@ -1865,6 +1887,7 @@ extern "C" fn transfer_parse_error(p_to_1: &mut Parse, p_from_1: &Parse)
         };
     }
 }
+
 extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, orconf: i32)
     -> *mut TriggerPrg {
@@ -2012,6 +2035,7 @@ extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
         return p_prg;
     }
 }
+
 extern "C" fn get_row_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, orconf: i32)
     -> *mut TriggerPrg {
@@ -2039,6 +2063,7 @@ extern "C" fn get_row_trigger(p_parse_1: *mut Parse,
     }
     return p_prg;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_code_row_trigger_direct(p_parse: *mut Parse,
     p: *mut Trigger, p_tab: *mut Table, reg: i32, orconf: i32,
@@ -2066,6 +2091,7 @@ pub extern "C" fn sqlite3_code_row_trigger_direct(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn is_asterisk_term(p_parse_1: *mut Parse, p_term_1: &Expr)
     -> i32 {
     { let _ = 0; };
@@ -2081,6 +2107,7 @@ extern "C" fn is_asterisk_term(p_parse_1: *mut Parse, p_term_1: &Expr)
     };
     return 1;
 }
+
 extern "C" fn sqlite3_expand_returning(p_parse_1: *mut Parse,
     p_list_1: &ExprList, p_tab_1: &Table) -> *mut ExprList {
     let mut p_new: *mut ExprList = core::ptr::null_mut();
@@ -2187,6 +2214,7 @@ extern "C" fn sqlite3_expand_returning(p_parse_1: *mut Parse,
     }
     return p_new;
 }
+
 extern "C" fn sqlite3_returning_subquery_correlated(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -2216,6 +2244,7 @@ extern "C" fn sqlite3_returning_subquery_correlated(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn sqlite3_returning_subquery_var_select(not_used_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2228,6 +2257,7 @@ extern "C" fn sqlite3_returning_subquery_var_select(not_used_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn sqlite3_process_returning_subqueries(p_e_list_1: *mut ExprList,
     p_tab_1: *mut Table) -> () {
     unsafe {
@@ -2247,6 +2277,7 @@ extern "C" fn sqlite3_process_returning_subqueries(p_e_list_1: *mut ExprList,
         }
     }
 }
+
 extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, reg_in_1: i32) -> () {
     unsafe {
@@ -2384,6 +2415,7 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
         unsafe { (*p_parse_1).p_trigger_tab = core::ptr::null_mut() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_code_row_trigger(p_parse: *mut Parse,
     p_trigger: *mut Trigger, op: i32, p_changes: *mut ExprList, tr_tm: i32,
@@ -2420,6 +2452,7 @@ pub extern "C" fn sqlite3_code_row_trigger(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn trigger_span_dup(db: *mut Sqlite3, z_start_1: *const i8,
     z_end_1: *const i8) -> *mut i8 {
     unsafe {
@@ -2450,6 +2483,7 @@ extern "C" fn trigger_span_dup(db: *mut Sqlite3, z_start_1: *const i8,
         return z;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_select_step(db: *mut Sqlite3,
     p_select: *mut Select, z_start: *const i8, z_end: *const i8)
@@ -2473,6 +2507,7 @@ pub extern "C" fn sqlite3_trigger_select_step(db: *mut Sqlite3,
         return p_trigger_step;
     }
 }
+
 extern "C" fn trigger_step_allocate(p_parse_1: *mut Parse, op: u8,
     p_tab_list_1: *mut SrcList, z_start_1: *const i8, z_end_1: *const i8)
     -> *mut TriggerStep {
@@ -2536,6 +2571,7 @@ extern "C" fn trigger_step_allocate(p_parse_1: *mut Parse, op: u8,
         return p_trigger_step;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_insert_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_column: *mut IdList,
@@ -2577,6 +2613,7 @@ pub extern "C" fn sqlite3_trigger_insert_step(p_parse: *mut Parse,
         return p_trigger_step;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_update_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_from: *mut SrcList,
@@ -2648,6 +2685,7 @@ pub extern "C" fn sqlite3_trigger_update_step(p_parse: *mut Parse,
     unsafe { sqlite3_src_list_delete(db, p_from) };
     return p_trigger_step;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_delete_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_where: *mut Expr, z_start: *const i8,
@@ -2671,6 +2709,7 @@ pub extern "C" fn sqlite3_trigger_delete_step(p_parse: *mut Parse,
     unsafe { sqlite3_expr_delete(db, p_where) };
     return p_trigger_step;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_unlink_and_delete_trigger(db: *mut Sqlite3,
     i_db: i32, z_name: *const i8) -> () {
@@ -2716,6 +2755,7 @@ pub extern "C" fn sqlite3_unlink_and_delete_trigger(db: *mut Sqlite3,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_colmask(p_parse: *mut Parse,
     p_trigger: *mut Trigger, p_changes: *mut ExprList, is_new: i32,
@@ -2751,12 +2791,14 @@ pub extern "C" fn sqlite3_trigger_colmask(p_parse: *mut Parse,
     }
     return mask;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union CodeReturningTriggerU0N25codeReturningTriggerU0 {
     s_src: SrcList,
     from_space: [u8; 80],
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5501,41 +5543,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

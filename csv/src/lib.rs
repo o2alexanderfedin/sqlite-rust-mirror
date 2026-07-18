@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CsvReader {
@@ -20,6 +23,7 @@ struct CsvReader {
     z_in: *mut i8,
     z_err: [i8; 200],
 }
+
 extern "C" fn csv_reader_init(p: &mut CsvReader) -> () {
     (*p).in_ = core::ptr::null_mut();
     (*p).z = core::ptr::null_mut();
@@ -31,6 +35,7 @@ extern "C" fn csv_reader_init(p: &mut CsvReader) -> () {
     (*p).z_in = core::ptr::null_mut();
     (*p).z_err[0 as usize] = 0 as i8;
 }
+
 extern "C" fn csv_reader_reset(p: *mut CsvReader) -> () {
     if !(unsafe { (*p).in_ }).is_null() {
         unsafe { fclose(unsafe { (*p).in_ }) };
@@ -39,6 +44,7 @@ extern "C" fn csv_reader_reset(p: *mut CsvReader) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     csv_reader_init(unsafe { &mut *p });
 }
+
 unsafe extern "C" fn csv_errmsg(p: &mut CsvReader, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -49,6 +55,7 @@ unsafe extern "C" fn csv_errmsg(p: &mut CsvReader, z_format_1: *const i8,
     };
     ();
 }
+
 extern "C" fn csv_reader_open(p: *mut CsvReader, z_filename_1: *const i8,
     z_data_1: *const i8) -> i32 {
     if !(z_filename_1).is_null() {
@@ -93,6 +100,7 @@ extern "C" fn csv_reader_open(p: *mut CsvReader, z_filename_1: *const i8,
     }
     return 0;
 }
+
 extern "C" fn csv_getc_refill(p: &mut CsvReader) -> i32 {
     let mut got: u64 = 0 as u64;
     if !((*p).i_in >= (*p).n_in) as i32 as i64 != 0 {
@@ -118,6 +126,7 @@ extern "C" fn csv_getc_refill(p: &mut CsvReader) -> i32 {
     (*p).i_in = 1 as u64;
     return unsafe { *(*p).z_in.offset(0 as isize) } as i32;
 }
+
 extern "C" fn csv_getc(p: *mut CsvReader) -> i32 {
     if unsafe { (*p).i_in } >= unsafe { (*p).n_in } {
         if unsafe { (*p).in_ } != core::ptr::null_mut() {
@@ -135,6 +144,7 @@ extern "C" fn csv_getc(p: *mut CsvReader) -> i32 {
                             } as usize)
             } as i32;
 }
+
 extern "C" fn csv_resize_and_append(p: *mut CsvReader, c: i8) -> i32 {
     let mut z_new: *mut i8 = core::ptr::null_mut();
     let n_new: i64 = unsafe { (*p).n_alloc } * 2 as i64 + 100 as i64;
@@ -165,6 +175,7 @@ extern "C" fn csv_resize_and_append(p: *mut CsvReader, c: i8) -> i32 {
         return 1;
     }
 }
+
 extern "C" fn csv_append(p: *mut CsvReader, c: i8) -> i32 {
     if unsafe { (*p).n } >= unsafe { (*p).n_alloc } - 1 as i64 {
         return csv_resize_and_append(p, c);
@@ -181,6 +192,7 @@ extern "C" fn csv_append(p: *mut CsvReader, c: i8) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn csv_read_one_field(p: *mut CsvReader) -> *mut i8 {
     let mut c: i32 = 0;
     unsafe { (*p).n = 0 as i64 };
@@ -309,6 +321,7 @@ extern "C" fn csv_read_one_field(p: *mut CsvReader) -> *mut i8 {
     unsafe { (*p).b_not_first = 1 };
     return unsafe { (*p).z };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CsvTable {
@@ -319,6 +332,7 @@ struct CsvTable {
     n_col: i32,
     tst_flags: u32,
 }
+
 extern "C" fn csv_skip_whitespace(mut z: *const i8) -> *const i8 {
     while unsafe { isspace(unsafe { *z.offset(0 as isize) } as u8 as i32) } !=
             0 {
@@ -331,6 +345,7 @@ extern "C" fn csv_skip_whitespace(mut z: *const i8) -> *const i8 {
     }
     return z;
 }
+
 extern "C" fn csv_parameter(z_tag_1: *const i8, n_tag_1: i32,
     mut z: *const i8) -> *const i8 {
     z = csv_skip_whitespace(z);
@@ -343,6 +358,7 @@ extern "C" fn csv_parameter(z_tag_1: *const i8, n_tag_1: i32,
     }
     return csv_skip_whitespace(unsafe { z.offset(1 as isize) });
 }
+
 extern "C" fn csv_trim_whitespace(z: *mut i8) -> () {
     let mut n: u64 = unsafe { strlen(z as *const i8) };
     while n > 0 as u64 &&
@@ -352,6 +368,7 @@ extern "C" fn csv_trim_whitespace(z: *mut i8) -> () {
     }
     unsafe { *z.add(n as usize) = 0 as i8 };
 }
+
 extern "C" fn csv_dequote(z: *mut i8) -> () {
     let mut j: i32 = 0;
     let c_quote: i8 = unsafe { *z.offset(0 as isize) };
@@ -391,6 +408,7 @@ extern "C" fn csv_dequote(z: *mut i8) -> () {
     }
     unsafe { *z.offset(j as isize) = 0 as i8 };
 }
+
 extern "C" fn csv_string_parameter(p: *mut CsvReader, z_param_1: *const i8,
     z_arg_1: *const i8, pz_val_1: &mut *mut i8) -> i32 {
     let mut z_value: *const i8 = core::ptr::null();
@@ -422,6 +440,7 @@ extern "C" fn csv_string_parameter(p: *mut CsvReader, z_param_1: *const i8,
     csv_dequote(*pz_val_1);
     return 1;
 }
+
 extern "C" fn csvtab_disconnect(p_vtab: *mut Sqlite3Vtab) -> i32 {
     let p: *mut CsvTable = p_vtab as *mut CsvTable;
     unsafe { sqlite3_free(unsafe { (*p).z_filename } as *mut ()) };
@@ -429,6 +448,7 @@ extern "C" fn csvtab_disconnect(p_vtab: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn csv_boolean(z: *const i8) -> i32 {
     if unsafe { sqlite3_stricmp(c"yes".as_ptr() as *mut i8 as *const i8, z) }
                         == 0 ||
@@ -457,6 +477,7 @@ extern "C" fn csv_boolean(z: *const i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn csv_boolean_parameter(z_tag_1: *const i8, n_tag_1: i32,
     mut z: *const i8, p_value_1: &mut i32) -> i32 {
     let mut b: i32 = 0;
@@ -473,6 +494,7 @@ extern "C" fn csv_boolean_parameter(z_tag_1: *const i8, n_tag_1: i32,
     if b >= 0 { *p_value_1 = b; return 1; }
     return 0;
 }
+
 extern "C" fn csvtab_connect(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab: *mut *mut Sqlite3Vtab,
     pz_err: *mut *mut i8) -> i32 {
@@ -993,16 +1015,19 @@ extern "C" fn csvtab_connect(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
         unreachable!();
     }
 }
+
 extern "C" fn csvtab_create(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab: *mut *mut Sqlite3Vtab,
     pz_err: *mut *mut i8) -> i32 {
     return csvtab_connect(db, p_aux, argc, argv, pp_vtab, pz_err);
 }
+
 extern "C" fn csvtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info: *mut Sqlite3IndexInfo) -> i32 {
     unsafe { (*p_idx_info).estimated_cost = 1000000 as f64 };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CsvCursor {
@@ -1012,6 +1037,7 @@ struct CsvCursor {
     a_len: *mut i64,
     i_rowid: Sqlite3Int64,
 }
+
 extern "C" fn csv_xfer_error(p_tab_1: &mut CsvTable, p_rdr_1: &mut CsvReader)
     -> () {
     unsafe { sqlite3_free((*p_tab_1).base.z_err_msg as *mut ()) };
@@ -1021,6 +1047,7 @@ extern "C" fn csv_xfer_error(p_tab_1: &mut CsvTable, p_rdr_1: &mut CsvReader)
                 &raw mut (*p_rdr_1).z_err[0 as usize] as *mut i8)
         };
 }
+
 extern "C" fn csvtab_open(p: *mut Sqlite3Vtab,
     pp_cursor: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut CsvTable = p as *mut CsvTable;
@@ -1064,6 +1091,7 @@ extern "C" fn csvtab_open(p: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn csvtab_cursor_row_reset(p_cur_1: &mut CsvCursor) -> () {
     let p_tab: *const CsvTable =
         (*p_cur_1).base.p_vtab as *mut CsvTable as *const CsvTable;
@@ -1089,6 +1117,7 @@ extern "C" fn csvtab_cursor_row_reset(p_cur_1: &mut CsvCursor) -> () {
         }
     }
 }
+
 extern "C" fn csvtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CsvCursor = cur as *mut CsvCursor;
     csvtab_cursor_row_reset(unsafe { &mut *p_cur });
@@ -1096,6 +1125,7 @@ extern "C" fn csvtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn csvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CsvCursor = cur as *mut CsvCursor;
     let p_tab: *mut CsvTable = unsafe { (*cur).p_vtab } as *mut CsvTable;
@@ -1171,6 +1201,7 @@ extern "C" fn csvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn csvtab_filter(p_vtab_cursor: *mut Sqlite3VtabCursor,
     idx_num: i32, idx_str: *const i8, argc: i32, argv: *mut *mut Sqlite3Value)
     -> i32 {
@@ -1216,10 +1247,12 @@ extern "C" fn csvtab_filter(p_vtab_cursor: *mut Sqlite3VtabCursor,
     }
     return csvtab_next(p_vtab_cursor);
 }
+
 extern "C" fn csvtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
     return (unsafe { (*p_cur).i_rowid } < 0 as i64) as i32;
 }
+
 extern "C" fn csvtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
@@ -1241,12 +1274,14 @@ extern "C" fn csvtab_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn csvtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid: *mut Sqlite3Int64) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
     unsafe { *p_rowid = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 static mut csv_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1275,6 +1310,7 @@ static mut csv_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_csv_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1291,9 +1327,11 @@ pub extern "C" fn sqlite3_csv_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 static mut az_param: [*const i8; 3] =
     [c"filename".as_ptr() as *const i8, c"data".as_ptr() as *const i8,
             c"schema".as_ptr() as *const i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2098,9 +2136,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

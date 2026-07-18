@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn sqlite3_delete83_name(z: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut sz: i32 = 0;
@@ -27,6 +30,7 @@ extern "C" fn sqlite3_delete83_name(z: *mut i8) -> () {
         };
     }
 }
+
 extern "C" fn sqlite3_delete_unlink_if_exists(p_vfs_1: *const Sqlite3Vfs,
     z_file_1: *const i8, pb_exists_1: *mut i32) -> i32 {
     let mut rc: i32 = 1;
@@ -49,6 +53,7 @@ extern "C" fn sqlite3_delete_unlink_if_exists(p_vfs_1: *const Sqlite3Vfs,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_database(z_file_1: *const i8) -> i32 {
     let mut z_buf: *mut i8 = core::ptr::null_mut();
@@ -164,6 +169,7 @@ pub extern "C" fn sqlite3_delete_database(z_file_1: *const i8) -> i32 {
     unsafe { sqlite3_free(z_buf as *mut ()) };
     return if rc != 0 { 1 } else { 0 };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MFileN5MFile {
@@ -171,6 +177,7 @@ struct MFileN5MFile {
     i_offset: i32,
     b83: i32,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

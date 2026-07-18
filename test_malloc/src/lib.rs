@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFault {
@@ -398,19 +407,23 @@ struct MemFault {
     is_benign_mode: i32,
     m: Sqlite3MemMethods,
 }
+
 static mut memfault: MemFault = unsafe { core::mem::zeroed() };
+
 extern "C" fn sqlite3_fault() -> () {
     unsafe {
         { let __p = &mut cnt; let __t = *__p; *__p += 1; __t };
         if cnt > (1 as u64) << 63 { unsafe { abort() }; }
     }
 }
+
 extern "C" fn sqlite3_first_fault() -> () {
     unsafe {
         { let __p = &mut cnt2; let __t = *__p; *__p += 1; __t };
         if cnt2 > (1 as u64) << 63 { unsafe { abort() }; }
     }
 }
+
 extern "C" fn faultsim_step() -> i32 {
     unsafe {
         if (memfault.enable == 0) as i32 != 0 {
@@ -453,6 +466,7 @@ extern "C" fn faultsim_step() -> i32 {
         return 1;
     }
 }
+
 extern "C" fn faultsim_malloc(n: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -462,6 +476,7 @@ extern "C" fn faultsim_malloc(n: i32) -> *mut () {
         return p;
     }
 }
+
 extern "C" fn faultsim_realloc(p_old_1: *mut (), n: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -471,6 +486,7 @@ extern "C" fn faultsim_realloc(p_old_1: *mut (), n: i32) -> *mut () {
         return p;
     }
 }
+
 extern "C" fn faultsim_config(n_delay_1: i32, n_repeat_1: i32) -> () {
     unsafe {
         memfault.i_countdown = n_delay_1;
@@ -483,12 +499,15 @@ extern "C" fn faultsim_config(n_delay_1: i32, n_repeat_1: i32) -> () {
         memfault.is_benign_mode = 0;
     }
 }
+
 extern "C" fn faultsim_failures() -> i32 {
     unsafe { return memfault.n_fail; }
 }
+
 extern "C" fn faultsim_benign_failures() -> i32 {
     unsafe { return memfault.n_benign; }
 }
+
 extern "C" fn faultsim_pending() -> i32 {
     unsafe {
         if memfault.enable != 0 {
@@ -496,6 +515,7 @@ extern "C" fn faultsim_pending() -> i32 {
         } else { return -1; }
     }
 }
+
 extern "C" fn faultsim_begin_benign() -> () {
     unsafe {
         {
@@ -506,6 +526,7 @@ extern "C" fn faultsim_begin_benign() -> () {
         };
     }
 }
+
 extern "C" fn faultsim_end_benign() -> () {
     unsafe {
         {
@@ -516,6 +537,7 @@ extern "C" fn faultsim_end_benign() -> () {
         };
     }
 }
+
 extern "C" fn faultsim_install(mut install: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -576,8 +598,11 @@ extern "C" fn faultsim_install(mut install: i32) -> i32 {
         return rc;
     }
 }
+
 static mut cnt: u64 = 0 as u64;
+
 static mut cnt2: u64 = 0 as u64;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3368,41 +3393,49 @@ extern "C" {
     fn memset(__b: *mut (), __c: i32, __len: u64)
     -> *mut ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

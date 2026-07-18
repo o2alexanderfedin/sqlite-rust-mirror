@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn fk_child_is_modified(p_tab_1: &Table, p: &FKey,
     a_change_1: *const i32, b_chng_rowid_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -411,6 +420,7 @@ extern "C" fn fk_child_is_modified(p_tab_1: &Table, p: &FKey,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
     p_parent: &Table, p_f_key: &FKey, pp_idx: &mut *mut Index,
@@ -576,6 +586,7 @@ pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
         return 0;
     }
 }
+
 extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
     p_tab_1: *mut Table, p_idx_1: *mut Index, p_f_key_1: &FKey,
     ai_col_1: *const i32, reg_data_1: i32, n_incr_1: i32, is_ignore_1: i32)
@@ -740,6 +751,7 @@ extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
     unsafe { sqlite3_vdbe_resolve_label(v, i_ok) };
     unsafe { sqlite3_vdbe_add_op1(v, 124, i_cur) };
 }
+
 extern "C" fn is_set_null_action(p_parse_1: *mut Parse, p_f_key_1: &FKey)
     -> i32 {
     let p_top: *const Parse =
@@ -759,6 +771,7 @@ extern "C" fn is_set_null_action(p_parse_1: *mut Parse, p_f_key_1: &FKey)
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_references(p_tab: &Table) -> *mut FKey {
     unsafe {
@@ -769,6 +782,7 @@ pub extern "C" fn sqlite3_fk_references(p_tab: &Table) -> *mut FKey {
                 } as *mut FKey;
     }
 }
+
 extern "C" fn fk_parent_is_modified(p_tab_1: &Table, p: &FKey,
     a_change_1: *const i32, b_chng_rowid_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -817,6 +831,7 @@ extern "C" fn fk_parent_is_modified(p_tab_1: &Table, p: &FKey,
     }
     return 0;
 }
+
 extern "C" fn expr_table_register(p_parse_1: *const Parse,
     p_tab_1: *mut Table, reg_base_1: i32, i_col_1: i16) -> *mut Expr {
     let mut p_expr: *mut Expr = core::ptr::null_mut();
@@ -856,6 +871,7 @@ extern "C" fn expr_table_register(p_parse_1: *const Parse,
     }
     return p_expr;
 }
+
 extern "C" fn expr_table_column(db: *mut Sqlite3, p_tab_1: *mut Table,
     i_cursor_1: i32, i_col_1: i16) -> *mut Expr {
     unsafe {
@@ -870,6 +886,7 @@ extern "C" fn expr_table_column(db: *mut Sqlite3, p_tab_1: *mut Table,
         return p_expr;
     }
 }
+
 extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     p_tab_1: *mut Table, p_idx_1: *const Index, p_f_key_1: &FKey,
     ai_col_1: *const i32, reg_data_1: i32, n_incr_1: i32) -> () {
@@ -1029,6 +1046,7 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
     reg_old: i32, reg_new: i32, a_change: *mut i32, b_chng_rowid: i32) -> () {
@@ -1298,6 +1316,7 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_drop_table(p_parse: *mut Parse,
     p_name: *mut SrcList, p_tab: *mut Table) -> () {
@@ -1355,6 +1374,7 @@ pub extern "C" fn sqlite3_fk_drop_table(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn fk_trigger_delete(db_mem_1: *mut Sqlite3, p: *mut Trigger)
     -> () {
     unsafe {
@@ -1379,6 +1399,7 @@ extern "C" fn fk_trigger_delete(db_mem_1: *mut Sqlite3, p: *mut Trigger)
         }
     }
 }
+
 extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_f_key_1: *mut FKey, p_changes_1: *const ExprList) -> *mut Trigger {
     unsafe {
@@ -1747,6 +1768,7 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
         return p_trigger;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_actions(p_parse: *mut Parse, p_tab: *mut Table,
     p_changes: *mut ExprList, reg_old: i32, a_change: *mut i32,
@@ -1779,6 +1801,7 @@ pub extern "C" fn sqlite3_fk_actions(p_parse: *mut Parse, p_tab: *mut Table,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_required(p_parse: &Parse, p_tab: *mut Table,
     a_change: *mut i32, chng_rowid: i32) -> i32 {
@@ -1838,6 +1861,7 @@ pub extern "C" fn sqlite3_fk_required(p_parse: &Parse, p_tab: *mut Table,
         return if b_have_fk != 0 { e_ret } else { 0 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_oldmask(p_parse: *mut Parse, p_tab: *mut Table)
     -> u32 {
@@ -1921,6 +1945,7 @@ pub extern "C" fn sqlite3_fk_oldmask(p_parse: *mut Parse, p_tab: *mut Table)
         return mask;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_clear_trigger_cache(db: *mut Sqlite3, i_db: i32)
     -> () {
@@ -1971,6 +1996,7 @@ pub extern "C" fn sqlite3_fk_clear_trigger_cache(db: *mut Sqlite3, i_db: i32)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_delete(db: *mut Sqlite3, p_tab: &Table) -> () {
     unsafe {
@@ -2023,6 +2049,7 @@ pub extern "C" fn sqlite3_fk_delete(db: *mut Sqlite3, p_tab: &Table) -> () {
         }
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4790,41 +4817,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

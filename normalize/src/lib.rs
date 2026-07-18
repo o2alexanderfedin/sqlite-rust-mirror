@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 static ai_class: [u8; 256] =
     [27 as u8, 27 as u8, 27 as u8, 27 as u8, 27 as u8, 27 as u8, 27 as u8,
             27 as u8, 27 as u8, 7 as u8, 7 as u8, 27 as u8, 7 as u8, 7 as u8,
@@ -41,6 +44,7 @@ static ai_class: [u8; 256] =
             2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
             2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
             2 as u8, 2 as u8];
+
 static sqlite3_upper_to_lower: [u8; 256] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -85,6 +89,7 @@ static sqlite3_upper_to_lower: [u8; 256] =
             242 as u8, 243 as u8, 244 as u8, 245 as u8, 246 as u8, 247 as u8,
             248 as u8, 249 as u8, 250 as u8, 251 as u8, 252 as u8, 253 as u8,
             254 as u8, 255 as u8];
+
 static sqlite3_ctype_map: [u8; 256] =
     [0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
             0 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 0 as u8,
@@ -127,6 +132,7 @@ static sqlite3_ctype_map: [u8; 256] =
             64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
             64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
             64 as u8, 64 as u8, 64 as u8];
+
 extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
     -> Sqlite3Int64 {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -6011,6 +6017,7 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
     *token_type_1 = 1;
     return i;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -6578,6 +6585,7 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
     }
     return z;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

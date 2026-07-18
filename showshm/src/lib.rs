@@ -1,13 +1,20 @@
 type DarwinSizeT = u64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSsizeT = i64;
+
 static mut fd: i32 = -1;
+
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
+
 extern "C" fn get_content(ofst: i32, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -18,6 +25,7 @@ extern "C" fn get_content(ofst: i32, n_byte_1: i32) -> *mut u8 {
         return a_data;
     }
 }
+
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     flg: u32, z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -127,6 +135,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
             &raw mut z_buf[0 as usize] as *mut i8, z_msg_1)
     };
 }
+
 extern "C" fn print_index_hdr(a_data_1: *mut u8, ix: i32) -> () {
     let mut i: i32 = 0;
     if !(ix == 0 || ix == 1) as i32 as i64 != 0 {
@@ -160,6 +169,7 @@ extern "C" fn print_index_hdr(a_data_1: *mut u8, ix: i32) -> () {
     print_decode_line(a_data_1 as *const u8, 40 + i, 8, 0 as u32,
         c"Cksum over all prior fields".as_ptr() as *mut i8 as *const i8);
 }
+
 extern "C" fn print_ckpt_info(a_data_1: *mut u8) -> () {
     let i: i32 = 96 as i32;
     let mut j: i32 = 0;
@@ -190,6 +200,7 @@ extern "C" fn print_ckpt_info(a_data_1: *mut u8) -> () {
     print_decode_line(a_data_1 as *const u8, 36 + i as i32, 4, 2 as u32,
         c"notUsed0".as_ptr() as *mut i8 as *const i8);
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -224,12 +235,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -263,9 +276,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

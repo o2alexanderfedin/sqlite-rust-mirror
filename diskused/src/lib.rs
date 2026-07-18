@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DiskUsed {
@@ -14,6 +17,7 @@ struct DiskUsed {
     z_su: *mut i8,
     z_schema: *const i8,
 }
+
 extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
     if !(unsafe { (*p).z_su }).is_null() {
         let z_sql: *mut i8 =
@@ -35,6 +39,7 @@ extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
         memset(p as *mut (), 0, core::mem::size_of::<DiskUsed>() as u64)
     };
 }
+
 unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -55,6 +60,7 @@ unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     }
     diskused_reset(p);
 }
+
 extern "C" fn diskused_v_prep(p: *mut DiskUsed, z_fmt_1: *const i8,
     ap: *mut i8) -> *mut Sqlite3Stmt {
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -84,6 +90,7 @@ extern "C" fn diskused_v_prep(p: *mut DiskUsed, z_fmt_1: *const i8,
     unsafe { sqlite3_free(z_sql as *mut ()) };
     return p_stmt;
 }
+
 unsafe extern "C" fn diskused_prepare(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -93,6 +100,7 @@ unsafe extern "C" fn diskused_prepare(p: *mut DiskUsed, z_format_1: *const i8,
     ();
     return p_stmt;
 }
+
 extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     p_stmt_1: *mut Sqlite3Stmt) -> i32 {
     if rc == 101 { rc = 0; }
@@ -109,6 +117,7 @@ extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     unsafe { sqlite3_finalize(p_stmt_1) };
     return rc;
 }
+
 unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -134,6 +143,7 @@ unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     unsafe { sqlite3_finalize(p_stmt) };
     return rc;
 }
+
 unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     pi_res_1: &mut Sqlite3Int64, z_format_1: *const i8, mut __va0: ...)
     -> i32 {
@@ -165,6 +175,7 @@ unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     unsafe { sqlite3_finalize(p_stmt) };
     return rc;
 }
+
 unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_first: *mut i8 = core::ptr::null_mut();
@@ -198,6 +209,7 @@ unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
         };
     }
 }
+
 unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut z_txt: *mut i8 = core::ptr::null_mut();
@@ -228,6 +240,7 @@ unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
         };
     }
 }
+
 extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
     let mut z_num: [i8; 100] = [0; 100];
     let mut z_dp: *const i8 = core::ptr::null();
@@ -277,6 +290,7 @@ extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
             c"%\n".as_ptr() as *mut i8 as *const i8, 2)
     };
 }
+
 extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     z_where_1: *mut i8, pgsz: Sqlite3Int64, n_page_1: Sqlite3Int64) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -483,6 +497,7 @@ extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     }
     return diskused_stmt_finish(p, rc, p_stmt);
 }
+
 extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut rc: i32 = 0;
@@ -1005,6 +1020,7 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
     }
     diskused_reset(&mut s);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_diskused_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1019,6 +1035,7 @@ pub extern "C" fn sqlite3_diskused_init(db: *mut Sqlite3,
         };
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 static z_help: [i8; 2897] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
             37 as i8, 115 as i8, 32 as i8, 91 as i8, 45 as i8, 45 as i8,
@@ -487,6 +490,7 @@ static z_help: [i8; 2897] =
             114 as i8, 101 as i8, 32 as i8, 97 as i8, 112 as i8, 112 as i8,
             114 as i8, 111 as i8, 112 as i8, 114 as i8, 105 as i8, 97 as i8,
             116 as i8, 101 as i8, 10 as i8, 0 as i8];
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct HashContext {
@@ -496,6 +500,7 @@ struct HashContext {
     s: [u8; 256],
     r: [u8; 32],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Global {
@@ -531,7 +536,9 @@ struct Global {
     hash_file: *mut FILE,
     hash: HashContext,
 }
+
 static mut g: Global = unsafe { core::mem::zeroed() };
+
 extern "C" fn is_temp(n_1: i32) -> *const i8 {
     unsafe {
         return if g.e_temp >= n_1 {
@@ -539,6 +546,7 @@ extern "C" fn is_temp(n_1: i32) -> *const i8 {
                 } else { c"".as_ptr() as *mut i8 } as *const i8;
     }
 }
+
 unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     unsafe {
         let mut ap: *mut i8 = core::ptr::null_mut();
@@ -548,6 +556,7 @@ unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn hash_init() -> () {
     unsafe {
         let mut k: u32 = 0 as u32;
@@ -563,6 +572,7 @@ extern "C" fn hash_init() -> () {
         }
     }
 }
+
 extern "C" fn hash_update(a_data_1: *const u8, n_data_1: u32) -> () {
     unsafe {
         let mut t: u8 = 0 as u8;
@@ -596,6 +606,7 @@ extern "C" fn hash_update(a_data_1: *const u8, n_data_1: u32) -> () {
         g.hash.j = j;
     }
 }
+
 extern "C" fn hash_final() -> () {
     unsafe {
         let mut k: u32 = 0 as u32;
@@ -623,6 +634,7 @@ extern "C" fn hash_final() -> () {
         }
     }
 }
+
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -635,6 +647,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -723,6 +736,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
         return if is_neg != 0 { -v } else { v } as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_timestamp() -> Sqlite3Int64 {
     unsafe {
@@ -749,6 +763,7 @@ pub extern "C" fn speedtest1_timestamp() -> Sqlite3Int64 {
         return t;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_random() -> u32 {
     unsafe {
@@ -757,6 +772,7 @@ pub extern "C" fn speedtest1_random() -> u32 {
         return g.x ^ g.y;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn swizzle(mut in__1: u32, mut limit: u32) -> u32 {
     let mut out: u32 = 0 as u32;
@@ -767,12 +783,14 @@ pub extern "C" fn swizzle(mut in__1: u32, mut limit: u32) -> u32 {
     }
     return out;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn roundup_allones(limit: u32) -> u32 {
     let mut m: u32 = 1 as u32;
     while m < limit { m = (m << 1) + 1 as u32; }
     return m;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_numbername(mut n: u32, z_out_1: *mut i8,
     n_out_1: i32) -> i32 {
@@ -924,6 +942,7 @@ pub extern "C" fn speedtest1_numbername(mut n: u32, z_out_1: *mut i8,
         return i;
     }
 }
+
 static z_dots: [i8; 72] =
     [46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8,
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8,
@@ -937,7 +956,9 @@ static z_dots: [i8; 72] =
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8,
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8,
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 0 as i8];
+
 static mut i_test_number: i32 = 0;
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_begin_test(i_test_num_1: i32,
     z_test_name_1: *const i8, mut __va0: ...) -> () {
@@ -982,6 +1003,7 @@ pub unsafe extern "C" fn speedtest1_begin_test(i_test_num_1: i32,
         g.y = 1157229256 as u32;
     }
 }
+
 extern "C" fn print_sql(z_sql_1: *const i8) -> () {
     unsafe {
         let mut n: i32 = unsafe { strlen(z_sql_1) } as i32;
@@ -1020,12 +1042,14 @@ extern "C" fn print_sql(z_sql_1: *const i8) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_shrink_memory() -> () {
     unsafe {
         if g.b_mem_shrink != 0 { unsafe { sqlite3_db_release_memory(g.db) }; }
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_exec(z_format: *const i8, mut __va0: ...)
     -> () {
@@ -1068,6 +1092,7 @@ pub unsafe extern "C" fn speedtest1_exec(z_format: *const i8, mut __va0: ...)
         speedtest1_shrink_memory();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_end_test() -> () {
     unsafe {
@@ -1107,6 +1132,7 @@ pub extern "C" fn speedtest1_end_test() -> () {
         i_test_number = 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_final() -> () {
     unsafe {
@@ -1148,6 +1174,7 @@ pub extern "C" fn speedtest1_final() -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_once(z_format_1: *const i8,
     mut __va0: ...) -> *mut i8 {
@@ -1206,6 +1233,7 @@ pub unsafe extern "C" fn speedtest1_once(z_format_1: *const i8,
         return z_result;
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_prepare(z_format_1: *const i8,
     mut __va0: ...) -> () {
@@ -1237,6 +1265,7 @@ pub unsafe extern "C" fn speedtest1_prepare(z_format_1: *const i8,
         unsafe { sqlite3_free(z_sql as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_run() -> () {
     unsafe {
@@ -1383,6 +1412,7 @@ pub extern "C" fn speedtest1_run() -> () {
         speedtest1_shrink_memory();
     }
 }
+
 extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
     unsafe {
         let mut n: i32 = unsafe { strlen(z_sql_1) } as i32;
@@ -1401,12 +1431,14 @@ extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
         };
     }
 }
+
 extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     unsafe {
         sqlite3_result_int64(context, speedtest1_random() as Sqlite3Int64)
     };
 }
+
 extern "C" fn est_square_root(x: i32) -> i32 {
     let mut y0: i32 = x / 2;
     let mut y1: i32 = 0;
@@ -1426,6 +1458,7 @@ extern "C" fn est_square_root(x: i32) -> i32 {
     }
     return y0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_main() -> () {
     unsafe {
@@ -2342,6 +2375,7 @@ pub extern "C" fn testset_main() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_cte() -> () {
     unsafe {
@@ -2405,6 +2439,7 @@ pub extern "C" fn testset_cte() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_random_ascii_fp(z_fp_1: *mut i8) -> () {
     let x: i32 = speedtest1_random() as i32;
@@ -2418,6 +2453,7 @@ pub extern "C" fn speedtest1_random_ascii_fp(z_fp_1: *mut i8) -> () {
             c"%d.%de%d".as_ptr() as *mut i8 as *const i8, y, z, x % 200)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_fp() -> () {
     unsafe {
@@ -2584,6 +2620,7 @@ pub extern "C" fn testset_fp() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_star() -> () {
     unsafe {
@@ -2680,6 +2717,7 @@ pub extern "C" fn testset_star() -> () {
         speedtest1_end_test();
     }
 }
+
 extern "C" fn testset_app() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -2767,6 +2805,7 @@ extern "C" fn testset_app() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_orm() -> () {
     unsafe {
@@ -2889,6 +2928,7 @@ pub extern "C" fn testset_orm() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_trigger() -> () {
     unsafe {
@@ -3288,6 +3328,7 @@ pub extern "C" fn testset_trigger() -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_debug1() -> () {
     unsafe {
@@ -3318,6 +3359,7 @@ pub extern "C" fn testset_debug1() -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_json() -> () {
     unsafe {
@@ -3404,6 +3446,7 @@ pub extern "C" fn testset_json() -> () {
         speedtest1_end_test();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_parsenumber() -> () {
     unsafe {
@@ -3503,6 +3546,7 @@ pub extern "C" fn testset_parsenumber() -> () {
         speedtest1_end_test();
     }
 }
+
 extern "C" fn x_compile_options(p_ctx_1: *mut (), n_val_1: i32,
     az_val_1: *mut *mut i8, az_col_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -3511,6 +3555,7 @@ extern "C" fn x_compile_options(p_ctx_1: *mut (), n_val_1: i32,
     };
     return 0;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -4513,12 +4558,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntegerValueS0N16integerValueS0 {
     z_suffix: *mut i8,
     i_mult: i32,
 }
+
 static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
     [IntegerValueS0N16integerValueS0 {
                 z_suffix: c"KiB".as_ptr() as *mut i8,
@@ -4556,7 +4603,9 @@ static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
                 z_suffix: c"G".as_ptr() as *mut i8,
                 i_mult: 1000000000,
             }];
+
 static mut clock_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 static mut ones: [*const i8; 20] =
     [c"zero".as_ptr() as *const i8, c"one".as_ptr() as *const i8,
             c"two".as_ptr() as *const i8, c"three".as_ptr() as *const i8,
@@ -4572,12 +4621,14 @@ static mut ones: [*const i8; 20] =
             c"seventeen".as_ptr() as *const i8,
             c"eighteen".as_ptr() as *const i8,
             c"nineteen".as_ptr() as *const i8];
+
 static mut tens: [*const i8; 10] =
     [c"".as_ptr() as *const i8, c"ten".as_ptr() as *const i8,
             c"twenty".as_ptr() as *const i8, c"thirty".as_ptr() as *const i8,
             c"forty".as_ptr() as *const i8, c"fifty".as_ptr() as *const i8,
             c"sixty".as_ptr() as *const i8, c"seventy".as_ptr() as *const i8,
             c"eighty".as_ptr() as *const i8, c"ninety".as_ptr() as *const i8];
+
 static mut az_puzzle: [*const i8; 3] =
     [c"534...9..67.195....98....6.8...6...34..8.3..1....2...6.6....28....419..5...28..79".as_ptr()
                 as *const i8,
@@ -4585,6 +4636,7 @@ static mut az_puzzle: [*const i8; 3] =
                 as *const i8,
             c"53.......6..195....98....6.8...6...34..8.3..1....2...6.6....28....419..5....8..79".as_ptr()
                 as *const i8];
+
 static z_type: [i8; 120] =
     [73 as i8, 66 as i8, 66 as i8, 73 as i8, 73 as i8, 73 as i8, 84 as i8,
             73 as i8, 86 as i8, 86 as i8, 73 as i8, 84 as i8, 66 as i8,
@@ -4606,6 +4658,7 @@ static z_type: [i8; 120] =
             86 as i8, 70 as i8, 73 as i8, 73 as i8, 73 as i8, 84 as i8,
             86 as i8, 66 as i8, 66 as i8, 86 as i8, 70 as i8, 70 as i8,
             84 as i8, 86 as i8, 86 as i8, 66 as i8, 0 as i8];
+
 static mut z_mix1_tests: [i8; 62] =
     [109 as i8, 97 as i8, 105 as i8, 110 as i8, 44 as i8, 111 as i8,
             114 as i8, 109 as i8, 47 as i8, 50 as i8, 53 as i8, 44 as i8,
@@ -4618,12 +4671,14 @@ static mut z_mix1_tests: [i8; 62] =
             101 as i8, 47 as i8, 49 as i8, 48 as i8, 44 as i8, 115 as i8,
             116 as i8, 97 as i8, 114 as i8, 44 as i8, 97 as i8, 112 as i8,
             112 as i8, 0 as i8];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -5445,9 +5500,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

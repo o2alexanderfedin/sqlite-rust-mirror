@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -12,6 +15,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn fuzz_read_file(z_filename_1: *const i8, p_sz_1: &mut i32,
     pp_buf_1: &mut *mut ()) -> () {
     unsafe {
@@ -61,6 +65,7 @@ extern "C" fn fuzz_read_file(z_filename_1: *const i8, p_sz_1: &mut i32,
         *pp_buf_1 = p_buf;
     }
 }
+
 extern "C" fn fuzz_write_file(z_filename_1: *const i8, p_buf_1: &mut [u8])
     -> () {
     unsafe {
@@ -91,7 +96,9 @@ extern "C" fn fuzz_write_file(z_filename_1: *const i8, p_buf_1: &mut [u8])
         unsafe { fclose(f) };
     }
 }
+
 extern "C" fn fuzz_corrupt() -> i32 { return 11; }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3PrngType {
@@ -99,6 +106,7 @@ struct Sqlite3PrngType {
     j: u8,
     s: [u8; 256],
 }
+
 static mut sqlite3_prng: Sqlite3PrngType =
     Sqlite3PrngType {
         i: 175 as u8,
@@ -152,6 +160,7 @@ static mut sqlite3_prng: Sqlite3PrngType =
                 174 as u8, 19 as u8, 6 as u8, 245 as u8, 28 as u8, 78 as u8,
                 82 as u8, 247 as u8],
     };
+
 extern "C" fn fuzz_random_byte() -> u8 {
     unsafe {
         let mut t: u8 = 0 as u8;
@@ -165,6 +174,7 @@ extern "C" fn fuzz_random_byte() -> u8 {
         return sqlite3_prng.s[t as usize];
     }
 }
+
 extern "C" fn fuzz_random_blob(mut z_buf_1: &mut [u8]) -> () {
     let mut i: i32 = 0;
     {
@@ -179,6 +189,7 @@ extern "C" fn fuzz_random_blob(mut z_buf_1: &mut [u8]) -> () {
         }
     }
 }
+
 extern "C" fn fuzz_random_int(n_range_1: u32) -> u32 {
     let mut ret: u32 = 0 as u32;
     if !(n_range_1 > 0 as u32) as i32 as i64 != 0 {
@@ -199,6 +210,7 @@ extern "C" fn fuzz_random_int(n_range_1: u32) -> u32 {
         });
     return ret % n_range_1;
 }
+
 extern "C" fn fuzz_random_u64() -> u64 {
     let mut ret: u64 = 0 as u64;
     fuzz_random_blob(unsafe {
@@ -212,6 +224,7 @@ extern "C" fn fuzz_random_u64() -> u64 {
         });
     return ret;
 }
+
 extern "C" fn fuzz_random_seed(i_seed_1: u32) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -235,6 +248,7 @@ extern "C" fn fuzz_random_seed(i_seed_1: u32) -> () {
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChangeset {
@@ -246,6 +260,7 @@ struct FuzzChangeset {
     n_change: i32,
     n_update: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChangesetGroup {
@@ -256,6 +271,7 @@ struct FuzzChangesetGroup {
     sz_change: i32,
     n_change: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChange {
@@ -268,13 +284,16 @@ struct FuzzChange {
     a_sub: [u8; 128],
     i_current: i32,
 }
+
 extern "C" fn fuzz_malloc(n_byte_1: Sqlite3Int64) -> *mut () {
     let p_ret: *mut () =
         unsafe { sqlite3_malloc64(n_byte_1 as Sqlite3Uint64) };
     if !(p_ret).is_null() { unsafe { memset(p_ret, 0, n_byte_1 as u64) }; }
     return p_ret;
 }
+
 extern "C" fn fuzz_free(p: *mut ()) -> () { unsafe { sqlite3_free(p) }; }
+
 extern "C" fn fuzz_get_varint(p: *const u8, pn_val_1: &mut i32) -> i32 {
     let mut i: i32 = 0;
     let mut n_val: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -299,6 +318,7 @@ extern "C" fn fuzz_get_varint(p: *const u8, pn_val_1: &mut i32) -> i32 {
     *pn_val_1 = n_val as i32;
     return i;
 }
+
 extern "C" fn fuzz_put_varint(p: *mut u8, n_val_1: i32) -> i32 {
     if !(n_val_1 > 0 && n_val_1 < 2097152) as i32 as i64 != 0 {
         unsafe {
@@ -321,6 +341,7 @@ extern "C" fn fuzz_put_varint(p: *mut u8, n_val_1: i32) -> i32 {
     unsafe { *p.offset(2 as isize) = (n_val_1 & 127) as u8 };
     return 3;
 }
+
 extern "C" fn fuzz_get_i64(a_rec_1: *const u8) -> i64 {
     return (((unsafe { *a_rec_1.offset(0 as isize) } as u64) << 56) +
                                         ((unsafe { *a_rec_1.offset(1 as isize) } as u64) << 48) +
@@ -332,6 +353,7 @@ extern "C" fn fuzz_get_i64(a_rec_1: *const u8) -> i64 {
                 ((unsafe { *a_rec_1.offset(7 as isize) } as u64) << 0)) as
             i64;
 }
+
 extern "C" fn fuzz_put_u64(a_rec_1: *mut u8, i_val_1: u64) -> () {
     unsafe {
         *a_rec_1.offset(0 as isize) = (i_val_1 >> 56 & 255 as u64) as u8
@@ -356,6 +378,7 @@ extern "C" fn fuzz_put_u64(a_rec_1: *mut u8, i_val_1: u64) -> () {
     };
     unsafe { *a_rec_1.offset(7 as isize) = (i_val_1 & 255 as u64) as u8 };
 }
+
 extern "C" fn fuzz_parse_header(p_parse_1: &FuzzChangeset,
     pp_hdr_1: &mut *mut u8, p_end_1: *mut u8,
     pp_grp_1: &mut *mut FuzzChangesetGroup) -> i32 {
@@ -414,6 +437,7 @@ extern "C" fn fuzz_parse_header(p_parse_1: &FuzzChangeset,
     *pp_grp_1 = p_grp;
     return rc;
 }
+
 extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
     let e_type: u8 = unsafe { *p.offset(0 as isize) };
     '__s3:
@@ -452,6 +476,7 @@ extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn fuzz_parse_record(pp_rec_1: &mut *mut u8, p_end_1: *mut u8,
     p_parse_1: &mut FuzzChangeset, b_pk_only_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -510,6 +535,7 @@ extern "C" fn fuzz_parse_record(pp_rec_1: &mut *mut u8, p_end_1: *mut u8,
     *pp_rec_1 = p;
     return rc;
 }
+
 extern "C" fn fuzz_parse_changes(pp_data_1: &mut *mut u8, p_end_1: *mut u8,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let c_hdr: u8 =
@@ -580,6 +606,7 @@ extern "C" fn fuzz_parse_changes(pp_data_1: &mut *mut u8, p_end_1: *mut u8,
     *pp_data_1 = p;
     return rc;
 }
+
 extern "C" fn fuzz_parse_changeset(p_changeset_1: *mut u8, n_changeset_1: i32,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let p_end: *mut u8 =
@@ -639,6 +666,7 @@ extern "C" fn fuzz_parse_changeset(p_changeset_1: *mut u8, n_changeset_1: i32,
     }
     return rc;
 }
+
 extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
     pp_rec_1: &mut *mut u8, b_pk_only_1: i32) -> i32 {
     let rc: i32 = 0;
@@ -980,6 +1008,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
     *pp_rec_1 = p;
     return rc;
 }
+
 extern "C" fn fuzz_print_group(p_parse_1: *const FuzzChangeset,
     p_grp_1: *mut FuzzChangesetGroup) -> () {
     let mut i: i32 = 0;
@@ -1041,6 +1070,7 @@ extern "C" fn fuzz_print_group(p_parse_1: *const FuzzChangeset,
         }
     }
 }
+
 extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
     p_change_1: *mut FuzzChange) -> i32 {
     let mut i_sub: i32 = 0;
@@ -1394,6 +1424,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
     }
     return 0;
 }
+
 extern "C" fn fuzz_copy_change(p_parse_1: &FuzzChangeset, i_grp_1: i32,
     p_fuzz_1: &mut FuzzChange, pp: &mut *mut u8, pp_out_1: &mut *mut u8)
     -> i32 {
@@ -1755,6 +1786,7 @@ extern "C" fn fuzz_copy_change(p_parse_1: &FuzzChangeset, i_grp_1: i32,
         (e_type as i32 == 23 || (*p_fuzz_1).e_type != 7) as i32;
     return 0;
 }
+
 extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let mut change: FuzzChange = unsafe { core::mem::zeroed() };
@@ -1935,6 +1967,7 @@ extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
     }
     return rc;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut n_repeat: i32 = 0;
@@ -2011,12 +2044,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     }
     return Err(rc);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2823,9 +2858,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

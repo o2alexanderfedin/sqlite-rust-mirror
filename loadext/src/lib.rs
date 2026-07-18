@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,14 +394,17 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3AutoExtList {
     n_ext: u32,
     a_ext: *mut unsafe extern "C" fn() -> (),
 }
+
 static mut sqlite3_autoext: Sqlite3AutoExtList =
     Sqlite3AutoExtList { n_ext: 0 as u32, a_ext: core::ptr::null_mut() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auto_extension(x_init: unsafe extern "C" fn() -> ())
     -> i32 {
@@ -458,6 +469,7 @@ pub extern "C" fn sqlite3_auto_extension(x_init: unsafe extern "C" fn() -> ())
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_cancel_auto_extension(x_init:
         unsafe extern "C" fn() -> ()) -> i32 {
@@ -497,6 +509,7 @@ pub extern "C" fn sqlite3_cancel_auto_extension(x_init:
         return n;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_reset_auto_extension() -> () {
     unsafe {
@@ -510,6 +523,7 @@ pub extern "C" fn sqlite3_reset_auto_extension() -> () {
         }
     }
 }
+
 static sqlite3_apis: Sqlite3ApiRoutines =
     Sqlite3ApiRoutines {
         aggregate_context: Some(sqlite3_aggregate_context),
@@ -796,6 +810,7 @@ static sqlite3_apis: Sqlite3ApiRoutines =
         incomplete: Some(sqlite3_incomplete),
         result_str: Some(sqlite3_result_str),
     };
+
 extern "C" fn sqlite3_load_extension_2(db: *mut Sqlite3, z_file_1: *const i8,
     z_proc_1: *const i8, pz_err_msg_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1279,6 +1294,7 @@ extern "C" fn sqlite3_load_extension_2(db: *mut Sqlite3, z_file_1: *const i8,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_load_extension(db: *mut Sqlite3,
     z_file_1: *const i8, z_proc_1: *const i8, pz_err_msg_1: *mut *mut i8)
@@ -1290,6 +1306,7 @@ pub extern "C" fn sqlite3_load_extension(db: *mut Sqlite3,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_enable_load_extension(db: &mut Sqlite3, onoff: i32)
     -> i32 {
@@ -1300,6 +1317,7 @@ pub extern "C" fn sqlite3_enable_load_extension(db: &mut Sqlite3, onoff: i32)
     unsafe { sqlite3_mutex_leave((*db).mutex) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auto_load_extensions(db: *mut Sqlite3) -> () {
     unsafe {
@@ -1356,6 +1374,7 @@ pub extern "C" fn sqlite3_auto_load_extensions(db: *mut Sqlite3) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_close_extensions(db: *mut Sqlite3) -> () {
     let mut i: i32 = 0;
@@ -1376,7 +1395,9 @@ pub extern "C" fn sqlite3_close_extensions(db: *mut Sqlite3) -> () {
     }
     unsafe { sqlite3_db_free(db, unsafe { (*db).a_extension } as *mut ()) };
 }
+
 static mut az_endings: [*const i8; 1] = [c"dylib".as_ptr() as *const i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4135,41 +4156,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

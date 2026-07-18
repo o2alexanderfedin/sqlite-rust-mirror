@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,6 +14,7 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -25,6 +27,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -104,6 +107,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -152,6 +156,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -288,6 +293,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -311,6 +317,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -383,6 +390,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr_list(p_walker: *mut Walker,
     p: *mut ExprList) -> i32 {
@@ -417,12 +425,14 @@ pub extern "C" fn sqlite3_walk_expr_list(p_walker: *mut Walker,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_win_defn_dummy_callback(p_walker: *mut Walker,
     p: *mut Select) -> () {
     { let _ = p_walker; };
     { let _ = p; };
 }
+
 extern "C" fn walk_window_list(p_walker_1: *mut Walker, p_list_1: *mut Window,
     b_one_only_1: i32) -> i32 {
     let mut p_win: *const Window = core::ptr::null();
@@ -456,6 +466,7 @@ extern "C" fn walk_window_list(p_walker_1: *mut Walker, p_list_1: *mut Window,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_select_expr(p_walker: *mut Walker, p: &Select)
     -> i32 {
@@ -486,6 +497,7 @@ pub extern "C" fn sqlite3_walk_select_expr(p_walker: *mut Walker, p: &Select)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_select_from(p_walker: *mut Walker, p: &Select)
     -> i32 {
@@ -531,6 +543,7 @@ pub extern "C" fn sqlite3_walk_select_from(p_walker: *mut Walker, p: &Select)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_select(p_walker: *mut Walker,
     mut p: *mut Select) -> i32 {
@@ -566,6 +579,7 @@ pub extern "C" fn sqlite3_walk_select(p_walker: *mut Walker,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr_nn(p_walker: *mut Walker,
     mut p_expr: *mut Expr) -> i32 {
@@ -619,6 +633,7 @@ pub extern "C" fn sqlite3_walk_expr_nn(p_walker: *mut Walker,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr(p_walker: *mut Walker, p_expr: *mut Expr)
     -> i32 {
@@ -626,18 +641,21 @@ pub extern "C" fn sqlite3_walk_expr(p_walker: *mut Walker, p_expr: *mut Expr)
             sqlite3_walk_expr_nn(p_walker, p_expr)
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_walk_noop(not_used: *mut Walker,
     not_used2: *mut Expr) -> i32 {
     { { let _ = not_used; }; { let _ = not_used2; } };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_walk_noop(not_used: *mut Walker,
     not_used2: *mut Select) -> i32 {
     { { let _ = not_used; }; { let _ = not_used2; } };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walker_depth_increase(p_walker: &mut Walker,
     p_select: *mut Select) -> i32 {
@@ -650,6 +668,7 @@ pub extern "C" fn sqlite3_walker_depth_increase(p_walker: &mut Walker,
     };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walker_depth_decrease(p_walker: &mut Walker,
     p_select: *mut Select) -> () {
@@ -661,6 +680,7 @@ pub extern "C" fn sqlite3_walker_depth_decrease(p_walker: &mut Walker,
         __t
     };
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3425,41 +3445,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SHA1Context {
@@ -12,6 +15,7 @@ struct SHA1Context {
     count: [u32; 2],
     buffer: [u8; 64],
 }
+
 extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -1371,6 +1375,7 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
         unsafe { *state.offset(4 as isize) += qq[4 as usize] };
     }
 }
+
 extern "C" fn hash_init(p: &mut SHA1Context) -> () {
     (*p).state[0 as usize] = 1732584193 as u32;
     (*p).state[1 as usize] = 4023233417u32;
@@ -1380,6 +1385,7 @@ extern "C" fn hash_init(p: &mut SHA1Context) -> () {
     (*p).count[0 as usize] =
         { (*p).count[1 as usize] = 0 as u32; (*p).count[1 as usize] };
 }
+
 extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
     -> () {
     let mut i: u32 = 0 as u32;
@@ -1423,6 +1429,7 @@ extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
         };
     }
 }
+
 unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -1440,6 +1447,7 @@ unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
     hash_step(unsafe { &mut *p },
         &raw mut z_buf[0 as usize] as *mut u8 as *const u8, n as u32);
 }
+
 extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
     b_as_binary_1: i32) -> () {
     let mut i: u32 = 0 as u32;
@@ -1510,6 +1518,7 @@ extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
         unsafe { *z_out_1.add((i * 2 as u32) as usize) = 0 as i8 };
     }
 }
+
 extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA1Context = unsafe { core::mem::zeroed() };
@@ -1563,6 +1572,7 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -1906,6 +1916,7 @@ extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_sha_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1941,12 +1952,16 @@ pub extern "C" fn sqlite3_sha_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 static mut one_1: i32 = 1;
+
 static z_encode: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 static mut one_2: i32 = 1;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

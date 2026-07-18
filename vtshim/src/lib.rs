@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimAux {
@@ -16,6 +19,7 @@ struct VtshimAux {
     p_all_vtab: *mut VtshimVtab,
     s_self: Sqlite3Module,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimVtab {
@@ -26,6 +30,7 @@ struct VtshimVtab {
     pp_prev: *mut *mut VtshimVtab,
     p_next: *mut VtshimVtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimCursor {
@@ -34,6 +39,7 @@ struct VtshimCursor {
     pp_prev: *mut *mut VtshimCursor,
     p_next: *mut VtshimCursor,
 }
+
 extern "C" fn vtshim_create(db: *mut Sqlite3, pp_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -93,6 +99,7 @@ extern "C" fn vtshim_create(db: *mut Sqlite3, pp_aux_1: *mut (), argc: i32,
     unsafe { (*p_aux).p_all_vtab = p_new };
     return rc;
 }
+
 extern "C" fn vtshim_connect(db: *mut Sqlite3, pp_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -152,6 +159,7 @@ extern "C" fn vtshim_connect(db: *mut Sqlite3, pp_aux_1: *mut (), argc: i32,
     unsafe { (*p_aux).p_all_vtab = p_new };
     return rc;
 }
+
 extern "C" fn vtshim_best_index(p_base_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
@@ -185,6 +193,7 @@ extern "C" fn vtshim_best_index(p_base_1: *mut Sqlite3Vtab,
     }
     return rc;
 }
+
 extern "C" fn vtshim_disconnect(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -208,6 +217,7 @@ extern "C" fn vtshim_disconnect(p_base_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab as *mut ()) };
     return rc;
 }
+
 extern "C" fn vtshim_destroy(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -231,6 +241,7 @@ extern "C" fn vtshim_destroy(p_base_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab as *mut ()) };
     return rc;
 }
+
 extern "C" fn vtshim_open(p_base_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
@@ -292,6 +303,7 @@ extern "C" fn vtshim_open(p_base_1: *mut Sqlite3Vtab,
     unsafe { (*p_vtab).p_all_cur = p_cur };
     return 0;
 }
+
 extern "C" fn vtshim_close(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
     let p_vtab: *mut VtshimVtab =
@@ -335,6 +347,7 @@ extern "C" fn vtshim_close(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return rc;
 }
+
 extern "C" fn vtshim_filter(p_x_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
@@ -371,6 +384,7 @@ extern "C" fn vtshim_filter(p_x_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     }
     return rc;
 }
+
 extern "C" fn vtshim_next(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
     let p_vtab: *mut VtshimVtab =
@@ -405,6 +419,7 @@ extern "C" fn vtshim_next(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_eof(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
     let p_vtab: *mut VtshimVtab =
@@ -437,6 +452,7 @@ extern "C" fn vtshim_eof(p_x_1: *mut Sqlite3VtabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_column(p_x_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
@@ -472,6 +488,7 @@ extern "C" fn vtshim_column(p_x_1: *mut Sqlite3VtabCursor,
     }
     return rc;
 }
+
 extern "C" fn vtshim_rowid(p_x_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut Sqlite3Int64) -> i32 {
     let p_cur: *mut VtshimCursor = p_x_1 as *mut VtshimCursor;
@@ -507,6 +524,7 @@ extern "C" fn vtshim_rowid(p_x_1: *mut Sqlite3VtabCursor,
     }
     return rc;
 }
+
 extern "C" fn vtshim_update(p_base_1: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut Sqlite3Int64) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
@@ -540,6 +558,7 @@ extern "C" fn vtshim_update(p_base_1: *mut Sqlite3Vtab, argc: i32,
     }
     return rc;
 }
+
 extern "C" fn vtshim_begin(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -572,6 +591,7 @@ extern "C" fn vtshim_begin(p_base_1: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_sync(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -604,6 +624,7 @@ extern "C" fn vtshim_sync(p_base_1: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_commit(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -636,6 +657,7 @@ extern "C" fn vtshim_commit(p_base_1: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_rollback(p_base_1: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -668,6 +690,7 @@ extern "C" fn vtshim_rollback(p_base_1: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_find_function(p_base_1: *mut Sqlite3Vtab, n_arg_1: i32,
     z_name_1: *const i8,
     px_func_1:
@@ -703,6 +726,7 @@ extern "C" fn vtshim_find_function(p_base_1: *mut Sqlite3Vtab, n_arg_1: i32,
     }
     return rc;
 }
+
 extern "C" fn vtshim_rename(p_base_1: *mut Sqlite3Vtab,
     z_new_name_1: *const i8) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
@@ -736,6 +760,7 @@ extern "C" fn vtshim_rename(p_base_1: *mut Sqlite3Vtab,
     }
     return rc;
 }
+
 extern "C" fn vtshim_savepoint(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -768,6 +793,7 @@ extern "C" fn vtshim_savepoint(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_release(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -800,6 +826,7 @@ extern "C" fn vtshim_release(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_rollback_to(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     let p_vtab: *mut VtshimVtab = p_base_1 as *mut VtshimVtab;
     let p_aux: *const VtshimAux =
@@ -832,6 +859,7 @@ extern "C" fn vtshim_rollback_to(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn vtshim_aux_destructor(p_x_aux_1: *mut ()) -> () {
     let p_aux: *mut VtshimAux = p_x_aux_1 as *mut VtshimAux;
     if !(unsafe { (*p_aux).p_all_vtab } == core::ptr::null_mut()) as i32 as
@@ -855,6 +883,7 @@ extern "C" fn vtshim_aux_destructor(p_x_aux_1: *mut ()) -> () {
     unsafe { sqlite3_free(unsafe { (*p_aux).p_mod } as *mut ()) };
     unsafe { sqlite3_free(p_aux as *mut ()) };
 }
+
 extern "C" fn vtshim_copy_module(p_mod_1: *const Sqlite3Module,
     pp_mod_1: *mut *mut Sqlite3Module) -> i32 {
     let mut p: *mut Sqlite3Module = core::ptr::null_mut();
@@ -874,6 +903,7 @@ extern "C" fn vtshim_copy_module(p_mod_1: *const Sqlite3Module,
     unsafe { *pp_mod_1 = p };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_disposable_module(db: *mut Sqlite3,
     z_name_1: *const i8, p: *const Sqlite3Module, p_client_data_1: *mut (),
@@ -1062,6 +1092,7 @@ pub extern "C" fn sqlite3_create_disposable_module(db: *mut Sqlite3,
         };
     return if rc == 0 { p_aux as *mut () } else { core::ptr::null_mut() };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dispose_module(p_x_1: *mut ()) -> () {
     let p_aux: *mut VtshimAux = p_x_1 as *mut VtshimAux;
@@ -1109,12 +1140,14 @@ pub extern "C" fn sqlite3_dispose_module(p_x_1: *mut ()) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtshim_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = p_api_1; };
     return 0;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

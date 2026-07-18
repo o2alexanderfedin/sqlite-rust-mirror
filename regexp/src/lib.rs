@@ -1,16 +1,21 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type ReStateNumber = u16;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReStateSet {
     n_state: u32,
     a_state: *mut ReStateNumber,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReInput {
@@ -18,6 +23,7 @@ struct ReInput {
     i: i32,
     mx: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReCompiled {
@@ -32,6 +38,7 @@ struct ReCompiled {
     n_alloc: u32,
     mx_alloc: u32,
 }
+
 extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
     let mut i: u32 = 0 as u32;
     {
@@ -57,6 +64,7 @@ extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
                         } as usize) = new_state_1 as ReStateNumber
     };
 }
+
 extern "C" fn re_next_char(p: *mut ReInput) -> u32 {
     let mut c: u32 = 0 as u32;
     if unsafe { (*p).i } >= unsafe { (*p).mx } { return 0 as u32; }
@@ -138,6 +146,7 @@ extern "C" fn re_next_char(p: *mut ReInput) -> u32 {
     }
     return c;
 }
+
 extern "C" fn re_next_char_nocase(p: *mut ReInput) -> u32 {
     let mut c: u32 = re_next_char(p);
     if c >= 'A' as i32 as u32 && c <= 'Z' as i32 as u32 {
@@ -145,20 +154,24 @@ extern "C" fn re_next_char_nocase(p: *mut ReInput) -> u32 {
     }
     return c;
 }
+
 extern "C" fn re_word_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32 ||
                         c >= 'a' as i32 && c <= 'z' as i32 ||
                     c >= 'A' as i32 && c <= 'Z' as i32 || c == '_' as i32) as
             i32;
 }
+
 extern "C" fn re_digit_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32) as i32;
 }
+
 extern "C" fn re_space_char(c: i32) -> i32 {
     return (c == ' ' as i32 || c == '\t' as i32 || c == '\n' as i32 ||
                         c == '\r' as i32 || c == '\u{b}' as i32 ||
                 c == '\u{c}' as i32) as i32;
 }
+
 extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     n_in_1: i32) -> i32 {
     let mut a_state_set: [ReStateSet; 2] = unsafe { core::mem::zeroed() };
@@ -587,6 +600,7 @@ extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     }
     unreachable!();
 }
+
 extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     let mut a_op: *mut i8 = core::ptr::null_mut();
     let mut a_arg: *mut i32 = core::ptr::null_mut();
@@ -618,6 +632,7 @@ extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     (*p).n_alloc = n_1;
     return 0;
 }
+
 extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     arg: i32) -> i32 {
     let mut i: i32 = 0;
@@ -654,9 +669,11 @@ extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     unsafe { *unsafe { (*p).a_arg.offset(i_before_1 as isize) } = arg };
     return i_before_1;
 }
+
 extern "C" fn re_append(p: *mut ReCompiled, op: i32, arg: i32) -> i32 {
     return re_insert(p, unsafe { (*p).n_state } as i32, op, arg);
 }
+
 extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     if unsafe { (*p).n_state } + n_1 >= unsafe { (*p).n_alloc } &&
             re_resize(unsafe { &mut *p },
@@ -687,6 +704,7 @@ extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     };
     unsafe { (*p).n_state += n_1 };
 }
+
 extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     if c >= '0' as i32 && c <= '9' as i32 {
         c -= '0' as i32;
@@ -698,6 +716,7 @@ extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     *p_v_1 = *p_v_1 * 16 + (c & 255);
     return 1;
 }
+
 extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     let mut i: i32 = 0;
     let mut v: i32 = 0;
@@ -748,11 +767,13 @@ extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     }
     return c as u32;
 }
+
 extern "C" fn re_peek(p: &ReCompiled) -> u8 {
     return if (*p).s_in.i < (*p).s_in.mx {
                 (unsafe { *(*p).s_in.z.offset((*p).s_in.i as isize) }) as i32
             } else { 0 } as u8;
 }
+
 extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     let mut z_err: *const i8 = core::ptr::null();
     let mut i_start: i32 = 0;
@@ -780,6 +801,7 @@ extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     }
     return core::ptr::null();
 }
+
 extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     let mut i_prev: i32 = -1;
     let mut i_start: i32 = 0;
@@ -3211,6 +3233,7 @@ extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     }
     return core::ptr::null();
 }
+
 extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
     if !(p_re_1).is_null() {
         unsafe { sqlite3_free(unsafe { (*p_re_1).a_op } as *mut ()) };
@@ -3218,9 +3241,11 @@ extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
         unsafe { sqlite3_free(p_re_1 as *mut ()) };
     }
 }
+
 extern "C" fn re_free_voidptr(p: *mut ()) -> () {
     sqlite3re_free(p as *mut ReCompiled);
 }
+
 extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     mut z_in_1: *const i8, mx_re_1: i32, no_case_1: i32) -> *const i8 {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
@@ -3349,11 +3374,14 @@ extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     }
     return unsafe { (*p_re).z_err };
 }
+
 extern "C" fn re_maxlen(context: *mut Sqlite3Context) -> i32 {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     return unsafe { sqlite3_limit(db, 8, -1) };
 }
+
 extern "C" fn re_maxnfa(mxlen: i32) -> i32 { return 75 + mxlen / 2; }
+
 extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
@@ -3410,6 +3438,7 @@ extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_regexp_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -3434,13 +3463,16 @@ pub extern "C" fn sqlite3_regexp_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 static z_esc: [i8; 22] =
     [97 as i8, 102 as i8, 110 as i8, 114 as i8, 116 as i8, 118 as i8,
             92 as i8, 40 as i8, 41 as i8, 42 as i8, 46 as i8, 43 as i8,
             63 as i8, 91 as i8, 36 as i8, 94 as i8, 123 as i8, 124 as i8,
             125 as i8, 93 as i8, 45 as i8, 0 as i8];
+
 static z_trans: [i8; 7] =
     [7 as i8, 12 as i8, 10 as i8, 13 as i8, 9 as i8, 11 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

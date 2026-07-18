@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [OPTIONS] DATABASE LOG\n\n".as_ptr() as *mut i8 as
@@ -22,6 +24,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
     };
     unsafe { exit(1) };
 }
+
 extern "C" fn __main_inner(mut argc: i32, argv: *mut *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -581,12 +584,14 @@ extern "C" fn __main_inner(mut argc: i32, argv: *mut *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *mut *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1374,9 +1379,11 @@ extern "C" {
     -> ();
     static mut __stdoutp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

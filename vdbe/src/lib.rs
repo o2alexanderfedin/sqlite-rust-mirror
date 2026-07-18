@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 type DarwinSizeT = u64;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -63,6 +66,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -135,6 +139,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -147,6 +152,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -226,6 +232,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -362,6 +369,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -410,6 +418,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -445,6 +454,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -468,6 +478,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 extern "C" fn also_an_int(p_rec_1: &Mem, r_value_1: f64, pi_value_1: *mut i64)
     -> i32 {
     unsafe {
@@ -484,6 +495,7 @@ extern "C" fn also_an_int(p_rec_1: &Mem, r_value_1: f64, pi_value_1: *mut i64)
                     }) as i32;
     }
 }
+
 extern "C" fn apply_numeric_affinity(p_rec_1: *mut Mem, b_try_for_int_1: i32)
     -> () {
     unsafe {
@@ -506,6 +518,7 @@ extern "C" fn apply_numeric_affinity(p_rec_1: *mut Mem, b_try_for_int_1: i32)
         unsafe { (*p_rec_1).flags &= !2 as u16 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_numeric_type(p_val_1: *mut Sqlite3Value)
     -> i32 {
@@ -523,6 +536,7 @@ pub extern "C" fn sqlite3_value_numeric_type(p_val_1: *mut Sqlite3Value)
     }
     return e_type;
 }
+
 extern "C" fn apply_affinity(p_rec_1: *mut Mem, affinity: i8, enc: u8) -> () {
     if affinity as i32 >= 67 {
         { let _ = 0; };
@@ -544,11 +558,13 @@ extern "C" fn apply_affinity(p_rec_1: *mut Mem, affinity: i8, enc: u8) -> () {
         unsafe { (*p_rec_1).flags &= !(8 | 4 | 32) as u16 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_apply_affinity(p_val_1: *mut Sqlite3Value,
     affinity: u8, enc: u8) -> () {
     apply_affinity(p_val_1 as *mut Mem, affinity as i8, enc);
 }
+
 extern "C" fn sqlite3_vdbe_log_abort(p: &Vdbe, rc: i32, p_op_1: *const Op,
     a_op_1: *const Op) -> () {
     unsafe {
@@ -586,11 +602,13 @@ extern "C" fn sqlite3_vdbe_log_abort(p: &Vdbe, rc: i32, p_op_1: *const Op,
         };
     }
 }
+
 extern "C" fn out2_prerelease_with_clear(p_out_1: *mut Mem) -> *mut Mem {
     unsafe { sqlite3_vdbe_mem_set_null(p_out_1) };
     unsafe { (*p_out_1).flags = 4 as u16 };
     return p_out_1;
 }
+
 extern "C" fn out2_prerelease(p: &Vdbe, p_op_1: &VdbeOp) -> *mut Mem {
     unsafe {
         let mut p_out: *mut Mem = core::ptr::null_mut();
@@ -602,6 +620,7 @@ extern "C" fn out2_prerelease(p: &Vdbe, p_op_1: &VdbeOp) -> *mut Mem {
         } else { unsafe { (*p_out).flags = 4 as u16 }; return p_out; }
     }
 }
+
 extern "C" fn compute_numeric_type(p_mem_1: *mut Mem) -> u16 {
     unsafe {
         let mut rc: i32 = 0;
@@ -639,6 +658,7 @@ extern "C" fn compute_numeric_type(p_mem_1: *mut Mem) -> u16 {
         return 8 as u16;
     }
 }
+
 extern "C" fn numeric_type(p_mem_1: *mut Mem) -> u16 {
     { let _ = 0; };
     if unsafe { (*p_mem_1).flags } as i32 & (4 | 8 | 32 | 1) != 0 {
@@ -648,6 +668,7 @@ extern "C" fn numeric_type(p_mem_1: *mut Mem) -> u16 {
     return compute_numeric_type(p_mem_1);
     return 0 as u16;
 }
+
 extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
     t: u32, i_offset_1: i64, cache_status_1: u32, col_cache_ctr_1: u32,
     p_dest_1: *mut Mem) -> i32 {
@@ -747,6 +768,7 @@ extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
         return rc;
     }
 }
+
 extern "C" fn vdbe_mem_type_name(p_mem_1: *mut Mem) -> *const i8 {
     unsafe {
         return az_types[(unsafe {
@@ -754,6 +776,7 @@ extern "C" fn vdbe_mem_type_name(p_mem_1: *mut Mem) -> *const i8 {
                         } - 1) as usize];
     }
 }
+
 extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
     e_cur_type_1: u8) -> *mut VdbeCursor {
     unsafe {
@@ -858,6 +881,7 @@ extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
         return p_cx;
     }
 }
+
 extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
     p_rc_1: &mut i32) -> i32 {
     unsafe {
@@ -888,6 +912,7 @@ extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
         return ret;
     }
 }
+
 extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
     unsafe {
         let mut i: i32 = 0;
@@ -916,6 +941,7 @@ extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
         return h;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
     unsafe {
@@ -13180,25 +13206,33 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
         }
     }
 }
+
 static mut az_types: [*const i8; 5] =
     [c"INT".as_ptr() as *const i8, c"REAL".as_ptr() as *const i8,
             c"TEXT".as_ptr() as *const i8, c"BLOB".as_ptr() as *const i8,
             c"NULL".as_ptr() as *const i8];
+
 static mut az_type: [*const i8; 4] =
     [c"NOT NULL".as_ptr() as *const i8, c"UNIQUE".as_ptr() as *const i8,
             c"CHECK".as_ptr() as *const i8,
             c"FOREIGN KEY".as_ptr() as *const i8];
+
 static and_logic: [u8; 9] =
     [0 as u8, 0 as u8, 0 as u8, 0 as u8, 1 as u8, 2 as u8, 0 as u8, 2 as u8,
             2 as u8];
+
 static or_logic: [u8; 9] =
     [0 as u8, 1 as u8, 2 as u8, 1 as u8, 1 as u8, 1 as u8, 2 as u8, 1 as u8,
             2 as u8];
+
 static a_mask: [u8; 12] =
     [16 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 2 as u8,
             1 as u8, 1 as u8, 16 as u8, 16 as u8];
+
 static a_flag: [u16; 2] = [16 as u16, (2 | 512) as u16];
+
 static vfs_flags: i32 = (2 | 4 | 16 | 8 | 1024) as i32;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -16155,41 +16189,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,7 +392,9 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 static mut vfs_list: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_find(z_vfs: *const i8) -> *mut Sqlite3Vfs {
     unsafe {
@@ -413,6 +423,7 @@ pub extern "C" fn sqlite3_vfs_find(z_vfs: *const i8) -> *mut Sqlite3Vfs {
         return p_vfs;
     }
 }
+
 extern "C" fn vfs_unlink(p_vfs_1: *mut Sqlite3Vfs) -> () {
     unsafe {
         { let _ = 0; };
@@ -431,6 +442,7 @@ extern "C" fn vfs_unlink(p_vfs_1: *mut Sqlite3Vfs) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_register(p_vfs: *mut Sqlite3Vfs, make_dflt: i32)
     -> i32 {
@@ -453,6 +465,7 @@ pub extern "C" fn sqlite3_vfs_register(p_vfs: *mut Sqlite3Vfs, make_dflt: i32)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_unregister(p_vfs: *mut Sqlite3Vfs) -> i32 {
     let mut mutex: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -464,6 +477,7 @@ pub extern "C" fn sqlite3_vfs_unregister(p_vfs: *mut Sqlite3Vfs) -> i32 {
     unsafe { sqlite3_mutex_leave(mutex) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3OsInit() -> i32 {
     let p: *mut () = unsafe { sqlite3_malloc(10) };
@@ -471,6 +485,7 @@ pub extern "C" fn sqlite3OsInit() -> i32 {
     unsafe { sqlite3_free(p) };
     return unsafe { sqlite3_os_init() };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_close(p_id: *mut Sqlite3File) -> () {
     if !(unsafe { (*p_id).p_methods }).is_null() {
@@ -482,6 +497,7 @@ pub extern "C" fn sqlite3_os_close(p_id: *mut Sqlite3File) -> () {
         unsafe { (*p_id).p_methods = core::ptr::null() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_read(id: *mut Sqlite3File, p_buf: *mut (),
     amt: i32, offset: i64) -> i32 {
@@ -491,6 +507,7 @@ pub extern "C" fn sqlite3_os_read(id: *mut Sqlite3File, p_buf: *mut (),
                 })(id, p_buf, amt, offset)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_write(id: *mut Sqlite3File, p_buf: *const (),
     amt: i32, offset: i64) -> i32 {
@@ -500,6 +517,7 @@ pub extern "C" fn sqlite3_os_write(id: *mut Sqlite3File, p_buf: *const (),
                 })(id, p_buf, amt, offset)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_truncate(id: *mut Sqlite3File, size: i64)
     -> i32 {
@@ -509,6 +527,7 @@ pub extern "C" fn sqlite3_os_truncate(id: *mut Sqlite3File, size: i64)
                 })(id, size)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
     return if flags != 0 {
@@ -519,6 +538,7 @@ pub extern "C" fn sqlite3_os_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
             }
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_file_size(id: *mut Sqlite3File, p_size: *mut i64)
     -> i32 {
@@ -528,6 +548,7 @@ pub extern "C" fn sqlite3_os_file_size(id: *mut Sqlite3File, p_size: *mut i64)
                 })(id, p_size)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_lock(id: *mut Sqlite3File, lock_type: i32)
     -> i32 {
@@ -538,6 +559,7 @@ pub extern "C" fn sqlite3_os_lock(id: *mut Sqlite3File, lock_type: i32)
                 })(id, lock_type)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_unlock(id: *mut Sqlite3File, lock_type: i32)
     -> i32 {
@@ -548,6 +570,7 @@ pub extern "C" fn sqlite3_os_unlock(id: *mut Sqlite3File, lock_type: i32)
                 })(id, lock_type)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
@@ -557,6 +580,7 @@ pub extern "C" fn sqlite3_os_check_reserved_lock(id: *mut Sqlite3File,
                 })(id, p_res_out)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_file_control(id: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
@@ -567,6 +591,7 @@ pub extern "C" fn sqlite3_os_file_control(id: *mut Sqlite3File, op: i32,
                 })(id, op, p_arg)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_file_control_hint(id: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> () {
@@ -581,6 +606,7 @@ pub extern "C" fn sqlite3_os_file_control_hint(id: *mut Sqlite3File, op: i32,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_sector_size(id: *mut Sqlite3File) -> i32 {
     let x_sector_size: Option<unsafe extern "C" fn(*mut Sqlite3File) -> i32> =
@@ -589,6 +615,7 @@ pub extern "C" fn sqlite3_os_sector_size(id: *mut Sqlite3File) -> i32 {
             unsafe { x_sector_size.unwrap()(id) }
         } else { 4096 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_device_characteristics(id: *mut Sqlite3File)
     -> i32 {
@@ -601,6 +628,7 @@ pub extern "C" fn sqlite3_os_device_characteristics(id: *mut Sqlite3File)
                 })(id)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_shm_map(id: *mut Sqlite3File, i_page: i32,
     pgsz: i32, b_extend: i32, pp: *mut *mut ()) -> i32 {
@@ -610,6 +638,7 @@ pub extern "C" fn sqlite3_os_shm_map(id: *mut Sqlite3File, i_page: i32,
                 })(id, i_page, pgsz, b_extend, pp)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_shm_lock(id: *mut Sqlite3File, offset: i32,
     n: i32, flags: i32) -> i32 {
@@ -619,12 +648,14 @@ pub extern "C" fn sqlite3_os_shm_lock(id: *mut Sqlite3File, offset: i32,
                 })(id, offset, n, flags)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_shm_barrier(id: *mut Sqlite3File) -> () {
     unsafe {
         (unsafe { (*unsafe { (*id).p_methods }).x_shm_barrier.unwrap() })(id)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_shm_unmap(id: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
@@ -634,6 +665,7 @@ pub extern "C" fn sqlite3_os_shm_unmap(id: *mut Sqlite3File, delete_flag: i32)
                 })(id, delete_flag)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_fetch(id: *mut Sqlite3File, i_off: i64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
@@ -643,6 +675,7 @@ pub extern "C" fn sqlite3_os_fetch(id: *mut Sqlite3File, i_off: i64,
                 })(id, i_off, i_amt, pp)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_unfetch(id: *mut Sqlite3File, i_off: i64,
     p: *mut ()) -> i32 {
@@ -652,6 +685,7 @@ pub extern "C" fn sqlite3_os_unfetch(id: *mut Sqlite3File, i_off: i64,
                 })(id, i_off, p)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_flags_out: *mut i32) -> i32 {
@@ -666,6 +700,7 @@ pub extern "C" fn sqlite3_os_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     { let _ = 0; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
@@ -678,6 +713,7 @@ pub extern "C" fn sqlite3_os_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
             }
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
@@ -687,6 +723,7 @@ pub extern "C" fn sqlite3_os_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 })(p_vfs, z_path, flags, p_res_out)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_full_pathname(p_vfs: *mut Sqlite3Vfs,
     z_path: *const i8, n_path_out: i32, z_path_out: *mut i8) -> i32 {
@@ -697,6 +734,7 @@ pub extern "C" fn sqlite3_os_full_pathname(p_vfs: *mut Sqlite3Vfs,
                 })(p_vfs, z_path, n_path_out, z_path_out)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_dl_open(p_vfs: *mut Sqlite3Vfs,
     z_path: *const i8) -> *mut () {
@@ -704,6 +742,7 @@ pub extern "C" fn sqlite3_os_dl_open(p_vfs: *mut Sqlite3Vfs,
     { let _ = 0; };
     return unsafe { (unsafe { (*p_vfs).x_dl_open.unwrap() })(p_vfs, z_path) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> () {
@@ -711,6 +750,7 @@ pub extern "C" fn sqlite3_os_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
         (unsafe { (*p_vfs).x_dl_error.unwrap() })(p_vfs, n_byte, z_buf_out)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_dl_sym(p_vfs: *mut Sqlite3Vfs, p_hdle: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
@@ -718,11 +758,13 @@ pub extern "C" fn sqlite3_os_dl_sym(p_vfs: *mut Sqlite3Vfs, p_hdle: *mut (),
             (unsafe { (*p_vfs).x_dl_sym.unwrap() })(p_vfs, p_hdle, z_sym)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_dl_close(p_vfs: *mut Sqlite3Vfs,
     p_handle: *mut ()) -> () {
     unsafe { (unsafe { (*p_vfs).x_dl_close.unwrap() })(p_vfs, p_handle) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_randomness(p_vfs: *mut Sqlite3Vfs,
     mut n_byte: i32, z_buf_out: *mut i8) -> i32 {
@@ -747,11 +789,13 @@ pub extern "C" fn sqlite3_os_randomness(p_vfs: *mut Sqlite3Vfs,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32)
     -> i32 {
     return unsafe { (unsafe { (*p_vfs).x_sleep.unwrap() })(p_vfs, n_micro) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_get_last_error(p_vfs: *mut Sqlite3Vfs) -> i32 {
     return if unsafe { (*p_vfs).x_get_last_error.is_some() } {
@@ -762,6 +806,7 @@ pub extern "C" fn sqlite3_os_get_last_error(p_vfs: *mut Sqlite3Vfs) -> i32 {
             }
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p_time_out: *mut Sqlite3Int64) -> i32 {
@@ -786,6 +831,7 @@ pub extern "C" fn sqlite3_os_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_open_malloc(p_vfs: *mut Sqlite3Vfs,
     z_file: *const i8, pp_file: &mut *mut Sqlite3File, flags: i32,
@@ -805,12 +851,14 @@ pub extern "C" fn sqlite3_os_open_malloc(p_vfs: *mut Sqlite3Vfs,
     { let _ = 0; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_close_free(p_file: *mut Sqlite3File) -> () {
     { let _ = 0; };
     sqlite3_os_close(p_file);
     unsafe { sqlite3_free(p_file as *mut ()) };
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3522,41 +3570,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

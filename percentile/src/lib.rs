@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Percentile {
@@ -16,6 +19,7 @@ struct Percentile {
     r_pct: f64,
     a: *mut f64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PercentileFunc {
@@ -24,6 +28,7 @@ struct PercentileFunc {
     mx_frac: i8,
     b_discrete: i8,
 }
+
 static mut a_percent_func: [PercentileFunc; 4] =
     [PercentileFunc {
                 z_name: c"median".as_ptr() as *const i8,
@@ -49,6 +54,7 @@ static mut a_percent_func: [PercentileFunc; 4] =
                 mx_frac: 1 as i8,
                 b_discrete: 1 as i8,
             }];
+
 extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if !(core::mem::size_of::<Sqlite3Uint64>() as u64 ==
@@ -65,10 +71,12 @@ extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     };
     return (u >> 52 & 2047 as Sqlite3Uint64 == 2047 as u64) as i32;
 }
+
 extern "C" fn percent_same_value(mut a: f64, b: f64) -> i32 {
     a -= b;
     return (a >= -0.001 && a <= 0.001) as i32;
 }
+
 extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     -> i32 {
     let mut i_first: i32 = 0;
@@ -83,6 +91,7 @@ extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     if b_exact_1 != 0 { return -1; }
     return i_first;
 }
+
 unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let p_func: *const PercentileFunc =
@@ -105,6 +114,7 @@ unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg1 as *mut ()) };
     unsafe { sqlite3_free(z_msg2 as *mut ()) };
 }
+
 extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -264,6 +274,7 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         unsafe { (*p).b_sorted = 0 as i8 };
     }
 }
+
 extern "C" fn percent_sort(mut a: *mut f64, mut n: u32) -> () {
     let mut i_lt: i32 = 0;
     let mut i_gt: i32 = 0;
@@ -360,6 +371,7 @@ extern "C" fn percent_sort(mut a: *mut f64, mut n: u32) -> () {
         }
     }
 }
+
 extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -425,6 +437,7 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
     -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -477,12 +490,15 @@ extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
         };
     } else { unsafe { (*p).b_keep_sorted = 1 as i8 }; }
 }
+
 extern "C" fn percent_final(p_ctx_1: *mut Sqlite3Context) -> () {
     percent_compute(p_ctx_1, 1);
 }
+
 extern "C" fn percent_value(p_ctx_1: *mut Sqlite3Context) -> () {
     percent_compute(p_ctx_1, 0);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_percentile_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -519,6 +535,7 @@ pub extern "C" fn sqlite3_percentile_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

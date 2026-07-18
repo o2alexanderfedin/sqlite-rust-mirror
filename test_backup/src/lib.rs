@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type ClientData = *mut ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclCmdInfo {
@@ -14,6 +17,7 @@ struct TclCmdInfo {
     deleteData: *mut (),
     namespacePtr: *mut TclNamespace,
 }
+
 extern "C" fn backup_test_cmd(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut a_sub: [BackupSubCommandN16BackupSubCommand; 5] =
@@ -175,14 +179,20 @@ extern "C" fn backup_test_cmd(client_data_1: ClientData,
     }
     return 0;
 }
+
 extern "C" fn backup_test_finish(client_data_1: ClientData) -> () {
     let p_backup: *mut Sqlite3Backup = client_data_1 as *mut Sqlite3Backup;
     unsafe { sqlite3_backup_finish(p_backup) };
 }
+
 const BACKUP_STEP: u32 = 0;
+
 const BACKUP_FINISH: u32 = 1;
+
 const BACKUP_REMAINING: u32 = 2;
+
 const BACKUP_PAGECOUNT: u32 = 3;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BackupSubCommandN16BackupSubCommand {
@@ -191,6 +201,7 @@ struct BackupSubCommandN16BackupSubCommand {
     n_arg: i32,
     z_arg: *const i8,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -994,16 +1005,19 @@ extern "C" {
     fn Tcl_SetObjResult(interp: *mut TclInterp, resultObjPtr: *mut TclObj)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclNamespace {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {

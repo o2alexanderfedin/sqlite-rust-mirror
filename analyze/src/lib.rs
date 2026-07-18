@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,6 +14,7 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -25,6 +27,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -104,6 +107,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -152,6 +156,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -288,6 +293,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -311,6 +317,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -383,6 +390,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
     i_stat_cur_1: i32, z_where_1: *const i8, z_where_type_1: *const i8)
     -> () {
@@ -477,6 +485,7 @@ extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct StatAccum {
@@ -489,15 +498,18 @@ struct StatAccum {
     n_skip_ahead: u8,
     current: StatSample,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct StatSample {
     an_d_lt: *mut TRowcnt,
 }
+
 extern "C" fn stat_accum_destructor(p_old_1: *mut ()) -> () {
     let p: *mut StatAccum = p_old_1 as *mut StatAccum;
     unsafe { sqlite3_db_free(unsafe { (*p).db }, p as *mut ()) };
 }
+
 extern "C" fn stat_init(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -556,6 +568,7 @@ extern "C" fn stat_init(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 static mut stat_init_funcdef: FuncDef =
     FuncDef {
         n_arg: 4 as i16,
@@ -569,6 +582,7 @@ static mut stat_init_funcdef: FuncDef =
         z_name: c"stat_init".as_ptr() as *const i8,
         u: FuncDefU0 { p_hash: core::ptr::null_mut() },
     };
+
 extern "C" fn stat_push(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -629,6 +643,7 @@ extern "C" fn stat_push(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 static mut stat_push_funcdef: FuncDef =
     FuncDef {
         n_arg: (2 + 0) as i16,
@@ -642,6 +657,7 @@ static mut stat_push_funcdef: FuncDef =
         z_name: c"stat_push".as_ptr() as *const i8,
         u: FuncDefU0 { p_hash: core::ptr::null_mut() },
     };
+
 extern "C" fn stat_get(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -695,6 +711,7 @@ extern "C" fn stat_get(context: *mut Sqlite3Context, argc: i32,
         { let _ = argc; };
     }
 }
+
 static mut stat_get_funcdef: FuncDef =
     FuncDef {
         n_arg: (1 + 0) as i16,
@@ -708,6 +725,7 @@ static mut stat_get_funcdef: FuncDef =
         z_name: c"stat_get".as_ptr() as *const i8,
         u: FuncDefU0 { p_hash: core::ptr::null_mut() },
     };
+
 extern "C" fn call_stat_get(p_parse_1: *mut Parse, reg_stat_1: i32,
     i_param_1: i32, reg_out_1: i32) -> () {
     unsafe {
@@ -719,6 +737,7 @@ extern "C" fn call_stat_get(p_parse_1: *mut Parse, reg_stat_1: i32,
         };
     }
 }
+
 extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_only_idx_1: *mut Index, i_stat_cur_1: i32, mut i_mem_1: i32,
     mut i_tab_1: i32) -> () {
@@ -1023,10 +1042,12 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
         }
     }
 }
+
 extern "C" fn load_analysis(p_parse_1: *mut Parse, i_db_1: i32) -> () {
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
     if !(v).is_null() { unsafe { sqlite3_vdbe_add_op1(v, 152, i_db_1) }; }
 }
+
 extern "C" fn analyze_database(p_parse_1: *mut Parse, i_db_1: i32) -> () {
     unsafe {
         let db: *const Sqlite3 = unsafe { (*p_parse_1).db } as *const Sqlite3;
@@ -1063,6 +1084,7 @@ extern "C" fn analyze_database(p_parse_1: *mut Parse, i_db_1: i32) -> () {
         load_analysis(p_parse_1, i_db_1);
     }
 }
+
 extern "C" fn analyze_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_only_idx_1: *mut Index) -> () {
     unsafe {
@@ -1092,6 +1114,7 @@ extern "C" fn analyze_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
         load_analysis(p_parse_1, i_db);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
     p_name2: *mut Token) -> () {
@@ -1172,12 +1195,14 @@ pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnalysisInfo {
     db: *mut Sqlite3,
     z_database: *const i8,
 }
+
 extern "C" fn decode_int_array(z_int_array_1: *mut i8, n_out_1: i32,
     a_out_1: *const TRowcnt, a_log_1: *mut LogEst, p_index_1: &mut Index)
     -> () {
@@ -1269,6 +1294,7 @@ extern "C" fn decode_int_array(z_int_array_1: *mut i8, n_out_1: i32,
         }
     }
 }
+
 extern "C" fn analysis_loader(p_data_1: *mut (), argc: i32,
     argv: *mut *mut i8, not_used_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1338,6 +1364,7 @@ extern "C" fn analysis_loader(p_data_1: *mut (), argc: i32,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
     unsafe {
@@ -1429,6 +1456,7 @@ pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_index_samples(db: *mut Sqlite3,
     p_idx: *mut Index) -> () {
@@ -1437,12 +1465,14 @@ pub extern "C" fn sqlite3_delete_index_samples(db: *mut Sqlite3,
     { let _ = db; };
     { let _ = p_idx; };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpenStatTableS0N18openStatTableS0 {
     z_name: *const i8,
     z_cols: *const i8,
 }
+
 static mut a_table: [OpenStatTableS0N18openStatTableS0; 3] =
     [OpenStatTableS0N18openStatTableS0 {
                 z_name: c"sqlite_stat1".as_ptr() as *const i8,
@@ -1456,6 +1486,7 @@ static mut a_table: [OpenStatTableS0N18openStatTableS0; 3] =
                 z_name: c"sqlite_stat3".as_ptr() as *const i8,
                 z_cols: core::ptr::null(),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4236,41 +4267,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

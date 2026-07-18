@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereInfo {
     pub(crate) p_parse: *mut Parse,
@@ -27,6 +29,7 @@ pub(crate) struct WhereInfo {
     pub(crate) s_mask_set: WhereMaskSet,
     pub(crate) a: [WhereLevel; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLoop {
@@ -46,12 +49,14 @@ pub(crate) struct WhereLoop {
     pub(crate) p_next_loop: *mut WhereLoop,
     pub(crate) a_l_term_space: [*mut WhereTerm; 3],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union WhereLoopU0 {
     pub(crate) btree: WhereLoopU0S0,
     pub(crate) vtab: WhereLoopU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLoopU0S0 {
@@ -62,6 +67,7 @@ pub(crate) struct WhereLoopU0S0 {
     pub(crate) p_index: *mut Index,
     pub(crate) p_order_by: *mut ExprList,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLoopU0S1 {
@@ -72,6 +78,7 @@ pub(crate) struct WhereLoopU0S1 {
     pub(crate) idx_str: *mut i8,
     pub(crate) m_handle_in: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereTerm {
@@ -88,6 +95,7 @@ pub(crate) struct WhereTerm {
     pub(crate) prereq_right: Bitmask,
     pub(crate) prereq_all: Bitmask,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereClause {
@@ -101,6 +109,7 @@ pub(crate) struct WhereClause {
     pub(crate) a: *mut WhereTerm,
     pub(crate) a_static: [WhereTerm; 8],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union WhereTermU0 {
@@ -108,29 +117,34 @@ pub(crate) union WhereTermU0 {
     pub(crate) p_or_info: *mut WhereOrInfo,
     pub(crate) p_and_info: *mut WhereAndInfo,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereTermU0S0 {
     pub(crate) left_column: i32,
     pub(crate) i_field: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereOrInfo {
     pub(crate) wc: WhereClause,
     pub(crate) indexable: Bitmask,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereAndInfo {
     pub(crate) wc: WhereClause,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereMemBlock {
     pub(crate) p_next: *mut WhereMemBlock,
     pub(crate) sz: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereMaskSet {
@@ -138,6 +152,7 @@ pub(crate) struct WhereMaskSet {
     pub(crate) n: i32,
     pub(crate) ix: [i32; 64],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLevel {
@@ -167,6 +182,7 @@ pub(crate) struct WhereLevel {
     pub(crate) p_w_loop: *mut WhereLoop,
     pub(crate) not_ready: Bitmask,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereRightJoin {
@@ -176,18 +192,21 @@ pub(crate) struct WhereRightJoin {
     pub(crate) addr_subrtn: i32,
     pub(crate) end_subrtn: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union WhereLevelU0 {
     pub(crate) in_: WhereLevelU0S0,
     pub(crate) p_covering_idx: *mut Index,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLevelU0S0 {
     pub(crate) n_in: i32,
     pub(crate) a_in_loop: *mut InLoop,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct InLoop {
@@ -197,6 +216,7 @@ pub(crate) struct InLoop {
     pub(crate) n_prefix: i32,
     pub(crate) e_end_loop_op: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WherePath {
@@ -208,6 +228,7 @@ pub(crate) struct WherePath {
     pub(crate) is_ordered: i8,
     pub(crate) a_loop: *mut *mut WhereLoop,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereLoopBuilder {
@@ -219,12 +240,14 @@ pub(crate) struct WhereLoopBuilder {
     pub(crate) bld_flags2: u8,
     pub(crate) i_plan_limit: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereOrSet {
     pub(crate) n: u16,
     pub(crate) a: [WhereOrCost; 3],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereOrCost {
@@ -232,6 +255,7 @@ pub(crate) struct WhereOrCost {
     pub(crate) r_run: LogEst,
     pub(crate) n_out: LogEst,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereScan {

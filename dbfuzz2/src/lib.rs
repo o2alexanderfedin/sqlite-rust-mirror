@@ -1,15 +1,21 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type Uint64T = u64;
+
 type RlimT = Uint64T;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Rlimit {
     rlim_cur: u64,
     rlim_max: u64,
 }
+
 static mut az_sql: [*const i8; 10] =
     [c"PRAGMA integrity_check;".as_ptr() as *const i8,
             c"SELECT * FROM sqlite_schema;".as_ptr() as *const i8,
@@ -22,14 +28,22 @@ static mut az_sql: [*const i8; 10] =
                 *const i8, c"REINDEX;".as_ptr() as *const i8,
             c"DROP TABLE t3;".as_ptr() as *const i8,
             c"VACUUM;".as_ptr() as *const i8];
+
 #[unsafe(no_mangle)]
 pub static mut e_verbosity: i32 = 0;
+
 static mut b_vdbe_debug: i32 = 0;
+
 static mut sz_max: Sqlite3Int64 = 104857600 as Sqlite3Int64;
+
 static mut n_cb: i32 = 0;
+
 static mut mx_cb: i32 = 250000;
+
 static mut memtrace_base: Sqlite3MemMethods = unsafe { core::mem::zeroed() };
+
 static mut memtrace_out: *mut FILE = unsafe { core::mem::zeroed() };
+
 extern "C" fn memtrace_malloc(n: i32) -> *mut () {
     unsafe {
         if !(memtrace_out).is_null() {
@@ -42,6 +56,7 @@ extern "C" fn memtrace_malloc(n: i32) -> *mut () {
         return unsafe { memtrace_base.x_malloc.unwrap()(n) };
     }
 }
+
 extern "C" fn memtrace_free(p: *mut ()) -> () {
     unsafe {
         if p == core::ptr::null_mut() { return; }
@@ -55,6 +70,7 @@ extern "C" fn memtrace_free(p: *mut ()) -> () {
         unsafe { memtrace_base.x_free.unwrap()(p) };
     }
 }
+
 extern "C" fn memtrace_realloc(p: *mut (), n: i32) -> *mut () {
     unsafe {
         if p == core::ptr::null_mut() { return memtrace_malloc(n); }
@@ -70,18 +86,23 @@ extern "C" fn memtrace_realloc(p: *mut (), n: i32) -> *mut () {
         return unsafe { memtrace_base.x_realloc.unwrap()(p, n) };
     }
 }
+
 extern "C" fn memtrace_size(p: *mut ()) -> i32 {
     unsafe { return unsafe { memtrace_base.x_size.unwrap()(p) }; }
 }
+
 extern "C" fn memtrace_roundup(n: i32) -> i32 {
     unsafe { return unsafe { memtrace_base.x_roundup.unwrap()(n) }; }
 }
+
 extern "C" fn memtrace_init(p: *mut ()) -> i32 {
     unsafe { return unsafe { memtrace_base.x_init.unwrap()(p) }; }
 }
+
 extern "C" fn memtrace_shutdown(p: *mut ()) -> () {
     unsafe { unsafe { memtrace_base.x_shutdown.unwrap()(p) }; }
 }
+
 static mut ersazt_methods: Sqlite3MemMethods =
     Sqlite3MemMethods {
         x_malloc: Some(memtrace_malloc),
@@ -93,6 +114,7 @@ static mut ersazt_methods: Sqlite3MemMethods =
         x_shutdown: Some(memtrace_shutdown),
         p_app_data: core::ptr::null_mut(),
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
     unsafe {
@@ -115,6 +137,7 @@ pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
     unsafe {
@@ -136,6 +159,7 @@ pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
         return rc;
     }
 }
+
 extern "C" fn progress_handler(p_not_used_1: *mut ()) -> i32 {
     unsafe {
         { let __p = &mut n_cb; let __t = *__p; *__p += 1; __t };
@@ -149,6 +173,7 @@ extern "C" fn progress_handler(p_not_used_1: *mut ()) -> i32 {
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn llvm_fuzzer_test_one_input(a_data_1: *const u8,
     n_byte_1: u64) -> i32 {
@@ -254,6 +279,7 @@ pub extern "C" fn llvm_fuzzer_test_one_input(a_data_1: *const u8,
         return 0;
     }
 }
+
 extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     let mut n: i32 = 0;
     while unsafe { *z.offset(0 as isize) } != 0 &&
@@ -268,6 +294,7 @@ extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     }
     return if unsafe { *z.offset(0 as isize) } as i32 == 0 { n } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn llvm_fuzzer_initialize(p_argc_1: &mut i32,
     p_argv_1: &*mut *mut i8) -> i32 {
@@ -459,6 +486,7 @@ pub extern "C" fn llvm_fuzzer_initialize(p_argc_1: &mut i32,
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1255,9 +1283,11 @@ extern "C" {
     static mut __stdoutp: *mut FILE;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

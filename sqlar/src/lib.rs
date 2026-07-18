@@ -1,12 +1,18 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type Byte = u8;
+
 type Bytef = Byte;
+
 type ULong = u64;
+
 type ULongf = ULong;
+
 extern "C" fn sqlar_compress_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -61,6 +67,7 @@ extern "C" fn sqlar_compress_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn sqlar_uncompress_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n_data: ULong = 0 as ULong;
@@ -114,6 +121,7 @@ extern "C" fn sqlar_uncompress_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_free(p_out as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_sqlar_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -138,6 +146,7 @@ pub extern "C" fn sqlite3_sqlar_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

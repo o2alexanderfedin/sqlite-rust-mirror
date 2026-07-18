@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,26 +14,37 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 const TCL_QUEUE_TAIL: u32 = 0;
+
 type TclThreadId = *mut Tcl_ThreadId_;
+
 type TclWideInt = i64;
+
 type ClientData = *mut ();
+
 type DarwinSizeT = u64;
+
 type TclCommand = *mut Tcl_Command_;
+
 type DarwinIntptrT = i64;
+
 type TclQueuePosition = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclEvent {
     proc: Option<unsafe extern "C" fn(*mut TclEvent, i32) -> i32>,
     nextPtr: *mut TclEvent,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclTime {
     sec: i64,
     usec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
@@ -42,6 +54,7 @@ struct TclObj {
     typePtr: *mut TclObjType,
     internalRep: TclObjU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union TclObjU0 {
@@ -52,18 +65,21 @@ union TclObjU0 {
     twoPtrValue: TclObjU0S0,
     ptrAndLongRep: TclObjU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S0 {
     ptr1: *mut (),
     ptr2: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S1 {
     ptr: *mut (),
     value: u64,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -76,6 +92,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -155,6 +172,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -203,6 +221,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -339,6 +358,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -362,6 +382,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -434,6 +455,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqlThread {
@@ -442,6 +464,7 @@ struct SqlThread {
     z_script: *mut i8,
     z_varname: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EvalEvent {
@@ -449,6 +472,7 @@ struct EvalEvent {
     z_script: *mut i8,
     interp: *mut TclInterp,
 }
+
 extern "C" fn tcl_script_event(ev_ptr_1: *mut TclEvent, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let p: *const EvalEvent = ev_ptr_1 as *mut EvalEvent as *const EvalEvent;
@@ -461,6 +485,7 @@ extern "C" fn tcl_script_event(ev_ptr_1: *mut TclEvent, flags: i32) -> i32 {
     { let _ = flags; };
     return 1;
 }
+
 extern "C" fn sqlthread_parent(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_event: *mut EvalEvent = core::ptr::null_mut();
@@ -505,6 +530,7 @@ extern "C" fn sqlthread_parent(client_data_1: ClientData,
     unsafe { Tcl_ThreadAlert(unsafe { (*p).parent }) };
     return 0;
 }
+
 extern "C" fn clock_seconds_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut now: TclTime = unsafe { core::mem::zeroed() };
@@ -517,6 +543,7 @@ extern "C" fn clock_seconds_proc(client_data_1: ClientData,
     { let _ = objv; };
     return 0;
 }
+
 extern "C" fn post_to_parent(p: &SqlThread, p_script_1: *mut TclObj) -> () {
     let mut p_event: *mut EvalEvent = core::ptr::null_mut();
     let mut z_msg: *const i8 = core::ptr::null();
@@ -544,6 +571,7 @@ extern "C" fn post_to_parent(p: &SqlThread, p_script_1: *mut TclObj) -> () {
     };
     unsafe { Tcl_ThreadAlert((*p).parent) };
 }
+
 extern "C" fn tcl_script_thread(p_sql_thread_1: ClientData) -> () {
     let mut interp: *mut TclInterp = core::ptr::null_mut();
     let mut p_res: *mut TclObj = core::ptr::null_mut();
@@ -647,6 +675,7 @@ extern "C" fn tcl_script_thread(p_sql_thread_1: ClientData) -> () {
     while unsafe { Tcl_DoOneEvent(!(1 << 1) | 1 << 1) } != 0 {}
     unsafe { Tcl_ExitThread(0) };
 }
+
 extern "C" fn sqlthread_spawn(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut x: TclThreadId = core::ptr::null_mut();
@@ -714,12 +743,14 @@ extern "C" fn sqlthread_spawn(client_data_1: ClientData,
     }
     return 0;
 }
+
 extern "C" fn x_busy(p_arg_1: *mut (), n_busy_1: i32) -> i32 {
     { let _ = p_arg_1; };
     { let _ = n_busy_1; };
     unsafe { sqlite3_sleep(50) };
     return 1;
 }
+
 extern "C" fn sqlthread_open(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_filename: *const i8 = core::ptr::null();
@@ -745,6 +776,7 @@ extern "C" fn sqlthread_open(client_data_1: ClientData,
     };
     return 0;
 }
+
 extern "C" fn sqlthread_id(client_data_1: ClientData, interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let id: *const Tcl_ThreadId_ =
@@ -757,6 +789,7 @@ extern "C" fn sqlthread_id(client_data_1: ClientData, interp: *mut TclInterp,
     { let _ = objv; };
     return 0;
 }
+
 extern "C" fn sqlthread_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut a_sub: [SubCommandN10SubCommand; 5] =
@@ -825,6 +858,7 @@ extern "C" fn sqlthread_proc(client_data_1: ClientData,
                 })(client_data_1, interp, objc, objv)
         };
 }
+
 extern "C" fn clock_milliseconds_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut now: TclTime = unsafe { core::mem::zeroed() };
@@ -841,6 +875,7 @@ extern "C" fn clock_milliseconds_proc(client_data_1: ClientData,
     { let _ = objv; };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest_thread_init(interp: *mut TclInterp) -> i32 {
     let a_cmd: [TclCmdN6TclCmd; 3] =
@@ -890,6 +925,7 @@ pub extern "C" fn sqlitetest_thread_init(interp: *mut TclInterp) -> i32 {
     }
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SubCommandN10SubCommand {
@@ -899,6 +935,7 @@ struct SubCommandN10SubCommand {
     n_arg: i32,
     z_usage: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclCmdN6TclCmd {
@@ -907,6 +944,7 @@ struct TclCmdN6TclCmd {
     z_name: *const i8,
     i_ctx: i32,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3780,61 +3818,73 @@ extern "C" {
     fn Tcl_NewWideIntObj(wideValue: TclWideInt)
     -> *mut TclObj;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_Command_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjType {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_ThreadId_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

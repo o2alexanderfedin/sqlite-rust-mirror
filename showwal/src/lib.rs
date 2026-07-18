@@ -1,33 +1,58 @@
 type DarwinSizeT = u64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSsizeT = i64;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinTimeT = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -50,10 +75,15 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 static mut pagesize: i32 = 1024;
+
 static mut fd: i32 = -1;
+
 static mut mx_frame: i32 = 0;
+
 static mut per_line: i32 = 16;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Cksum {
@@ -61,6 +91,7 @@ struct Cksum {
     s0: u32,
     s1: u32,
 }
+
 extern "C" fn get_int32(a: *const u8) -> u32 {
     let x: u32 =
         (((unsafe { *a.offset(0 as isize) } as i32) << 24) +
@@ -69,10 +100,12 @@ extern "C" fn get_int32(a: *const u8) -> u32 {
                 unsafe { *a.offset(3 as isize) } as i32) as u32;
     return x;
 }
+
 extern "C" fn swab32(x: u32) -> u32 {
     return ((x & 255 as u32) << 24) + ((x & 65280 as u32) << 8) +
                 ((x & 16711680 as u32) >> 8) + ((x & 4278190080u32) >> 24);
 }
+
 extern "C" fn extend_cksum(p_cksum_1: &mut Cksum, a_data_1: *mut u8,
     mut n_byte_1: u32, b_init_1: i32) -> () {
     let mut a32: *const u32 = core::ptr::null();
@@ -104,6 +137,7 @@ extern "C" fn extend_cksum(p_cksum_1: &mut Cksum, a_data_1: *mut u8,
         };
     }
 }
+
 extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     let mut v: i64 = 0 as i64;
     let mut i: i32 = 0;
@@ -128,10 +162,12 @@ extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     *p_val_1 = v;
     return 9;
 }
+
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
+
 extern "C" fn get_content(ofst: i64, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -142,6 +178,7 @@ extern "C" fn get_content(ofst: i64, n_byte_1: i32) -> *mut u8 {
         return a_data;
     }
 }
+
 extern "C" fn print_byte_range(ofst: i32, a_data_1: &[u8], print_ofst_1: i32)
     -> () {
     unsafe {
@@ -218,6 +255,7 @@ extern "C" fn print_byte_range(ofst: i32, a_data_1: &[u8], print_ofst_1: i32)
         }
     }
 }
+
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     as_hex_1: i32, z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -276,6 +314,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
             &raw mut z_buf[0 as usize] as *mut i8, z_msg_1)
     };
 }
+
 extern "C" fn print_frame(i_frame_1: i32) -> () {
     unsafe {
         let mut i_start: i64 = 0 as i64;
@@ -310,6 +349,7 @@ extern "C" fn print_frame(i_frame_1: i32) -> () {
         unsafe { free(a_data as *mut ()) };
     }
 }
+
 extern "C" fn print_oneline_frame(i_frame_1: i32, p_cksum_1: *mut Cksum)
     -> () {
     unsafe {
@@ -352,6 +392,7 @@ extern "C" fn print_oneline_frame(i_frame_1: i32, p_cksum_1: *mut Cksum)
         unsafe { free(a_data as *mut ()) };
     }
 }
+
 extern "C" fn print_wal_header(p_cksum_1: *mut Cksum) -> () {
     let mut a_data: *mut u8 = core::ptr::null_mut();
     a_data = get_content(0 as i64, 32);
@@ -403,6 +444,7 @@ extern "C" fn print_wal_header(p_cksum_1: *mut Cksum) -> () {
     }
     unsafe { free(a_data as *mut ()) };
 }
+
 extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     mut z_desc_1: *mut i8) -> i64 {
     let mut n_desc: i32 = 0;
@@ -629,6 +671,7 @@ extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     }
     return n_desc as i64;
 }
+
 extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     unsafe {
         let mut max_local: i64 = 0 as i64;
@@ -652,6 +695,7 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
         return n_local;
     }
 }
+
 extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     show_cell_content_1: i32, pz_desc_1: &mut *mut i8) -> i64 {
     unsafe {
@@ -748,6 +792,7 @@ extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
         return n_local + n as i64;
     }
 }
+
 extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     mut z_args_1: *const i8) -> () {
     unsafe {
@@ -912,12 +957,14 @@ extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
         }
     }
 }
+
 extern "C" fn check_page_validity(i_page_1: i32, mx_page_1: i32) -> () {
     if i_page_1 < 1 || i_page_1 > mx_page_1 {
         eprintln!("Invalid page number {}:  valid range is 1..{}", i_page_1 as i32, mx_page_1 as i32);
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -1117,13 +1164,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 static mut z_desc_2: [i8; 1000] = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1168,9 +1218,11 @@ extern "C" {
     static mut __stderrp: *mut FILE;
     static mut __stdoutp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

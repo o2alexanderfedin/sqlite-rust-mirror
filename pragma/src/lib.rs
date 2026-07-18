@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,8 +16,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinIntptrT = i64;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -29,6 +33,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -108,6 +113,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -156,6 +162,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -292,6 +299,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -315,6 +323,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -387,12 +396,14 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn return_single_text(v: *mut Vdbe, z_value_1: *const i8) -> () {
     if !(z_value_1).is_null() {
         unsafe { sqlite3_vdbe_load_string(v, 1, z_value_1 as *const i8) };
         unsafe { sqlite3_vdbe_add_op2(v, 86, 1, 1) };
     }
 }
+
 extern "C" fn pragma_locate(z_name_1: *const i8) -> *const PragmaName {
     unsafe {
         let mut upr: i32 = 0;
@@ -418,6 +429,7 @@ extern "C" fn pragma_locate(z_name_1: *const i8) -> *const PragmaName {
             } else { &a_pragma_name[mid as usize] };
     }
 }
+
 extern "C" fn set_pragma_result_column_names(v: *mut Vdbe,
     p_pragma_1: &PragmaName) -> () {
     unsafe {
@@ -453,6 +465,7 @@ extern "C" fn set_pragma_result_column_names(v: *mut Vdbe,
         }
     }
 }
+
 extern "C" fn return_single_int(v: *mut Vdbe, mut value: i64) -> () {
     unsafe {
         sqlite3_vdbe_add_op4_dup8(v, 74, 0, 1, 0, &raw mut value as *const u8,
@@ -460,6 +473,7 @@ extern "C" fn return_single_int(v: *mut Vdbe, mut value: i64) -> () {
     };
     unsafe { sqlite3_vdbe_add_op2(v, 86, 1, 1) };
 }
+
 extern "C" fn get_safety_level(z: *const i8, omit_full_1: i32, dflt: u8)
     -> u8 {
     unsafe {
@@ -498,10 +512,12 @@ extern "C" fn get_safety_level(z: *const i8, omit_full_1: i32, dflt: u8)
         return dflt;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_boolean(z: *const i8, dflt: u8) -> u8 {
     return (get_safety_level(z, 1, dflt) as i32 != 0) as u8;
 }
+
 extern "C" fn get_locking_mode(z: *const i8) -> i32 {
     if !(z).is_null() {
         if 0 ==
@@ -521,6 +537,7 @@ extern "C" fn get_locking_mode(z: *const i8) -> i32 {
     }
     return -1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_modename(e_mode: i32) -> *const i8 {
     unsafe {
@@ -539,6 +556,7 @@ pub extern "C" fn sqlite3_journal_modename(e_mode: i32) -> *const i8 {
         return az_mode_name[e_mode as usize] as *const i8;
     }
 }
+
 extern "C" fn get_auto_vacuum(z: *const i8) -> i32 {
     let mut i: i32 = 0;
     if 0 ==
@@ -563,6 +581,7 @@ extern "C" fn get_auto_vacuum(z: *const i8) -> i32 {
     i = unsafe { sqlite3_atoi(z) };
     return if i >= 0 && i <= 2 { i } else { 0 } as u8 as i32;
 }
+
 extern "C" fn set_all_pager_flags(db: &Sqlite3) -> () {
     if (*db).auto_commit != 0 {
         let mut p_db: *const Db = (*db).a_db as *const Db;
@@ -589,6 +608,7 @@ extern "C" fn set_all_pager_flags(db: &Sqlite3) -> () {
         }
     }
 }
+
 extern "C" fn get_temp_store(z: *const i8) -> i32 {
     if unsafe { *z.offset(0 as isize) } as i32 >= '0' as i32 &&
             unsafe { *z.offset(0 as isize) } as i32 <= '2' as i32 {
@@ -604,6 +624,7 @@ extern "C" fn get_temp_store(z: *const i8) -> i32 {
         return 2;
     } else { return 0; }
 }
+
 extern "C" fn invalidate_temp_storage(p_parse_1: *mut Parse) -> i32 {
     let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
     if unsafe { (*unsafe { (*db).a_db.offset(1 as isize) }).p_bt } !=
@@ -634,6 +655,7 @@ extern "C" fn invalidate_temp_storage(p_parse_1: *mut Parse) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn change_temp_storage(p_parse_1: *mut Parse,
     z_storage_type_1: *const i8) -> i32 {
     let ts: i32 = get_temp_store(z_storage_type_1);
@@ -643,6 +665,7 @@ extern "C" fn change_temp_storage(p_parse_1: *mut Parse,
     unsafe { (*db).temp_store = ts as u8 };
     return 0;
 }
+
 extern "C" fn pragma_funclist_line(v: *mut Vdbe, mut p: *const FuncDef,
     is_builtin_1: i32, show_intern_funcs_1: i32) -> () {
     unsafe {
@@ -685,6 +708,7 @@ extern "C" fn pragma_funclist_line(v: *mut Vdbe, mut p: *const FuncDef,
         }
     }
 }
+
 extern "C" fn action_name(action: u8) -> *const i8 {
     let mut z_name: *const i8 = core::ptr::null();
     '__s5:
@@ -702,6 +726,7 @@ extern "C" fn action_name(action: u8) -> *const i8 {
     }
     return z_name;
 }
+
 extern "C" fn table_skip_integrity_check(p_tab_1: *const Table,
     p_obj_tab_1: *const Table) -> i32 {
     if !(p_obj_tab_1).is_null() {
@@ -711,6 +736,7 @@ extern "C" fn table_skip_integrity_check(p_tab_1: *const Table,
                 as i32;
     }
 }
+
 extern "C" fn integrity_check_result_row(v: *mut Vdbe) -> i32 {
     let mut addr: i32 = 0;
     unsafe { sqlite3_vdbe_add_op2(v, 86, 3, 1) };
@@ -722,6 +748,7 @@ extern "C" fn integrity_check_result_row(v: *mut Vdbe) -> i32 {
     unsafe { sqlite3_vdbe_add_op0(v, 72) };
     return addr;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
     p_id2: *mut Token, p_value: *mut Token, minus_flag: i32) -> () {
@@ -5800,6 +5827,7 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PragmaVtab {
@@ -5809,6 +5837,7 @@ struct PragmaVtab {
     n_hidden: u8,
     i_hidden: u8,
 }
+
 extern "C" fn pragma_vtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -5917,6 +5946,7 @@ extern "C" fn pragma_vtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
         return rc;
     }
 }
+
 extern "C" fn pragma_vtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const PragmaVtab =
@@ -6000,11 +6030,13 @@ extern "C" fn pragma_vtab_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn pragma_vtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut PragmaVtab = p_vtab_1 as *mut PragmaVtab;
     unsafe { sqlite3_free(p_tab as *mut ()) };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PragmaVtabCursor {
@@ -6013,6 +6045,7 @@ struct PragmaVtabCursor {
     i_rowid: SqliteInt64,
     az_arg: [*mut i8; 2],
 }
+
 extern "C" fn pragma_vtab_open(p_vtab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -6032,6 +6065,7 @@ extern "C" fn pragma_vtab_open(p_vtab_1: *mut Sqlite3Vtab,
         return 0;
     }
 }
+
 extern "C" fn pragma_vtab_cursor_clear(p_csr_1: &mut PragmaVtabCursor) -> () {
     let mut i: i32 = 0;
     unsafe { sqlite3_finalize((*p_csr_1).p_pragma) };
@@ -6056,12 +6090,14 @@ extern "C" fn pragma_vtab_cursor_clear(p_csr_1: &mut PragmaVtabCursor) -> () {
         }
     }
 }
+
 extern "C" fn pragma_vtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut PragmaVtabCursor = cur as *mut PragmaVtabCursor;
     pragma_vtab_cursor_clear(unsafe { &mut *p_csr });
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn pragma_vtab_next(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut PragmaVtabCursor =
@@ -6081,6 +6117,7 @@ extern "C" fn pragma_vtab_next(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     }
     return rc;
 }
+
 extern "C" fn pragma_vtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -6183,12 +6220,14 @@ extern "C" fn pragma_vtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return pragma_vtab_next(p_vtab_cursor_1);
     }
 }
+
 extern "C" fn pragma_vtab_eof(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *const PragmaVtabCursor =
         p_vtab_cursor_1 as *mut PragmaVtabCursor as *const PragmaVtabCursor;
     return (unsafe { (*p_csr).p_pragma } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn pragma_vtab_column(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -6222,6 +6261,7 @@ extern "C" fn pragma_vtab_column(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn pragma_vtab_rowid(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     p: *mut SqliteInt64) -> i32 {
     let p_csr: *const PragmaVtabCursor =
@@ -6229,6 +6269,7 @@ extern "C" fn pragma_vtab_rowid(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { *p = unsafe { (*p_csr).i_rowid } };
     return 0;
 }
+
 static pragma_vtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -6257,6 +6298,7 @@ static pragma_vtab_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pragma_vtab_register(db: *mut Sqlite3,
     z_name: *const i8) -> *mut Module {
@@ -6273,34 +6315,43 @@ pub extern "C" fn sqlite3_pragma_vtab_register(db: *mut Sqlite3,
                 p_name as *mut (), None)
         };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EncNameN7EncName {
     z_name: *mut i8,
     enc: u8,
 }
+
 static z_text_1: [i8; 25] =
     [111 as i8, 110 as i8, 111 as i8, 102 as i8, 102 as i8, 97 as i8,
             108 as i8, 115 as i8, 101 as i8, 121 as i8, 101 as i8, 115 as i8,
             116 as i8, 114 as i8, 117 as i8, 101 as i8, 120 as i8, 116 as i8,
             114 as i8, 97 as i8, 102 as i8, 117 as i8, 108 as i8, 108 as i8,
             0 as i8];
+
 static i_offset: [u8; 8] =
     [0 as u8, 1 as u8, 2 as u8, 4 as u8, 9 as u8, 12 as u8, 15 as u8,
             20 as u8];
+
 static i_length: [u8; 8] =
     [2 as u8, 2 as u8, 3 as u8, 5 as u8, 3 as u8, 4 as u8, 5 as u8, 4 as u8];
+
 static i_value: [u8; 8] =
     [1 as u8, 0 as u8, 0 as u8, 0 as u8, 1 as u8, 1 as u8, 3 as u8, 2 as u8];
+
 static mut az_mode_name: [*mut i8; 6] =
     [c"delete".as_ptr() as *mut i8, c"persist".as_ptr() as *mut i8,
             c"off".as_ptr() as *mut i8, c"truncate".as_ptr() as *mut i8,
             c"memory".as_ptr() as *mut i8, c"wal".as_ptr() as *mut i8];
+
 static mut az_enc: [*const i8; 4] =
     [core::ptr::null(), c"utf8".as_ptr() as *const i8,
             c"utf16le".as_ptr() as *const i8,
             c"utf16be".as_ptr() as *const i8];
+
 static i_ln: i32 = 0 as i32;
+
 static get_cache_size: [VdbeOpList; 9] =
     [VdbeOpList { opcode: 2 as u8, p1: 0 as i8, p2: 0 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -6351,7 +6402,9 @@ static get_cache_size: [VdbeOpList; 9] =
                 p2: 1 as i8,
                 p3: 0 as i8,
             }];
+
 static i_ln_1: i32 = 0 as i32;
+
 static set_meta6: [VdbeOpList; 5] =
     [VdbeOpList { opcode: 2 as u8, p1: 0 as i8, p2: 1 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -6378,9 +6431,12 @@ static set_meta6: [VdbeOpList; 5] =
                 p2: 7 as i8,
                 p3: 0 as i8,
             }];
+
 static mut a_std_type_mask: [u8; 6] =
     [31 as u8, 24 as u8, 17 as u8, 17 as u8, 19 as u8, 20 as u8];
+
 static i_ln_2: i32 = 0 as i32;
+
 static end_code: [VdbeOpList; 7] =
     [VdbeOpList { opcode: 88 as u8, p1: 1 as i8, p2: 0 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -6419,6 +6475,7 @@ static end_code: [VdbeOpList; 7] =
                 p2: 3 as i8,
                 p3: 0 as i8,
             }];
+
 static mut encnames: [EncNameN7EncName; 9] =
     [EncNameN7EncName { z_name: c"UTF8".as_ptr() as *mut i8, enc: 1 as u8 },
             EncNameN7EncName {
@@ -6450,6 +6507,7 @@ static mut encnames: [EncNameN7EncName; 9] =
                 enc: 0 as u8,
             },
             EncNameN7EncName { z_name: core::ptr::null_mut(), enc: 0 as u8 }];
+
 static set_cookie: [VdbeOpList; 2] =
     [VdbeOpList { opcode: 2 as u8, p1: 0 as i8, p2: 1 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -6458,6 +6516,7 @@ static set_cookie: [VdbeOpList; 2] =
                 p2: 0 as i8,
                 p3: 0 as i8,
             }];
+
 static read_cookie: [VdbeOpList; 3] =
     [VdbeOpList { opcode: 2 as u8, p1: 0 as i8, p2: 0 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -6472,6 +6531,7 @@ static read_cookie: [VdbeOpList; 3] =
                 p2: 1 as i8,
                 p3: 0 as i8,
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -9251,41 +9311,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

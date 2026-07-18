@@ -1,10 +1,17 @@
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSizeT = u64;
+
 type Int32T = i32;
+
 type DarwinPidT = Int32T;
+
 type PidT = DarwinPidT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Flock {
@@ -14,6 +21,7 @@ struct Flock {
     l_type: i16,
     l_whence: i16,
 }
+
 extern "C" fn show_locks_in_range(fd: i32, mut lwr: OffT, mut upr: OffT)
     -> i32 {
     unsafe {
@@ -114,6 +122,7 @@ extern "C" fn show_locks_in_range(fd: i32, mut lwr: OffT, mut upr: OffT)
         return cnt;
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -148,18 +157,21 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct LockRangeN9lockRange {
     lwr: OffT,
     upr: OffT,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -183,9 +195,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

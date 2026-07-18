@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -8,7 +9,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Expr {
@@ -19,6 +22,7 @@ struct Fts5Expr {
     n_phrase: i32,
     ap_expr_phrase: *mut *mut Fts5ExprPhrase,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprNode {
@@ -33,6 +37,7 @@ struct Fts5ExprNode {
     n_child: i32,
     ap_child: [*mut Fts5ExprNode; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprNearset {
@@ -41,6 +46,7 @@ struct Fts5ExprNearset {
     n_phrase: i32,
     ap_phrase: [*mut Fts5ExprPhrase; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprPhrase {
@@ -49,6 +55,7 @@ struct Fts5ExprPhrase {
     n_term: i32,
     a_term: [Fts5ExprTerm; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprTerm {
@@ -60,6 +67,7 @@ struct Fts5ExprTerm {
     p_iter: *mut Fts5IndexIter,
     p_synonym: *mut Fts5ExprTerm,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Parse {
@@ -71,13 +79,16 @@ struct Fts5Parse {
     p_expr: *mut Fts5ExprNode,
     b_phrase_to_and: i32,
 }
+
 extern "C" fn fts5_parse_alloc(t: u64) -> *mut () {
     return unsafe { sqlite3_malloc64(t as Sqlite3Int64 as Sqlite3Uint64) };
 }
+
 extern "C" fn fts5_expr_isspace(t: i8) -> i32 {
     return (t as i32 == ' ' as i32 || t as i32 == '\t' as i32 ||
                     t as i32 == '\n' as i32 || t as i32 == '\r' as i32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_parse_error(p_parse: &mut Fts5Parse,
     z_fmt: *const i8, mut __va0: ...) -> () {
@@ -96,6 +107,7 @@ pub unsafe extern "C" fn sqlite3_fts5_parse_error(p_parse: &mut Fts5Parse,
     }
     ();
 }
+
 extern "C" fn fts5_expr_get_token(p_parse_1: *mut Fts5Parse,
     pz: &mut *const i8, p_token_1: &mut Fts5Token) -> i32 {
     let mut z: *const i8 = *pz;
@@ -279,9 +291,11 @@ extern "C" fn fts5_expr_get_token(p_parse_1: *mut Fts5Parse,
     *pz = unsafe { (*p_token_1).p.offset((*p_token_1).n as isize) };
     return tok;
 }
+
 extern "C" fn fts5_parse_free(p: *mut ()) -> () {
     unsafe { sqlite3_free(p) };
 }
+
 extern "C" fn assert_expr_depth_ok(rc: i32, p: &Fts5ExprNode) -> () {
     if rc == 0 {
         if (*p).e_type == 4 || (*p).e_type == 9 || (*p).e_type == 0 {
@@ -325,6 +339,7 @@ extern "C" fn assert_expr_depth_ok(rc: i32, p: &Fts5ExprNode) -> () {
         }
     }
 }
+
 extern "C" fn fts5_merge_colset(p_colset_1: &mut Fts5Colset,
     p_merge_1: &Fts5Colset) -> () {
     let mut i_in: i32 = 0;
@@ -362,6 +377,7 @@ extern "C" fn fts5_merge_colset(p_colset_1: &mut Fts5Colset,
     }
     (*p_colset_1).n_col = i_out;
 }
+
 extern "C" fn fts5_clone_colset(p_rc_1: *mut i32, p_orig_1: *const Fts5Colset)
     -> *mut Fts5Colset {
     let mut p_ret: *mut Fts5Colset = core::ptr::null_mut();
@@ -381,6 +397,7 @@ extern "C" fn fts5_clone_colset(p_rc_1: *mut i32, p_orig_1: *const Fts5Colset)
     } else { p_ret = core::ptr::null_mut(); }
     return p_ret;
 }
+
 extern "C" fn fts5_parse_set_colset(p_parse_1: *mut Fts5Parse,
     p_node_1: &mut Fts5ExprNode, p_colset_1: *mut Fts5Colset,
     pp_free_1: *mut *mut Fts5Colset) -> () {
@@ -447,6 +464,7 @@ extern "C" fn fts5_parse_set_colset(p_parse_1: *mut Fts5Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_set_colset(p_parse: *mut Fts5Parse,
     p_expr: *mut Fts5ExprNode, p_colset: *mut Fts5Colset) -> () {
@@ -463,6 +481,7 @@ pub extern "C" fn sqlite3_fts5_parse_set_colset(p_parse: *mut Fts5Parse,
     }
     unsafe { sqlite3_free(p_free as *mut ()) };
 }
+
 extern "C" fn fts5_expr_phrase_free(p_phrase_1: *mut Fts5ExprPhrase) -> () {
     if !(p_phrase_1).is_null() {
         let mut i: i32 = 0;
@@ -519,6 +538,7 @@ extern "C" fn fts5_expr_phrase_free(p_phrase_1: *mut Fts5ExprPhrase) -> () {
         unsafe { sqlite3_free(p_phrase_1 as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_nearset_free(p_near:
         *mut Fts5ExprNearset) -> () {
@@ -542,6 +562,7 @@ pub extern "C" fn sqlite3_fts5_parse_nearset_free(p_near:
         unsafe { sqlite3_free(p_near as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_node_free(p: *mut Fts5ExprNode) -> () {
     if !(p).is_null() {
@@ -564,6 +585,7 @@ pub extern "C" fn sqlite3_fts5_parse_node_free(p: *mut Fts5ExprNode) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_new(p_config: *mut Fts5Config,
     b_phrase_to_and: i32, i_col: i32, z_expr: *const i8,
@@ -658,6 +680,7 @@ pub extern "C" fn sqlite3_fts5_expr_new(p_config: *mut Fts5Config,
     } else { unsafe { sqlite3_free(s_parse.z_err as *mut ()) }; }
     return s_parse.rc;
 }
+
 extern "C" fn fts5_expr_count_char(z: &[i8]) -> i32 {
     let mut n_ret: i32 = 0;
     let mut ii: i32 = 0;
@@ -676,6 +699,7 @@ extern "C" fn fts5_expr_count_char(z: &[i8]) -> i32 {
     }
     return n_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_pattern(p_config: *mut Fts5Config,
     b_glob: i32, mut i_col: i32, z_text: *const i8, pp: *mut *mut Fts5Expr)
@@ -809,6 +833,7 @@ pub extern "C" fn sqlite3_fts5_expr_pattern(p_config: *mut Fts5Config,
     }
     return rc;
 }
+
 extern "C" fn fts5_expr_near_init_all(p_expr_1: &Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> i32 {
     let p_near: *const Fts5ExprNearset =
@@ -901,6 +926,7 @@ extern "C" fn fts5_expr_near_init_all(p_expr_1: &Fts5Expr,
     (*p_node_1).b_eof = 0;
     return 0;
 }
+
 extern "C" fn fts5_expr_set_eof(p_node_1: &mut Fts5ExprNode) -> () {
     let mut i: i32 = 0;
     (*p_node_1).b_eof = 1;
@@ -922,6 +948,7 @@ extern "C" fn fts5_expr_set_eof(p_node_1: &mut Fts5ExprNode) -> () {
         }
     }
 }
+
 extern "C" fn fts5_expr_synonym_rowid(p_term_1: *mut Fts5ExprTerm,
     b_desc_1: i32, pb_eof_1: *mut i32) -> i64 {
     let mut i_ret: i64 = 0 as i64;
@@ -970,6 +997,7 @@ extern "C" fn fts5_expr_synonym_rowid(p_term_1: *mut Fts5ExprTerm,
     if !(pb_eof_1).is_null() && b_ret_valid == 0 { unsafe { *pb_eof_1 = 1 }; }
     return i_ret;
 }
+
 extern "C" fn fts5_expr_synonym_advanceto(p_term_1: *mut Fts5ExprTerm,
     b_desc_1: i32, pi_last_1: &mut i64, p_rc_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -1005,6 +1033,7 @@ extern "C" fn fts5_expr_synonym_advanceto(p_term_1: *mut Fts5ExprTerm,
     }
     return b_eof;
 }
+
 extern "C" fn fts5_expr_advanceto(p_iter_1: *mut Fts5IndexIter, b_desc_1: i32,
     pi_last_1: &mut i64, p_rc_1: &mut i32, pb_eof_1: &mut i32) -> i32 {
     let i_last: i64 = *pi_last_1;
@@ -1033,6 +1062,7 @@ extern "C" fn fts5_expr_advanceto(p_iter_1: *mut Fts5IndexIter, b_desc_1: i32,
     *pi_last_1 = i_rowid;
     return 0;
 }
+
 extern "C" fn fts5_expr_synonym_list(p_term_1: *mut Fts5ExprTerm,
     i_rowid_1: i64, p_buf_1: *mut Fts5Buffer, pa: &mut *mut u8, pn: &mut i32)
     -> i32 {
@@ -1266,6 +1296,7 @@ extern "C" fn fts5_expr_synonym_list(p_term_1: *mut Fts5ExprTerm,
     }
     unreachable!();
 }
+
 extern "C" fn fts5_expr_phrase_is_match(p_node_1: &Fts5ExprNode,
     p_phrase_1: &mut Fts5ExprPhrase, pb_match_1: &mut i32) -> i32 {
     let mut writer: Fts5PoslistWriter = unsafe { core::mem::zeroed() };
@@ -1551,6 +1582,7 @@ extern "C" fn fts5_expr_phrase_is_match(p_node_1: &Fts5ExprNode,
     }
     unreachable!();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5NearTrimmer {
@@ -1558,6 +1590,7 @@ struct Fts5NearTrimmer {
     writer: Fts5PoslistWriter,
     p_out: *mut Fts5Buffer,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5LookaheadReader {
@@ -1567,6 +1600,7 @@ struct Fts5LookaheadReader {
     i_pos: i64,
     i_lookahead: i64,
 }
+
 extern "C" fn fts5_lookahead_reader_next(p: &mut Fts5LookaheadReader) -> i32 {
     (*p).i_pos = (*p).i_lookahead;
     if unsafe {
@@ -1577,6 +1611,7 @@ extern "C" fn fts5_lookahead_reader_next(p: &mut Fts5LookaheadReader) -> i32 {
     }
     return ((*p).i_pos == (1 as i64) << 62) as i32;
 }
+
 extern "C" fn fts5_lookahead_reader_init(a: *const u8, n: i32,
     p: *mut Fts5LookaheadReader) -> i32 {
     unsafe {
@@ -1588,6 +1623,7 @@ extern "C" fn fts5_lookahead_reader_init(a: *const u8, n: i32,
     fts5_lookahead_reader_next(unsafe { &mut *p });
     return fts5_lookahead_reader_next(unsafe { &mut *p });
 }
+
 extern "C" fn fts5_expr_near_is_match(p_rc_1: &mut i32,
     p_near_1: &Fts5ExprNearset) -> i32 {
     let mut a_static: [Fts5NearTrimmer; 4] = unsafe { core::mem::zeroed() };
@@ -1844,6 +1880,7 @@ extern "C" fn fts5_expr_near_is_match(p_rc_1: &mut i32,
     }
     unreachable!();
 }
+
 extern "C" fn fts5_expr_near_test(p_rc_1: *mut i32, p_expr_1: &Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let p_near: *mut Fts5ExprNearset = unsafe { (*p_node_1).p_near };
@@ -1937,6 +1974,7 @@ extern "C" fn fts5_expr_near_test(p_rc_1: *mut i32, p_expr_1: &Fts5Expr,
         return 0;
     }
 }
+
 extern "C" fn fts5_expr_node_test_string(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let p_near: *const Fts5ExprNearset =
@@ -2080,6 +2118,7 @@ extern "C" fn fts5_expr_node_test_string(p_expr_1: *mut Fts5Expr,
     } else { { let _ = 0; } };
     return rc;
 }
+
 extern "C" fn fts5_expr_node_test_term(p_expr_1: &Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> i32 {
     let p_phrase: *mut Fts5ExprPhrase =
@@ -2129,6 +2168,7 @@ extern "C" fn fts5_expr_node_test_term(p_expr_1: &Fts5Expr,
     (*p_node_1).b_nomatch = (unsafe { (*p_phrase).poslist.n } == 0) as i32;
     return 0;
 }
+
 extern "C" fn fts5_rowid_cmp(p_expr_1: &Fts5Expr, i_lhs_1: i64, i_rhs_1: i64)
     -> i32 {
     if !((*p_expr_1).b_desc == 0 || (*p_expr_1).b_desc == 1) as i32 as i64 !=
@@ -2148,6 +2188,7 @@ extern "C" fn fts5_rowid_cmp(p_expr_1: &Fts5Expr, i_lhs_1: i64, i_rhs_1: i64)
         return (i_lhs_1 < i_rhs_1) as i32;
     }
 }
+
 extern "C" fn fts5_expr_node_zero_poslist(p_node_1: &Fts5ExprNode) -> () {
     if (*p_node_1).e_type == 9 || (*p_node_1).e_type == 4 {
         let p_near: *const Fts5ExprNearset =
@@ -2189,6 +2230,7 @@ extern "C" fn fts5_expr_node_zero_poslist(p_node_1: &Fts5ExprNode) -> () {
         }
     }
 }
+
 extern "C" fn fts5_expr_node_test_and(p_expr_1: *mut Fts5Expr,
     p_and_1: *mut Fts5ExprNode) -> i32 {
     let mut i_child: i32 = 0;
@@ -2270,6 +2312,7 @@ extern "C" fn fts5_expr_node_test_and(p_expr_1: *mut Fts5Expr,
     unsafe { (*p_and_1).i_rowid = i_last };
     return 0;
 }
+
 extern "C" fn fts5_node_compare(p_expr_1: *mut Fts5Expr, p1: &Fts5ExprNode,
     p2: &Fts5ExprNode) -> i32 {
     if (*p2).b_eof != 0 { return -1; }
@@ -2277,6 +2320,7 @@ extern "C" fn fts5_node_compare(p_expr_1: *mut Fts5Expr, p1: &Fts5ExprNode,
     return fts5_rowid_cmp(unsafe { &*p_expr_1 }, (*p1).i_rowid,
             (*p2).i_rowid);
 }
+
 extern "C" fn fts5_expr_node_test_or(p_expr_1: *mut Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> () {
     let mut p_next: *mut Fts5ExprNode =
@@ -2311,6 +2355,7 @@ extern "C" fn fts5_expr_node_test_or(p_expr_1: *mut Fts5Expr,
     (*p_node_1).b_eof = unsafe { (*p_next).b_eof };
     (*p_node_1).b_nomatch = unsafe { (*p_next).b_nomatch };
 }
+
 extern "C" fn fts5_expr_node_test_not(p_expr_1: *mut Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> i32 {
     let mut rc: i32 = 0;
@@ -2363,6 +2408,7 @@ extern "C" fn fts5_expr_node_test_not(p_expr_1: *mut Fts5Expr,
     }
     return rc;
 }
+
 extern "C" fn fts5_expr_node_test(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let mut rc: i32 = 0;
@@ -2499,6 +2545,7 @@ extern "C" fn fts5_expr_node_test(p_expr_1: *mut Fts5Expr,
     }
     return rc;
 }
+
 extern "C" fn fts5_expr_node_first(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let mut rc: i32 = 0;
@@ -2594,6 +2641,7 @@ extern "C" fn fts5_expr_node_first(p_expr_1: *mut Fts5Expr,
     if rc == 0 { rc = fts5_expr_node_test(p_expr_1, p_node_1); }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_first(p: *mut Fts5Expr,
     p_idx: *mut Fts5Index, i_first: i64, i_last: i64, b_desc: i32) -> i32 {
@@ -2629,6 +2677,7 @@ pub extern "C" fn sqlite3_fts5_expr_first(p: *mut Fts5Expr,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_next(p: *mut Fts5Expr, i_last: i64)
     -> i32 {
@@ -2669,14 +2718,17 @@ pub extern "C" fn sqlite3_fts5_expr_next(p: *mut Fts5Expr, i_last: i64)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_eof(p: &Fts5Expr) -> i32 {
     return unsafe { (*(*p).p_root).b_eof };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_rowid(p: &Fts5Expr) -> i64 {
     return unsafe { (*(*p).p_root).i_rowid };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_free(p: *mut Fts5Expr) -> () {
     if !(p).is_null() {
@@ -2685,6 +2737,7 @@ pub extern "C" fn sqlite3_fts5_expr_free(p: *mut Fts5Expr) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn fts5_expr_node_next_term(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let mut rc: i32 = 0;
@@ -2718,6 +2771,7 @@ extern "C" fn fts5_expr_node_next_term(p_expr_1: *mut Fts5Expr,
     }
     return rc;
 }
+
 extern "C" fn fts5_expr_node_next_string(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let p_term: *mut Fts5ExprTerm =
@@ -2800,6 +2854,7 @@ extern "C" fn fts5_expr_node_next_string(p_expr_1: *mut Fts5Expr,
     }
     return rc;
 }
+
 extern "C" fn fts5_expr_node_next_or(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let mut i: i32 = 0;
@@ -2849,6 +2904,7 @@ extern "C" fn fts5_expr_node_next_or(p_expr_1: *mut Fts5Expr,
     fts5_expr_node_test_or(p_expr_1, unsafe { &mut *p_node_1 });
     return 0;
 }
+
 extern "C" fn fts5_expr_node_next_and(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let mut rc: i32 =
@@ -2869,6 +2925,7 @@ extern "C" fn fts5_expr_node_next_and(p_expr_1: *mut Fts5Expr,
     } else { unsafe { (*p_node_1).b_nomatch = 0 }; }
     return rc;
 }
+
 extern "C" fn fts5_expr_node_next_not(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let mut rc: i32 =
@@ -2890,6 +2947,7 @@ extern "C" fn fts5_expr_node_next_not(p_expr_1: *mut Fts5Expr,
     if rc != 0 { unsafe { (*p_node_1).b_nomatch = 0 }; }
     return rc;
 }
+
 extern "C" fn fts5_expr_assign_x_next(p_node_1: &mut Fts5ExprNode) -> () {
     '__s46:
         {
@@ -3002,6 +3060,7 @@ extern "C" fn fts5_expr_assign_x_next(p_node_1: &mut Fts5ExprNode) -> () {
         }
     }
 }
+
 extern "C" fn parse_grow_phrase_array(p_parse_1: &mut Fts5Parse) -> i32 {
     if (*p_parse_1).n_phrase % 8 == 0 {
         let n_byte: Sqlite3Int64 =
@@ -3018,11 +3077,13 @@ extern "C" fn parse_grow_phrase_array(p_parse_1: &mut Fts5Parse) -> i32 {
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_phrase_free(p_phrase:
         *mut Fts5ExprPhrase) -> () {
     fts5_expr_phrase_free(p_phrase);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_nearset(p_parse: *mut Fts5Parse,
     p_near: *mut Fts5ExprNearset, mut p_phrase: *mut Fts5ExprPhrase)
@@ -3168,6 +3229,7 @@ pub extern "C" fn sqlite3_fts5_parse_nearset(p_parse: *mut Fts5Parse,
     }
     return p_ret;
 }
+
 extern "C" fn fts5_parse_phrase_to_and(p_parse_1: *mut Fts5Parse,
     p_near_1: *mut Fts5ExprNearset) -> *mut Fts5ExprNode {
     let n_term: i32 =
@@ -3292,6 +3354,7 @@ extern "C" fn fts5_parse_phrase_to_and(p_parse_1: *mut Fts5Parse,
     }
     return p_ret;
 }
+
 extern "C" fn fts5_expr_add_children(p: &mut Fts5ExprNode,
     p_sub_1: *mut Fts5ExprNode) -> () {
     let mut ii: i32 = (*p).n_child;
@@ -3347,6 +3410,7 @@ extern "C" fn fts5_expr_add_children(p: &mut Fts5ExprNode,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_node(p_parse: *mut Fts5Parse,
     e_type: i32, mut p_left: *mut Fts5ExprNode,
@@ -3507,6 +3571,7 @@ pub extern "C" fn sqlite3_fts5_parse_node(p_parse: *mut Fts5Parse,
     }
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_and(pp1: &mut *mut Fts5Expr,
     p2: *mut Fts5Expr) -> i32 {
@@ -3570,6 +3635,7 @@ pub extern "C" fn sqlite3_fts5_expr_and(pp1: &mut *mut Fts5Expr,
     } else if !(p2).is_null() { *pp1 = p2; }
     return s_parse.rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_init(p_global: *mut Fts5Global,
     db: *mut Sqlite3) -> i32 {
@@ -3579,6 +3645,7 @@ pub extern "C" fn sqlite3_fts5_expr_init(p_global: *mut Fts5Global,
     { let _ = sqlite3_fts5_parser_fallback; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_count(p_expr: *mut Fts5Expr)
     -> i32 {
@@ -3586,6 +3653,7 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_count(p_expr: *mut Fts5Expr)
             unsafe { (*p_expr).n_phrase }
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_size(p_expr: &Fts5Expr,
     i_phrase: i32) -> i32 {
@@ -3596,6 +3664,7 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_size(p_expr: &Fts5Expr,
                         }).n_term
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_poslist(p_expr: &Fts5Expr, i_phrase: i32,
     pa: &mut *const u8) -> i32 {
@@ -3613,6 +3682,7 @@ pub extern "C" fn sqlite3_fts5_expr_poslist(p_expr: &Fts5Expr, i_phrase: i32,
     } else { *pa = core::ptr::null(); n_ret = 0; }
     return n_ret;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5PoslistPopulator {
@@ -3620,6 +3690,7 @@ struct Fts5PoslistPopulator {
     b_ok: i32,
     b_miss: i32,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_clear_poslists(p_expr: &Fts5Expr,
     b_live: i32) -> *mut Fts5PoslistPopulator {
@@ -3681,6 +3752,7 @@ pub extern "C" fn sqlite3_fts5_expr_clear_poslists(p_expr: &Fts5Expr,
     }
     return p_ret;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprCtx {
@@ -3688,6 +3760,7 @@ struct Fts5ExprCtx {
     a_populator: *mut Fts5PoslistPopulator,
     i_off: i64,
 }
+
 extern "C" fn fts5_expr_colset_test(p_colset_1: &Fts5Colset, i_col_1: i32)
     -> i32 {
     let mut i: i32 = 0;
@@ -3709,6 +3782,7 @@ extern "C" fn fts5_expr_colset_test(p_colset_1: &Fts5Colset, i_col_1: i32)
     }
     return 0;
 }
+
 extern "C" fn fts5_query_term(p_token_1: &[i8]) -> i32 {
     let mut ii: i32 = 0;
     {
@@ -3723,6 +3797,7 @@ extern "C" fn fts5_query_term(p_token_1: &[i8]) -> i32 {
     }
     return ii;
 }
+
 extern "C" fn fts5_expr_populate_poslists_cb(p_ctx_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_unused1_1: i32, i_unused2_1: i32)
     -> i32 {
@@ -3824,6 +3899,7 @@ extern "C" fn fts5_expr_populate_poslists_cb(p_ctx_1: *mut (), tflags: i32,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_populate_poslists(p_config:
         *mut Fts5Config, p_expr: *mut Fts5Expr,
@@ -3865,6 +3941,7 @@ pub extern "C" fn sqlite3_fts5_expr_populate_poslists(p_config:
                 Some(fts5_expr_populate_poslists_cb))
         };
 }
+
 extern "C" fn fts5_expr_clear_poslists(p_node_1: &Fts5ExprNode) -> () {
     if (*p_node_1).e_type == 4 || (*p_node_1).e_type == 9 {
         unsafe {
@@ -3893,6 +3970,7 @@ extern "C" fn fts5_expr_clear_poslists(p_node_1: &Fts5ExprNode) -> () {
         }
     }
 }
+
 extern "C" fn fts5_expr_check_poslists(p_node_1: *mut Fts5ExprNode,
     i_rowid_1: i64) -> i32 {
     unsafe { (*p_node_1).i_rowid = i_rowid_1 };
@@ -4270,11 +4348,13 @@ extern "C" fn fts5_expr_check_poslists(p_node_1: *mut Fts5ExprNode,
     }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_check_poslists(p_expr: &Fts5Expr,
     i_rowid: i64) -> () {
     fts5_expr_check_poslists((*p_expr).p_root, i_rowid);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TokenCtx {
@@ -4282,6 +4362,7 @@ struct TokenCtx {
     p_config: *mut Fts5Config,
     rc: i32,
 }
+
 extern "C" fn fts5_parse_tokenize(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -4420,6 +4501,7 @@ extern "C" fn fts5_parse_tokenize(p_context_1: *mut (), tflags: i32,
     unsafe { (*p_ctx).rc = rc };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
     i_phrase: i32, pp_new: &mut *mut Fts5Expr) -> i32 {
@@ -4647,6 +4729,7 @@ pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
     *pp_new = p_new;
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_collist(p_expr: &Fts5Expr,
     i_phrase: i32, pp_collist: *mut *const u8, pn_collist: *mut i32) -> i32 {
@@ -4717,6 +4800,7 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_collist(p_expr: &Fts5Expr,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_query_token(p_expr: &Fts5Expr,
     i_phrase: i32, i_token: i32, pp_out: &mut *const i8, pn_out: &mut i32)
@@ -4737,6 +4821,7 @@ pub extern "C" fn sqlite3_fts5_expr_query_token(p_expr: &Fts5Expr,
         };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_inst_token(p_expr: &Fts5Expr,
     i_rowid: i64, i_phrase: i32, i_col: i32, i_off: i32, i_token: i32,
@@ -4767,6 +4852,7 @@ pub extern "C" fn sqlite3_fts5_expr_inst_token(p_expr: &Fts5Expr,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_clear_tokens(p_expr: &Fts5Expr) -> () {
     let mut ii: i32 = 0;
@@ -4804,6 +4890,7 @@ pub extern "C" fn sqlite3_fts5_expr_clear_tokens(p_expr: &Fts5Expr) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_implicit_and(p_parse: *mut Fts5Parse,
     p_left: *mut Fts5ExprNode, p_right: *mut Fts5ExprNode)
@@ -4958,6 +5045,7 @@ pub extern "C" fn sqlite3_fts5_parse_implicit_and(p_parse: *mut Fts5Parse,
     }
     return p_ret;
 }
+
 extern "C" fn fts5_parse_string_from_token(p_token_1: &Fts5Token,
     pz: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -4967,6 +5055,7 @@ extern "C" fn fts5_parse_string_from_token(p_token_1: &Fts5Token,
         };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_term(p_parse: *mut Fts5Parse,
     p_append: *mut Fts5ExprPhrase, p_token: *mut Fts5Token, b_prefix: i32)
@@ -5044,6 +5133,7 @@ pub extern "C" fn sqlite3_fts5_parse_term(p_parse: *mut Fts5Parse,
     }
     return s_ctx.p_phrase;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_set_caret(p_phrase: *mut Fts5ExprPhrase)
     -> () {
@@ -5054,6 +5144,7 @@ pub extern "C" fn sqlite3_fts5_parse_set_caret(p_phrase: *mut Fts5ExprPhrase)
         };
     }
 }
+
 extern "C" fn fts5_parse_colset(p_parse_1: &mut Fts5Parse, p: *mut Fts5Colset,
     i_col_1: i32) -> *mut Fts5Colset {
     let n_col: i32 = if !(p).is_null() { unsafe { (*p).n_col } } else { 0 };
@@ -5147,6 +5238,7 @@ extern "C" fn fts5_parse_colset(p_parse_1: &mut Fts5Parse, p: *mut Fts5Colset,
     }
     return p_new;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_colset(p_parse: *mut Fts5Parse,
     p_colset: *mut Fts5Colset, p: &Fts5Token) -> *mut Fts5Colset {
@@ -5203,6 +5295,7 @@ pub extern "C" fn sqlite3_fts5_parse_colset(p_parse: *mut Fts5Parse,
     }
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_set_distance(p_parse: *mut Fts5Parse,
     p_near: *mut Fts5ExprNearset, p: &Fts5Token) -> () {
@@ -5238,6 +5331,7 @@ pub extern "C" fn sqlite3_fts5_parse_set_distance(p_parse: *mut Fts5Parse,
         unsafe { (*p_near).n_near = n_near };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_colset_invert(p_parse: &mut Fts5Parse,
     p: *mut Fts5Colset) -> *mut Fts5Colset {
@@ -5283,6 +5377,7 @@ pub extern "C" fn sqlite3_fts5_parse_colset_invert(p_parse: &mut Fts5Parse,
     unsafe { sqlite3_free(p as *mut ()) };
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_finished(p_parse: &mut Fts5Parse,
     p: *mut Fts5ExprNode) -> () {
@@ -5295,6 +5390,7 @@ pub extern "C" fn sqlite3_fts5_parse_finished(p_parse: &mut Fts5Parse,
     } else { { let _ = 0; } };
     (*p_parse).p_expr = p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_near(p_parse: *mut Fts5Parse,
     p_tok: &Fts5Token) -> () {
@@ -5310,6 +5406,7 @@ pub extern "C" fn sqlite3_fts5_parse_near(p_parse: *mut Fts5Parse,
         };
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -6410,9 +6507,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

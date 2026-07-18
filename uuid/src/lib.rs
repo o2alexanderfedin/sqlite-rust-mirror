@@ -1,8 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 extern "C" fn sqlite3_uuid_hex_to_int(mut h: i32) -> u8 {
     if !(h >= '0' as i32 && h <= '9' as i32 ||
                                 h >= 'a' as i32 && h <= 'f' as i32 ||
@@ -17,6 +19,7 @@ extern "C" fn sqlite3_uuid_hex_to_int(mut h: i32) -> u8 {
     h += 9 * (1 & h >> 6);
     return (h & 15) as u8;
 }
+
 extern "C" fn sqlite3_uuid_blob_to_str(a_blob_1: *const u8,
     mut z_str_1: *mut u8) -> () {
     let mut i: i32 = 0;
@@ -61,6 +64,7 @@ extern "C" fn sqlite3_uuid_blob_to_str(a_blob_1: *const u8,
     }
     unsafe { *z_str_1 = 0 as u8 };
 }
+
 extern "C" fn sqlite3_uuid_str_to_blob(mut z_str_1: *const u8,
     a_blob_1: *mut u8) -> i32 {
     let mut i: i32 = 0;
@@ -123,6 +127,7 @@ extern "C" fn sqlite3_uuid_str_to_blob(mut z_str_1: *const u8,
     }
     return (unsafe { *z_str_1.offset(0 as isize) } as i32 != 0) as i32;
 }
+
 extern "C" fn sqlite3_uuid_input_to_blob(p_in_1: *mut Sqlite3Value,
     p_buf_1: *mut u8) -> *const u8 {
     '__s2:
@@ -157,6 +162,7 @@ extern "C" fn sqlite3_uuid_input_to_blob(p_in_1: *mut Sqlite3Value,
         }
     }
 }
+
 extern "C" fn sqlite3_uuid_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -181,6 +187,7 @@ extern "C" fn sqlite3_uuid_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn sqlite3_uuid_str_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -202,6 +209,7 @@ extern "C" fn sqlite3_uuid_str_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn sqlite3_uuid_blob_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -220,6 +228,7 @@ extern "C" fn sqlite3_uuid_blob_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uuid_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -252,10 +261,12 @@ pub extern "C" fn sqlite3_uuid_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 static z_digits: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

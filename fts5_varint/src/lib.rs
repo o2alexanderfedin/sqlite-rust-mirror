@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -7,6 +8,7 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     -> u8 {
@@ -166,6 +168,7 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     *v = (s as u64) << 32 | a as u64;
     return 9 as u8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_get_varint32(mut p: *const u8, v: &mut u32)
     -> i32 {
@@ -221,6 +224,7 @@ pub extern "C" fn sqlite3_fts5_get_varint32(mut p: *const u8, v: &mut u32)
         return n as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_get_varint_len(i_val: u32) -> i32 {
     if !(i_val >= (1 << 7) as u32) as i32 as i64 != 0 {
@@ -235,6 +239,7 @@ pub extern "C" fn sqlite3_fts5_get_varint_len(i_val: u32) -> i32 {
     if i_val < (1 << 28) as u32 { return 4; }
     return 5;
 }
+
 extern "C" fn fts5_put_varint64(p: *mut u8, mut v: u64) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -293,6 +298,7 @@ extern "C" fn fts5_put_varint64(p: *mut u8, mut v: u64) -> i32 {
     }
     return n;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_put_varint(p: *mut u8, v: u64) -> i32 {
     if v <= 127 as u64 {
@@ -308,6 +314,7 @@ pub extern "C" fn sqlite3_fts5_put_varint(p: *mut u8, v: u64) -> i32 {
     }
     return fts5_put_varint64(p, v);
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

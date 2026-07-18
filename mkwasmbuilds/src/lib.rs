@@ -1,13 +1,23 @@
 const F_ESM: i32 = 1;
+
 const F_BUNDLER_FRIENDLY: i32 = 2;
+
 const F_UNSUPPORTED: i32 = 4;
+
 const F_NOT_IN_ALL: i32 = 8;
+
 const F_64BIT: i32 = 16;
+
 const F_NODEJS: i32 = 32;
+
 const F_WASMFS: i32 = 64;
+
 const CP_JS: i32 = 1073741824;
+
 const CP_WASM: i32 = -2147483648;
+
 const CP_ALL: i32 = -1073741824;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuildDef {
@@ -22,6 +32,7 @@ struct BuildDef {
     z_if_cond: *const i8,
     flags: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuildDefs {
@@ -37,6 +48,7 @@ struct BuildDefs {
     node64: BuildDef,
     wasmfs: BuildDef,
 }
+
 static mut o_build_defs: BuildDefs =
     BuildDefs {
         vanilla: BuildDef {
@@ -183,6 +195,7 @@ static mut o_build_defs: BuildDefs =
             flags: CP_ALL | F_UNSUPPORTED | F_WASMFS | F_ESM,
         },
     };
+
 extern "C" fn mk_prologue() -> () {
     let a_required_vars: [*const i8; 7] =
         [c"dir.top".as_ptr() as *const i8, c"dir.api".as_ptr() as *const i8,
@@ -262,11 +275,13 @@ extern "C" fn mk_prologue() -> () {
     }
     unsafe { puts(c"more: all".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn build_def_jsext(p_b_1: &BuildDef) -> *const i8 {
     return if F_ESM & (*p_b_1).flags as i32 != 0 {
                 c".mjs".as_ptr() as *mut i8
             } else { c".js".as_ptr() as *mut i8 } as *const i8;
 }
+
 extern "C" fn build_def_basename(p_b_1: &BuildDef) -> *const i8 {
     unsafe {
         return if !((*p_b_1).z_base_name).is_null() {
@@ -274,6 +289,7 @@ extern "C" fn build_def_basename(p_b_1: &BuildDef) -> *const i8 {
             } else { o_build_defs.vanilla.z_base_name };
     }
 }
+
 extern "C" fn mk_pre_post(z_build_name_1: *const i8, p_b_1: *const BuildDef)
     -> () {
     let z_base_name: *const i8 =
@@ -384,12 +400,14 @@ extern "C" fn mk_pre_post(z_build_name_1: *const i8, p_b_1: *const BuildDef)
                 as *mut i8)
     };
 }
+
 extern "C" fn emit_compile_start(z_build_name_1: *const i8) -> () {
     unsafe {
         printf(c"\t@$(call b.mkdir@); $(call b.echo,%s,$(emo.compile) building ...)\n".as_ptr()
                     as *mut i8 as *const i8, z_build_name_1)
     };
 }
+
 extern "C" fn emit_logtag(z_build_name_1: *const i8) -> () {
     unsafe {
         printf(c"logtag.%s ?= [$(emo.b.%s)$(if $@, $@,)]:\n".as_ptr() as
@@ -400,6 +418,7 @@ extern "C" fn emit_logtag(z_build_name_1: *const i8) -> () {
                     *mut i8 as *const i8, z_build_name_1, z_build_name_1)
     };
 }
+
 extern "C" fn emit_api_js(z_build_name_1: *const i8) -> () {
     unsafe {
         printf(c"sqlite3-api.%s.js = $(dir.tmp)/sqlite3-api.%s.js\n".as_ptr()
@@ -419,6 +438,7 @@ extern "C" fn emit_api_js(z_build_name_1: *const i8) -> () {
                     as *mut i8 as *const i8, z_build_name_1)
     };
 }
+
 extern "C" fn mk_lib_mode(z_build_name_1: *const i8, p_b_1: *const BuildDef)
     -> () {
     unsafe {
@@ -662,6 +682,7 @@ extern "C" fn mk_lib_mode(z_build_name_1: *const i8, p_b_1: *const BuildDef)
         };
     }
 }
+
 extern "C" fn emit_gz(z_build_name_1: *const i8, z_file_ext_1: *const i8)
     -> () {
     unsafe {
@@ -670,6 +691,7 @@ extern "C" fn emit_gz(z_build_name_1: *const i8, z_file_ext_1: *const i8)
             z_build_name_1, z_file_ext_1, z_build_name_1)
     };
 }
+
 extern "C" fn mk_fiddle() -> () {
     {
         let mut i: i32 = 0;
@@ -784,6 +806,7 @@ extern "C" fn mk_fiddle() -> () {
         }
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     -> Result<(), i32> {
     unsafe {
@@ -918,12 +941,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
         return Err(rc);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *const i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -941,9 +966,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod where_int_h;
 pub(crate) use crate::where_int_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl WhereInfo {
     fn b_deferred_seek(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -428,6 +437,7 @@ impl WhereInfo {
             (self._bitfield_1 & !(0x1u32 << 5u32)) | ((val & 0x1u32) << 5u32);
     }
 }
+
 impl WhereLoopU0S1 {
     fn need_free(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -451,6 +461,7 @@ impl WhereLoopU0S1 {
             (self._bitfield_1 & !(0x1u32 << 2u32)) | ((val & 0x1u32) << 2u32);
     }
 }
+
 extern "C" fn explain_index_column_name(p_idx_1: &Index, mut i: i32)
     -> *const i8 {
     i = unsafe { *(*p_idx_1).ai_column.offset(i as isize) } as i32;
@@ -462,6 +473,7 @@ extern "C" fn explain_index_column_name(p_idx_1: &Index, mut i: i32)
                         }).z_cn_name
             } as *const i8;
 }
+
 extern "C" fn explain_append_term(p_str_1: *mut StrAccum, p_idx_1: *mut Index,
     n_term_1: i32, i_term_1: i32, b_and_1: i32, z_op_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -539,6 +551,7 @@ extern "C" fn explain_append_term(p_str_1: *mut StrAccum, p_idx_1: *mut Index,
         };
     }
 }
+
 extern "C" fn explain_index_range(p_str_1: *mut StrAccum,
     p_loop_1: &WhereLoop) -> () {
     unsafe {
@@ -597,6 +610,7 @@ extern "C" fn explain_index_range(p_str_1: *mut StrAccum,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_add_explain_text(p_parse: *mut Parse,
     addr: i32, p_tab_list: &mut SrcList, p_level: &WhereLevel,
@@ -740,6 +754,7 @@ pub extern "C" fn sqlite3_where_add_explain_text(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_explain_one_scan(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_level: *mut WhereLevel, wctrl_flags: u16)
@@ -767,6 +782,7 @@ pub extern "C" fn sqlite3_where_explain_one_scan(p_parse: *mut Parse,
     }
     return ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_explain_bloom_filter(p_parse: &Parse,
     p_w_info: &WhereInfo, p_level: &WhereLevel) -> i32 {
@@ -857,6 +873,7 @@ pub extern "C" fn sqlite3_where_explain_bloom_filter(p_parse: &Parse,
         return ret;
     }
 }
+
 extern "C" fn disable_term(p_level_1: &WhereLevel,
     mut p_term_1: *mut WhereTerm) -> () {
     let mut n_loop: i32 = 0;
@@ -890,6 +907,7 @@ extern "C" fn disable_term(p_level_1: &WhereLevel,
         { let __p = &mut n_loop; let __t = *__p; *__p += 1; __t };
     }
 }
+
 extern "C" fn adjust_order_by_col(p_order_by_1: *mut ExprList,
     p_e_list_1: &ExprList) -> () {
     unsafe {
@@ -942,6 +960,7 @@ extern "C" fn adjust_order_by_col(p_order_by_1: *mut ExprList,
         }
     }
 }
+
 extern "C" fn remove_unindexable_in_clause_terms(p_parse_1: *mut Parse,
     i_eq_1: i32, p_loop_1: &WhereLoop, p_x_1: *mut Expr) -> *mut Expr {
     unsafe {
@@ -1095,6 +1114,7 @@ extern "C" fn remove_unindexable_in_clause_terms(p_parse_1: *mut Parse,
         return p_new;
     }
 }
+
 extern "C" fn code_in_term(p_parse_1: *mut Parse, p_term_1: *mut WhereTerm,
     p_level_1: *mut WhereLevel, i_eq_1: i32, mut b_rev_1: i32,
     i_target_1: i32) -> () {
@@ -1303,6 +1323,7 @@ extern "C" fn code_in_term(p_parse_1: *mut Parse, p_term_1: *mut WhereTerm,
         };
     }
 }
+
 extern "C" fn code_equality_term(p_parse_1: *mut Parse,
     p_term_1: *mut WhereTerm, p_level_1: *mut WhereLevel, i_eq_1: i32,
     b_rev_1: i32, i_target_1: i32) -> i32 {
@@ -1335,6 +1356,7 @@ extern "C" fn code_equality_term(p_parse_1: *mut Parse,
     }
     return i_reg;
 }
+
 extern "C" fn code_expr_or_vector(p_parse_1: *mut Parse, p: *mut Expr,
     i_reg_1: i32, n_reg_1: i32) -> () {
     unsafe {
@@ -1379,6 +1401,7 @@ extern "C" fn code_expr_or_vector(p_parse_1: *mut Parse, p: *mut Expr,
         }
     }
 }
+
 extern "C" fn code_all_equality_terms(p_parse_1: *mut Parse,
     p_level_1: *mut WhereLevel, b_rev_1: i32, n_extra_reg_1: i32,
     pz_aff_1: &mut *mut i8) -> i32 {
@@ -1514,6 +1537,7 @@ extern "C" fn code_all_equality_terms(p_parse_1: *mut Parse,
         return reg_base;
     }
 }
+
 extern "C" fn code_apply_affinity(p_parse_1: &Parse, mut base: i32,
     mut n: i32, mut z_aff_1: *const i8) -> () {
     let v: *mut Vdbe = (*p_parse_1).p_vdbe;
@@ -1539,6 +1563,7 @@ extern "C" fn code_apply_affinity(p_parse_1: &Parse, mut base: i32,
         };
     }
 }
+
 extern "C" fn filter_pull_down(p_parse_1: *mut Parse,
     p_w_info_1: &mut WhereInfo, mut i_level_1: i32, addr_nxt_1: i32,
     not_ready_1: Bitmask) -> () {
@@ -1606,6 +1631,7 @@ extern "C" fn filter_pull_down(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn where_like_optimization_string_fixup(v: *mut Vdbe,
     p_level_1: &WhereLevel, p_term_1: &WhereTerm) -> () {
     if (*p_term_1).wt_flags as i32 & 256 != 0 {
@@ -1621,6 +1647,7 @@ extern "C" fn where_like_optimization_string_fixup(v: *mut Vdbe,
         };
     }
 }
+
 extern "C" fn update_range_affinity_str(p_right_1: *mut Expr,
     mut z_aff_1: &mut [i8]) -> () {
     let mut i: i32 = 0;
@@ -1648,6 +1675,7 @@ extern "C" fn update_range_affinity_str(p_right_1: *mut Expr,
         }
     }
 }
+
 extern "C" fn code_deferred_seek(p_w_info_1: &mut WhereInfo, p_idx_1: &Index,
     i_cur_1: i32, i_idx_cur_1: i32) -> () {
     let p_parse: *const Parse = (*p_w_info_1).p_parse as *const Parse;
@@ -1701,6 +1729,7 @@ extern "C" fn code_deferred_seek(p_w_info_1: &mut WhereInfo, p_idx_1: &Index,
         }
     }
 }
+
 extern "C" fn where_apply_partial_index_constraints(mut p_truth_1:
         *const Expr, i_tab_cur_1: i32, p_wc_1: *mut WhereClause) -> () {
     let mut i: i32 = 0;
@@ -1741,6 +1770,7 @@ extern "C" fn where_apply_partial_index_constraints(mut p_truth_1:
         }
     }
 }
+
 extern "C" fn where_loop_is_one_row(p_loop_1: &WhereLoop) -> i32 {
     unsafe {
         if unsafe { (*(*p_loop_1).u.btree.p_index).on_error } != 0 &&
@@ -1770,6 +1800,7 @@ extern "C" fn where_loop_is_one_row(p_loop_1: &WhereLoop) -> i32 {
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_code_one_loop_start(p_parse: *mut Parse,
     v: *mut Vdbe, p_w_info: *mut WhereInfo, i_level: i32,
@@ -4851,6 +4882,7 @@ pub extern "C" fn sqlite3_where_code_one_loop_start(p_parse: *mut Parse,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_right_join_loop(p_w_info: &mut WhereInfo,
     i_level: i32, p_level: &WhereLevel) -> () {
@@ -5076,18 +5108,24 @@ pub extern "C" fn sqlite3_where_right_join_loop(p_w_info: &mut WhereInfo,
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union Sqlite3WhereRightJoinLoopU0N32sqlite3WhereRightJoinLoopU0 {
     s_src: SrcList,
     from_space: [u8; 80],
 }
+
 static a_start_op: [u8; 8] =
     [0 as u8, 0 as u8, 36 as u8, 32 as u8, 24 as u8, 21 as u8, 23 as u8,
             22 as u8];
+
 static a_end_op: [u8; 4] = [46 as u8, 42 as u8, 41 as u8, 45 as u8];
+
 static a_step: [u8; 2] = [40 as u8, 39 as u8];
+
 static a_start: [u8; 2] = [36 as u8, 32 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -7907,41 +7945,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

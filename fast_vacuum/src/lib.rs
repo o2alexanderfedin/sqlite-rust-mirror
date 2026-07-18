@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 extern "C" fn vacuum_finalize(p_stmt_1: *mut Sqlite3Stmt) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
@@ -15,6 +17,7 @@ extern "C" fn vacuum_finalize(p_stmt_1: *mut Sqlite3Stmt) -> () {
         }
     }
 }
+
 extern "C" fn exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -39,6 +42,7 @@ extern "C" fn exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
         vacuum_finalize(p_stmt);
     }
 }
+
 extern "C" fn exec_exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -65,6 +69,7 @@ extern "C" fn exec_exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
         vacuum_finalize(p_stmt);
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -162,12 +167,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -949,9 +956,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

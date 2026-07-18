@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DState {
@@ -13,6 +16,7 @@ struct DState {
     x_callback: Option<unsafe extern "C" fn(*const i8, *mut ()) -> i32>,
     p_arg: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DText {
@@ -20,13 +24,16 @@ struct DText {
     n: Sqlite3Int64,
     n_alloc: Sqlite3Int64,
 }
+
 extern "C" fn init_text(p: *mut DText) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<DText>() as u64) };
 }
+
 extern "C" fn free_text(p: *mut DText) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     init_text(p);
 }
+
 extern "C" fn append_text(p: *mut DText, z_append_1: *const i8, quote: i8)
     -> () {
     let mut len: i32 = 0;
@@ -135,6 +142,7 @@ extern "C" fn append_text(p: *mut DText, z_append_1: *const i8, quote: i8)
         };
     }
 }
+
 extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
     let mut i: i32 = 0;
     if (unsafe {
@@ -168,6 +176,7 @@ extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
                 '\"' as i32
             } else { 0 } as i8;
 }
+
 extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
     let mut i: i32 = 0;
     {
@@ -188,6 +197,7 @@ extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
     }
     unsafe { sqlite3_free(az_col_1 as *mut ()) };
 }
+
 extern "C" fn table_column_list(p: &mut DState, z_tab_1: *const i8)
     -> *mut *mut i8 {
     unsafe {
@@ -453,6 +463,7 @@ extern "C" fn table_column_list(p: &mut DState, z_tab_1: *const i8)
         unreachable!();
     }
 }
+
 unsafe extern "C" fn output_formatted(p: &DState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -463,6 +474,7 @@ unsafe extern "C" fn output_formatted(p: &DState, z_format_1: *const i8,
     unsafe { (*p).x_callback.unwrap()(z as *const i8, (*p).p_arg) };
     unsafe { sqlite3_free(z as *mut ()) };
 }
+
 extern "C" fn unused_string(z: *const i8, z_a_1: *const i8, z_b_1: *const i8,
     z_buf_1: *mut i8) -> *const i8 {
     let mut i: u32 = 0 as u32;
@@ -484,6 +496,7 @@ extern "C" fn unused_string(z: *const i8, z_a_1: *const i8, z_b_1: *const i8,
     }
     return z_buf_1 as *const i8;
 }
+
 extern "C" fn output_quoted_escaped_string(p: *mut DState, mut z: *const i8)
     -> () {
     let mut i: i32 = 0;
@@ -635,6 +648,7 @@ extern "C" fn output_quoted_escaped_string(p: *mut DState, mut z: *const i8)
         }
     }
 }
+
 extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az_col_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -1245,6 +1259,7 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     }
     return 0;
 }
+
 unsafe extern "C" fn output_sql_from_query(p: *mut DState,
     z_select_1: *const i8, mut __va0: ...) -> () {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1365,6 +1380,7 @@ unsafe extern "C" fn output_sql_from_query(p: *mut DState,
         }
     }
 }
+
 unsafe extern "C" fn run_schema_dump_query(p: *mut DState,
     z_query_1: *const i8, mut __va0: ...) -> () {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -1394,6 +1410,7 @@ unsafe extern "C" fn run_schema_dump_query(p: *mut DState,
         z_err = core::ptr::null_mut();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_dump(db: *mut Sqlite3, z_schema_1: *const i8,
     z_table_1: *const i8,
@@ -1463,9 +1480,11 @@ pub extern "C" fn sqlite3_db_dump(db: *mut Sqlite3, z_schema_1: *const i8,
     };
     return x.rc;
 }
+
 static mut az_rowid: [*mut i8; 3] =
     [c"rowid".as_ptr() as *mut i8, c"_rowid_".as_ptr() as *mut i8,
             c"oid".as_ptr() as *mut i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

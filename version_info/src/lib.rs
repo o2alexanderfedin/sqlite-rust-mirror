@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 extern "C" fn usage(z_app_name_1: *const i8) -> () {
     unsafe {
         puts(c"Emits version info about the sqlite3 it is built against.".as_ptr()
@@ -39,6 +41,7 @@ extern "C" fn usage(z_app_name_1: *const i8) -> () {
                     as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     -> Result<(), i32> {
     let mut f_json: i32 = 0;
@@ -169,12 +172,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     }
     return Ok(());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *const i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

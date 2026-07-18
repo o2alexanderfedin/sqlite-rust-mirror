@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -7,7 +8,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5VocabTable {
@@ -19,6 +22,7 @@ struct Fts5VocabTable {
     e_type: i32,
     b_busy: u32,
 }
+
 extern "C" fn fts5_vocab_table_type(z_type_1: *const i8,
     pz_err_1: &mut *mut i8, pe_type_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -53,6 +57,7 @@ extern "C" fn fts5_vocab_table_type(z_type_1: *const i8,
     }
     return rc;
 }
+
 extern "C" fn fts5_vocab_init_vtab(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_v_tab_1: &mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -154,18 +159,21 @@ extern "C" fn fts5_vocab_init_vtab(db: *mut Sqlite3, p_aux_1: *mut (),
     *pp_v_tab_1 = p_ret as *mut Sqlite3Vtab;
     return rc;
 }
+
 extern "C" fn fts5_vocab_create_method(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     return fts5_vocab_init_vtab(db, p_aux_1, argc, argv,
             unsafe { &mut *pp_vtab_1 }, pz_err_1);
 }
+
 extern "C" fn fts5_vocab_connect_method(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     return fts5_vocab_init_vtab(db, p_aux_1, argc, argv,
             unsafe { &mut *pp_vtab_1 }, pz_err_1);
 }
+
 extern "C" fn fts5_vocab_best_index_method(p_unused_1: *mut Sqlite3Vtab,
     p_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -257,17 +265,20 @@ extern "C" fn fts5_vocab_best_index_method(p_unused_1: *mut Sqlite3Vtab,
     unsafe { (*p_info_1).idx_num = idx_num };
     return 0;
 }
+
 extern "C" fn fts5_vocab_disconnect_method(p_vtab_1: *mut Sqlite3Vtab)
     -> i32 {
     let p_tab: *mut Fts5VocabTable = p_vtab_1 as *mut Fts5VocabTable;
     unsafe { sqlite3_free(p_tab as *mut ()) };
     return 0;
 }
+
 extern "C" fn fts5_vocab_destroy_method(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut Fts5VocabTable = p_vtab_1 as *mut Fts5VocabTable;
     unsafe { sqlite3_free(p_tab as *mut ()) };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5VocabCursor {
@@ -288,6 +299,7 @@ struct Fts5VocabCursor {
     i_inst_pos: i64,
     i_inst_off: i32,
 }
+
 extern "C" fn fts5_vocab_open_method(p_v_tab_1: *mut Sqlite3Vtab,
     pp_csr_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut Fts5VocabTable = p_v_tab_1 as *mut Fts5VocabTable;
@@ -388,6 +400,7 @@ extern "C" fn fts5_vocab_open_method(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_csr_1 = p_csr as *mut Sqlite3VtabCursor };
     return rc;
 }
+
 extern "C" fn fts5_vocab_reset_cursor(p_csr_1: &mut Fts5VocabCursor) -> () {
     let n_col: i32 =
         unsafe { (*unsafe { (*(*p_csr_1).p_fts5).p_config }).n_col };
@@ -413,6 +426,7 @@ extern "C" fn fts5_vocab_reset_cursor(p_csr_1: &mut Fts5VocabCursor) -> () {
             core::mem::size_of::<i64>() as u64 * n_col as u64)
     };
 }
+
 extern "C" fn fts5_vocab_close_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut Fts5VocabCursor = p_cursor_1 as *mut Fts5VocabCursor;
@@ -422,6 +436,7 @@ extern "C" fn fts5_vocab_close_method(p_cursor_1: *mut Sqlite3VtabCursor)
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn fts5_vocab_instance_new_term(p_csr_1: &mut Fts5VocabCursor)
     -> i32 {
     let mut rc: i32 = 0;
@@ -453,6 +468,7 @@ extern "C" fn fts5_vocab_instance_new_term(p_csr_1: &mut Fts5VocabCursor)
     }
     return rc;
 }
+
 extern "C" fn fts5_vocab_instance_next(p_csr_1: *mut Fts5VocabCursor) -> i32 {
     let e_detail: i32 =
         unsafe {
@@ -497,6 +513,7 @@ extern "C" fn fts5_vocab_instance_next(p_csr_1: *mut Fts5VocabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut Fts5VocabCursor = p_cursor_1 as *mut Fts5VocabCursor;
@@ -833,6 +850,7 @@ extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
     }
     return rc;
 }
+
 extern "C" fn fts5_vocab_filter_method(p_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, z_unused_1: *const i8, n_unused_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> i32 {
@@ -950,12 +968,14 @@ extern "C" fn fts5_vocab_filter_method(p_cursor_1: *mut Sqlite3VtabCursor,
     }
     return rc;
 }
+
 extern "C" fn fts5_vocab_eof_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *const Fts5VocabCursor =
         p_cursor_1 as *mut Fts5VocabCursor as *const Fts5VocabCursor;
     return unsafe { (*p_csr).b_eof };
 }
+
 extern "C" fn fts5_vocab_column_method(p_cursor_1: *mut Sqlite3VtabCursor,
     p_ctx_1: *mut Sqlite3Context, i_col_1: i32) -> i32 {
     let p_csr: *const Fts5VocabCursor =
@@ -1114,6 +1134,7 @@ extern "C" fn fts5_vocab_column_method(p_cursor_1: *mut Sqlite3VtabCursor,
     if i_val > 0 as i64 { unsafe { sqlite3_result_int64(p_ctx_1, i_val) }; }
     return 0;
 }
+
 extern "C" fn fts5_vocab_rowid_method(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const Fts5VocabCursor =
@@ -1121,6 +1142,7 @@ extern "C" fn fts5_vocab_rowid_method(p_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_csr).rowid } };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_vocab_init(p_global: *mut Fts5Global,
     db: *mut Sqlite3) -> i32 {
@@ -1131,6 +1153,7 @@ pub extern "C" fn sqlite3_fts5_vocab_init(p_global: *mut Fts5Global,
                 None)
         };
 }
+
 static fts5_vocab: Sqlite3Module =
     Sqlite3Module {
         i_version: 2,
@@ -1159,6 +1182,7 @@ static fts5_vocab: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

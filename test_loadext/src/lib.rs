@@ -1,10 +1,13 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
+
 extern "C" fn half_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -21,6 +24,7 @@ extern "C" fn half_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn status_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -140,6 +144,7 @@ extern "C" fn status_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testloadext_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -200,6 +205,7 @@ pub extern "C" fn testloadext_init(db: *mut Sqlite3,
         return if n_err != 0 { 1 } else { 0 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn testbrokenext_init(db: *const Sqlite3,
     pz_err_msg_1: &mut *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -216,12 +222,14 @@ pub extern "C" fn testbrokenext_init(db: *const Sqlite3,
         return 1;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct StatusFuncS0N14statusFuncS0 {
     z_name: *const i8,
     op: i32,
 }
+
 static mut a_op: [StatusFuncS0N14statusFuncS0; 6] =
     [StatusFuncS0N14statusFuncS0 {
                 z_name: c"MEMORY_USED".as_ptr() as *const i8,
@@ -247,6 +255,7 @@ static mut a_op: [StatusFuncS0N14statusFuncS0; 6] =
                 z_name: c"MALLOC_SIZE".as_ptr() as *const i8,
                 op: 5,
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

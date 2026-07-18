@@ -1,40 +1,70 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinPthreadT = *mut OpaquePthreadT;
+
 type PthreadT = DarwinPthreadT;
+
 type DarwinSsizeT = i64;
+
 type DarwinIntptrT = i64;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinTimeT = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -57,8 +87,10 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[unsafe(no_mangle)]
 pub static mut sqlite3_pending_byte: i32 = 1073741824;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MD5Context {
@@ -67,12 +99,14 @@ struct MD5Context {
     bits: [u32; 2],
     u: MD5ContextU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union MD5ContextU0 {
     in_: [u8; 64],
     in32: [u32; 16],
 }
+
 extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
     let mut t: u32 = 0 as u32;
     '__b0: loop {
@@ -93,6 +127,7 @@ extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
         if !({ let __p = &mut longs; *__p -= 1; *__p } != 0) { break '__b0; }
     }
 }
+
 extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     let mut a: u32 = 0 as u32;
     let mut b: u32 = 0 as u32;
@@ -701,6 +736,7 @@ extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     unsafe { *buf.offset(2 as isize) += c };
     unsafe { *buf.offset(3 as isize) += d };
 }
+
 extern "C" fn md5_init(ctx: &mut MD5Context) -> () {
     (*ctx).is_init = 1;
     (*ctx).buf[0 as usize] = 1732584193 as u32;
@@ -710,6 +746,7 @@ extern "C" fn md5_init(ctx: &mut MD5Context) -> () {
     (*ctx).bits[0 as usize] = 0 as u32;
     (*ctx).bits[1 as usize] = 0 as u32;
 }
+
 extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
     mut len: u32) -> () {
     unsafe {
@@ -773,6 +810,7 @@ extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
         };
     }
 }
+
 extern "C" fn md5_final(digest: *mut u8, ctx: *mut MD5Context) -> () {
     unsafe {
         let mut count: u32 = 0 as u32;
@@ -831,6 +869,7 @@ extern "C" fn md5_final(digest: *mut u8, ctx: *mut MD5Context) -> () {
         };
     }
 }
+
 extern "C" fn md5_digest_to_base16(digest: *const u8, z_buf_1: *mut i8)
     -> () {
     let mut i: i32 = 0;
@@ -864,6 +903,7 @@ extern "C" fn md5_digest_to_base16(digest: *const u8, z_buf_1: *mut i8)
     }
     unsafe { *z_buf_1.offset(j as isize) = 0 as i8 };
 }
+
 extern "C" fn md5step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut MD5Context = core::ptr::null_mut();
@@ -898,6 +938,7 @@ extern "C" fn md5step(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn md5finalize(context: *mut Sqlite3Context) -> () {
     let mut p: *mut MD5Context = core::ptr::null_mut();
     let mut digest: [u8; 16] = [0; 16];
@@ -920,6 +961,7 @@ extern "C" fn md5finalize(context: *mut Sqlite3Context) -> () {
                 }))
     };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Error {
@@ -927,6 +969,7 @@ struct Error {
     i_line: i32,
     z_err: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite {
@@ -935,18 +978,21 @@ struct Sqlite {
     n_text: i32,
     a_text: *mut *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Statement {
     p_stmt: *mut Sqlite3Stmt,
     p_next: *mut Statement,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Threadset {
     i_max_tid: i32,
     p_thread: *mut Thread,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Thread {
@@ -957,12 +1003,15 @@ struct Thread {
     z_res: *mut i8,
     p_next: *mut Thread,
 }
+
 static mut n_global_err: i32 = 0;
+
 extern "C" fn free_err(p: &mut Error) -> () {
     unsafe { sqlite3_free((*p).z_err as *mut ()) };
     (*p).z_err = core::ptr::null_mut();
     (*p).rc = 0;
 }
+
 extern "C" fn print_err(p: &Error) -> () {
     unsafe {
         if (*p).rc != 0 {
@@ -994,16 +1043,19 @@ extern "C" fn print_err(p: &Error) -> () {
         }
     }
 }
+
 extern "C" fn print_and_free_err(p: *mut Error) -> () {
     print_err(unsafe { &*p });
     free_err(unsafe { &mut *p });
 }
+
 extern "C" fn system_error(p_err_1: &mut Error, i_sys_1: i32) -> () {
     (*p_err_1).rc = i_sys_1;
     (*p_err_1).z_err = unsafe { sqlite3_malloc(512) } as *mut i8;
     unsafe { strerror_r(i_sys_1, (*p_err_1).z_err, 512 as u64) };
     unsafe { *(*p_err_1).z_err.offset(511 as isize) = '\u{0}' as i32 as i8 };
 }
+
 extern "C" fn sqlite_error(p_err_1: &mut Error, p_db_1: &Sqlite,
     z_func_1: *const i8) -> () {
     (*p_err_1).rc = unsafe { sqlite3_errcode((*p_db_1).db) };
@@ -1015,12 +1067,14 @@ extern "C" fn sqlite_error(p_err_1: &mut Error, p_db_1: &Sqlite,
                 unsafe { sqlite3_extended_errcode((*p_db_1).db) })
         };
 }
+
 extern "C" fn test_error_x(p_err_1: &mut Error, z_err_1: *mut i8) -> () {
     if (*p_err_1).rc == 0 {
         (*p_err_1).rc = 1;
         (*p_err_1).z_err = z_err_1;
     } else { unsafe { sqlite3_free(z_err_1 as *mut ()) }; }
 }
+
 extern "C" fn clear_error_x(p_err_1: &mut Error, rc: i32) -> () {
     if (*p_err_1).rc == rc {
         (*p_err_1).rc = 0;
@@ -1028,10 +1082,12 @@ extern "C" fn clear_error_x(p_err_1: &mut Error, rc: i32) -> () {
         (*p_err_1).z_err = core::ptr::null_mut();
     }
 }
+
 extern "C" fn busyhandler(p_arg_1: *mut (), n: i32) -> i32 {
     unsafe { sqlite3_sleep(10) };
     return 1;
 }
+
 extern "C" fn opendb_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     z_file_1: *const i8, b_delete_1: i32) -> () {
     if unsafe { (*p_err_1).rc } == 0 {
@@ -1067,6 +1123,7 @@ extern "C" fn opendb_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     }
 }
+
 extern "C" fn closedb_x(p_err_1: &mut Error, p_db_1: *mut Sqlite) -> () {
     let mut rc: i32 = 0;
     let mut i: i32 = 0;
@@ -1113,6 +1170,7 @@ extern "C" fn closedb_x(p_err_1: &mut Error, p_db_1: *mut Sqlite) -> () {
         memset(p_db_1 as *mut (), 0, core::mem::size_of::<Sqlite>() as u64)
     };
 }
+
 extern "C" fn sql_script_x(p_err_1: &mut Error, p_db_1: &Sqlite,
     z_sql_1: *const i8) -> () {
     if (*p_err_1).rc == 0 {
@@ -1123,6 +1181,7 @@ extern "C" fn sql_script_x(p_err_1: &mut Error, p_db_1: &Sqlite,
             };
     }
 }
+
 unsafe extern "C" fn sql_script_printf_x(p_err_1: &mut Error, p_db_1: &Sqlite,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -1138,6 +1197,7 @@ unsafe extern "C" fn sql_script_printf_x(p_err_1: &mut Error, p_db_1: &Sqlite,
     }
     ();
 }
+
 extern "C" fn get_sql_statement(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     z_sql_1: *const i8) -> *mut Statement {
     let mut p_ret: *mut Statement = core::ptr::null_mut();
@@ -1188,6 +1248,7 @@ extern "C" fn get_sql_statement(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     unsafe { (*p_db_1).p_cache = p_ret };
     return p_ret;
 }
+
 extern "C" fn get_and_bind_sql_statement(p_err_1: *mut Error,
     p_db_1: *mut Sqlite, mut ap: *const i8) -> *mut Sqlite3Stmt {
     let mut p_statement: *const Statement = core::ptr::null();
@@ -1250,6 +1311,7 @@ extern "C" fn get_and_bind_sql_statement(p_err_1: *mut Error,
     }
     return p_stmt;
 }
+
 unsafe extern "C" fn execsql_i64_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     mut __va0: ...) -> i64 {
     let mut i_ret: i64 = 0 as i64;
@@ -1275,6 +1337,7 @@ unsafe extern "C" fn execsql_i64_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     }
     return i_ret;
 }
+
 unsafe extern "C" fn execsql_text_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i_slot_1: i32, mut __va0: ...) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -1336,6 +1399,7 @@ unsafe extern "C" fn execsql_text_x(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     }
     return z_ret;
 }
+
 extern "C" fn integrity_check_x(p_err_1: *mut Error, p_db_1: *mut Sqlite)
     -> () {
     if unsafe { (*p_err_1).rc } == 0 {
@@ -1374,6 +1438,7 @@ extern "C" fn integrity_check_x(p_err_1: *mut Error, p_db_1: *mut Sqlite)
         }
     }
 }
+
 extern "C" fn launch_thread_main(p_arg_1: *mut ()) -> *mut () {
     let p: *mut Thread = p_arg_1 as *mut Thread;
     unsafe {
@@ -1386,6 +1451,7 @@ extern "C" fn launch_thread_main(p_arg_1: *mut ()) -> *mut () {
     };
     return core::ptr::null_mut();
 }
+
 extern "C" fn launch_thread_x(p_err_1: *mut Error,
     p_threads_1: &mut Threadset,
     x_proc_1: Option<unsafe extern "C" fn(i32, *mut ()) -> *mut i8>,
@@ -1419,6 +1485,7 @@ extern "C" fn launch_thread_x(p_err_1: *mut Error,
         }
     }
 }
+
 extern "C" fn join_all_threads_x(p_err_1: *mut Error,
     p_threads_1: &mut Threadset) -> () {
     unsafe {
@@ -1457,6 +1524,7 @@ extern "C" fn join_all_threads_x(p_err_1: *mut Error,
         (*p_threads_1).p_thread = core::ptr::null_mut();
     }
 }
+
 extern "C" fn filesize_x(p_err_1: &Error, z_file_1: *const i8) -> i64 {
     let mut i_ret: i64 = 0 as i64;
     if (*p_err_1).rc == 0 {
@@ -1467,6 +1535,7 @@ extern "C" fn filesize_x(p_err_1: &Error, z_file_1: *const i8) -> i64 {
     }
     return i_ret;
 }
+
 extern "C" fn filecopy_x(p_err_1: *mut Error, z_from_1: *const i8,
     z_to_1: *const i8) -> () {
     if unsafe { (*p_err_1).rc } == 0 {
@@ -1529,7 +1598,9 @@ extern "C" fn filecopy_x(p_err_1: *mut Error, z_from_1: *const i8,
         }
     }
 }
+
 static mut timelimit: f64 = 0.0;
+
 extern "C" fn current_time() -> f64 {
     unsafe {
         let mut t: f64 = 0.0;
@@ -1555,6 +1626,7 @@ extern "C" fn current_time() -> f64 {
         return t;
     }
 }
+
 extern "C" fn setstoptime_x(p_err_1: &Error, n_ms_1: i32) -> () {
     unsafe {
         if (*p_err_1).rc == 0 {
@@ -1563,6 +1635,7 @@ extern "C" fn setstoptime_x(p_err_1: &Error, n_ms_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn timetostop_x(p_err_1: &Error) -> i32 {
     unsafe {
         let mut ret: i32 = 1;
@@ -1573,6 +1646,7 @@ extern "C" fn timetostop_x(p_err_1: &Error) -> i32 {
         return ret;
     }
 }
+
 extern "C" fn walthread1_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -1722,6 +1796,7 @@ extern "C" fn walthread1_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                 n_iter)
         };
 }
+
 extern "C" fn walthread1_ckpt_thread(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -1789,6 +1864,7 @@ extern "C" fn walthread1_ckpt_thread(i_tid_1: i32, p_arg_1: *mut ())
                     *const i8, n_ckpt)
         };
 }
+
 extern "C" fn walthread1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -1882,6 +1958,7 @@ extern "C" fn walthread1(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn walthread2_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2026,6 +2103,7 @@ extern "C" fn walthread2_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                 an_trans[0 as usize], an_trans[1 as usize])
         };
 }
+
 extern "C" fn walthread2(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2128,6 +2206,7 @@ extern "C" fn walthread2(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn walthread3_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2267,6 +2346,7 @@ extern "C" fn walthread3_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     print_and_free_err(&mut err);
     return core::ptr::null_mut();
 }
+
 extern "C" fn walthread3(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2350,6 +2430,7 @@ extern "C" fn walthread3(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn walthread4_reader_thread(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -2402,6 +2483,7 @@ extern "C" fn walthread4_reader_thread(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return core::ptr::null_mut();
 }
+
 extern "C" fn walthread4_writer_thread(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -2474,6 +2556,7 @@ extern "C" fn walthread4_writer_thread(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return core::ptr::null_mut();
 }
+
 extern "C" fn walthread4(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2556,6 +2639,7 @@ extern "C" fn walthread4(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn walthread5_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2611,6 +2695,7 @@ extern "C" fn walthread5_thread(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     print_and_free_err(&mut err);
     return core::ptr::null_mut();
 }
+
 extern "C" fn walthread5(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -2830,6 +2915,7 @@ extern "C" fn walthread5(n_ms_1: i32) -> () {
     }
     print_and_free_err(&mut err);
 }
+
 extern "C" fn cgt_pager_1_populate(p_err_1: *mut Error, p_db_1: *mut Sqlite)
     -> () {
     let z_insert: *const i8 =
@@ -2883,6 +2969,7 @@ extern "C" fn cgt_pager_1_populate(p_err_1: *mut Error, p_db_1: *mut Sqlite)
             c"COMMIT".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn cgt_pager_1_update(p_err_1: *mut Error, p_db_1: *mut Sqlite)
     -> () {
     let z_update: *const i8 =
@@ -2937,6 +3024,7 @@ extern "C" fn cgt_pager_1_update(p_err_1: *mut Error, p_db_1: *mut Sqlite)
             c"COMMIT".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn cgt_pager_1_read(p_err_1: *mut Error, p_db_1: *mut Sqlite)
     -> () {
     let mut i_row: i64 = 0 as i64;
@@ -2987,6 +3075,7 @@ extern "C" fn cgt_pager_1_read(p_err_1: *mut Error, p_db_1: *mut Sqlite)
             c"COMMIT".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn cgt_pager_1(n_ms_1: i32) -> () {
     let mut x_sub:
             Option<unsafe extern "C" fn(*mut Error, *mut Sqlite) -> ()> =
@@ -3038,6 +3127,7 @@ extern "C" fn cgt_pager_1(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn dynamic_triggers_1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3201,6 +3291,7 @@ extern "C" fn dynamic_triggers_1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                     *const i8, n_create, n_drop)
         };
 }
+
 extern "C" fn dynamic_triggers_2(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3297,6 +3388,7 @@ extern "C" fn dynamic_triggers_2(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                     *const i8, n_insert, n_delete)
         };
 }
+
 extern "C" fn dynamic_triggers(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3402,12 +3494,14 @@ extern "C" fn dynamic_triggers(n_ms_1: i32) -> () {
     };
     print_and_free_err(&mut err);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckpointStarvationCtx {
     e_mode: i32,
     n_max_frame: i32,
 }
+
 extern "C" fn checkpoint_starvation_walhook(p_ctx_1: *mut (),
     db: *mut Sqlite3, z_db_1: *const i8, n_frame_1: i32) -> i32 {
     let p: *mut CheckpointStarvationCtx =
@@ -3423,6 +3517,7 @@ extern "C" fn checkpoint_starvation_walhook(p_ctx_1: *mut (),
     }
     return 0;
 }
+
 extern "C" fn checkpoint_starvation_reader(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -3526,6 +3621,7 @@ extern "C" fn checkpoint_starvation_reader(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return core::ptr::null_mut();
 }
+
 extern "C" fn checkpoint_starvation_main(n_ms_1: i32,
     p: *mut CheckpointStarvationCtx) -> () {
     let mut err: Error =
@@ -3652,6 +3748,7 @@ extern "C" fn checkpoint_starvation_main(n_ms_1: i32,
     };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn checkpoint_starvation_1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3667,6 +3764,7 @@ extern "C" fn checkpoint_starvation_1(n_ms_1: i32) -> () {
     }
     print_and_free_err(&mut err);
 }
+
 extern "C" fn checkpoint_starvation_2(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3682,6 +3780,7 @@ extern "C" fn checkpoint_starvation_2(n_ms_1: i32) -> () {
     }
     print_and_free_err(&mut err);
 }
+
 extern "C" fn create_drop_index_thread(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -3737,6 +3836,7 @@ extern "C" fn create_drop_index_thread(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn create_drop_index_1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -3851,6 +3951,7 @@ extern "C" fn create_drop_index_1(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn lookaside1_thread_reader(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -3923,6 +4024,7 @@ extern "C" fn lookaside1_thread_reader(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn lookaside1_thread_writer(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -3983,6 +4085,7 @@ extern "C" fn lookaside1_thread_writer(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn lookaside1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4107,6 +4210,7 @@ extern "C" fn lookaside1(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn vacuum1_thread_writer(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -4201,6 +4305,7 @@ extern "C" fn vacuum1_thread_writer(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn vacuum1_thread_vacuumer(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let mut err: Error =
@@ -4261,6 +4366,7 @@ extern "C" fn vacuum1_thread_vacuumer(i_tid_1: i32, p_arg_1: *mut ())
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn vacuum1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4365,6 +4471,7 @@ extern "C" fn vacuum1(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn stress_thread_1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4430,6 +4537,7 @@ extern "C" fn stress_thread_1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn stress_thread_2(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4484,6 +4592,7 @@ extern "C" fn stress_thread_2(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn stress_thread_3(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4548,6 +4657,7 @@ extern "C" fn stress_thread_3(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                     *const i8, i2, i1)
         };
 }
+
 extern "C" fn stress_thread_4(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4634,6 +4744,7 @@ extern "C" fn stress_thread_4(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                     *const i8, i2, i1)
         };
 }
+
 extern "C" fn stress_thread_5(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4725,6 +4836,7 @@ extern "C" fn stress_thread_5(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
                         *mut i8 as *const i8, i2, i1)
         };
 }
+
 extern "C" fn stress1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -4852,6 +4964,7 @@ extern "C" fn stress1(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn stress2_workload1(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     let i_tab: i32 = i % (5 - 1) + 1;
@@ -4869,6 +4982,7 @@ extern "C" fn stress2_workload1(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload2(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     let i_tab: i32 = i % (5 - 1) + 1;
@@ -4886,6 +5000,7 @@ extern "C" fn stress2_workload2(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload3(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4900,6 +5015,7 @@ extern "C" fn stress2_workload3(p_err_1: *mut Error, p_db_1: *mut Sqlite,
                 *const i8)
     };
 }
+
 extern "C" fn stress2_workload4(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4914,6 +5030,7 @@ extern "C" fn stress2_workload4(p_err_1: *mut Error, p_db_1: *mut Sqlite,
                 *const i8)
     };
 }
+
 extern "C" fn stress2_workload5(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4928,6 +5045,7 @@ extern "C" fn stress2_workload5(p_err_1: *mut Error, p_db_1: *mut Sqlite,
                     as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn stress2_workload6(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4942,6 +5060,7 @@ extern "C" fn stress2_workload6(p_err_1: *mut Error, p_db_1: *mut Sqlite,
                     as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn stress2_workload7(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4958,6 +5077,7 @@ extern "C" fn stress2_workload7(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload8(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4974,6 +5094,7 @@ extern "C" fn stress2_workload8(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload9(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -4990,6 +5111,7 @@ extern "C" fn stress2_workload9(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload10(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -5006,6 +5128,7 @@ extern "C" fn stress2_workload10(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload11(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -5019,6 +5142,7 @@ extern "C" fn stress2_workload11(p_err_1: *mut Error, p_db_1: *mut Sqlite,
             c"VACUUM".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn stress2_workload14(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -5032,6 +5156,7 @@ extern "C" fn stress2_workload14(p_err_1: *mut Error, p_db_1: *mut Sqlite,
             c"PRAGMA integrity_check".as_ptr() as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn stress2_workload17(p_err_1: *mut Error, p_db_1: *mut Sqlite,
     i: i32) -> () {
     {
@@ -5050,6 +5175,7 @@ extern "C" fn stress2_workload17(p_err_1: *mut Error, p_db_1: *mut Sqlite,
         }
     };
 }
+
 extern "C" fn stress2_workload19(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -5104,12 +5230,14 @@ extern "C" fn stress2_workload19(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     print_and_free_err(&mut err);
     return unsafe { sqlite3_mprintf(c"ok".as_ptr() as *mut i8 as *const i8) };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stress2Ctx {
     z_db: *const i8,
     x_proc: Option<unsafe extern "C" fn(*mut Error, *mut Sqlite, i32) -> ()>,
 }
+
 extern "C" fn stress2_thread_wrapper(i_tid_1: i32, p_arg_1: *mut ())
     -> *mut i8 {
     let p_ctx: *const Stress2Ctx =
@@ -5176,6 +5304,7 @@ extern "C" fn stress2_thread_wrapper(i_tid_1: i32, p_arg_1: *mut ())
                 i1)
         };
 }
+
 extern "C" fn stress2_launch_thread_loop(p_err_1: *mut Error,
     p_threads_1: *mut Threadset, z_db_1: *const i8,
     x: unsafe extern "C" fn(*mut Error, *mut Sqlite, i32) -> ()) -> () {
@@ -5205,6 +5334,7 @@ extern "C" fn stress2_launch_thread_loop(p_err_1: *mut Error,
             Some(stress2_thread_wrapper), p_ctx as *mut ())
     };
 }
+
 extern "C" fn stress2(n_ms_1: i32) -> () {
     let a_task: [Stress2TaskN11Stress2Task; 13] =
         [Stress2TaskN11Stress2Task { x: Some(stress2_workload1) },
@@ -5326,6 +5456,7 @@ extern "C" fn stress2(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn shared_thread1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -5380,6 +5511,7 @@ extern "C" fn shared_thread1(i_tid_1: i32, p_arg_1: *mut ()) -> *mut i8 {
             sqlite3_mprintf(c"done!".as_ptr() as *mut i8 as *const i8)
         };
 }
+
 extern "C" fn shared1(n_ms_1: i32) -> () {
     let mut err: Error =
         Error { rc: 0, i_line: 0, z_err: core::ptr::null_mut() };
@@ -5464,6 +5596,7 @@ extern "C" fn shared1(n_ms_1: i32) -> () {
     unsafe { sqlite3_enable_shared_cache(0) };
     print_and_free_err(&mut err);
 }
+
 extern "C" fn __main_inner(mut argc: i32, mut argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -5758,11 +5891,13 @@ extern "C" fn __main_inner(mut argc: i32, mut argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stress2TaskN11Stress2Task {
     x: Option<unsafe extern "C" fn(*mut Error, *mut Sqlite, i32) -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ThreadTestN10ThreadTest {
@@ -5770,19 +5905,24 @@ struct ThreadTestN10ThreadTest {
     z_test: *const i8,
     n_ms: i32,
 }
+
 static z_encode: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 static mut p_timelimit_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 static mut subst_argv: [*mut i8; 3] =
     [core::ptr::null_mut(), c"*".as_ptr() as *mut i8, core::ptr::null_mut()];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -6607,20 +6747,25 @@ extern "C" {
     fn fprintf(_: *mut FILE, _: *const i8, ...)
     -> i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadT {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadAttrT {
     _opaque: [u8; 0],
 }
+
 type PthreadAttrT = OpaquePthreadAttrT;

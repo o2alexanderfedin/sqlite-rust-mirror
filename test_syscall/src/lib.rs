@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -14,15 +15,25 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSsizeT = i64;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type TclWideInt = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
@@ -32,6 +43,7 @@ struct TclObj {
     typePtr: *mut TclObjType,
     internalRep: TclObjU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union TclObjU0 {
@@ -42,18 +54,21 @@ union TclObjU0 {
     twoPtrValue: TclObjU0S0,
     ptrAndLongRep: TclObjU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S0 {
     ptr1: *mut (),
     ptr2: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S1 {
     ptr: *mut (),
     value: u64,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -66,6 +81,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -145,6 +161,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -193,6 +210,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -329,6 +347,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -352,6 +371,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -424,6 +444,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TestSyscallGlobal {
@@ -433,6 +454,7 @@ struct TestSyscallGlobal {
     pgsz: i32,
     orig_getpagesize: Option<unsafe extern "C" fn() -> ()>,
 }
+
 static mut g_syscall: TestSyscallGlobal =
     TestSyscallGlobal {
         b_persist: 0,
@@ -441,6 +463,7 @@ static mut g_syscall: TestSyscallGlobal =
         pgsz: 0,
         orig_getpagesize: None,
     };
+
 extern "C" fn ts_is_fail() -> i32 {
     unsafe {
         { let __p = &mut g_syscall.n_count; let __t = *__p; *__p -= 1; __t };
@@ -457,6 +480,7 @@ extern "C" fn ts_is_fail() -> i32 {
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TestSyscallArray {
@@ -466,6 +490,7 @@ struct TestSyscallArray {
     default_errno: i32,
     custom_errno: i32,
 }
+
 extern "C" fn ts_close(fd: i32) -> i32 {
     unsafe {
         if ts_is_fail() != 0 {
@@ -497,6 +522,7 @@ extern "C" fn ts_close(fd: i32) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_access(z_path: *const i8, mode: i32) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -514,6 +540,7 @@ extern "C" fn ts_access(z_path: *const i8, mode: i32) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_getcwd(z_path: *mut i8, n_path: u64) -> *mut i8 {
     unsafe {
         if ts_is_fail() != 0 { return 0 as *mut () as *mut i8; }
@@ -531,6 +558,7 @@ extern "C" fn ts_getcwd(z_path: *mut i8, n_path: u64) -> *mut i8 {
             };
     }
 }
+
 extern "C" fn ts_stat(z_path: *const i8, p: *mut Stat) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -548,6 +576,7 @@ extern "C" fn ts_stat(z_path: *const i8, p: *mut Stat) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_fstat(fd: i32, p: *mut Stat) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"fstat".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -567,6 +596,7 @@ extern "C" fn ts_fstat(fd: i32, p: *mut Stat) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_ftruncate(fd: i32, n: OffT) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"ftruncate".as_ptr() as *mut i8 as *const i8) !=
@@ -587,6 +617,7 @@ extern "C" fn ts_ftruncate(fd: i32, n: OffT) -> i32 {
             };
     }
 }
+
 unsafe extern "C" fn ts_fcntl(fd: i32, cmd: i32, mut __va0: ...) -> i32 {
     unsafe {
         let mut ap: *const i8 = core::ptr::null();
@@ -617,6 +648,7 @@ unsafe extern "C" fn ts_fcntl(fd: i32, cmd: i32, mut __va0: ...) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_read(fd: i32, a_buf: *mut (), n_buf: u64) -> i64 {
     unsafe {
         if ts_is_fail_errno(c"read".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -636,6 +668,7 @@ extern "C" fn ts_read(fd: i32, a_buf: *mut (), n_buf: u64) -> i64 {
             };
     }
 }
+
 extern "C" fn ts_pread(fd: i32, a_buf: *mut (), n_buf: u64, off: OffT)
     -> i64 {
     unsafe {
@@ -656,6 +689,7 @@ extern "C" fn ts_pread(fd: i32, a_buf: *mut (), n_buf: u64, off: OffT)
             };
     }
 }
+
 extern "C" fn ts_pread64(fd: i32, a_buf: *mut (), n_buf: u64,
     off: Sqlite3Uint64) -> i64 {
     unsafe {
@@ -677,6 +711,7 @@ extern "C" fn ts_pread64(fd: i32, a_buf: *mut (), n_buf: u64,
             };
     }
 }
+
 extern "C" fn ts_write(fd: i32, a_buf: *const (), n_buf: u64) -> i64 {
     unsafe {
         if ts_is_fail_errno(c"write".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -710,6 +745,7 @@ extern "C" fn ts_write(fd: i32, a_buf: *const (), n_buf: u64) -> i64 {
             };
     }
 }
+
 extern "C" fn ts_pwrite(fd: i32, a_buf: *const (), n_buf: u64, off: OffT)
     -> i64 {
     unsafe {
@@ -730,6 +766,7 @@ extern "C" fn ts_pwrite(fd: i32, a_buf: *const (), n_buf: u64, off: OffT)
             };
     }
 }
+
 extern "C" fn ts_pwrite64(fd: i32, a_buf: *const (), n_buf: u64,
     off: Sqlite3Uint64) -> i64 {
     unsafe {
@@ -751,6 +788,7 @@ extern "C" fn ts_pwrite64(fd: i32, a_buf: *const (), n_buf: u64,
             };
     }
 }
+
 extern "C" fn ts_fchmod(fd: i32, mode: ModeT) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -768,6 +806,7 @@ extern "C" fn ts_fchmod(fd: i32, mode: ModeT) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_fallocate(fd: i32, off: OffT, len: OffT) -> i32 {
     unsafe {
         if ts_is_fail() != 0 {
@@ -787,6 +826,7 @@ extern "C" fn ts_fallocate(fd: i32, off: OffT, len: OffT) -> i32 {
             };
     }
 }
+
 extern "C" fn ts_mmap(p_addr: *mut (), n_byte: u64, prot: i32, flags: i32,
     fd: i32, i_off: OffT) -> *mut () {
     unsafe {
@@ -807,6 +847,7 @@ extern "C" fn ts_mmap(p_addr: *mut (), n_byte: u64, prot: i32, flags: i32,
             };
     }
 }
+
 unsafe extern "C" fn ts_mremap(a: *mut (), b: u64, c: u64, d: i32,
     mut __va0: ...) -> *mut () {
     unsafe {
@@ -838,6 +879,7 @@ unsafe extern "C" fn ts_mremap(a: *mut (), b: u64, c: u64, d: i32,
             };
     }
 }
+
 #[unsafe(no_mangle)]
 pub static mut a_syscall: [TestSyscallArray; 19] =
     [TestSyscallArray {
@@ -1027,6 +1069,7 @@ pub static mut a_syscall: [TestSyscallArray; 19] =
                 default_errno: 0,
                 custom_errno: 0,
             }];
+
 extern "C" fn ts_errno(z_func_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -1058,6 +1101,7 @@ extern "C" fn ts_errno(z_func_1: *const i8) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn ts_is_fail_errno(z_func_1: *const i8) -> i32 {
     if ts_is_fail() != 0 {
         unsafe { *unsafe { __error() } = ts_errno(z_func_1) };
@@ -1065,6 +1109,7 @@ extern "C" fn ts_is_fail_errno(z_func_1: *const i8) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn ts_open(z_file: *const i8, flags: i32, mode: i32) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"open".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -1084,6 +1129,7 @@ extern "C" fn ts_open(z_file: *const i8, flags: i32, mode: i32) -> i32 {
             };
     }
 }
+
 extern "C" fn test_syscall_install(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1151,6 +1197,7 @@ extern "C" fn test_syscall_install(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn test_syscall_uninstall(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1191,6 +1238,7 @@ extern "C" fn test_syscall_uninstall(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn test_syscall_reset(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1286,6 +1334,7 @@ extern "C" fn test_syscall_reset(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn test_syscall_exists(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
@@ -1313,6 +1362,7 @@ extern "C" fn test_syscall_exists(client_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn test_syscall_fault(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1347,6 +1397,7 @@ extern "C" fn test_syscall_fault(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn test_syscall_errno(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1405,6 +1456,7 @@ extern "C" fn test_syscall_errno(client_data_1: *mut (),
         }
     }
 }
+
 extern "C" fn test_syscall_list(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_sys: *const i8 = core::ptr::null();
@@ -1460,6 +1512,7 @@ extern "C" fn test_syscall_list(client_data_1: *mut (),
     }
     return 0;
 }
+
 extern "C" fn test_syscall_defaultvfs(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_vfs: *const Sqlite3Vfs = core::ptr::null();
@@ -1477,7 +1530,9 @@ extern "C" fn test_syscall_defaultvfs(client_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn ts_getpagesize() -> i32 { unsafe { return g_syscall.pgsz; } }
+
 extern "C" fn test_syscall_pagesize(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1537,12 +1592,14 @@ extern "C" fn test_syscall_pagesize(client_data_1: *mut (),
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ErrnoN5Errno {
     z: *const i8,
     i: i32,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4378,56 +4435,67 @@ extern "C" {
     fn __builtin_va_start(_: &mut *mut i8, ...)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjType {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {

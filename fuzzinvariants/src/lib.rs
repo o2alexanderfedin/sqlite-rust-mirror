@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
     let n_var: i32 = unsafe { sqlite3_bind_parameter_count(p_stmt_1) };
     let mut i: i32 = 0;
@@ -46,6 +49,7 @@ extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
         }
     }
 }
+
 extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
     -> *mut i8 {
     let mut z_in: *const i8 = core::ptr::null();
@@ -189,6 +193,7 @@ extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
     }
     return unsafe { sqlite3_str_finish(p_test) };
 }
+
 extern "C" fn same_value(p_s1: *mut Sqlite3Stmt, i1: i32,
     p_s2: *mut Sqlite3Stmt, i2: i32, p_test_compare: *mut Sqlite3Stmt)
     -> i32 {
@@ -513,6 +518,7 @@ extern "C" fn same_value(p_s1: *mut Sqlite3Stmt, i1: i32,
     }
     return x;
 }
+
 extern "C" fn print_hex(a: &[u8], mx: i32) -> () {
     let mut j: i32 = 0;
     {
@@ -533,6 +539,7 @@ extern "C" fn print_hex(a: &[u8], mx: i32) -> () {
         unsafe { printf(c"...".as_ptr() as *mut i8 as *const i8) };
     }
 }
+
 extern "C" fn print_row(p_stmt_1: *mut Sqlite3Stmt, i_row_1: i32) -> () {
     let mut i: i32 = 0;
     let mut n: i32 = 0;
@@ -1352,6 +1359,7 @@ extern "C" fn print_row(p_stmt_1: *mut Sqlite3Stmt, i_row_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn report_invariant_failed(p_orig: *mut Sqlite3Stmt,
     p_test: *mut Sqlite3Stmt, i_row: i32, db_opt: u32, no_opt: i32) -> () {
     let mut i_test_row: i32 = 0;
@@ -1393,6 +1401,7 @@ extern "C" fn report_invariant_failed(p_orig: *mut Sqlite3Stmt,
     unsafe { sqlite3_finalize(p_test) };
     unsafe { abort() };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fuzz_invariant(db: *mut Sqlite3, p_stmt_1: *mut Sqlite3Stmt,
     i_cnt_1: i32, i_row_1: i32, n_row_1: i32, pb_corrupt_1: &mut i32,
@@ -1848,6 +1857,7 @@ pub extern "C" fn fuzz_invariant(db: *mut Sqlite3, p_stmt_1: *mut Sqlite3Stmt,
     }
     unreachable!();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

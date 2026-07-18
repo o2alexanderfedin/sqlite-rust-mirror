@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3expert {
@@ -20,6 +23,7 @@ struct Sqlite3expert {
     h_idx: IdxHash,
     z_candidates: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxTable {
@@ -28,6 +32,7 @@ struct IdxTable {
     a_col: *mut IdxColumn,
     p_next: *mut IdxTable,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxColumn {
@@ -35,6 +40,7 @@ struct IdxColumn {
     z_coll: *mut i8,
     i_pk: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxScan {
@@ -46,6 +52,7 @@ struct IdxScan {
     p_range: *mut IdxConstraint,
     p_next_scan: *mut IdxScan,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxConstraint {
@@ -57,6 +64,7 @@ struct IdxConstraint {
     p_next: *mut IdxConstraint,
     p_link: *mut IdxConstraint,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxWrite {
@@ -64,6 +72,7 @@ struct IdxWrite {
     e_op: i32,
     p_next: *mut IdxWrite,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxStatement {
@@ -73,12 +82,14 @@ struct IdxStatement {
     z_eqp: *mut i8,
     p_next: *mut IdxStatement,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxHash {
     p_first: *mut IdxHashEntry,
     a_hash: [*mut IdxHashEntry; 1023],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxHashEntry {
@@ -88,6 +99,7 @@ struct IdxHashEntry {
     p_hash_next: *mut IdxHashEntry,
     p_next: *mut IdxHashEntry,
 }
+
 extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
     if !(*p_rc_1 == 0) as i32 as i64 != 0 {
@@ -110,6 +122,7 @@ extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     } else { *p_rc_1 = 7; }
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
     up4: i32, up5: *const ()) -> i32 {
@@ -127,6 +140,7 @@ pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
     } else { { let _ = 0; } };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
     z_name_1: *const i8) -> () {
@@ -136,6 +150,7 @@ pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
             Some(dummy_compare), None)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn dummy_udf(up1: *mut Sqlite3Context, up2: i32,
     up3: *mut *mut Sqlite3Value) -> () {
@@ -150,6 +165,7 @@ pub extern "C" fn dummy_udf(up1: *mut Sqlite3Context, up2: i32,
         }
     } else { { let _ = 0; } };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn dummy_ud_fvalue(up1: *mut Sqlite3Context) -> () {
     { let _ = up1; };
@@ -161,6 +177,7 @@ pub extern "C" fn dummy_ud_fvalue(up1: *mut Sqlite3Context) -> () {
         }
     } else { { let _ = 0; } };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     db_dst_1: *mut Sqlite3) -> i32 {
@@ -235,6 +252,7 @@ pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     }
     return rc;
 }
+
 extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
     -> () {
     *pz_errmsg_1 =
@@ -243,6 +261,7 @@ extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
                 unsafe { sqlite3_errmsg(db) })
         };
 }
+
 extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_sql_1: *const i8) -> i32 {
@@ -257,6 +276,7 @@ extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     }
     return rc;
 }
+
 unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> i32 {
@@ -274,6 +294,7 @@ unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     ();
     return rc;
 }
+
 extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     pb_contains_1: &mut i32) -> i32 {
     let z_sql: *const i8 =
@@ -295,6 +316,7 @@ extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     *pb_contains_1 = ret;
     return rc;
 }
+
 extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     pz_err_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -319,11 +341,13 @@ extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     *pz_err_1 = z_err;
     return rc;
 }
+
 extern "C" fn idx_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
     if *p_rc_1 == 0 { *p_rc_1 = rc; }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ExpertVtab {
@@ -331,6 +355,7 @@ struct ExpertVtab {
     p_tab: *mut IdxTable,
     p_expert: *mut Sqlite3expert,
 }
+
 extern "C" fn expert_dequote(z_in_1: *const i8) -> *mut i8 {
     let n: i64 = unsafe { strlen(z_in_1) } as i32 as i64;
     let z_ret: *mut i8 =
@@ -388,6 +413,7 @@ extern "C" fn expert_dequote(z_in_1: *const i8) -> *mut i8 {
     }
     return z_ret;
 }
+
 extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -438,6 +464,7 @@ extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     unsafe { *pp_vtab_1 = p as *mut Sqlite3Vtab };
     return rc;
 }
+
 extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     -> *mut IdxConstraint {
     let mut p_new: *mut IdxConstraint = core::ptr::null_mut();
@@ -465,6 +492,7 @@ extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     }
     return p_new;
 }
+
 extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p: *const ExpertVtab =
@@ -578,17 +606,20 @@ extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_cost = 1000000.0 / (n + 1) as f64 };
     return rc;
 }
+
 extern "C" fn expert_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut ExpertVtab = p_vtab_1 as *mut ExpertVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ExpertCsr {
     base: Sqlite3VtabCursor,
     p_data: *mut Sqlite3Stmt,
 }
+
 extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
@@ -600,12 +631,14 @@ extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = p_csr as *mut Sqlite3VtabCursor };
     return rc;
 }
+
 extern "C" fn expert_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_data }) };
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     let mut rc: i32 = 0;
@@ -623,6 +656,7 @@ extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     } else { rc = 0; }
     return rc;
 }
+
 extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
@@ -650,10 +684,12 @@ extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     if rc == 0 { rc = expert_next(cur); }
     return rc;
 }
+
 extern "C" fn expert_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
     return (unsafe { (*p_csr).p_data } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
@@ -662,12 +698,14 @@ extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     if !(p_val).is_null() { unsafe { sqlite3_result_value(ctx, p_val) }; }
     return 0;
 }
+
 extern "C" fn expert_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     { let _ = cur; };
     unsafe { *p_rowid_1 = 0 as SqliteInt64 };
     return 0;
 }
+
 extern "C" fn expert_update(p_vtab_1: *mut Sqlite3Vtab, n_data_1: i32,
     az_data_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     { let _ = p_vtab_1; };
@@ -676,6 +714,7 @@ extern "C" fn expert_update(p_vtab_1: *mut Sqlite3Vtab, n_data_1: i32,
     { let _ = p_rowid_1; };
     return 0;
 }
+
 extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
     unsafe {
         return unsafe {
@@ -686,6 +725,7 @@ extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
             };
     }
 }
+
 extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     pp_out_1: &mut *mut IdxTable, pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut p1: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -843,6 +883,7 @@ extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     *pp_out_1 = p_new;
     return rc;
 }
+
 unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -886,6 +927,7 @@ unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     ();
     return z_ret;
 }
+
 extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
     pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = idx_register_vtab(p);
@@ -998,6 +1040,7 @@ extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
     idx_finalize(&mut rc, p_schema);
     return rc;
 }
+
 extern "C" fn idx_auth_callback(p_ctx_1: *mut (), e_op_1: i32, z3: *const i8,
     z4: *const i8, z_db_1: *const i8, z_trigger_1: *const i8) -> i32 {
     let mut rc: i32 = 0;
@@ -1058,6 +1101,7 @@ extern "C" fn idx_auth_callback(p_ctx_1: *mut (), e_op_1: i32, z3: *const i8,
     }
     return rc;
 }
+
 extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
     let mut p_next: *mut IdxConstraint = core::ptr::null_mut();
     let mut p: *mut IdxConstraint = core::ptr::null_mut();
@@ -1074,6 +1118,7 @@ extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
         }
     }
 }
+
 extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
     -> () {
     let mut p: *mut IdxScan = core::ptr::null_mut();
@@ -1094,6 +1139,7 @@ extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
         }
     }
 }
+
 extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
     p_last_1: *mut IdxStatement) -> () {
     let mut p: *mut IdxStatement = core::ptr::null_mut();
@@ -1113,6 +1159,7 @@ extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
         }
     }
 }
+
 extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
     let mut p_iter: *mut IdxTable = core::ptr::null_mut();
     let mut p_next: *mut IdxTable = core::ptr::null_mut();
@@ -1129,6 +1176,7 @@ extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
         }
     }
 }
+
 extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
     let mut p_iter: *mut IdxWrite = core::ptr::null_mut();
     let mut p_next: *mut IdxWrite = core::ptr::null_mut();
@@ -1145,6 +1193,7 @@ extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
         }
     }
 }
+
 extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
     let mut i: i32 = 0;
     {
@@ -1178,6 +1227,7 @@ extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
         memset(p_hash_1 as *mut (), 0, core::mem::size_of::<IdxHash>() as u64)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
     if !(p).is_null() {
@@ -1193,6 +1243,7 @@ pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     pz_errmsg_1: *mut *mut i8) -> *mut Sqlite3expert {
@@ -1282,6 +1333,7 @@ pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     }
     return p_new;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     mut __va0: ...) -> i32 {
@@ -1313,6 +1365,7 @@ pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     ();
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     z_sql_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
@@ -1370,6 +1423,7 @@ pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     }
     return rc;
 }
+
 extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
     pz_err_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1595,6 +1649,7 @@ extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
         return rc;
     }
 }
+
 extern "C" fn idx_process_triggers(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -1620,6 +1675,7 @@ extern "C" fn idx_process_triggers(p: *mut Sqlite3expert,
     }
     return rc;
 }
+
 extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     p: &IdxConstraint) -> i32 {
     let mut p_cmp: *const IdxConstraint = core::ptr::null();
@@ -1636,6 +1692,7 @@ extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     }
     return 0;
 }
+
 extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     p_scan_1: &IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -1739,6 +1796,7 @@ extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     *p_rc_1 = rc;
     return 0;
 }
+
 extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let n_id: i32 = unsafe { strlen(z_id_1) } as i32;
@@ -1771,6 +1829,7 @@ extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     p_tab_1: &IdxTable, p_cons_1: &IdxConstraint) -> *mut i8 {
     let mut z_ret: *mut i8 = z_in_1;
@@ -1831,6 +1890,7 @@ extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     }
     return z_ret;
 }
+
 extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     az_results_1: *mut *mut i8, az_columns_1: *mut *mut i8) -> i32 {
     { let _ = az_columns_1; };
@@ -1849,6 +1909,7 @@ extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     }
     return 0;
 }
+
 extern "C" fn idx_hash_string(z: &[i8]) -> i32 {
     let mut ret: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -1865,6 +1926,7 @@ extern "C" fn idx_hash_string(z: &[i8]) -> i32 {
     }
     return (ret % 1023 as u32) as i32;
 }
+
 extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     z_key_1: *const i8, z_val_1: *const i8) -> i32 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -1941,6 +2003,7 @@ extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     }
     return 0;
 }
+
 extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -2079,6 +2142,7 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     }
     return rc;
 }
+
 extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_tail_1: *mut IdxConstraint) -> i32 {
     let mut p1: *mut IdxConstraint = core::ptr::null_mut();
@@ -2132,6 +2196,7 @@ extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     }
     return rc;
 }
+
 extern "C" fn idx_create_candidates(p: *mut Sqlite3expert) -> i32 {
     let mut rc: i32 = 0;
     let mut p_iter: *mut IdxScan = core::ptr::null_mut();
@@ -2153,12 +2218,14 @@ extern "C" fn idx_create_candidates(p: *mut Sqlite3expert) -> i32 {
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxRemCtx {
     n_slot: i32,
     a_slot: [IdxRemSlot; 1],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxRemSlot {
@@ -2169,6 +2236,7 @@ struct IdxRemSlot {
     n: i64,
     z: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxSampleCtx {
@@ -2177,6 +2245,7 @@ struct IdxSampleCtx {
     n_row: f64,
     n_ret: f64,
 }
+
 extern "C" fn idx_largest_index(db: *mut Sqlite3, pn_max_1: &mut i32,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -2192,6 +2261,7 @@ extern "C" fn idx_largest_index(db: *mut Sqlite3, pn_max_1: &mut i32,
     idx_finalize(&mut rc, p_max);
     return rc;
 }
+
 extern "C" fn idx_rem_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut IdxRemCtx =
@@ -2390,6 +2460,7 @@ extern "C" fn idx_rem_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn idx_sample_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut IdxSampleCtx =
@@ -2419,6 +2490,7 @@ extern "C" fn idx_sample_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     unsafe { (*p).n_row += 1.0 };
     unsafe { (*p).n_ret += b_ret as f64 };
 }
+
 extern "C" fn idx_build_sample_table(p: &Sqlite3expert, z_tab_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -2445,6 +2517,7 @@ extern "C" fn idx_build_sample_table(p: &Sqlite3expert, z_tab_1: *const i8)
     unsafe { sqlite3_free(z_sql as *mut ()) };
     return rc;
 }
+
 extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     mut n_key_1: i32) -> *mut IdxHashEntry {
     let mut i_hash: i32 = 0;
@@ -2485,6 +2558,7 @@ extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     }
     return core::ptr::null_mut();
 }
+
 extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     p_index_x_info_1: *mut Sqlite3Stmt, p_write_stat_1: *mut Sqlite3Stmt,
     z_tab_1: *const i8, z_idx_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
@@ -2673,6 +2747,7 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     idx_finalize(&mut rc, p_query);
     return rc;
 }
+
 extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -2824,11 +2899,13 @@ extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     };
     return rc;
 }
+
 extern "C" fn idx_hash_init(p_hash_1: *mut IdxHash) -> () {
     unsafe {
         memset(p_hash_1 as *mut (), 0, core::mem::size_of::<IdxHash>() as u64)
     };
 }
+
 extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     n_key_1: i32) -> *const i8 {
     let p_entry: *const IdxHashEntry =
@@ -2839,6 +2916,7 @@ extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     }
     return core::ptr::null();
 }
+
 extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     -> i32 {
     let mut p_stmt: *mut IdxStatement = core::ptr::null_mut();
@@ -3028,6 +3106,7 @@ extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     }
     unreachable!();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -3075,6 +3154,7 @@ pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     if rc == 0 { unsafe { (*p).b_run = 1 }; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     let mut n_ret: i32 = 0;
@@ -3083,6 +3163,7 @@ pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     }
     return n_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_report(p: &Sqlite3expert, i_stmt_1: i32,
     e_report_1: i32) -> *const i8 {
@@ -3124,6 +3205,7 @@ pub extern "C" fn sqlite3_expert_report(p: &Sqlite3expert, i_stmt_1: i32,
     }
     return z_ret;
 }
+
 static mut expert_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 2,
@@ -3152,11 +3234,14 @@ static mut expert_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 static mut z_int: *const i8 =
     c"t592690916721053953805701627921227776".as_ptr() as *mut i8 as *const i8;
+
 static mut z_drop: *const i8 =
     c"DROP TABLE t592690916721053953805701627921227776".as_ptr() as *mut i8 as
         *const i8;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

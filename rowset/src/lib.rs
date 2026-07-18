@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSet {
@@ -397,12 +406,14 @@ struct RowSet {
     rs_flags: u16,
     i_batch: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSetChunk {
     p_next_chunk: *mut RowSetChunk,
     a_entry: [RowSetEntry; 42],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSetEntry {
@@ -410,6 +421,7 @@ struct RowSetEntry {
     p_right: *mut RowSetEntry,
     p_left: *mut RowSetEntry,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_init(db: *mut Sqlite3) -> *mut RowSet {
     let p: *mut RowSet =
@@ -444,6 +456,7 @@ pub extern "C" fn sqlite3_row_set_init(db: *mut Sqlite3) -> *mut RowSet {
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_clear(p_arg: *mut ()) -> () {
     let p: *mut RowSet = p_arg as *mut RowSet;
@@ -470,6 +483,7 @@ pub extern "C" fn sqlite3_row_set_clear(p_arg: *mut ()) -> () {
     unsafe { (*p).p_forest = core::ptr::null_mut() };
     unsafe { (*p).rs_flags = 1 as u16 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_delete(p_arg: *mut ()) -> () {
     sqlite3_row_set_clear(p_arg);
@@ -477,6 +491,7 @@ pub extern "C" fn sqlite3_row_set_delete(p_arg: *mut ()) -> () {
         sqlite3_db_free(unsafe { (*(p_arg as *mut RowSet)).db }, p_arg)
     };
 }
+
 extern "C" fn row_set_entry_alloc(p: &mut RowSet) -> *mut RowSetEntry {
     { let _ = 0; };
     if (*p).n_fresh as i32 == 0 {
@@ -504,6 +519,7 @@ extern "C" fn row_set_entry_alloc(p: &mut RowSet) -> *mut RowSetEntry {
             __t
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_insert(p: *mut RowSet, rowid: i64) -> () {
     let mut p_entry: *mut RowSetEntry = core::ptr::null_mut();
@@ -522,6 +538,7 @@ pub extern "C" fn sqlite3_row_set_insert(p: *mut RowSet, rowid: i64) -> () {
     } else { unsafe { (*p).p_entry = p_entry }; }
     unsafe { (*p).p_last = p_entry };
 }
+
 extern "C" fn row_set_entry_merge(mut p_a_1: *mut RowSetEntry,
     mut p_b_1: *mut RowSetEntry) -> *mut RowSetEntry {
     let mut head: RowSetEntry = unsafe { core::mem::zeroed() };
@@ -564,6 +581,7 @@ extern "C" fn row_set_entry_merge(mut p_a_1: *mut RowSetEntry,
     }
     return head.p_right;
 }
+
 extern "C" fn row_set_entry_sort(mut p_in_1: *mut RowSetEntry)
     -> *mut RowSetEntry {
     let mut i: u32 = 0 as u32;
@@ -616,6 +634,7 @@ extern "C" fn row_set_entry_sort(mut p_in_1: *mut RowSetEntry)
     }
     return p_in_1;
 }
+
 extern "C" fn row_set_n_deep_tree(pp_list_1: *mut *mut RowSetEntry,
     i_depth_1: i32) -> *mut RowSetEntry {
     let mut p: *mut RowSetEntry = core::ptr::null_mut();
@@ -645,6 +664,7 @@ extern "C" fn row_set_n_deep_tree(pp_list_1: *mut *mut RowSetEntry,
     }
     return p;
 }
+
 extern "C" fn row_set_list_to_tree(mut p_list_1: *mut RowSetEntry)
     -> *mut RowSetEntry {
     let mut i_depth: i32 = 0;
@@ -679,6 +699,7 @@ extern "C" fn row_set_list_to_tree(mut p_list_1: *mut RowSetEntry)
     }
     return p;
 }
+
 extern "C" fn row_set_tree_to_list(p_in_1: *mut RowSetEntry,
     pp_first_1: *mut *mut RowSetEntry, pp_last_1: *mut *mut RowSetEntry)
     -> () {
@@ -694,6 +715,7 @@ extern "C" fn row_set_tree_to_list(p_in_1: *mut RowSetEntry,
     } else { unsafe { *pp_last_1 = p_in_1 }; }
     { let _ = 0; };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_test(p_row_set_1: *mut RowSet,
     i_batch_1: i32, i_rowid_1: Sqlite3Int64) -> i32 {
@@ -770,6 +792,7 @@ pub extern "C" fn sqlite3_row_set_test(p_row_set_1: *mut RowSet,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_next(p: *mut RowSet, p_rowid_1: &mut i64)
     -> i32 {
@@ -794,6 +817,7 @@ pub extern "C" fn sqlite3_row_set_next(p: *mut RowSet, p_rowid_1: &mut i64)
         return 1;
     } else { return 0; }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3570,41 +3594,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

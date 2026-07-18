@@ -1,11 +1,18 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type TclWideInt = i64;
+
 type TclChannel = *mut Tcl_Channel_;
+
 type ClientData = *mut ();
+
 type TclChannelTypeVersion = *mut Tcl_ChannelTypeVersion_;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclChannelType {
@@ -35,6 +42,7 @@ struct TclChannelType {
     threadActionProc: Option<unsafe extern "C" fn(*mut (), i32) -> ()>,
     truncateProc: Option<unsafe extern "C" fn(*mut (), i64) -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclDString {
@@ -43,6 +51,7 @@ struct TclDString {
     spaceAvl: i32,
     staticSpace: [i8; 200],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
@@ -52,11 +61,13 @@ struct TclObj {
     typePtr: *mut TclObjType,
     internalRep: TclObjU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjType {
     name: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union TclObjU0 {
@@ -67,20 +78,25 @@ union TclObjU0 {
     twoPtrValue: TclObjU0S0,
     ptrAndLongRep: TclObjU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S0 {
     ptr1: *mut (),
     ptr2: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S1 {
     ptr: *mut (),
     value: u64,
 }
+
 type TclSize = i32;
+
 type Uptr = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqliteDb {
@@ -118,6 +134,7 @@ struct SqliteDb {
     open_flags: i32,
     n_ref: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqlFunc {
@@ -129,6 +146,7 @@ struct SqlFunc {
     z_name: *mut i8,
     p_next: *mut SqlFunc,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqlCollate {
@@ -136,6 +154,7 @@ struct SqlCollate {
     z_script: *mut i8,
     p_next: *mut SqlCollate,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqlPreparedStmt {
@@ -147,6 +166,7 @@ struct SqlPreparedStmt {
     n_parm: i32,
     ap_parm: *mut *mut TclObj,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IncrblobChannel {
@@ -158,6 +178,7 @@ struct IncrblobChannel {
     p_next: *mut IncrblobChannel,
     p_prev: *mut IncrblobChannel,
 }
+
 extern "C" fn strlen30(z: *const i8) -> i32 {
     let mut z2: *const i8 = z;
     while unsafe { *z2 } != 0 {
@@ -170,6 +191,7 @@ extern "C" fn strlen30(z: *const i8) -> i32 {
     }
     return 1073741823 & unsafe { z2.offset_from(z) } as i64 as i32;
 }
+
 extern "C" fn close_incrblob_channels(p_db_1: &SqliteDb) -> () {
     let mut p: *const IncrblobChannel = core::ptr::null();
     let mut p_next: *mut IncrblobChannel = core::ptr::null_mut();
@@ -189,6 +211,7 @@ extern "C" fn close_incrblob_channels(p_db_1: &SqliteDb) -> () {
         }
     }
 }
+
 extern "C" fn incrblob_close2(instance_data_1: ClientData,
     interp: *mut TclInterp, flags: i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
@@ -220,10 +243,12 @@ extern "C" fn incrblob_close2(instance_data_1: ClientData,
     }
     return 0;
 }
+
 extern "C" fn incrblob_close(instance_data_1: ClientData,
     interp: *mut TclInterp) -> i32 {
     return incrblob_close2(instance_data_1, interp, 0);
 }
+
 extern "C" fn incrblob_input(instance_data_1: ClientData, buf: *mut i8,
     buf_size_1: i32, error_code_ptr_1: *mut i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
@@ -245,6 +270,7 @@ extern "C" fn incrblob_input(instance_data_1: ClientData, buf: *mut i8,
     unsafe { (*p).i_seek += n_read };
     return n_read as i32;
 }
+
 extern "C" fn incrblob_output(instance_data_1: ClientData, buf: *const i8,
     to_write_1: i32, error_code_ptr_1: *mut i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
@@ -268,6 +294,7 @@ extern "C" fn incrblob_output(instance_data_1: ClientData, buf: *const i8,
     unsafe { (*p).i_seek += n_write };
     return n_write as i32;
 }
+
 extern "C" fn incrblob_wide_seek(instance_data_1: ClientData,
     offset: TclWideInt, seek_mode_1: i32, error_code_ptr_1: *mut i32)
     -> TclWideInt {
@@ -297,16 +324,20 @@ extern "C" fn incrblob_wide_seek(instance_data_1: ClientData,
     }
     return unsafe { (*p).i_seek } as TclWideInt;
 }
+
 extern "C" fn incrblob_seek(instance_data_1: ClientData, offset: i64,
     seek_mode_1: i32, error_code_ptr_1: *mut i32) -> i32 {
     return incrblob_wide_seek(instance_data_1, offset, seek_mode_1,
                 error_code_ptr_1) as i32;
 }
+
 extern "C" fn incrblob_watch(instance_data_1: ClientData, mode: i32) -> () {}
+
 extern "C" fn incrblob_handle(instance_data_1: ClientData, dir: i32,
     h_ptr_1: *mut ClientData) -> i32 {
     return 1;
 }
+
 static mut incrblob_channel_type: TclChannelType =
     TclChannelType {
         typeName: c"incrblob".as_ptr() as *mut i8,
@@ -327,6 +358,7 @@ static mut incrblob_channel_type: TclChannelType =
         threadActionProc: None,
         truncateProc: None,
     };
+
 extern "C" fn create_incrblob_channel(interp: *mut TclInterp,
     p_db_1: *mut SqliteDb, z_db_1: *const i8, z_table_1: *const i8,
     z_column_1: *const i8, i_row_1: SqliteInt64, is_readonly_1: i32) -> i32 {
@@ -400,6 +432,7 @@ extern "C" fn create_incrblob_channel(interp: *mut TclInterp,
         return 0;
     }
 }
+
 extern "C" fn safe_to_use_eval_objv(p_cmd_1: *mut TclObj) -> i32 {
     let mut z: *const i8 = core::ptr::null();
     let mut n: TclSize = 0;
@@ -418,6 +451,7 @@ extern "C" fn safe_to_use_eval_objv(p_cmd_1: *mut TclObj) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn find_sql_func(p_db_1: *mut SqliteDb, z_name_1: *const i8)
     -> *mut SqlFunc {
     let mut p: *mut SqlFunc = core::ptr::null_mut();
@@ -460,10 +494,12 @@ extern "C" fn find_sql_func(p_db_1: *mut SqliteDb, z_name_1: *const i8)
     unsafe { (*p_db_1).p_func = p_new };
     return p_new;
 }
+
 extern "C" fn db_free_stmt(p_stmt_1: *mut SqlPreparedStmt) -> () {
     unsafe { sqlite3_finalize(unsafe { (*p_stmt_1).p_stmt }) };
     unsafe { Tcl_Free(p_stmt_1 as *mut i8) };
 }
+
 extern "C" fn flush_stmt_cache(p_db_1: &mut SqliteDb) -> () {
     let mut p_pre_stmt: *mut SqlPreparedStmt = core::ptr::null_mut();
     let mut p_next: *mut SqlPreparedStmt = core::ptr::null_mut();
@@ -483,9 +519,11 @@ extern "C" fn flush_stmt_cache(p_db_1: &mut SqliteDb) -> () {
     (*p_db_1).stmt_last = core::ptr::null_mut();
     (*p_db_1).stmt_list = core::ptr::null_mut();
 }
+
 extern "C" fn add_database_ref(p_db_1: &mut SqliteDb) -> () {
     { let __p = &mut (*p_db_1).n_ref; let __t = *__p; *__p += 1; __t };
 }
+
 extern "C" fn del_database_ref(p_db_1: *mut SqliteDb) -> () {
     if !(unsafe { (*p_db_1).n_ref } > 0) as i32 as i64 != 0 {
         unsafe {
@@ -651,10 +689,12 @@ extern "C" fn del_database_ref(p_db_1: *mut SqliteDb) -> () {
         unsafe { Tcl_Free(p_db_1 as *mut i8) };
     }
 }
+
 extern "C" fn db_delete_cmd(db: *mut ()) -> () {
     let p_db: *mut SqliteDb = db as *mut SqliteDb;
     del_database_ref(p_db);
 }
+
 extern "C" fn db_busy_handler(cd: *mut (), n_tries_1: i32) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -680,6 +720,7 @@ extern "C" fn db_busy_handler(cd: *mut (), n_tries_1: i32) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn db_progress_handler(cd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -705,6 +746,7 @@ extern "C" fn db_progress_handler(cd: *mut ()) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn db_trace_handler(cd: *mut (), z_sql_1: *const i8) -> () {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut str: TclDString = unsafe { core::mem::zeroed() };
@@ -721,6 +763,7 @@ extern "C" fn db_trace_handler(cd: *mut (), z_sql_1: *const i8) -> () {
     unsafe { Tcl_DStringFree(&mut str) };
     unsafe { Tcl_ResetResult(unsafe { (*p_db).interp }) };
 }
+
 extern "C" fn db_trace_v2_handler(type__1: u32, cd: *mut (), pd: *mut (),
     xd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
@@ -1128,6 +1171,7 @@ extern "C" fn db_trace_v2_handler(type__1: u32, cd: *mut (), pd: *mut (),
     }
     return 0;
 }
+
 extern "C" fn db_profile_handler(cd: *mut (), z_sql_1: *const i8,
     tm: SqliteUint64) -> () {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
@@ -1155,6 +1199,7 @@ extern "C" fn db_profile_handler(cd: *mut (), z_sql_1: *const i8,
     unsafe { Tcl_DStringFree(&mut str) };
     unsafe { Tcl_ResetResult(unsafe { (*p_db).interp }) };
 }
+
 extern "C" fn db_commit_handler(cd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -1173,6 +1218,7 @@ extern "C" fn db_commit_handler(cd: *mut ()) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn db_rollback_handler(client_data_1: *mut ()) -> () {
     let p_db: *const SqliteDb =
         client_data_1 as *mut SqliteDb as *const SqliteDb;
@@ -1191,6 +1237,7 @@ extern "C" fn db_rollback_handler(client_data_1: *mut ()) -> () {
         unsafe { Tcl_BackgroundError(unsafe { (*p_db).interp }) };
     }
 }
+
 extern "C" fn db_wal_handler(client_data_1: *mut (), db: *mut Sqlite3,
     z_db_1: *const i8, n_entry_1: i32) -> i32 {
     let mut ret: i32 = 0;
@@ -1242,6 +1289,7 @@ extern "C" fn db_wal_handler(client_data_1: *mut (), db: *mut Sqlite3,
     }
     return ret;
 }
+
 extern "C" fn db_update_handler(p: *mut (), op: i32, z_db_1: *const i8,
     z_tbl_1: *const i8, rowid: SqliteInt64) -> () {
     unsafe {
@@ -1322,6 +1370,7 @@ extern "C" fn db_update_handler(p: *mut (), op: i32, z_db_1: *const i8,
         }
     }
 }
+
 extern "C" fn tcl_collate_needed(p_ctx_1: *mut (), db: *mut Sqlite3, enc: i32,
     z_name_1: *const i8) -> () {
     let p_db: *const SqliteDb = p_ctx_1 as *mut SqliteDb as *const SqliteDb;
@@ -1347,6 +1396,7 @@ extern "C" fn tcl_collate_needed(p_ctx_1: *mut (), db: *mut Sqlite3, enc: i32,
         if !(0 != 0) { break '__b21; }
     }
 }
+
 extern "C" fn tcl_sql_collate(p_ctx_1: *mut (), n_a_1: i32, z_a_1: *const (),
     n_b_1: i32, z_b_1: *const ()) -> i32 {
     let p: *const SqlCollate =
@@ -1383,6 +1433,7 @@ extern "C" fn tcl_sql_collate(p_ctx_1: *mut (), n_a_1: i32, z_a_1: *const (),
             atoi(unsafe { Tcl_GetStringResult(unsafe { (*p).interp }) })
         };
 }
+
 extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *const SqlFunc =
@@ -1796,6 +1847,7 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn auth_callback(p_arg_1: *mut (), code: i32, z_arg1_1: *const i8,
     z_arg2_1: *const i8, z_arg3_1: *const i8, z_arg4_1: *const i8) -> i32 {
     let mut z_code: *const i8 = core::ptr::null();
@@ -1990,6 +2042,7 @@ extern "C" fn auth_callback(p_arg_1: *mut (), code: i32, z_arg1_1: *const i8,
     } else { rc = 999; }
     return rc;
 }
+
 extern "C" fn db_trans_post_cmd(data: *mut ClientData, interp: *mut TclInterp,
     result: i32) -> i32 {
     unsafe {
@@ -2040,6 +2093,7 @@ extern "C" fn db_trans_post_cmd(data: *mut ClientData, interp: *mut TclInterp,
         return rc;
     }
 }
+
 extern "C" fn db_prepare(p_db_1: &SqliteDb, z_sql_1: *const i8,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_out_1: *mut *const i8) -> i32 {
     let mut prep_flags: u32 = 0 as u32;
@@ -2049,6 +2103,7 @@ extern "C" fn db_prepare(p_db_1: &SqliteDb, z_sql_1: *const i8,
                 pp_stmt_1, pz_out_1)
         };
 }
+
 extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
     pz_out_1: *mut *const i8, pp_pre_stmt_1: &mut *mut SqlPreparedStmt)
     -> i32 {
@@ -2379,6 +2434,7 @@ extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
     }
     return rc;
 }
+
 extern "C" fn db_release_stmt(p_db_1: &mut SqliteDb,
     p_pre_stmt_1: *mut SqlPreparedStmt, discard: i32) -> () {
     let mut i: i32 = 0;
@@ -2457,6 +2513,7 @@ extern "C" fn db_release_stmt(p_db_1: &mut SqliteDb,
         }
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbEvalContext {
@@ -2469,6 +2526,7 @@ struct DbEvalContext {
     p_var_name: *mut TclObj,
     ap_col_name: *mut *mut TclObj,
 }
+
 extern "C" fn db_release_column_names(p: &mut DbEvalContext) -> () {
     if !((*p).ap_col_name).is_null() {
         let mut i: i32 = 0;
@@ -2507,6 +2565,7 @@ extern "C" fn db_release_column_names(p: &mut DbEvalContext) -> () {
     }
     (*p).n_col = 0;
 }
+
 extern "C" fn db_eval_init(p: *mut DbEvalContext, p_db_1: *mut SqliteDb,
     p_sql_1: *mut TclObj, p_var_name_1: *mut TclObj, eval_flags_1: i32)
     -> () {
@@ -2528,6 +2587,7 @@ extern "C" fn db_eval_init(p: *mut DbEvalContext, p_db_1: *mut SqliteDb,
     unsafe { (*p).eval_flags = eval_flags_1 };
     add_database_ref(unsafe { &mut *unsafe { (*p).p_db } });
 }
+
 extern "C" fn db_eval_row_info(p: &mut DbEvalContext, pn_col_1: *mut i32,
     pap_col_name_1: *mut *mut *mut TclObj) -> () {
     if core::ptr::null_mut() == (*p).ap_col_name {
@@ -2675,6 +2735,7 @@ extern "C" fn db_eval_row_info(p: &mut DbEvalContext, pn_col_1: *mut i32,
     }
     if !(pn_col_1).is_null() { unsafe { *pn_col_1 = (*p).n_col }; }
 }
+
 extern "C" fn db_eval_step(p: *mut DbEvalContext) -> i32 {
     let mut z_prev_sql: *const i8 = core::ptr::null();
     while unsafe { *unsafe { (*p).z_sql.offset(0 as isize) } } != 0 ||
@@ -2733,6 +2794,7 @@ extern "C" fn db_eval_step(p: *mut DbEvalContext) -> i32 {
     }
     return 3;
 }
+
 extern "C" fn db_eval_finalize(p: *mut DbEvalContext) -> () {
     if !(unsafe { (*p).p_pre_stmt }).is_null() {
         unsafe {
@@ -2775,6 +2837,7 @@ extern "C" fn db_eval_finalize(p: *mut DbEvalContext) -> () {
     db_release_column_names(unsafe { &mut *p });
     del_database_ref(unsafe { (*p).p_db });
 }
+
 extern "C" fn db_eval_column_value(p: &DbEvalContext, i_col_1: i32)
     -> *mut TclObj {
     let p_stmt: *mut Sqlite3Stmt = unsafe { (*(*p).p_pre_stmt).p_stmt };
@@ -2867,6 +2930,7 @@ extern "C" fn db_eval_column_value(p: &DbEvalContext, i_col_1: i32)
                         as *mut i8 as *const i8, -1)
         };
 }
+
 extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
     result: i32) -> i32 {
     let mut rc: i32 = result;
@@ -3019,6 +3083,7 @@ extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
     if rc == 0 || rc == 3 { unsafe { Tcl_ResetResult(interp) }; rc = 0; }
     return rc;
 }
+
 extern "C" fn db_hook_cmd(interp: *mut TclInterp, p_db_1: *mut SqliteDb,
     p_arg_1: *mut TclObj, pp_hook_1: &mut *mut TclObj) -> () {
     let db: *mut Sqlite3 = unsafe { (*p_db_1).db };
@@ -3095,6 +3160,7 @@ extern "C" fn db_hook_cmd(interp: *mut TclInterp, p_db_1: *mut SqliteDb,
                 }), p_db_1 as *mut ())
     };
 }
+
 extern "C" fn db_qrf(p_db_1: &SqliteDb, objc: i32, objv: *const *mut TclObj)
     -> i32 {
     unsafe {
@@ -3107,6 +3173,7 @@ extern "C" fn db_qrf(p_db_1: &SqliteDb, objc: i32, objv: *const *mut TclObj)
     };
     return 1;
 }
+
 extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
     mut objc: i32, mut objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -6990,6 +7057,7 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
         unreachable!();
     }
 }
+
 extern "C" fn sqlite_cmd_usage(interp: *mut TclInterp,
     objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -6999,111 +7067,175 @@ extern "C" fn sqlite_cmd_usage(interp: *mut TclInterp,
     };
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_unload(interp: *const TclInterp, flags: i32)
     -> i32 {
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tclsqlite3_unload(interp: *const TclInterp, flags: i32)
     -> i32 {
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_safe_init(interp: *const TclInterp) -> i32 {
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_safe_unload(interp: *const TclInterp, flags: i32)
     -> i32 {
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite_unload(interp: *const TclInterp, flags: i32) -> i32 {
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn tclsqlite_unload(interp: *const TclInterp, flags: i32)
     -> i32 {
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite_safe_init(interp: *const TclInterp) -> i32 {
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite_safe_unload(interp: *const TclInterp, flags: i32)
     -> i32 {
     return 1;
 }
+
 const DB_AUTHORIZER: u32 = 0;
+
 const DB_BACKUP: u32 = 1;
+
 const DB_BIND_FALLBACK: u32 = 2;
+
 const DB_BUSY: u32 = 3;
+
 const DB_CACHE: u32 = 4;
+
 const DB_CHANGES: u32 = 5;
+
 const DB_CLOSE: u32 = 6;
+
 const DB_COLLATE: u32 = 7;
+
 const DB_COLLATION_NEEDED: u32 = 8;
+
 const DB_COMMIT_HOOK: u32 = 9;
+
 const DB_COMPLETE: u32 = 10;
+
 const DB_CONFIG: u32 = 11;
+
 const DB_COPY: u32 = 12;
+
 const DB_DESERIALIZE: u32 = 13;
+
 const DB_ENABLE_LOAD_EXTENSION: u32 = 14;
+
 const DB_ERRORCODE: u32 = 15;
+
 const DB_ERROROFFSET: u32 = 16;
+
 const DB_EXISTS: u32 = 18;
+
 const DB_ONECOLUMN: u32 = 25;
+
 const DB_EVAL: u32 = 17;
+
 const DB_FORMAT: u32 = 19;
+
 const DB_FUNCTION: u32 = 20;
+
 const DB_INCRBLOB: u32 = 21;
+
 const DB_INTERRUPT: u32 = 22;
+
 const DB_NULLVALUE: u32 = 24;
+
 const DB_LAST_INSERT_ROWID: u32 = 23;
+
 const DB_PROGRESS: u32 = 28;
+
 const DB_PROFILE: u32 = 27;
+
 const DB_REKEY: u32 = 29;
+
 const DB_RESTORE: u32 = 30;
+
 const DB_SERIALIZE: u32 = 32;
+
 const DB_STATUS: u32 = 33;
+
 const DB_TIMEOUT: u32 = 34;
+
 const DB_TOTAL_CHANGES: u32 = 35;
+
 const DB_TRACE: u32 = 36;
+
 const DB_TRACE_V2: u32 = 37;
+
 const DB_TRANSACTION: u32 = 38;
+
 const DB_UNLOCK_NOTIFY: u32 = 39;
+
 const DB_PREUPDATE: u32 = 26;
+
 const DB_WAL_HOOK: u32 = 42;
+
 const DB_UPDATE_HOOK: u32 = 40;
+
 const DB_ROLLBACK_HOOK: u32 = 31;
+
 const DB_VERSION: u32 = 41;
+
 type Sqlite3AuthCb =
     unsafe extern "C" fn(*mut (), i32, *const i8, *const i8, *const i8,
         *const i8) -> i32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbConfigChoicesN15DbConfigChoices {
     z_name: *const i8,
     op: i32,
 }
+
 const TTYPE_STMT: u32 = 0;
+
 const TTYPE_PROFILE: u32 = 1;
+
 const TTYPE_ROW: u32 = 2;
+
 const TTYPE_CLOSE: u32 = 3;
+
 const TTYPE_DEFERRED: u32 = 0;
+
 const TTYPE_EXCLUSIVE: u32 = 1;
+
 const TTYPE_IMMEDIATE: u32 = 2;
+
 static mut count: i32 = 0;
+
 static mut az_str: [*const i8; 3] =
     [c"DELETE".as_ptr() as *const i8, c"INSERT".as_ptr() as *const i8,
             c"UPDATE".as_ptr() as *const i8];
+
 static mut az_end: [*const i8; 4] =
     [c"RELEASE _tcl_transaction".as_ptr() as *const i8,
             c"COMMIT".as_ptr() as *const i8,
             c"ROLLBACK TO _tcl_transaction ; RELEASE _tcl_transaction".as_ptr()
                 as *const i8, c"ROLLBACK".as_ptr() as *const i8];
+
 static mut db_strs: [*const i8; 44] =
     [c"authorizer".as_ptr() as *const i8, c"backup".as_ptr() as *const i8,
             c"bind_fallback".as_ptr() as *const i8,
@@ -7140,6 +7272,7 @@ static mut db_strs: [*const i8; 44] =
             c"update_hook".as_ptr() as *const i8,
             c"version".as_ptr() as *const i8,
             c"wal_hook".as_ptr() as *const i8, core::ptr::null()];
+
 static mut a_db_config: [DbConfigChoicesN15DbConfigChoices; 16] =
     [DbConfigChoicesN15DbConfigChoices {
                 z_name: c"defensive".as_ptr() as *const i8,
@@ -7205,13 +7338,16 @@ static mut a_db_config: [DbConfigChoicesN15DbConfigChoices; 16] =
                 z_name: c"writable_schema".as_ptr() as *const i8,
                 op: 1011,
             }];
+
 static mut ttype_strs: [*const i8; 5] =
     [c"statement".as_ptr() as *const i8, c"profile".as_ptr() as *const i8,
             c"row".as_ptr() as *const i8, c"close".as_ptr() as *const i8,
             core::ptr::null()];
+
 static mut ttype_strs_1: [*const i8; 4] =
     [c"deferred".as_ptr() as *const i8, c"exclusive".as_ptr() as *const i8,
             c"immediate".as_ptr() as *const i8, core::ptr::null()];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -8147,16 +8283,19 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_ChannelTypeVersion_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_Channel_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {

@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Btree {
     pub(crate) db: *mut Sqlite3,
@@ -14,6 +16,7 @@ pub(crate) struct Btree {
     pub(crate) p_prev: *mut Btree,
     pub(crate) lock: BtLock,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtShared {
@@ -48,6 +51,7 @@ pub(crate) struct BtShared {
     pub(crate) p_tmp_space: *mut u8,
     pub(crate) n_preformat_size: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtCursor {
@@ -72,6 +76,7 @@ pub(crate) struct BtCursor {
     pub(crate) p_page: *mut MemPage,
     pub(crate) ap_page: [*mut MemPage; 19],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct CellInfo {
@@ -81,6 +86,7 @@ pub(crate) struct CellInfo {
     pub(crate) n_local: u16,
     pub(crate) n_size: u16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct MemPage {
@@ -112,6 +118,7 @@ pub(crate) struct MemPage {
     pub(crate) x_parse_cell: Option<unsafe extern "C" fn(*mut MemPage,
         *mut u8, *mut CellInfo) -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BtLock {
@@ -120,6 +127,7 @@ pub(crate) struct BtLock {
     pub(crate) e_lock: u8,
     pub(crate) p_next: *mut BtLock,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct IntegrityCk {

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,8 +16,11 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 type DarwinSizeT = u64;
+
 type TclWideInt = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
@@ -26,6 +30,7 @@ struct TclObj {
     typePtr: *mut TclObjType,
     internalRep: TclObjU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union TclObjU0 {
@@ -36,18 +41,21 @@ union TclObjU0 {
     twoPtrValue: TclObjU0S0,
     ptrAndLongRep: TclObjU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S0 {
     ptr1: *mut (),
     ptr2: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S1 {
     ptr: *mut (),
     value: u64,
 }
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -95,6 +103,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -167,6 +176,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -179,6 +189,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -258,6 +269,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -394,6 +406,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -442,6 +455,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -477,6 +491,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -500,6 +515,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 extern "C" fn test_context_malloc(context: *mut Sqlite3Context, n_byte_1: i32)
     -> *mut () {
     let z: *mut i8 = unsafe { sqlite3_malloc(n_byte_1) } as *mut i8;
@@ -508,6 +524,7 @@ extern "C" fn test_context_malloc(context: *mut Sqlite3Context, n_byte_1: i32)
     }
     return z as *mut ();
 }
+
 extern "C" fn rand_str(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i_min: i32 = 0;
@@ -566,7 +583,9 @@ extern "C" fn rand_str(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 static mut test_destructor_count_var: i32 = 0;
+
 extern "C" fn destructor(p: *mut ()) -> () {
     unsafe {
         let mut z_val: *mut i8 = p as *mut i8;
@@ -586,6 +605,7 @@ extern "C" fn destructor(p: *mut ()) -> () {
         };
     }
 }
+
 extern "C" fn test_destructor(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -628,6 +648,7 @@ extern "C" fn test_destructor(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn test_destructor16(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -670,14 +691,17 @@ extern "C" fn test_destructor16(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn test_destructor_count(p_ctx_1: *mut Sqlite3Context,
     n_arg_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
         unsafe { sqlite3_result_int(p_ctx_1, test_destructor_count_var) };
     }
 }
+
 extern "C" fn test_agg_errmsg16_step(a: *mut Sqlite3Context, b: i32,
     c: *mut *mut Sqlite3Value) -> () {}
+
 extern "C" fn test_agg_errmsg16_final(ctx: *mut Sqlite3Context) -> () {
     let mut z: *const () = core::ptr::null();
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(ctx) };
@@ -692,9 +716,11 @@ extern "C" fn test_agg_errmsg16_final(ctx: *mut Sqlite3Context) -> () {
                 }))
     };
 }
+
 extern "C" fn free_test_auxdata(p: *mut ()) -> () {
     unsafe { sqlite3_free(p) };
 }
+
 extern "C" fn test_auxdata(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -749,6 +775,7 @@ extern "C" fn test_auxdata(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
             Some(free_test_auxdata))
     };
 }
+
 extern "C" fn test_error(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -765,6 +792,7 @@ extern "C" fn test_error(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn counter_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_counter: *mut i32 =
@@ -790,6 +818,7 @@ extern "C" fn counter_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     } else { { let __p = unsafe { &mut *p_counter }; *__p += 1; *__p }; }
     unsafe { sqlite3_result_int(p_ctx_1, unsafe { *p_counter }) };
 }
+
 extern "C" fn test_isolation(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe { sqlite3_value_text16(unsafe { *argv.offset(0 as isize) }) };
@@ -800,6 +829,7 @@ extern "C" fn test_isolation(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         sqlite3_result_value(p_ctx_1, unsafe { *argv.offset(1 as isize) })
     };
 }
+
 extern "C" fn test_eval(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -839,6 +869,7 @@ extern "C" fn test_eval(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         unsafe { sqlite3_result_error_code(p_ctx_1, rc) };
     }
 }
+
 extern "C" fn test_hex_char(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -849,6 +880,7 @@ extern "C" fn test_hex_char(c: i8) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn test_hex_to_bin(mut z_in_1: *const i8, mut z_out_1: *mut i8)
     -> () {
     while unsafe { *z_in_1.offset(0 as isize) } != 0 &&
@@ -870,6 +902,7 @@ extern "C" fn test_hex_to_bin(mut z_in_1: *const i8, mut z_out_1: *mut i8)
         };
     }
 }
+
 extern "C" fn test_hex_to_utf16be(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
@@ -891,6 +924,7 @@ extern "C" fn test_hex_to_utf16be(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn test_hex_to_utf8(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
@@ -912,6 +946,7 @@ extern "C" fn test_hex_to_utf8(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn test_hex_to_utf16le(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
@@ -933,6 +968,7 @@ extern "C" fn test_hex_to_utf16le(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
         };
     }
 }
+
 extern "C" fn real2hex(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -991,6 +1027,7 @@ extern "C" fn real2hex(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn test_extract(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -1061,6 +1098,7 @@ extern "C" fn test_extract(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn test_decode(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -1237,12 +1275,14 @@ extern "C" fn test_decode(context: *mut Sqlite3Context, argc: i32,
         if !(0 != 0) { break '__b8; }
     }
 }
+
 extern "C" fn test_zeroblob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let n_zero: i32 =
         unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) };
     unsafe { sqlite3_result_zeroblob(context, n_zero) };
 }
+
 extern "C" fn test_getsubtype(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1252,6 +1292,7 @@ extern "C" fn test_getsubtype(context: *mut Sqlite3Context, argc: i32,
                 } as i32)
     };
 }
+
 extern "C" fn test_frombind(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut m: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -1273,6 +1314,7 @@ extern "C" fn test_frombind(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_int64(context, m as Sqlite3Int64) };
 }
+
 extern "C" fn test_setsubtype(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1284,6 +1326,7 @@ extern "C" fn test_setsubtype(context: *mut Sqlite3Context, argc: i32,
                 as u32)
     };
 }
+
 extern "C" fn register_test_functions(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_thunk_1: *const Sqlite3ApiRoutines)
     -> i32 {
@@ -1320,6 +1363,7 @@ extern "C" fn register_test_functions(db: *mut Sqlite3,
         return 0;
     }
 }
+
 extern "C" fn rankfunc(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut a_matchinfo: *mut i32 = core::ptr::null_mut();
@@ -1467,6 +1511,7 @@ extern "C" fn rankfunc(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
         }
     }
 }
+
 extern "C" fn install_fts3_rank_function(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -1491,9 +1536,12 @@ extern "C" fn install_fts3_rank_function(client_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn t_step(a: *mut Sqlite3Context, b: i32,
     c: *mut *mut Sqlite3Value) -> () {}
+
 extern "C" fn t_final(a: *mut Sqlite3Context) -> () {}
+
 extern "C" fn abuse_create_function(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     '__b13: loop {
@@ -1589,6 +1637,7 @@ extern "C" fn abuse_create_function(client_data_1: *mut (),
     };
     return 1;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union Real2hexU0N11real2hexU0 {
@@ -1596,6 +1645,7 @@ union Real2hexU0N11real2hexU0 {
     r: f64,
     x: [u8; 8],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RegisterTestFunctionsS0N26registerTestFunctionsS0 {
@@ -1605,6 +1655,7 @@ struct RegisterTestFunctionsS0N26registerTestFunctionsS0 {
     x_func: Option<unsafe extern "C" fn(*mut Sqlite3Context, i32,
         *mut *mut Sqlite3Value) -> ()>,
 }
+
 static z_src: [u8; 79] =
     [97 as u8, 98 as u8, 99 as u8, 100 as u8, 101 as u8, 102 as u8, 103 as u8,
             104 as u8, 105 as u8, 106 as u8, 107 as u8, 108 as u8, 109 as u8,
@@ -1619,6 +1670,7 @@ static z_src: [u8; 79] =
             57 as u8, 46 as u8, 45 as u8, 33 as u8, 44 as u8, 58 as u8,
             42 as u8, 94 as u8, 43 as u8, 61 as u8, 95 as u8, 124 as u8,
             63 as u8, 47 as u8, 60 as u8, 62 as u8, 32 as u8, 0 as u8];
+
 static mut a_funcs: [RegisterTestFunctionsS0N26registerTestFunctionsS0; 20] =
     [RegisterTestFunctionsS0N26registerTestFunctionsS0 {
                 z_name: c"randstr".as_ptr() as *mut i8,
@@ -1740,6 +1792,7 @@ static mut a_funcs: [RegisterTestFunctionsS0N26registerTestFunctionsS0; 20] =
                 e_text_rep: 1 as u32,
                 x_func: Some(test_frombind),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4724,51 +4777,61 @@ extern "C" {
     fn Tcl_AppendResult(interp: *mut TclInterp, ...)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjType {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_match_e_name(p_item: &ExprListItem,
     z_col: *const i8, z_tab: *const i8, z_db: *const i8, pb_rowid: *mut i32)
@@ -451,6 +460,7 @@ pub extern "C" fn sqlite3_match_e_name(p_item: &ExprListItem,
     if e_e_name == 3 { unsafe { *pb_rowid = 1 }; }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_col_used(p_expr: &Expr) -> Bitmask {
     unsafe {
@@ -483,6 +493,7 @@ pub extern "C" fn sqlite3_expr_col_used(p_expr: &Expr) -> Bitmask {
         }
     }
 }
+
 extern "C" fn not_valid_impl(p_parse_1: *mut Parse, p_nc_1: &NameContext,
     z_msg_1: *const i8, p_expr_1: *mut Expr, p_error_1: *const Expr) -> () {
     let mut z_in: *const i8 =
@@ -505,6 +516,7 @@ extern "C" fn not_valid_impl(p_parse_1: *mut Parse, p_nc_1: &NameContext,
             p_error_1 as *const Expr)
     };
 }
+
 extern "C" fn extend_fj_match(p_parse_1: *mut Parse,
     pp_list_1: &mut *mut ExprList, p_match_1: &SrcItem, i_column_1: i16)
     -> () {
@@ -527,6 +539,7 @@ extern "C" fn extend_fj_match(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn is_valid_schema_table_name(z_tab_1: *const i8, p_tab_1: &Table,
     z_db_1: *const i8) -> i32 {
     let mut z_legacy: *const i8 = core::ptr::null();
@@ -587,6 +600,7 @@ extern "C" fn is_valid_schema_table_name(z_tab_1: *const i8, p_tab_1: &Table,
     }
     return 0;
 }
+
 extern "C" fn incr_agg_depth(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -596,6 +610,7 @@ extern "C" fn incr_agg_depth(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
         return 0;
     }
 }
+
 extern "C" fn incr_agg_function_depth(p_expr_1: *mut Expr, n_1: i32) -> () {
     unsafe {
         if n_1 > 0 {
@@ -610,6 +625,7 @@ extern "C" fn incr_agg_function_depth(p_expr_1: *mut Expr, n_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn resolve_alias(p_parse_1: *mut Parse, p_e_list_1: &ExprList,
     i_col_1: i32, p_expr_1: *mut Expr, n_subquery_1: i32) -> () {
     unsafe {
@@ -664,6 +680,7 @@ extern "C" fn resolve_alias(p_parse_1: *mut Parse, p_e_list_1: &ExprList,
         }
     }
 }
+
 extern "C" fn are_double_quoted_strings_enabled(db: *mut Sqlite3,
     p_top_nc_1: &NameContext) -> i32 {
     if unsafe { (*db).init.busy } != 0 { return 1; }
@@ -678,6 +695,7 @@ extern "C" fn are_double_quoted_strings_enabled(db: *mut Sqlite3,
                 i32;
     }
 }
+
 extern "C" fn lookup_name(p_parse_1: *mut Parse, mut z_db_1: *const i8,
     z_tab_1: *const i8, p_right_1: &Expr, mut p_nc_1: *mut NameContext,
     mut p_expr_1: *mut Expr) -> i32 {
@@ -1906,6 +1924,7 @@ extern "C" fn lookup_name(p_parse_1: *mut Parse, mut z_db_1: *const i8,
         unreachable!();
     }
 }
+
 extern "C" fn expr_probability(p: &Expr) -> i32 {
     unsafe {
         let mut r: f64 = -1.0;
@@ -1917,6 +1936,7 @@ extern "C" fn expr_probability(p: &Expr) -> i32 {
         return (r * 134217728.0) as i32;
     }
 }
+
 extern "C" fn resolve_set_expr_subtype_arg(p_list_1: *const ExprList) -> () {
     unsafe {
         let mut nn: i32 = 0;
@@ -1950,6 +1970,7 @@ extern "C" fn resolve_set_expr_subtype_arg(p_list_1: *const ExprList) -> () {
         }
     }
 }
+
 extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -6072,6 +6093,7 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
         return if unsafe { (*p_parse).n_err } != 0 { 2 } else { 0 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_select_names(p_parse: *mut Parse,
     p: *mut Select, p_outer_nc: *mut NameContext) -> () {
@@ -6086,6 +6108,7 @@ pub extern "C" fn sqlite3_resolve_select_names(p_parse: *mut Parse,
         unsafe { sqlite3_walk_select(&mut w, p) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_expr_list_names(p_nc: *mut NameContext,
     p_list: *mut ExprList) -> i32 {
@@ -6151,6 +6174,7 @@ pub extern "C" fn sqlite3_resolve_expr_list_names(p_nc: *mut NameContext,
         return 0;
     }
 }
+
 extern "C" fn resolve_as_name(p_parse_1: *const Parse, p_e_list_1: &ExprList,
     p_e_1: &Expr) -> i32 {
     unsafe {
@@ -6186,6 +6210,7 @@ extern "C" fn resolve_as_name(p_parse_1: *const Parse, p_e_list_1: &ExprList,
         return 0;
     }
 }
+
 extern "C" fn resolve_out_of_range_error(p_parse_1: *mut Parse,
     z_type_1: *const i8, i: i32, mx: i32, p_error_1: *const Expr) -> () {
     unsafe {
@@ -6198,6 +6223,7 @@ extern "C" fn resolve_out_of_range_error(p_parse_1: *mut Parse,
             p_error_1 as *const Expr)
     };
 }
+
 extern "C" fn resolve_remove_windows_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -6209,6 +6235,7 @@ extern "C" fn resolve_remove_windows_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn window_remove_expr_from_select(p_select_1: *mut Select,
     p_expr_1: *mut Expr) -> () {
     unsafe {
@@ -6224,6 +6251,7 @@ extern "C" fn window_remove_expr_from_select(p_select_1: *mut Select,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_order_group_by(p_parse: *mut Parse,
     p_select: &Select, p_order_by: *mut ExprList, z_type: *const i8) -> i32 {
@@ -6284,6 +6312,7 @@ pub extern "C" fn sqlite3_resolve_order_group_by(p_parse: *mut Parse,
         return 0;
     }
 }
+
 extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
     p_select_1: *mut Select, p_order_by_1: *mut ExprList, z_type_1: *const i8)
     -> i32 {
@@ -6378,6 +6407,7 @@ extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
                 unsafe { &*p_select_1 }, p_order_by_1, z_type_1);
     }
 }
+
 extern "C" fn resolve_order_by_term_to_expr_list(p_parse_1: *mut Parse,
     p_select_1: &Select, p_e_1: *mut Expr) -> i32 {
     unsafe {
@@ -6426,6 +6456,7 @@ extern "C" fn resolve_order_by_term_to_expr_list(p_parse_1: *mut Parse,
         return 0;
     }
 }
+
 extern "C" fn resolve_compound_order_by(p_parse_1: *mut Parse,
     mut p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -6586,6 +6617,7 @@ extern "C" fn resolve_compound_order_by(p_parse_1: *mut Parse,
         return 0;
     }
 }
+
 extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
     -> i32 {
     unsafe {
@@ -6880,6 +6912,7 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_expr_names(p_nc: *mut NameContext,
     p_expr: *mut Expr) -> i32 {
@@ -6919,6 +6952,7 @@ pub extern "C" fn sqlite3_resolve_expr_names(p_nc: *mut NameContext,
                     unsafe { (*w.p_parse).n_err } > 0) as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_self_reference(p_parse: *mut Parse,
     p_tab: *mut Table, mut type_: i32, p_expr: *mut Expr,
@@ -6974,6 +7008,7 @@ pub extern "C" fn sqlite3_resolve_self_reference(p_parse: *mut Parse,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_column_expr(db: *mut Sqlite3,
     p_src: &mut SrcList, i_src: i32, i_col: i32) -> *mut Expr {
@@ -7028,12 +7063,14 @@ pub extern "C" fn sqlite3_create_column_expr(db: *mut Sqlite3,
         return p;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union Sqlite3ResolveSelfReferenceU0N33sqlite3ResolveSelfReferenceU0 {
     s_src: SrcList,
     src_space: [u8; 80],
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -9807,41 +9844,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

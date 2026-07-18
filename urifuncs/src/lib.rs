@@ -1,8 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 extern "C" fn func_db_filename(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -19,6 +21,7 @@ extern "C" fn func_db_filename(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn func_uri_parameter(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -39,6 +42,7 @@ extern "C" fn func_uri_parameter(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn func_uri_boolean(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -54,6 +58,7 @@ extern "C" fn func_uri_boolean(context: *mut Sqlite3Context, argc: i32,
     let i_res: i32 = unsafe { sqlite3_uri_boolean(z_file, z_name, i_dflt) };
     unsafe { sqlite3_result_int(context, i_res) };
 }
+
 extern "C" fn func_uri_key(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -73,6 +78,7 @@ extern "C" fn func_uri_key(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn func_uri_int64(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -89,6 +95,7 @@ extern "C" fn func_uri_int64(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_uri_int64(z_file, z_name, i_dflt) };
     unsafe { sqlite3_result_int64(context, i_res) };
 }
+
 extern "C" fn func_filename_database(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -109,6 +116,7 @@ extern "C" fn func_filename_database(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn func_filename_journal(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -129,6 +137,7 @@ extern "C" fn func_filename_journal(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn func_filename_wal(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -149,6 +158,7 @@ extern "C" fn func_filename_wal(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_urifuncs_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -181,6 +191,7 @@ pub extern "C" fn sqlite3_urifuncs_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3UrifuncsInitS0N24sqlite3UrifuncsInitS0 {
@@ -189,6 +200,7 @@ struct Sqlite3UrifuncsInitS0N24sqlite3UrifuncsInitS0 {
     x_func: Option<unsafe extern "C" fn(*mut Sqlite3Context, i32,
         *mut *mut Sqlite3Value) -> ()>,
 }
+
 static mut a_func: [Sqlite3UrifuncsInitS0N24sqlite3UrifuncsInitS0; 8] =
     [Sqlite3UrifuncsInitS0N24sqlite3UrifuncsInitS0 {
                 z_func_name: c"sqlite3_db_filename".as_ptr() as *const i8,
@@ -232,6 +244,7 @@ static mut a_func: [Sqlite3UrifuncsInitS0N24sqlite3UrifuncsInitS0; 8] =
                 n_arg: 1,
                 x_func: Some(func_filename_wal),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

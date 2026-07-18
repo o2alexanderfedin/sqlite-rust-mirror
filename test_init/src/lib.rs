@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,8 +14,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type ClientData = *mut ();
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -27,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -106,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -154,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -290,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -313,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -385,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Wrapped {
@@ -398,7 +408,9 @@ struct Wrapped {
     pcache_init: i32,
     pcache_fail: i32,
 }
+
 static mut wrapped: Wrapped = unsafe { core::mem::zeroed() };
+
 extern "C" fn wr_mem_init(p_app_data_1: *mut ()) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -414,27 +426,34 @@ extern "C" fn wr_mem_init(p_app_data_1: *mut ()) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn wr_mem_shutdown(p_app_data_1: *mut ()) -> () {
     unsafe {
         unsafe { wrapped.mem.x_shutdown.unwrap()(wrapped.mem.p_app_data) };
         wrapped.mem_init = 0;
     }
 }
+
 extern "C" fn wr_mem_malloc(n: i32) -> *mut () {
     unsafe { return unsafe { wrapped.mem.x_malloc.unwrap()(n) }; }
 }
+
 extern "C" fn wr_mem_free(p: *mut ()) -> () {
     unsafe { unsafe { wrapped.mem.x_free.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mem_realloc(p: *mut (), n: i32) -> *mut () {
     unsafe { return unsafe { wrapped.mem.x_realloc.unwrap()(p, n) }; }
 }
+
 extern "C" fn wr_mem_size(p: *mut ()) -> i32 {
     unsafe { return unsafe { wrapped.mem.x_size.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mem_roundup(n: i32) -> i32 {
     unsafe { return unsafe { wrapped.mem.x_roundup.unwrap()(n) }; }
 }
+
 extern "C" fn wr_mutex_init() -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -445,6 +464,7 @@ extern "C" fn wr_mutex_init() -> i32 {
         return rc;
     }
 }
+
 extern "C" fn wr_mutex_end() -> i32 {
     unsafe {
         unsafe { wrapped.mutex.x_mutex_end.unwrap()() };
@@ -452,27 +472,35 @@ extern "C" fn wr_mutex_end() -> i32 {
         return 0;
     }
 }
+
 extern "C" fn wr_mutex_alloc(e: i32) -> *mut Sqlite3Mutex {
     unsafe { return unsafe { wrapped.mutex.x_mutex_alloc.unwrap()(e) }; }
 }
+
 extern "C" fn wr_mutex_free(p: *mut Sqlite3Mutex) -> () {
     unsafe { unsafe { wrapped.mutex.x_mutex_free.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mutex_enter(p: *mut Sqlite3Mutex) -> () {
     unsafe { unsafe { wrapped.mutex.x_mutex_enter.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mutex_try(p: *mut Sqlite3Mutex) -> i32 {
     unsafe { return unsafe { wrapped.mutex.x_mutex_try.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mutex_leave(p: *mut Sqlite3Mutex) -> () {
     unsafe { unsafe { wrapped.mutex.x_mutex_leave.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mutex_held(p: *mut Sqlite3Mutex) -> i32 {
     unsafe { return unsafe { wrapped.mutex.x_mutex_held.unwrap()(p) }; }
 }
+
 extern "C" fn wr_mutex_notheld(p: *mut Sqlite3Mutex) -> i32 {
     unsafe { return unsafe { wrapped.mutex.x_mutex_notheld.unwrap()(p) }; }
 }
+
 extern "C" fn wr_p_cache_init(p_arg_1: *mut ()) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -488,40 +516,50 @@ extern "C" fn wr_p_cache_init(p_arg_1: *mut ()) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn wr_p_cache_shutdown(p_arg_1: *mut ()) -> () {
     unsafe {
         unsafe { wrapped.pcache.x_shutdown.unwrap()(wrapped.pcache.p_arg) };
         wrapped.pcache_init = 0;
     }
 }
+
 extern "C" fn wr_p_cache_create(a: i32, b: i32, c: i32)
     -> *mut Sqlite3Pcache {
     unsafe { return unsafe { wrapped.pcache.x_create.unwrap()(a, b, c) }; }
 }
+
 extern "C" fn wr_p_cache_cachesize(p: *mut Sqlite3Pcache, n: i32) -> () {
     unsafe { unsafe { wrapped.pcache.x_cachesize.unwrap()(p, n) }; }
 }
+
 extern "C" fn wr_p_cache_pagecount(p: *mut Sqlite3Pcache) -> i32 {
     unsafe { return unsafe { wrapped.pcache.x_pagecount.unwrap()(p) }; }
 }
+
 extern "C" fn wr_p_cache_fetch(p: *mut Sqlite3Pcache, a: u32, b: i32)
     -> *mut Sqlite3PcachePage {
     unsafe { return unsafe { wrapped.pcache.x_fetch.unwrap()(p, a, b) }; }
 }
+
 extern "C" fn wr_p_cache_unpin(p: *mut Sqlite3Pcache,
     a: *mut Sqlite3PcachePage, b: i32) -> () {
     unsafe { unsafe { wrapped.pcache.x_unpin.unwrap()(p, a, b) }; }
 }
+
 extern "C" fn wr_p_cache_rekey(p: *mut Sqlite3Pcache,
     a: *mut Sqlite3PcachePage, b: u32, c: u32) -> () {
     unsafe { unsafe { wrapped.pcache.x_rekey.unwrap()(p, a, b, c) }; }
 }
+
 extern "C" fn wr_p_cache_truncate(p: *mut Sqlite3Pcache, a: u32) -> () {
     unsafe { unsafe { wrapped.pcache.x_truncate.unwrap()(p, a) }; }
 }
+
 extern "C" fn wr_p_cache_destroy(p: *mut Sqlite3Pcache) -> () {
     unsafe { unsafe { wrapped.pcache.x_destroy.unwrap()(p) }; }
 }
+
 extern "C" fn install_init_wrappers() -> () {
     unsafe {
         let mut mutexmethods: Sqlite3MutexMethods =
@@ -592,6 +630,7 @@ extern "C" fn install_init_wrappers() -> () {
         };
     }
 }
+
 extern "C" fn init_wrapper_install(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -637,6 +676,7 @@ extern "C" fn init_wrapper_install(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" fn init_wrapper_uninstall(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -662,6 +702,7 @@ extern "C" fn init_wrapper_uninstall(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" fn init_wrapper_clear(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -678,6 +719,7 @@ extern "C" fn init_wrapper_clear(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" fn init_wrapper_query(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -721,6 +763,7 @@ extern "C" fn init_wrapper_query(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3527,51 +3570,61 @@ extern "C" {
     fn Tcl_SetObjResult(interp: *mut TclInterp, resultObjPtr: *mut TclObj)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

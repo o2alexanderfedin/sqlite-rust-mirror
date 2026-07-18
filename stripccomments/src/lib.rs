@@ -6,6 +6,7 @@ struct AnonS0 {
     rc: i32,
     keep_first: i32,
 }
+
 #[unsafe(no_mangle)]
 pub static mut app: AnonS0 =
     AnonS0 {
@@ -14,6 +15,7 @@ pub static mut app: AnonS0 =
         rc: 0,
         keep_first: 0,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn do_it_all() -> () {
     unsafe {
@@ -187,6 +189,7 @@ pub extern "C" fn do_it_all() -> () {
         }
     }
 }
+
 extern "C" fn usage(z_app_name_1: *const i8) -> () {
     unsafe {
         eprintln!("Strips C- and C++-style comments from stdin and sends the results to stdout.");
@@ -197,6 +200,7 @@ extern "C" fn usage(z_app_name_1: *const i8) -> () {
         };
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     -> Result<(), i32> {
     unsafe {
@@ -240,16 +244,22 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
         return Err(if app.rc != 0 { 1 } else { 0 });
     }
 }
+
 const S_NONE: u32 = 0;
+
 const S_SLASH1: u32 = 1;
+
 const S_C: u32 = 3;
+
 const S_CPP: u32 = 2;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *const i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -269,9 +279,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

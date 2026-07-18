@@ -1,12 +1,17 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type Byte = u8;
+
 type UInt = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZStreamS {
@@ -25,13 +30,21 @@ struct ZStreamS {
     adler: u64,
     reserved: u64,
 }
+
 type ZStream = ZStreamS;
+
 type ZStreamp = *mut ZStream;
+
 type Bytef = Byte;
+
 type ULong = u64;
+
 type Voidpf = *mut ();
+
 type AllocFunc = unsafe extern "C" fn(*mut (), u32, u32) -> *mut ();
+
 type FreeFunc = unsafe extern "C" fn(*mut (), *mut ()) -> ();
+
 static zipfile_schema: [i8; 91] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -48,6 +61,7 @@ static zipfile_schema: [i8; 91] =
             78 as i8, 41 as i8, 32 as i8, 87 as i8, 73 as i8, 84 as i8,
             72 as i8, 79 as i8, 85 as i8, 84 as i8, 32 as i8, 82 as i8,
             79 as i8, 87 as i8, 73 as i8, 68 as i8, 59 as i8, 0 as i8];
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileEOCD {
@@ -58,6 +72,7 @@ struct ZipfileEOCD {
     n_size: u32,
     i_offset: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileCDS {
@@ -79,6 +94,7 @@ struct ZipfileCDS {
     i_offset: u32,
     z_file: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileLFH {
@@ -93,6 +109,7 @@ struct ZipfileLFH {
     n_file: u16,
     n_extra: u16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileEntry {
@@ -103,6 +120,7 @@ struct ZipfileEntry {
     a_data: *mut u8,
     p_next: *mut ZipfileEntry,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileCsr {
@@ -117,6 +135,7 @@ struct ZipfileCsr {
     p_current: *mut ZipfileEntry,
     p_csr_next: *mut ZipfileCsr,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileTab {
@@ -132,6 +151,7 @@ struct ZipfileTab {
     sz_current: i64,
     sz_orig: i64,
 }
+
 unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -142,6 +162,7 @@ unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg as *mut ()) };
     ();
 }
+
 extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
     let mut q: i8 = unsafe { *z_in_1.offset(0 as isize) };
     if q as i32 == '\"' as i32 || q as i32 == '\'' as i32 ||
@@ -195,6 +216,7 @@ extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
         unsafe { *z_in_1.offset(i_out as isize) = '\u{0}' as i32 as i8 };
     }
 }
+
 extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -274,12 +296,14 @@ extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     unsafe { *pp_vtab_1 = p_new as *mut Sqlite3Vtab };
     return rc;
 }
+
 extern "C" fn zipfile_entry_free(p: *mut ZipfileEntry) -> () {
     if !(p).is_null() {
         unsafe { sqlite3_free(unsafe { (*p).cds.z_file } as *mut ()) };
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     let mut p_entry: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -304,6 +328,7 @@ extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     (*p_tab_1).sz_current = 0 as i64;
     (*p_tab_1).sz_orig = 0 as i64;
 }
+
 extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     zipfile_cleanup_transaction(unsafe {
             &mut *(p_vtab_1 as *mut ZipfileTab)
@@ -311,6 +336,7 @@ extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     pp_csr_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut ZipfileTab = p as *mut ZipfileTab;
@@ -337,6 +363,7 @@ extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     unsafe { (*p_tab).p_csr_list = p_csr };
     return 0;
 }
+
 extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     let mut p: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -361,6 +388,7 @@ extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     }
     (*p_csr_1).p_free_entry = core::ptr::null_mut();
 }
+
 extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let p_tab: *mut ZipfileTab =
@@ -379,6 +407,7 @@ extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 unsafe extern "C" fn zipfile_table_err(p_tab_1: &mut ZipfileTab,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -387,6 +416,7 @@ unsafe extern "C" fn zipfile_table_err(p_tab_1: &mut ZipfileTab,
     (*p_tab_1).base.z_err_msg = unsafe { sqlite3_vmprintf(z_fmt_1, ap) };
     ();
 }
+
 unsafe extern "C" fn zipfile_cursor_err(p_csr_1: &ZipfileCsr,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -401,6 +431,7 @@ unsafe extern "C" fn zipfile_cursor_err(p_csr_1: &ZipfileCsr,
     };
     ();
 }
+
 extern "C" fn zipfile_read_data(p_file_1: *mut FILE, a_read_1: *mut u8,
     n_read_1: i64, i_off_1: i64, pz_errmsg_1: &mut *mut i8) -> i32 {
     let mut n: u64 = 0 as u64;
@@ -421,6 +452,7 @@ extern "C" fn zipfile_read_data(p_file_1: *mut FILE, a_read_1: *mut u8,
     }
     return 0;
 }
+
 extern "C" fn zipfile_append_data(p_tab_1: *mut ZipfileTab,
     a_write_1: *const u8, n_write_1: i32) -> i32 {
     if n_write_1 > 0 {
@@ -445,10 +477,12 @@ extern "C" fn zipfile_append_data(p_tab_1: *mut ZipfileTab,
     }
     return 0;
 }
+
 extern "C" fn zipfile_get_u16(a_buf_1: *const u8) -> u16 {
     return (((unsafe { *a_buf_1.offset(1 as isize) } as i32) << 8) +
                 unsafe { *a_buf_1.offset(0 as isize) } as i32) as u16;
 }
+
 extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
     if a_buf_1 == core::ptr::null() { return 0 as u32; }
     return ((unsafe { *a_buf_1.offset(3 as isize) } as u32) << 24) +
@@ -456,16 +490,19 @@ extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
                 ((unsafe { *a_buf_1.offset(1 as isize) } as u32) << 8) +
             ((unsafe { *a_buf_1.offset(0 as isize) } as u32) << 0);
 }
+
 extern "C" fn zipfile_put_u16(a_buf_1: *mut u8, val: u16) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val as i32 & 255) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val as i32 >> 8 & 255) as u8 };
 }
+
 extern "C" fn zipfile_put_u32(a_buf_1: *mut u8, val: u32) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val & 255 as u32) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val >> 8 & 255 as u32) as u8 };
     unsafe { *a_buf_1.offset(2 as isize) = (val >> 16 & 255 as u32) as u8 };
     unsafe { *a_buf_1.offset(3 as isize) = (val >> 24 & 255 as u32) as u8 };
 }
+
 extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     -> i32 {
     let mut a_read: *mut u8 = a_buf_1;
@@ -664,6 +701,7 @@ extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     }
     return rc;
 }
+
 extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     -> i32 {
     let mut a_read: *const u8 = a_buffer_1 as *const u8;
@@ -785,6 +823,7 @@ extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     }
     return rc;
 }
+
 extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     pm_time_1: &mut u32) -> i32 {
     let mut ret: i32 = 0;
@@ -841,6 +880,7 @@ extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     }
     return ret;
 }
+
 extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
     let mut y: i32 = 0;
     let mut m: i32 = 0;
@@ -872,6 +912,7 @@ extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
                     (hr * 3600) as i64 + (min * 60) as i64 + sec as i64;
     return (j_dsec - 24405875 as i64 * 8640 as i64) as u32;
 }
+
 extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
     m_unix_time_1: u32) -> () {
     let jd: i64 =
@@ -928,6 +969,7 @@ extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
         }
     } else { { let _ = 0; } };
 }
+
 extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
     unsafe { sqlite3_free(*pz_err_1 as *mut ()) };
     *pz_err_1 =
@@ -937,6 +979,7 @@ extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
         };
     return 11;
 }
+
 extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, i_off_1: i64,
     pp_entry_1: &mut *mut ZipfileEntry) -> i32 {
@@ -1119,6 +1162,7 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     }
     return rc;
 }
+
 extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let mut rc: i32 = 0;
@@ -1163,7 +1207,9 @@ extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { (*p_csr).b_noop = 0 as u8 };
     return rc;
 }
+
 extern "C" fn zipfile_free(p: *mut ()) -> () { unsafe { sqlite3_free(p) }; }
+
 extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
     n_in_1: i32, n_out_1: i32) -> () {
     let mut a_res: *mut u8 =
@@ -1213,6 +1259,7 @@ extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
         unsafe { inflateEnd(&mut str) };
     }
 }
+
 extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     pp_out_1: &mut *mut u8, pn_out_1: &mut i32, pz_err_1: &mut *mut i8)
     -> i32 {
@@ -1257,6 +1304,7 @@ extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     }
     return rc;
 }
+
 extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
@@ -1651,11 +1699,13 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     }
     return rc;
 }
+
 extern "C" fn zipfile_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ZipfileCsr =
         cur as *mut ZipfileCsr as *const ZipfileCsr;
     return unsafe { (*p_csr).b_eof } as i32;
 }
+
 extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, p_eocd_1: *mut ZipfileEOCD) -> i32 {
     let mut a_read: *mut u8 = unsafe { (*p_tab_1).a_buffer };
@@ -1798,6 +1848,7 @@ extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     }
     return rc;
 }
+
 extern "C" fn zipfile_add_entry(p_tab_1: &mut ZipfileTab,
     p_before_1: *mut ZipfileEntry, p_new_1: *mut ZipfileEntry) -> () {
     if !(((*p_tab_1).p_first_entry == core::ptr::null_mut()) as i32 ==
@@ -1852,6 +1903,7 @@ extern "C" fn zipfile_add_entry(p_tab_1: &mut ZipfileTab,
         unsafe { *pp = p_new_1 };
     }
 }
+
 extern "C" fn zipfile_load_directory(p_tab_1: *mut ZipfileTab,
     a_blob_1: *const u8, n_blob_1: i64) -> i32 {
     let mut eocd: ZipfileEOCD = unsafe { core::mem::zeroed() };
@@ -1887,6 +1939,7 @@ extern "C" fn zipfile_load_directory(p_tab_1: *mut ZipfileTab,
     }
     return rc;
 }
+
 extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_tab: *mut ZipfileTab = unsafe { (*cur).p_vtab } as *mut ZipfileTab;
@@ -1989,6 +2042,7 @@ extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     }
     return rc;
 }
+
 extern "C" fn zipfile_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -2033,6 +2087,7 @@ extern "C" fn zipfile_best_index(tab: *mut Sqlite3Vtab,
     } else if unusable != 0 { return 19; }
     return 0;
 }
+
 extern "C" fn zipfile_new_entry(z_path_1: *const i8) -> *mut ZipfileEntry {
     let mut p_new: *mut ZipfileEntry = core::ptr::null_mut();
     p_new =
@@ -2059,6 +2114,7 @@ extern "C" fn zipfile_new_entry(z_path_1: *const i8) -> *mut ZipfileEntry {
     }
     return p_new;
 }
+
 extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let p_cds: *mut ZipfileCDS = &mut (*p_entry_1).cds;
@@ -2203,6 +2259,7 @@ extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
     }
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
+
 extern "C" fn zipfile_append_entry(p_tab_1: *mut ZipfileTab,
     p_entry_1: *mut ZipfileEntry, p_data_1: *const u8, n_data_1: i32) -> i32 {
     let a_buf: *mut u8 = unsafe { (*p_tab_1).a_buffer };
@@ -2216,6 +2273,7 @@ extern "C" fn zipfile_append_entry(p_tab_1: *mut ZipfileTab,
     }
     return rc;
 }
+
 extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
     p_mode_1: &mut u32, pz_err_1: &mut *mut i8) -> i32 {
     let mut z: *const i8 = core::ptr::null();
@@ -2337,6 +2395,7 @@ extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
     }
     unreachable!();
 }
+
 extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     mut n_b_1: i32) -> i32 {
     let mut n_a: i32 = unsafe { strlen(z_a_1) } as i32;
@@ -2358,6 +2417,7 @@ extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     }
     return 1;
 }
+
 extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -2409,6 +2469,7 @@ extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     if rc != 0 { zipfile_cleanup_transaction(unsafe { &mut *p_tab }); }
     return rc;
 }
+
 extern "C" fn zipfile_time() -> u32 {
     let p_vfs: *mut Sqlite3Vfs =
         unsafe { sqlite3_vfs_find(core::ptr::null()) };
@@ -2432,6 +2493,7 @@ extern "C" fn zipfile_time() -> u32 {
     }
     return ret;
 }
+
 extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     if p_val_1 == core::ptr::null_mut() ||
             unsafe { sqlite3_value_type(p_val_1) } == 5 {
@@ -2439,6 +2501,7 @@ extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     }
     return unsafe { sqlite3_value_int64(p_val_1) } as u32;
 }
+
 extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
     p_old_1: *mut ZipfileEntry) -> () {
     if !(p_old_1).is_null() {
@@ -2470,6 +2533,7 @@ extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
         zipfile_entry_free(p_old_1);
     }
 }
+
 extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let mut p_tab: *mut ZipfileTab = core::ptr::null_mut();
@@ -2961,6 +3025,7 @@ extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
     }
     unreachable!();
 }
+
 extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
     -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -3030,6 +3095,7 @@ extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
     }
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
+
 extern "C" fn zipfile_append_eocd(p_tab_1: *mut ZipfileTab,
     p: *mut ZipfileEOCD) -> i32 {
     let n_buf: i32 =
@@ -3046,6 +3112,7 @@ extern "C" fn zipfile_append_eocd(p_tab_1: *mut ZipfileTab,
     return zipfile_append_data(p_tab_1,
             unsafe { (*p_tab_1).a_buffer } as *const u8, n_buf);
 }
+
 extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -3261,6 +3328,7 @@ extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     }
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
+
 extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -3297,9 +3365,11 @@ extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn zipfile_rollback(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return zipfile_commit(p_vtab_1);
 }
+
 extern "C" fn zipfile_find_cursor(p_tab_1: &ZipfileTab, i_id_1: i64)
     -> *mut ZipfileCsr {
     let mut p_csr: *mut ZipfileCsr = core::ptr::null_mut();
@@ -3316,6 +3386,7 @@ extern "C" fn zipfile_find_cursor(p_tab_1: &ZipfileTab, i_id_1: i64)
     }
     return p_csr;
 }
+
 extern "C" fn zipfile_function_cds(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_csr: *const ZipfileCsr = core::ptr::null();
@@ -3372,6 +3443,7 @@ extern "C" fn zipfile_function_cds(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn zipfile_find_function(p_vtab_1: *mut Sqlite3Vtab, n_arg_1: i32,
     z_name_1: *const i8,
     px_func_1:
@@ -3388,6 +3460,7 @@ extern "C" fn zipfile_find_function(p_vtab_1: *mut Sqlite3Vtab, n_arg_1: i32,
     }
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileBuffer {
@@ -3395,6 +3468,7 @@ struct ZipfileBuffer {
     n: i32,
     n_alloc: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ZipfileCtx {
@@ -3402,6 +3476,7 @@ struct ZipfileCtx {
     body: ZipfileBuffer,
     cds: ZipfileBuffer,
 }
+
 extern "C" fn zipfile_buffer_grow(p_buf_1: &mut ZipfileBuffer, n_byte_1: i64)
     -> i32 {
     if (((*p_buf_1).n_alloc - (*p_buf_1).n) as i64) < n_byte_1 {
@@ -3423,6 +3498,7 @@ extern "C" fn zipfile_buffer_grow(p_buf_1: &mut ZipfileBuffer, n_byte_1: i64)
     }
     return 0;
 }
+
 extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut ZipfileCtx = core::ptr::null_mut();
@@ -3861,6 +3937,7 @@ extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
         }
     }
 }
+
 extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     let mut p: *const ZipfileCtx = core::ptr::null();
     let mut eocd: ZipfileEOCD = unsafe { core::mem::zeroed() };
@@ -3913,6 +3990,7 @@ extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     unsafe { sqlite3_free(unsafe { (*p).body.a } as *mut ()) };
     unsafe { sqlite3_free(unsafe { (*p).cds.a } as *mut ()) };
 }
+
 extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 =
@@ -3973,6 +4051,7 @@ extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_zipfile_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -3980,8 +4059,11 @@ pub extern "C" fn sqlite3_zipfile_init(db: *mut Sqlite3,
     { let _ = pz_err_msg_1; };
     return zipfile_register(db);
 }
+
 static sz_fix: i32 = 30 as i32;
+
 static a_empty_blob: u8 = 0 as u8;
+
 static mut zipfile_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 1,
@@ -4010,6 +4092,7 @@ static mut zipfile_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4831,12 +4914,15 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct InternalState {

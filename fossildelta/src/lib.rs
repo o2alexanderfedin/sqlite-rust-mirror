@@ -1,10 +1,14 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type S16 = i16;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Hash {
@@ -13,6 +17,7 @@ struct Hash {
     i: u16,
     z: [i8; 16],
 }
+
 extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     let mut a: u16 = 0 as u16;
     let mut b: u16 = 0 as u16;
@@ -38,6 +43,7 @@ extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     (*p_hash_1).b = (b as i32 & 65535) as u16;
     (*p_hash_1).i = 0 as u16;
 }
+
 extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
     let old: u16 = (*p_hash_1).z[(*p_hash_1).i as usize] as u16;
     (*p_hash_1).z[(*p_hash_1).i as usize] = c as i8;
@@ -47,10 +53,12 @@ extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
         ((*p_hash_1).b as i32 - 16 * old as i32 + (*p_hash_1).a as i32) as
             u16;
 }
+
 extern "C" fn hash_32bit(p_hash_1: &Hash) -> u32 {
     return ((*p_hash_1).a as i32 & 65535) as u32 |
             (((*p_hash_1).b as i32 & 65535) as u32) << 16;
 }
+
 extern "C" fn hash_once(z: *const i8) -> u32 {
     let mut a: u16 = 0 as u16;
     let mut b: u16 = 0 as u16;
@@ -70,6 +78,7 @@ extern "C" fn hash_once(z: *const i8) -> u32 {
     }
     return a as u32 | (b as u32) << 16;
 }
+
 extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -118,6 +127,7 @@ extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
         }
     }
 }
+
 extern "C" fn delta_get_int(pz: &mut *const i8, p_len_1: &mut i32) -> u32 {
     let mut v: u32 = 0 as u32;
     let mut c: i32 = 0;
@@ -137,6 +147,7 @@ extern "C" fn delta_get_int(pz: &mut *const i8, p_len_1: &mut i32) -> u32 {
     *pz = z as *mut i8 as *const i8;
     return v;
 }
+
 extern "C" fn digit_count(v: i32) -> i32 {
     let mut i: u32 = 0 as u32;
     let mut x: u32 = 0 as u32;
@@ -153,6 +164,7 @@ extern "C" fn digit_count(v: i32) -> i32 {
     }
     return i as i32;
 }
+
 extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     let mut z: *const u8 = z_in_1 as *const u8;
     let z_end: *const u8 =
@@ -249,6 +261,7 @@ extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     }
     return sum;
 }
+
 extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
     z_out_1: *const i8, len_out_1: u32, mut z_delta_1: *mut i8) -> i32 {
     let mut i: i32 = 0;
@@ -517,6 +530,7 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
     unsafe { sqlite3_free(collide as *mut ()) };
     return unsafe { z_delta_1.offset_from(z_orig_delta) } as i64 as i32;
 }
+
 extern "C" fn delta_output_size(mut z_delta_1: *const i8,
     mut len_delta_1: i32) -> i32 {
     let mut size: i32 = 0;
@@ -526,6 +540,7 @@ extern "C" fn delta_output_size(mut z_delta_1: *const i8,
     }
     return size;
 }
+
 extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
     mut z_delta_1: *const i8, mut len_delta_1: i32, mut z_out_1: *mut i8)
     -> i32 {
@@ -730,6 +745,7 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
     }
     return -1;
 }
+
 extern "C" fn delta_create_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_orig: *const i8 = core::ptr::null();
@@ -785,6 +801,7 @@ extern "C" fn delta_create_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn delta_apply_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_orig: *const i8 = core::ptr::null();
@@ -851,6 +868,7 @@ extern "C" fn delta_apply_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn delta_output_size_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_delta: *const i8 = core::ptr::null();
@@ -881,11 +899,13 @@ extern "C" fn delta_output_size_func(context: *mut Sqlite3Context, argc: i32,
         return;
     } else { unsafe { sqlite3_result_int(context, n_out) }; }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DeltaparsevtabVtab {
     base: Sqlite3Vtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DeltaparsevtabCursor {
@@ -898,11 +918,13 @@ struct DeltaparsevtabCursor {
     a1: u32,
     a2: u32,
 }
+
 static mut az_op: [*const i8; 6] =
     [c"SIZE".as_ptr() as *const i8, c"COPY".as_ptr() as *const i8,
             c"INSERT".as_ptr() as *const i8,
             c"CHECKSUM".as_ptr() as *const i8, c"ERROR".as_ptr() as *const i8,
             c"EOF".as_ptr() as *const i8];
+
 extern "C" fn deltaparsevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -930,11 +952,13 @@ extern "C" fn deltaparsevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn deltaparsevtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut DeltaparsevtabVtab = p_vtab_1 as *mut DeltaparsevtabVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn deltaparsevtab_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut DeltaparsevtabCursor = core::ptr::null_mut();
@@ -951,12 +975,14 @@ extern "C" fn deltaparsevtab_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn deltaparsevtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut DeltaparsevtabCursor = cur as *mut DeltaparsevtabCursor;
     unsafe { sqlite3_free(unsafe { (*p_cur).a_delta } as *mut ()) };
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn deltaparsevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut DeltaparsevtabCursor = cur as *mut DeltaparsevtabCursor;
     let mut z: *const i8 = core::ptr::null();
@@ -1121,6 +1147,7 @@ extern "C" fn deltaparsevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn deltaparsevtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -1304,6 +1331,7 @@ extern "C" fn deltaparsevtab_column(cur: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn deltaparsevtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const DeltaparsevtabCursor =
@@ -1311,6 +1339,7 @@ extern "C" fn deltaparsevtab_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_cursor } };
     return 0;
 }
+
 extern "C" fn deltaparsevtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const DeltaparsevtabCursor =
         cur as *mut DeltaparsevtabCursor as *const DeltaparsevtabCursor;
@@ -1318,6 +1347,7 @@ extern "C" fn deltaparsevtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
                 unsafe { (*p_cur).i_cursor } >= unsafe { (*p_cur).n_delta })
             as i32;
 }
+
 extern "C" fn deltaparsevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1385,6 +1415,7 @@ extern "C" fn deltaparsevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     };
     return 0;
 }
+
 extern "C" fn deltaparsevtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -1442,6 +1473,7 @@ extern "C" fn deltaparsevtab_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64 };
     return 19;
 }
+
 static mut deltaparsevtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1470,6 +1502,7 @@ static mut deltaparsevtab_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fossildelta_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1512,6 +1545,7 @@ pub extern "C" fn sqlite3_fossildelta_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 static z_digits: [i8; 65] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 65 as i8, 66 as i8, 67 as i8,
@@ -1524,6 +1558,7 @@ static z_digits: [i8; 65] =
             109 as i8, 110 as i8, 111 as i8, 112 as i8, 113 as i8, 114 as i8,
             115 as i8, 116 as i8, 117 as i8, 118 as i8, 119 as i8, 120 as i8,
             121 as i8, 122 as i8, 126 as i8, 0 as i8];
+
 static z_value: [i8; 256] =
     [-1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8,
             -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8,
@@ -1568,8 +1603,11 @@ static z_value: [i8; 256] =
             -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8,
             -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8, -1 as i8,
             -1 as i8, -1 as i8];
+
 static byte_order_test: i32 = 1 as i32;
+
 static enc: i32 = (1 | 2097152) as i32;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

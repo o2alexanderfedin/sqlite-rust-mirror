@@ -1,14 +1,18 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PrefixesVtab {
     base: Sqlite3Vtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PrefixesCursor {
@@ -17,6 +21,7 @@ struct PrefixesCursor {
     z_str: *mut i8,
     n_str: i32,
 }
+
 extern "C" fn prefixes_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -44,11 +49,13 @@ extern "C" fn prefixes_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     return rc;
 }
+
 extern "C" fn prefixes_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut PrefixesVtab = p_vtab_1 as *mut PrefixesVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn prefixes_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut PrefixesCursor = core::ptr::null_mut();
@@ -65,12 +72,14 @@ extern "C" fn prefixes_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn prefixes_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut PrefixesCursor = cur as *mut PrefixesCursor;
     unsafe { sqlite3_free(unsafe { (*p_cur).z_str } as *mut ()) };
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn prefixes_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut PrefixesCursor = cur as *mut PrefixesCursor;
     {
@@ -81,6 +90,7 @@ extern "C" fn prefixes_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn prefixes_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const PrefixesCursor =
@@ -107,6 +117,7 @@ extern "C" fn prefixes_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn prefixes_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const PrefixesCursor =
@@ -114,12 +125,14 @@ extern "C" fn prefixes_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 extern "C" fn prefixes_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const PrefixesCursor =
         cur as *mut PrefixesCursor as *const PrefixesCursor;
     return (unsafe { (*p_cur).i_rowid } > unsafe { (*p_cur).n_str } as i64) as
             i32;
 }
+
 extern "C" fn prefixes_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -149,6 +162,7 @@ extern "C" fn prefixes_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { (*p_cur).i_rowid = 0 as Sqlite3Int64 };
     return 0;
 }
+
 extern "C" fn prefixes_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -198,6 +212,7 @@ extern "C" fn prefixes_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_rows = 1000000000 as Sqlite3Int64 };
     return 0;
 }
+
 static mut prefixes_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -226,6 +241,7 @@ static mut prefixes_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn prefix_length_func(ctx: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut n_byte: i32 = 0;
@@ -275,6 +291,7 @@ extern "C" fn prefix_length_func(ctx: *mut Sqlite3Context, n_val_1: i32,
     }
     unsafe { sqlite3_result_int(ctx, n_ret) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_prefixes_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -299,6 +316,7 @@ pub extern "C" fn sqlite3_prefixes_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

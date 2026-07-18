@@ -1,9 +1,14 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type TclCommand = *mut Tcl_Command_;
+
 type ClientData = *mut ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MD5Context {
@@ -12,6 +17,7 @@ struct MD5Context {
     bits: [u32; 2],
     in_: [u8; 64],
 }
+
 extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
     let mut t: u32 = 0 as u32;
     '__b0: loop {
@@ -32,6 +38,7 @@ extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
         if !({ let __p = &mut longs; *__p -= 1; *__p } != 0) { break '__b0; }
     }
 }
+
 extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     let mut a: u32 = 0 as u32;
     let mut b: u32 = 0 as u32;
@@ -640,6 +647,7 @@ extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     unsafe { *buf.offset(2 as isize) += c };
     unsafe { *buf.offset(3 as isize) += d };
 }
+
 extern "C" fn md5_init_1(ctx: &mut MD5Context) -> () {
     (*ctx).is_init = 1;
     (*ctx).buf[0 as usize] = 1732584193 as u32;
@@ -649,6 +657,7 @@ extern "C" fn md5_init_1(ctx: &mut MD5Context) -> () {
     (*ctx).bits[0 as usize] = 0 as u32;
     (*ctx).bits[1 as usize] = 0 as u32;
 }
+
 extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
     mut len: u32) -> () {
     let mut t: u32 = 0 as u32;
@@ -707,6 +716,7 @@ extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
             buf as *const (), len as u64)
     };
 }
+
 extern "C" fn md5_final(digest: *mut u8, ctx: &mut MD5Context) -> () {
     let mut count: u32 = 0 as u32;
     let mut p: *mut u8 = core::ptr::null_mut();
@@ -752,6 +762,7 @@ extern "C" fn md5_final(digest: *mut u8, ctx: &mut MD5Context) -> () {
             16 as u64)
     };
 }
+
 extern "C" fn md5_digest_to_base16(digest: *mut u8, z_buf_1: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -784,6 +795,7 @@ extern "C" fn md5_digest_to_base16(digest: *mut u8, z_buf_1: *mut i8) -> () {
     }
     unsafe { *z_buf_1.offset(j as isize) = 0 as i8 };
 }
+
 extern "C" fn md5_digest_to_base10x8(digest: *mut u8, z_digest_1: *mut i8)
     -> () {
     let mut i: i32 = 0;
@@ -820,6 +832,7 @@ extern "C" fn md5_digest_to_base10x8(digest: *mut u8, z_digest_1: *mut i8)
     }
     unsafe { *z_digest_1.offset(j as isize) = 0 as i8 };
 }
+
 extern "C" fn md5_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     argv: *mut *const i8) -> i32 {
     let mut ctx: MD5Context = unsafe { core::mem::zeroed() };
@@ -857,6 +870,7 @@ extern "C" fn md5_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     };
     return 0;
 }
+
 extern "C" fn md5file_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     argv: *mut *const i8) -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -930,6 +944,7 @@ extern "C" fn md5file_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn md5_init(interp: *mut TclInterp) -> i32 {
     unsafe {
@@ -984,6 +999,7 @@ pub extern "C" fn md5_init(interp: *mut TclInterp) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn md5step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut MD5Context = core::ptr::null_mut();
@@ -1018,6 +1034,7 @@ extern "C" fn md5step(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn md5finalize(context: *mut Sqlite3Context) -> () {
     let mut p: *mut MD5Context = core::ptr::null_mut();
     let mut digest: [u8; 16] = [0; 16];
@@ -1040,6 +1057,7 @@ extern "C" fn md5finalize(context: *mut Sqlite3Context) -> () {
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn md5_register(db: *mut Sqlite3, pz_err_msg_1: *const *mut i8,
     p_thunk_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1055,10 +1073,12 @@ pub extern "C" fn md5_register(db: *mut Sqlite3, pz_err_msg_1: *const *mut i8,
     };
     return rc;
 }
+
 static z_encode: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1855,17 +1875,21 @@ extern "C" {
     deleteProc: unsafe extern "C" fn(*mut ()) -> ())
     -> TclCommand;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_Command_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {

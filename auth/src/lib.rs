@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,6 +14,7 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -25,6 +27,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -104,6 +107,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -152,6 +156,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -288,6 +293,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -311,6 +317,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -383,6 +390,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_authorizer(db: *mut Sqlite3,
     x_auth_1:
@@ -408,6 +416,7 @@ pub extern "C" fn sqlite3_set_authorizer(db: *mut Sqlite3,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return 0;
 }
+
 extern "C" fn sqlite_auth_bad_return_code(p_parse_1: *mut Parse) -> () {
     unsafe {
         sqlite3_error_msg(p_parse_1,
@@ -415,6 +424,7 @@ extern "C" fn sqlite_auth_bad_return_code(p_parse_1: *mut Parse) -> () {
     };
     unsafe { (*p_parse_1).rc = 1 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_read_col(p_parse_1: *mut Parse,
     z_tab_1: *const i8, z_col_1: *const i8, i_db_1: i32) -> i32 {
@@ -454,6 +464,7 @@ pub extern "C" fn sqlite3_auth_read_col(p_parse_1: *mut Parse,
     } else if rc != 2 && rc != 0 { sqlite_auth_bad_return_code(p_parse_1); }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_read(p_parse_1: *mut Parse,
     p_expr_1: &mut Expr, p_schema_1: *mut Schema, p_tab_list_1: &SrcList)
@@ -524,6 +535,7 @@ pub extern "C" fn sqlite3_auth_read(p_parse_1: *mut Parse,
         (*p_expr_1).op = 122 as u8;
     }
 }
+
 extern "C" fn real_auth_check(p_parse_1: *mut Parse, code: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8) -> i32 {
     let db: *const Sqlite3 = unsafe { (*p_parse_1).db } as *const Sqlite3;
@@ -549,6 +561,7 @@ extern "C" fn real_auth_check(p_parse_1: *mut Parse, code: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_check(p_parse_1: *mut Parse, code: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8) -> i32 {
@@ -557,6 +570,7 @@ pub extern "C" fn sqlite3_auth_check(p_parse_1: *mut Parse, code: i32,
         return real_auth_check(p_parse_1, code, z_arg1_1, z_arg2_1, z_arg3_1);
     } else { return 0; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_context_push(p_parse_1: *mut Parse,
     p_context_1: &mut AuthContext, z_context_1: *const i8) -> () {
@@ -565,6 +579,7 @@ pub extern "C" fn sqlite3_auth_context_push(p_parse_1: *mut Parse,
     (*p_context_1).z_auth_context = unsafe { (*p_parse_1).z_auth_context };
     unsafe { (*p_parse_1).z_auth_context = z_context_1 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_context_pop(p_context_1: &mut AuthContext)
     -> () {
@@ -576,6 +591,7 @@ pub extern "C" fn sqlite3_auth_context_pop(p_context_1: &mut AuthContext)
         (*p_context_1).p_parse = core::ptr::null_mut();
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3343,41 +3359,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

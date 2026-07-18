@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 type DarwinSizeT = u64;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -63,6 +66,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -135,6 +139,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -147,6 +152,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -226,6 +232,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -362,6 +369,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -410,6 +418,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -445,6 +454,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -468,6 +478,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 extern "C" fn binarize(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut len: i32 = 0;
@@ -486,6 +497,7 @@ extern "C" fn binarize(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { Tcl_SetObjResult(interp, p_ret) };
     return 0;
 }
+
 extern "C" fn test_value_overhead(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -538,6 +550,7 @@ extern "C" fn test_value_overhead(client_data_1: *mut (),
         return 0;
     }
 }
+
 extern "C" fn name_to_enc(interp: *mut TclInterp, p_obj_1: *mut TclObj)
     -> u8 {
     let mut encnames: [EncNameN7EncName; 5] =
@@ -594,6 +607,7 @@ extern "C" fn name_to_enc(interp: *mut TclInterp, p_obj_1: *mut TclObj)
     if unsafe { (*p_enc).enc } as i32 == 4 { return 2 as u8; }
     return unsafe { (*p_enc).enc };
 }
+
 extern "C" fn test_translate(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut enc_from: u8 = 0 as u8;
@@ -657,17 +671,20 @@ extern "C" fn test_translate(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { sqlite3ValueFree(p_val) };
     return 0;
 }
+
 extern "C" fn test_translate_selftest(client_data_1: *mut (),
     interp: *const TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe { sqlite3_utf_self_test() };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EncNameN7EncName {
     z_name: *mut i8,
     enc: u8,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3641,51 +3658,61 @@ extern "C" {
     fn sqlite3_utf_self_test()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -3,6 +3,7 @@
 struct U256 {
     a: [u64; 4],
 }
+
 extern "C" fn u256_times_10(p_x_1: &mut U256) -> () {
     let mut carry: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -21,6 +22,7 @@ extern "C" fn u256_times_10(p_x_1: &mut U256) -> () {
         }
     }
 }
+
 extern "C" fn u256_times_2(p_x_1: &mut U256) -> () {
     let mut carry: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -38,6 +40,7 @@ extern "C" fn u256_times_2(p_x_1: &mut U256) -> () {
         }
     }
 }
+
 extern "C" fn u256_div_10(p_x_1: &mut U256) -> () {
     let mut rem: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -56,6 +59,7 @@ extern "C" fn u256_div_10(p_x_1: &mut U256) -> () {
         }
     }
 }
+
 extern "C" fn u256_div_2(p_x_1: &mut U256) -> () {
     let mut rem: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -73,6 +77,7 @@ extern "C" fn u256_div_2(p_x_1: &mut U256) -> () {
         }
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -309,12 +314,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -328,9 +335,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

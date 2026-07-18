@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,48 +14,82 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinPidT = Int32T;
+
 type PidT = DarwinPidT;
+
 type DarwinSizeT = u64;
+
 type DarwinSsizeT = i64;
+
 type DarwinTimeT = i64;
+
 type DarwinUuidT = [u8; 16];
+
 type UuidT = DarwinUuidT;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type TimeT = DarwinTimeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinSusecondsT = Int32T;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fsid {
     val: [i32; 2],
 }
+
 type FsidT = Fsid;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -77,6 +112,7 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Flock {
@@ -86,6 +122,7 @@ struct Flock {
     l_type: i16,
     l_whence: i16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Statfs {
@@ -107,12 +144,14 @@ struct Statfs {
     f_flags_ext: u32,
     f_reserved: [u32; 7],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timeval {
     tv_sec: i64,
     tv_usec: i32,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -125,6 +164,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -204,6 +244,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -252,6 +293,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -388,6 +430,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -411,6 +454,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -483,6 +527,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixFile {
@@ -508,6 +553,7 @@ struct UnixFile {
     open_flags: i32,
     fs_flags: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixInodeInfo {
@@ -524,12 +570,14 @@ struct UnixInodeInfo {
     p_prev: *mut UnixInodeInfo,
     shared_byte: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixFileId {
     dev: DevT,
     ino: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixUnusedFd {
@@ -537,6 +585,7 @@ struct UnixUnusedFd {
     flags: i32,
     p_next: *mut UnixUnusedFd,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixShmNode {
@@ -553,6 +602,7 @@ struct UnixShmNode {
     p_first: *mut UnixShm,
     a_lock: [i32; 8],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixShm {
@@ -563,6 +613,7 @@ struct UnixShm {
     shared_mask: u16,
     excl_mask: u16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixSyscall {
@@ -570,9 +621,11 @@ struct UnixSyscall {
     p_current: Option<unsafe extern "C" fn() -> ()>,
     p_default: Option<unsafe extern "C" fn() -> ()>,
 }
+
 extern "C" fn posix_open(z_file_1: *const i8, flags: i32, mode: i32) -> i32 {
     return unsafe { open(z_file_1, flags, mode) };
 }
+
 extern "C" fn robust_open(z: *const i8, f: i32, m: ModeT) -> i32 {
     unsafe {
         let mut fd: i32 = 0;
@@ -681,6 +734,7 @@ extern "C" fn robust_open(z: *const i8, f: i32, m: ModeT) -> i32 {
         return fd;
     }
 }
+
 extern "C" fn unix_log_error_at_line(errcode: i32, z_func_1: *const i8,
     mut z_path_1: *const i8, i_line_1: i32) -> i32 {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -696,6 +750,7 @@ extern "C" fn unix_log_error_at_line(errcode: i32, z_func_1: *const i8,
     };
     return errcode;
 }
+
 extern "C" fn open_directory(z_filename: *const i8, p_fd: *mut i32) -> i32 {
     let mut ii: i32 = 0;
     let mut fd: i32 = -1;
@@ -736,9 +791,11 @@ extern "C" fn open_directory(z_filename: *const i8, p_fd: *mut i32) -> i32 {
             c"openDirectory".as_ptr() as *mut i8 as *const i8,
             &raw mut z_dirname[0 as usize] as *mut i8 as *const i8, 3893);
 }
+
 extern "C" fn unix_getpagesize() -> i32 {
     return unsafe { sysconf(29) } as i32;
 }
+
 static mut a_syscall: [UnixSyscall; 29] =
     [UnixSyscall {
                 z_name: c"open".as_ptr() as *const i8,
@@ -957,6 +1014,7 @@ static mut a_syscall: [UnixSyscall; 29] =
                 p_current: None,
                 p_default: None,
             }];
+
 extern "C" fn file_has_moved(p_file_1: &UnixFile) -> i32 {
     unsafe {
         let mut buf: Stat = unsafe { core::mem::zeroed() };
@@ -977,6 +1035,7 @@ extern "C" fn file_has_moved(p_file_1: &UnixFile) -> i32 {
                             unsafe { (*(*p_file_1).p_inode).file_id.ino })) as i32;
     }
 }
+
 extern "C" fn verify_db_file(p_file_1: *mut UnixFile) -> () {
     unsafe {
         let mut buf: Stat = unsafe { core::mem::zeroed() };
@@ -1029,6 +1088,7 @@ extern "C" fn verify_db_file(p_file_1: *mut UnixFile) -> () {
         }
     }
 }
+
 extern "C" fn unix_file_lock(p_file_1: &UnixFile, p_lock_1: *mut Flock)
     -> i32 {
     unsafe {
@@ -1083,9 +1143,11 @@ extern "C" fn unix_file_lock(p_file_1: &UnixFile, p_lock_1: *mut Flock)
         return rc;
     }
 }
+
 extern "C" fn store_last_errno(p_file_1: &mut UnixFile, error: i32) -> () {
     (*p_file_1).last_errno = error;
 }
+
 extern "C" fn sqlite_error_from_posix_error(posix_error_1: i32,
     sqlite_io_err_1: i32) -> i32 {
     { let _ = 0; };
@@ -1103,6 +1165,7 @@ extern "C" fn sqlite_error_from_posix_error(posix_error_1: i32,
         }
     }
 }
+
 extern "C" fn robust_close(p_file_1: *const UnixFile, h: i32, lineno: i32)
     -> () {
     unsafe {
@@ -1126,6 +1189,7 @@ extern "C" fn robust_close(p_file_1: *const UnixFile, h: i32, lineno: i32)
         }
     }
 }
+
 extern "C" fn close_pending_fds(p_file_1: *mut UnixFile) -> () {
     let p_inode: *mut UnixInodeInfo = unsafe { (*p_file_1).p_inode };
     let mut p: *mut UnixUnusedFd = core::ptr::null_mut();
@@ -1147,6 +1211,7 @@ extern "C" fn close_pending_fds(p_file_1: *mut UnixFile) -> () {
     }
     unsafe { (*p_inode).p_unused = core::ptr::null_mut() };
 }
+
 extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
     handle_nfs_unlock_1: i32) -> i32 {
     unsafe {
@@ -1273,14 +1338,18 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
         return rc;
     }
 }
+
 extern "C" fn unix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     { let _ = 0; };
     return posix_unlock(id, e_file_lock_1, 0);
 }
+
 static mut unix_big_lock: *mut Sqlite3Mutex = core::ptr::null_mut();
+
 extern "C" fn unix_enter_mutex() -> () {
     unsafe { { let _ = 0; }; unsafe { sqlite3_mutex_enter(unix_big_lock) }; }
 }
+
 extern "C" fn set_pending_fd(p_file_1: &mut UnixFile) -> () {
     let p_inode: *mut UnixInodeInfo = (*p_file_1).p_inode;
     let p: *mut UnixUnusedFd = (*p_file_1).p_preallocated_unused;
@@ -1290,7 +1359,9 @@ extern "C" fn set_pending_fd(p_file_1: &mut UnixFile) -> () {
     (*p_file_1).h = -1;
     (*p_file_1).p_preallocated_unused = core::ptr::null_mut();
 }
+
 static mut inode_list: *mut UnixInodeInfo = core::ptr::null_mut();
+
 extern "C" fn release_inode_info(p_file_1: *mut UnixFile) -> () {
     unsafe {
         let p_inode: *mut UnixInodeInfo = unsafe { (*p_file_1).p_inode };
@@ -1337,6 +1408,7 @@ extern "C" fn release_inode_info(p_file_1: *mut UnixFile) -> () {
         }
     }
 }
+
 extern "C" fn unix_unmapfile(p_fd_1: &mut UnixFile) -> () {
     unsafe {
         { let _ = 0; };
@@ -1360,6 +1432,7 @@ extern "C" fn unix_unmapfile(p_fd_1: &mut UnixFile) -> () {
         }
     }
 }
+
 extern "C" fn close_unix_file(id: *mut Sqlite3File) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     unsafe { unix_unmapfile(unsafe { &mut *p_file }) };
@@ -1375,9 +1448,11 @@ extern "C" fn close_unix_file(id: *mut Sqlite3File) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn unix_leave_mutex() -> () {
     unsafe { { let _ = 0; }; unsafe { sqlite3_mutex_leave(unix_big_lock) }; }
 }
+
 extern "C" fn unix_close(id: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1400,6 +1475,7 @@ extern "C" fn unix_close(id: *mut Sqlite3File) -> i32 {
     unix_leave_mutex();
     return rc;
 }
+
 extern "C" fn seek_and_read(id: *mut UnixFile, mut offset: Sqlite3Int64,
     mut p_buf_1: *mut (), mut cnt: i32) -> i32 {
     unsafe {
@@ -1447,6 +1523,7 @@ extern "C" fn seek_and_read(id: *mut UnixFile, mut offset: Sqlite3Int64,
         return got + prior;
     }
 }
+
 extern "C" fn unix_read(id: *mut Sqlite3File, mut p_buf_1: *mut (),
     mut amt: i32, mut offset: Sqlite3Int64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1506,6 +1583,7 @@ extern "C" fn unix_read(id: *mut Sqlite3File, mut p_buf_1: *mut (),
         return 10 | 2 << 8;
     }
 }
+
 extern "C" fn seek_and_write_fd(fd: i32, i_off_1: i64, p_buf_1: *const (),
     mut n_buf_1: i32, pi_errno_1: &mut i32) -> i32 {
     unsafe {
@@ -1539,11 +1617,13 @@ extern "C" fn seek_and_write_fd(fd: i32, i_off_1: i64, p_buf_1: *const (),
         return rc;
     }
 }
+
 extern "C" fn seek_and_write(id: &mut UnixFile, offset: i64,
     p_buf_1: *const (), cnt: i32) -> i32 {
     return seek_and_write_fd((*id).h, offset, p_buf_1, cnt,
             &mut (*id).last_errno);
 }
+
 extern "C" fn unix_write(id: *mut Sqlite3File, mut p_buf_1: *const (),
     mut amt: i32, mut offset: Sqlite3Int64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1569,6 +1649,7 @@ extern "C" fn unix_write(id: *mut Sqlite3File, mut p_buf_1: *const (),
     }
     return 0;
 }
+
 extern "C" fn robust_ftruncate(h: i32, sz: Sqlite3Int64) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1596,6 +1677,7 @@ extern "C" fn robust_ftruncate(h: i32, sz: Sqlite3Int64) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn unix_truncate(id: *mut Sqlite3File, mut n_byte_1: i64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = 0;
@@ -1620,6 +1702,7 @@ extern "C" fn unix_truncate(id: *mut Sqlite3File, mut n_byte_1: i64) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn full_fsync(fd: i32, full_sync_1: i32, data_only_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1644,6 +1727,7 @@ extern "C" fn full_fsync(fd: i32, full_sync_1: i32, data_only_1: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn unix_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1684,6 +1768,7 @@ extern "C" fn unix_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn unix_file_size(id: *mut Sqlite3File, p_size_1: *mut i64)
     -> i32 {
     unsafe {
@@ -1715,6 +1800,7 @@ extern "C" fn unix_file_size(id: *mut Sqlite3File, p_size_1: *mut i64)
         return 0;
     }
 }
+
 extern "C" fn unix_is_sharing_shm_node(p_file_1: &UnixFile) -> i32 {
     unsafe {
         let mut p_shm_node: *const UnixShmNode = core::ptr::null();
@@ -1746,6 +1832,7 @@ extern "C" fn unix_is_sharing_shm_node(p_file_1: &UnixFile) -> i32 {
         return (lock.l_type as i32 != 2) as i32;
     }
 }
+
 extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1884,6 +1971,7 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn unix_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -1934,6 +2022,7 @@ extern "C" fn unix_check_reserved_lock(id: *mut Sqlite3File,
         return rc;
     }
 }
+
 extern "C" fn unix_remapfile(p_fd_1: &mut UnixFile, mut n_new_1: i64) -> () {
     unsafe {
         let z_err: *const i8 = c"mmap".as_ptr() as *mut i8 as *const i8;
@@ -2056,6 +2145,7 @@ extern "C" fn unix_remapfile(p_fd_1: &mut UnixFile, mut n_new_1: i64) -> () {
             };
     }
 }
+
 extern "C" fn unix_mapfile(p_fd_1: *mut UnixFile, mut n_map_1: i64) -> i32 {
     unsafe {
         { let _ = 0; };
@@ -2089,6 +2179,7 @@ extern "C" fn unix_mapfile(p_fd_1: *mut UnixFile, mut n_map_1: i64) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn fcntl_size_hint(p_file_1: *mut UnixFile, n_byte_1: i64) -> i32 {
     unsafe {
         if unsafe { (*p_file_1).sz_chunk } > 0 {
@@ -2157,6 +2248,7 @@ extern "C" fn fcntl_size_hint(p_file_1: *mut UnixFile, n_byte_1: i64) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn unix_mode_bit(p_file_1: &mut UnixFile, mask: u8,
     p_arg_1: &mut i32) -> () {
     if *p_arg_1 < 0 {
@@ -2165,10 +2257,12 @@ extern "C" fn unix_mode_bit(p_file_1: &mut UnixFile, mask: u8,
         (*p_file_1).ctrl_flags &= !mask as u16;
     } else { (*p_file_1).ctrl_flags |= mask as i32 as u16; }
 }
+
 static mut az_temp_dirs: [*const i8; 6] =
     [core::ptr::null(), core::ptr::null(), c"/var/tmp".as_ptr() as *const i8,
             c"/usr/tmp".as_ptr() as *const i8, c"/tmp".as_ptr() as *const i8,
             c".".as_ptr() as *const i8];
+
 extern "C" fn unix_temp_file_dir() -> *const i8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -2218,6 +2312,7 @@ extern "C" fn unix_temp_file_dir() -> *const i8 {
         return core::ptr::null();
     }
 }
+
 extern "C" fn unix_get_tempname(n_buf: i32, z_buf: *mut i8) -> i32 {
     unsafe {
         let mut z_dir: *const i8 = core::ptr::null();
@@ -2272,6 +2367,7 @@ extern "C" fn unix_get_tempname(n_buf: i32, z_buf: *mut i8) -> i32 {
         return rc;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ProxyLockingContext {
@@ -2285,6 +2381,7 @@ struct ProxyLockingContext {
     old_locking_context: *mut (),
     p_old_method: *const Sqlite3IoMethods,
 }
+
 extern "C" fn proxy_release_conch(p_file_1: &mut UnixFile) -> i32 {
     let mut rc: i32 = 0;
     let mut p_ctx: *mut ProxyLockingContext = core::ptr::null_mut();
@@ -2302,6 +2399,7 @@ extern "C" fn proxy_release_conch(p_file_1: &mut UnixFile) -> i32 {
     unsafe { (*p_ctx).conch_held = 0 };
     return rc;
 }
+
 extern "C" fn proxy_close(id: *mut Sqlite3File) -> i32 {
     if !(id).is_null() {
         let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -2367,6 +2465,7 @@ extern "C" fn proxy_close(id: *mut Sqlite3File) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn proxy_get_host_id(p_host_id_1: *mut u8, p_error_1: *mut i32)
     -> i32 {
     { let _ = 0; };
@@ -2385,6 +2484,7 @@ extern "C" fn proxy_get_host_id(p_host_id_1: *mut u8, p_error_1: *mut i32)
     }
     return 0;
 }
+
 extern "C" fn unix_sleep(not_used: *mut Sqlite3Vfs, microseconds: i32)
     -> i32 {
     let mut sp: Timespec = unsafe { core::mem::zeroed() };
@@ -2397,6 +2497,7 @@ extern "C" fn unix_sleep(not_used: *mut Sqlite3Vfs, microseconds: i32)
     { let _ = not_used; };
     return microseconds;
 }
+
 extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
     my_host_id_1: *const u8) -> i32 {
     unsafe {
@@ -2554,6 +2655,7 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
         return rc;
     }
 }
+
 extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
     lock_type_1: i32) -> i32 {
     unsafe {
@@ -2670,6 +2772,7 @@ extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
         return rc;
     }
 }
+
 extern "C" fn proxy_get_lock_path(db_path_1: *const i8, l_path_1: *mut i8,
     max_len_1: u64) -> i32 {
     let mut len: i32 = 0;
@@ -2718,6 +2821,7 @@ extern "C" fn proxy_get_lock_path(db_path_1: *const i8, l_path_1: *mut i8,
     };
     return 0;
 }
+
 extern "C" fn find_reusable_fd(z_path_1: *const i8, mut flags: i32)
     -> *mut UnixUnusedFd {
     unsafe {
@@ -2776,6 +2880,7 @@ extern "C" fn find_reusable_fd(z_path_1: *const i8, mut flags: i32)
         return p_unused;
     }
 }
+
 extern "C" fn proxy_create_lock_path(lock_path_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -2826,25 +2931,30 @@ extern "C" fn proxy_create_lock_path(lock_path_1: *const i8) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn nolock_close(id: *mut Sqlite3File) -> i32 {
     return close_unix_file(id);
 }
+
 extern "C" fn nolock_lock(not_used_1: *mut Sqlite3File, not_used2_1: i32)
     -> i32 {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     return 0;
 }
+
 extern "C" fn nolock_unlock(not_used_1: *mut Sqlite3File, not_used2_1: i32)
     -> i32 {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     return 0;
 }
+
 extern "C" fn nolock_check_reserved_lock(not_used_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     { let _ = not_used_1; };
     unsafe { *p_res_out_1 = 0 };
     return 0;
 }
+
 extern "C" fn set_device_characteristics(p_fd_1: &mut UnixFile) -> () {
     { let _ = 0; };
     if (*p_fd_1).sector_size == 0 {
@@ -2855,16 +2965,19 @@ extern "C" fn set_device_characteristics(p_fd_1: &mut UnixFile) -> () {
         (*p_fd_1).sector_size = 4096;
     }
 }
+
 extern "C" fn unix_sector_size(id: *mut Sqlite3File) -> i32 {
     let p_fd: *mut UnixFile = id as *mut UnixFile;
     set_device_characteristics(unsafe { &mut *p_fd });
     return unsafe { (*p_fd).sector_size };
 }
+
 extern "C" fn unix_device_characteristics(id: *mut Sqlite3File) -> i32 {
     let p_fd: *mut UnixFile = id as *mut UnixFile;
     set_device_characteristics(unsafe { &mut *p_fd });
     return unsafe { (*p_fd).device_characteristics };
 }
+
 extern "C" fn unix_shm_system_lock(p_file_1: &UnixFile, lock_type_1: i32,
     ofst: i32, n: i32) -> i32 {
     unsafe {
@@ -2906,6 +3019,7 @@ extern "C" fn unix_shm_system_lock(p_file_1: &UnixFile, lock_type_1: i32,
         return rc;
     }
 }
+
 extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     let p_db_fd: *mut UnixFile = fd as *mut UnixFile;
@@ -3030,6 +3144,7 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
     }
     return rc;
 }
+
 extern "C" fn unix_shm_barrier(fd: *mut Sqlite3File) -> () {
     { let _ = fd; };
     unsafe { sqlite3_memory_barrier() };
@@ -3037,6 +3152,7 @@ extern "C" fn unix_shm_barrier(fd: *mut Sqlite3File) -> () {
     unix_enter_mutex();
     unix_leave_mutex();
 }
+
 extern "C" fn unix_shm_region_per_map() -> i32 {
     unsafe {
         let shmsz: i32 = 32 * 1024;
@@ -3058,6 +3174,7 @@ extern "C" fn unix_shm_region_per_map() -> i32 {
         return pgsz / shmsz;
     }
 }
+
 extern "C" fn unix_shm_purge(p_fd_1: *mut UnixFile) -> () {
     unsafe {
         let p: *mut UnixShmNode =
@@ -3112,6 +3229,7 @@ extern "C" fn unix_shm_purge(p_fd_1: *mut UnixFile) -> () {
         }
     }
 }
+
 extern "C" fn unix_shm_unmap(fd: *mut Sqlite3File, delete_flag_1: i32)
     -> i32 {
     unsafe {
@@ -3168,6 +3286,7 @@ extern "C" fn unix_shm_unmap(fd: *mut Sqlite3File, delete_flag_1: i32)
         return 0;
     }
 }
+
 extern "C" fn unix_fetch(fd: *mut Sqlite3File, i_off_1: i64, n_amt_1: i32,
     pp: *mut *mut ()) -> i32 {
     let p_fd: *mut UnixFile = fd as *mut UnixFile;
@@ -3197,6 +3316,7 @@ extern "C" fn unix_fetch(fd: *mut Sqlite3File, i_off_1: i64, n_amt_1: i32,
     }
     return 0;
 }
+
 extern "C" fn unix_unfetch(fd: *mut Sqlite3File, i_off_1: i64, p: *mut ())
     -> i32 {
     let p_fd: *mut UnixFile = fd as *mut UnixFile;
@@ -3214,6 +3334,7 @@ extern "C" fn unix_unfetch(fd: *mut Sqlite3File, i_off_1: i64, p: *mut ())
     { let _ = 0; };
     return 0;
 }
+
 static nolock_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -3236,11 +3357,14 @@ static nolock_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 type FinderType =
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods;
+
 extern "C" fn nfs_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     return posix_unlock(id, e_file_lock_1, 1);
 }
+
 static nfs_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -3263,6 +3387,7 @@ static nfs_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn find_inode_info(p_file_1: *mut UnixFile,
     pp_inode_1: &mut *mut UnixInodeInfo) -> i32 {
     unsafe {
@@ -3405,12 +3530,14 @@ extern "C" fn find_inode_info(p_file_1: *mut UnixFile,
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AfpLockingContext {
     reserved: i32,
     db_path: *const i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ByteRangeLockPB2 {
@@ -3421,6 +3548,7 @@ struct ByteRangeLockPB2 {
     start_end_flag: u8,
     fd: i32,
 }
+
 extern "C" fn afp_set_lock(path: *const i8, p_file_1: *mut UnixFile,
     offset: u64, length: u64, set_lock_flag_1: i32) -> i32 {
     let mut pb: ByteRangeLockPB2 = unsafe { core::mem::zeroed() };
@@ -3452,6 +3580,7 @@ extern "C" fn afp_set_lock(path: *const i8, p_file_1: *mut UnixFile,
         return rc;
     } else { return 0; }
 }
+
 extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -3542,6 +3671,7 @@ extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn afp_close(id: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -3564,6 +3694,7 @@ extern "C" fn afp_close(id: *mut Sqlite3File) -> i32 {
     unix_leave_mutex();
     return rc;
 }
+
 extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -3726,6 +3857,7 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn afp_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -3768,6 +3900,7 @@ extern "C" fn afp_check_reserved_lock(id: *mut Sqlite3File,
         return rc;
     }
 }
+
 static afp_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -3790,6 +3923,7 @@ static afp_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn dotlock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32)
     -> i32 {
     unsafe {
@@ -3834,6 +3968,7 @@ extern "C" fn dotlock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32)
         return 0;
     }
 }
+
 extern "C" fn dotlock_close(id: *mut Sqlite3File) -> i32 {
     let p_file: *const UnixFile = id as *mut UnixFile as *const UnixFile;
     { let _ = 0; };
@@ -3841,6 +3976,7 @@ extern "C" fn dotlock_close(id: *mut Sqlite3File) -> i32 {
     unsafe { sqlite3_free(unsafe { (*p_file).locking_context }) };
     return close_unix_file(id);
 }
+
 extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -3884,6 +4020,7 @@ extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn dotlock_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -3910,6 +4047,7 @@ extern "C" fn dotlock_check_reserved_lock(id: *mut Sqlite3File,
         return 0;
     }
 }
+
 static dotlock_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -3932,6 +4070,7 @@ static dotlock_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
     p_id_1: *mut Sqlite3File, z_filename_1: *const i8, ctrl_flags_1: i32)
     -> i32 {
@@ -4048,6 +4187,7 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
         return rc;
     }
 }
+
 extern "C" fn proxy_create_unix_file(path: *const i8,
     pp_file_1: &mut *mut UnixFile, islockfile: i32) -> i32 {
     let mut fd: i32 = 0;
@@ -4233,6 +4373,7 @@ extern "C" fn proxy_create_unix_file(path: *const i8,
     }
     unreachable!();
 }
+
 extern "C" fn proxy_take_conch(p_file_1: *mut UnixFile) -> i32 {
     unsafe {
         let p_ctx: *mut ProxyLockingContext =
@@ -4701,6 +4842,7 @@ extern "C" fn proxy_take_conch(p_file_1: *mut UnixFile) -> i32 {
         }
     }
 }
+
 extern "C" fn proxy_lock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = proxy_take_conch(p_file);
@@ -4723,6 +4865,7 @@ extern "C" fn proxy_lock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn proxy_unlock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = proxy_take_conch(p_file);
@@ -4745,6 +4888,7 @@ extern "C" fn proxy_unlock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn proxy_check_reserved_lock(id: *mut Sqlite3File,
     mut p_res_out: *mut i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -4766,6 +4910,7 @@ extern "C" fn proxy_check_reserved_lock(id: *mut Sqlite3File,
     }
     return rc;
 }
+
 static proxy_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -4788,6 +4933,7 @@ static proxy_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn switch_lock_proxy_path(p_file_1: &mut UnixFile, path: *const i8)
     -> i32 {
     let p_ctx: *mut ProxyLockingContext =
@@ -4827,6 +4973,7 @@ extern "C" fn switch_lock_proxy_path(p_file_1: &mut UnixFile, path: *const i8)
     }
     return rc;
 }
+
 extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
     db_path_1: *mut i8) -> i32 {
     if (*p_file_1).p_method ==
@@ -4863,6 +5010,7 @@ extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
     }
     return 0;
 }
+
 extern "C" fn proxy_create_conch_pathname(db_path_1: *const i8,
     p_conch_path_1: &mut *mut i8) -> i32 {
     let mut i: i32 = 0;
@@ -4910,6 +5058,7 @@ extern "C" fn proxy_create_conch_pathname(db_path_1: *const i8,
     { let _ = 0; };
     return 0;
 }
+
 extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
     path: *const i8) -> i32 {
     unsafe {
@@ -5035,6 +5184,7 @@ extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
         return rc;
     }
 }
+
 extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     '__s34:
@@ -5152,6 +5302,7 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
     { let _ = 0; };
     return 1;
 }
+
 extern "C" fn unix_fcntl_external_reader(p_file_1: &UnixFile,
     pi_out_1: &mut i32) -> i32 {
     unsafe {
@@ -5194,6 +5345,7 @@ extern "C" fn unix_fcntl_external_reader(p_file_1: &UnixFile,
         return rc;
     }
 }
+
 extern "C" fn unix_file_control(id: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     unsafe {
@@ -6052,6 +6204,7 @@ extern "C" fn unix_file_control(id: *mut Sqlite3File, op: i32,
         return 12;
     }
 }
+
 extern "C" fn robust_fchown(fd: i32, uid: UidT, gid: GidT) -> i32 {
     unsafe {
         return if unsafe {
@@ -6083,6 +6236,7 @@ extern "C" fn robust_fchown(fd: i32, uid: UidT, gid: GidT) -> i32 {
             };
     }
 }
+
 extern "C" fn unix_lock_shared_memory(p_db_fd_1: *mut UnixFile,
     p_shm_node_1: &mut UnixShmNode) -> i32 {
     unsafe {
@@ -6132,6 +6286,7 @@ extern "C" fn unix_lock_shared_memory(p_db_fd_1: *mut UnixFile,
         return rc;
     }
 }
+
 extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
     unsafe {
         let mut p: *mut UnixShm = core::ptr::null_mut();
@@ -6285,6 +6440,7 @@ extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn unix_shm_map(fd: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     unsafe {
@@ -6609,6 +6765,7 @@ extern "C" fn unix_shm_map(fd: *mut Sqlite3File, i_region_1: i32,
         unreachable!();
     }
 }
+
 static posix_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -6631,6 +6788,7 @@ static posix_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn autolock_io_finder_impl(file_path_1: *const i8,
     p_new_1: *mut UnixFile) -> *const Sqlite3IoMethods {
     unsafe {
@@ -6684,11 +6842,14 @@ extern "C" fn autolock_io_finder_impl(file_path_1: *const i8,
         } else { return &dotlock_io_methods; }
     }
 }
+
 static autolock_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     autolock_io_finder_impl;
+
 static mut randomness_pid: PidT = 0;
+
 extern "C" fn get_file_mode(z_file_1: *const i8, p_mode_1: *mut ModeT,
     p_uid_1: *mut UidT, p_gid_1: *mut GidT) -> i32 {
     unsafe {
@@ -6714,6 +6875,7 @@ extern "C" fn get_file_mode(z_file_1: *const i8, p_mode_1: *mut ModeT,
         return rc;
     }
 }
+
 extern "C" fn find_create_file_mode(z_path_1: *const i8, flags: i32,
     p_mode_1: *mut ModeT, p_uid_1: *mut UidT, p_gid_1: *mut GidT) -> i32 {
     let mut rc: i32 = 0;
@@ -6755,6 +6917,7 @@ extern "C" fn find_create_file_mode(z_path_1: *const i8, flags: i32,
     }
     return rc;
 }
+
 extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     p_file_1: *mut Sqlite3File, mut flags: i32, p_out_flags_1: *mut i32)
     -> i32 {
@@ -6989,6 +7152,7 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn unix_delete(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     dir_sync_1: i32) -> i32 {
     unsafe {
@@ -7042,6 +7206,7 @@ extern "C" fn unix_delete(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn unix_access(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -7088,6 +7253,7 @@ extern "C" fn unix_access(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbPath {
@@ -7097,6 +7263,7 @@ struct DbPath {
     n_out: i32,
     n_used: i32,
 }
+
 extern "C" fn append_one_path_element(p_path_1: *mut DbPath,
     z_name_1: *const i8, n_name_1: i32) -> () {
     unsafe {
@@ -7226,6 +7393,7 @@ extern "C" fn append_one_path_element(p_path_1: *mut DbPath,
         }
     }
 }
+
 extern "C" fn append_all_path_elements(p_path_1: *mut DbPath,
     z_path_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -7256,6 +7424,7 @@ extern "C" fn append_all_path_elements(p_path_1: *mut DbPath,
         }
     }
 }
+
 extern "C" fn unix_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_path_1: *const i8, n_out_1: i32, z_out_1: *mut i8) -> i32 {
     unsafe {
@@ -7298,11 +7467,13 @@ extern "C" fn unix_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
         return 0;
     }
 }
+
 extern "C" fn unix_dl_open(not_used_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8) -> *mut () {
     { let _ = not_used_1; };
     return unsafe { dlopen(z_filename_1, 2 | 8) };
 }
+
 extern "C" fn unix_dl_error(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     z_buf_out_1: *mut i8) -> () {
     let mut z_err: *const i8 = core::ptr::null();
@@ -7317,6 +7488,7 @@ extern "C" fn unix_dl_error(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     }
     unix_leave_mutex();
 }
+
 extern "C" fn unix_dl_sym(not_used_1: *mut Sqlite3Vfs, p: *mut (),
     z_sym_1: *const i8) -> unsafe extern "C" fn() -> () {
     let mut x:
@@ -7331,11 +7503,13 @@ extern "C" fn unix_dl_sym(not_used_1: *mut Sqlite3Vfs, p: *mut (),
             });
     return unsafe { x.unwrap()(p, z_sym_1) };
 }
+
 extern "C" fn unix_dl_close(not_used_1: *mut Sqlite3Vfs, p_handle_1: *mut ())
     -> () {
     { let _ = not_used_1; };
     unsafe { dlclose(p_handle_1) };
 }
+
 extern "C" fn unix_randomness(not_used_1: *mut Sqlite3Vfs, mut n_buf_1: i32,
     z_buf_1: *mut i8) -> i32 {
     unsafe {
@@ -7395,6 +7569,7 @@ extern "C" fn unix_randomness(not_used_1: *mut Sqlite3Vfs, mut n_buf_1: i32,
         return n_buf_1;
     }
 }
+
 extern "C" fn unix_current_time_int64(not_used_1: *mut Sqlite3Vfs,
     pi_now_1: *mut Sqlite3Int64) -> i32 {
     let rc: i32 = 0;
@@ -7408,6 +7583,7 @@ extern "C" fn unix_current_time_int64(not_used_1: *mut Sqlite3Vfs,
     { let _ = not_used_1; };
     return rc;
 }
+
 extern "C" fn unix_current_time(not_used_1: *mut Sqlite3Vfs,
     pr_now_1: *mut f64) -> i32 {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -7417,6 +7593,7 @@ extern "C" fn unix_current_time(not_used_1: *mut Sqlite3Vfs,
     unsafe { *pr_now_1 = i as f64 / 86400000.0 };
     return rc;
 }
+
 extern "C" fn unix_get_last_error(not_used_1: *mut Sqlite3Vfs,
     not_used2_1: i32, not_used3_1: *mut i8) -> i32 {
     { let _ = not_used_1; };
@@ -7424,6 +7601,7 @@ extern "C" fn unix_get_last_error(not_used_1: *mut Sqlite3Vfs,
     { let _ = not_used3_1; };
     return unsafe { *unsafe { __error() } };
 }
+
 extern "C" fn unix_set_system_call(p_not_used_1: *mut Sqlite3Vfs,
     z_name_1: *const i8, mut p_new_func_1: unsafe extern "C" fn() -> ())
     -> i32 {
@@ -7499,6 +7677,7 @@ extern "C" fn unix_set_system_call(p_not_used_1: *mut Sqlite3Vfs,
         return rc;
     }
 }
+
 extern "C" fn unix_get_system_call(p_not_used_1: *mut Sqlite3Vfs,
     z_name_1: *const i8) -> unsafe extern "C" fn() -> () {
     unsafe {
@@ -7532,6 +7711,7 @@ extern "C" fn unix_get_system_call(p_not_used_1: *mut Sqlite3Vfs,
             };
     }
 }
+
 extern "C" fn unix_next_system_call(p: *mut Sqlite3Vfs, z_name_1: *const i8)
     -> *const i8 {
     unsafe {
@@ -7577,36 +7757,43 @@ extern "C" fn unix_next_system_call(p: *mut Sqlite3Vfs, z_name_1: *const i8)
         return core::ptr::null();
     }
 }
+
 extern "C" fn nolock_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &nolock_io_methods;
 }
+
 static nolock_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     nolock_io_finder_impl;
+
 extern "C" fn dotlock_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &dotlock_io_methods;
 }
+
 static dotlock_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     dotlock_io_finder_impl;
+
 extern "C" fn posix_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &posix_io_methods;
 }
+
 static posix_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     posix_io_finder_impl;
+
 extern "C" fn robust_flock(fd: i32, op: i32) -> i32 {
     let mut rc: i32 = 0;
     '__b51: loop {
@@ -7617,6 +7804,7 @@ extern "C" fn robust_flock(fd: i32, op: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn flock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     { let _ = 0; };
@@ -7630,11 +7818,13 @@ extern "C" fn flock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return 10 | 8 << 8;
     } else { unsafe { (*p_file).e_file_lock = 0 as u8 }; return 0; }
 }
+
 extern "C" fn flock_close(id: *mut Sqlite3File) -> i32 {
     { let _ = 0; };
     flock_unlock(id, 0);
     return close_unix_file(id);
 }
+
 extern "C" fn flock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -7652,6 +7842,7 @@ extern "C" fn flock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     } else { unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 }; }
     return rc;
 }
+
 extern "C" fn flock_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     { let _ = id; };
@@ -7660,6 +7851,7 @@ extern "C" fn flock_check_reserved_lock(id: *mut Sqlite3File,
     unsafe { *p_res_out_1 = 0 };
     return 0;
 }
+
 static flock_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -7682,46 +7874,55 @@ static flock_io_methods: Sqlite3IoMethods =
         x_fetch: Some(unix_fetch),
         x_unfetch: Some(unix_unfetch),
     };
+
 extern "C" fn flock_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &flock_io_methods;
 }
+
 static flock_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     flock_io_finder_impl;
+
 extern "C" fn afp_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &afp_io_methods;
 }
+
 static afp_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     afp_io_finder_impl;
+
 extern "C" fn nfs_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &nfs_io_methods;
 }
+
 static nfs_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     nfs_io_finder_impl;
+
 extern "C" fn proxy_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
     { let _ = p; };
     return &proxy_io_methods;
 }
+
 static proxy_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
     proxy_io_finder_impl;
+
 extern "C" fn unix_temp_file_init() -> () {
     unsafe {
         az_temp_dirs[0 as usize] =
@@ -7733,6 +7934,7 @@ extern "C" fn unix_temp_file_init() -> () {
                 *const i8;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_init() -> i32 {
     unsafe {
@@ -7764,10 +7966,12 @@ pub extern "C" fn sqlite3_os_init() -> i32 {
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_end() -> i32 {
     unsafe { unix_big_lock = core::ptr::null_mut(); return 0; }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VxworksFileId {
@@ -7776,13 +7980,16 @@ struct VxworksFileId {
     n_name: i32,
     z_canonical_name: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MappingN7Mapping {
     z_filesystem: *const i8,
     p_methods: *const Sqlite3IoMethods,
 }
+
 static pgsz_1: i32 = 4096 as i32;
+
 static mut a_map: [MappingN7Mapping; 6] =
     [MappingN7Mapping {
                 z_filesystem: c"hfs".as_ptr() as *const i8,
@@ -7808,8 +8015,10 @@ static mut a_map: [MappingN7Mapping; 6] =
                 z_filesystem: core::ptr::null(),
                 p_methods: core::ptr::null(),
             }];
+
 static unix_epoch: Sqlite3Int64 =
     (24405875 as Sqlite3Int64 * 8640000 as Sqlite3Int64) as Sqlite3Int64;
+
 static mut a_vfs: [Sqlite3Vfs; 9] =
     [Sqlite3Vfs {
                 i_version: 3,
@@ -8027,6 +8236,7 @@ static mut a_vfs: [Sqlite3Vfs; 9] =
                 x_get_system_call: Some(unix_get_system_call),
                 x_next_system_call: Some(unix_next_system_call),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -10922,52 +11132,63 @@ extern "C" {
     fn dlsym(__handle: *mut (), __symbol: *const i8)
     -> *mut ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Utimbuf {

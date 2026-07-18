@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,9 +14,13 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinTimeT = i64;
+
 type TimeT = DarwinTimeT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tm {
@@ -31,6 +36,7 @@ struct Tm {
     tm_gmtoff: i64,
     tm_zone: *mut i8,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -43,6 +49,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -122,6 +129,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -170,6 +178,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -306,6 +315,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -329,6 +339,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -401,6 +412,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DateTime {
@@ -418,6 +430,7 @@ struct DateTime {
     n_floor: i8,
     _bitfield_1: u32,
 }
+
 impl DateTime {
     fn raw_s(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x1u32) as i32 }
     fn set_raw_s(&mut self, val: u32) {
@@ -447,11 +460,13 @@ impl DateTime {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 extern "C" fn clear_ymd_hms_tz(p: &mut DateTime) -> () {
     (*p).valid_ymd = 0 as i8;
     (*p).valid_hms = 0 as i8;
     (*p).tz = 0;
 }
+
 extern "C" fn set_date_time_to_current(context: *mut Sqlite3Context,
     p: *mut DateTime) -> i32 {
     unsafe { (*p).i_jd = unsafe { sqlite3_stmt_current_time(context) } };
@@ -463,6 +478,7 @@ extern "C" fn set_date_time_to_current(context: *mut Sqlite3Context,
         return 0;
     } else { return 1; }
 }
+
 extern "C" fn set_raw_date_number(p: &mut DateTime, r: f64) -> () {
     (*p).s = r;
     (*p).set_raw_s(1 as u32 as u32);
@@ -471,6 +487,7 @@ extern "C" fn set_raw_date_number(p: &mut DateTime, r: f64) -> () {
         (*p).valid_jd = 1 as i8;
     }
 }
+
 extern "C" fn get_digits(mut z_date_1: *const i8, mut z_format_1: *const i8,
     __va: &[*mut i32]) -> i32 {
     unsafe {
@@ -598,6 +615,7 @@ extern "C" fn get_digits(mut z_date_1: *const i8, mut z_format_1: *const i8,
         unreachable!();
     }
 }
+
 extern "C" fn parse_timezone(mut z_date_1: *const i8, p: &mut DateTime)
     -> i32 {
     unsafe {
@@ -716,6 +734,7 @@ extern "C" fn parse_timezone(mut z_date_1: *const i8, p: &mut DateTime)
         unreachable!();
     }
 }
+
 extern "C" fn parse_hh_mm_ss(mut z_date_1: *const i8, p: *mut DateTime)
     -> i32 {
     unsafe {
@@ -789,6 +808,7 @@ extern "C" fn parse_hh_mm_ss(mut z_date_1: *const i8, p: *mut DateTime)
         return 0;
     }
 }
+
 extern "C" fn compute_floor(p: &mut DateTime) -> () {
     unsafe {
         { let _ = 0; };
@@ -805,12 +825,14 @@ extern "C" fn compute_floor(p: &mut DateTime) -> () {
         } else { (*p).n_floor = ((*p).d - 29) as i8; }
     }
 }
+
 extern "C" fn datetime_error(p: *mut DateTime) -> () {
     unsafe {
         memset(p as *mut (), 0, core::mem::size_of::<DateTime>() as u64)
     };
     unsafe { (*p).set_is_error(1 as u32 as u32) };
 }
+
 extern "C" fn compute_jd(p: *mut DateTime) -> () {
     unsafe {
         let mut y: i32 = 0;
@@ -864,6 +886,7 @@ extern "C" fn compute_jd(p: *mut DateTime) -> () {
         }
     }
 }
+
 extern "C" fn parse_yyyy_mm_dd(mut z_date_1: *const i8, p: *mut DateTime)
     -> i32 {
     unsafe {
@@ -918,6 +941,7 @@ extern "C" fn parse_yyyy_mm_dd(mut z_date_1: *const i8, p: *mut DateTime)
         }
     }
 }
+
 extern "C" fn parse_date_or_time(context: *mut Sqlite3Context,
     z_date_1: *const i8, p: *mut DateTime) -> i32 {
     let mut r: f64 = 0.0;
@@ -946,6 +970,7 @@ extern "C" fn parse_date_or_time(context: *mut Sqlite3Context,
     }
     return 1;
 }
+
 extern "C" fn auto_adjust_date(p: *mut DateTime) -> () {
     if (unsafe { (*p).raw_s() } == 0) as i32 != 0 ||
             unsafe { (*p).valid_jd } != 0 {
@@ -960,10 +985,12 @@ extern "C" fn auto_adjust_date(p: *mut DateTime) -> () {
         unsafe { (*p).set_raw_s(0 as u32 as u32) };
     }
 }
+
 extern "C" fn valid_julian_day(i_jd_1: Sqlite3Int64) -> i32 {
     return (i_jd_1 >= 0 as i64 &&
                 i_jd_1 <= (108096 as i64) << 32 | 275971583 as i64) as i32;
 }
+
 extern "C" fn compute_ymd(p: *mut DateTime) -> () {
     unsafe {
         let mut z: i32 = 0;
@@ -1003,6 +1030,7 @@ extern "C" fn compute_ymd(p: *mut DateTime) -> () {
         unsafe { (*p).valid_ymd = 1 as i8 };
     }
 }
+
 extern "C" fn compute_hms(p: *mut DateTime) -> () {
     let mut day_ms: i32 = 0;
     let mut day_min: i32 = 0;
@@ -1018,10 +1046,12 @@ extern "C" fn compute_hms(p: *mut DateTime) -> () {
     unsafe { (*p).set_raw_s(0 as u32 as u32) };
     unsafe { (*p).valid_hms = 1 as i8 };
 }
+
 extern "C" fn compute_ymd_hms(p: *mut DateTime) -> () {
     compute_ymd(p);
     compute_hms(p);
 }
+
 extern "C" fn os_localtime(t: *const TimeT, p_tm_1: *mut Tm) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1039,6 +1069,7 @@ extern "C" fn os_localtime(t: *const TimeT, p_tm_1: *mut Tm) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn to_localtime(p: *mut DateTime, p_ctx_1: *mut Sqlite3Context)
     -> i32 {
     unsafe {
@@ -1094,6 +1125,7 @@ extern "C" fn to_localtime(p: *mut DateTime, p_ctx_1: *mut Sqlite3Context)
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -1102,6 +1134,7 @@ struct AnonS0 {
     r_limit: f32,
     r_xform: f32,
 }
+
 static a_xform_type: [AnonS0; 6] =
     [AnonS0 {
                 n_name: 6 as u8,
@@ -1145,6 +1178,7 @@ static a_xform_type: [AnonS0; 6] =
                 r_limit: 14713.0,
                 r_xform: 31536000.0,
             }];
+
 extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
     mut n: i32, p: *mut DateTime, idx: i32) -> i32 {
     unsafe {
@@ -7447,6 +7481,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
         }
     }
 }
+
 extern "C" fn is_date(context: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, p: *mut DateTime) -> i32 {
     unsafe {
@@ -7521,6 +7556,7 @@ extern "C" fn is_date(context: *mut Sqlite3Context, argc: i32,
         return 0;
     }
 }
+
 extern "C" fn julianday_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7529,6 +7565,7 @@ extern "C" fn julianday_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_double(context, x.i_jd as f64 / 86400000.0) };
     }
 }
+
 extern "C" fn unixepoch_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7549,6 +7586,7 @@ extern "C" fn unixepoch_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn date_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -7596,6 +7634,7 @@ extern "C" fn date_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn time_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7638,6 +7677,7 @@ extern "C" fn time_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn datetime_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -7710,11 +7750,13 @@ extern "C" fn datetime_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn days_after_monday(p_date_1: &DateTime) -> i32 {
     { let _ = 0; };
     return (((*p_date_1).i_jd + 43200000 as Sqlite3Int64) /
                     86400000 as Sqlite3Int64) as i32 % 7;
 }
+
 extern "C" fn days_after_jan01(p_date_1: &DateTime) -> i32 {
     unsafe {
         let mut jan01: DateTime = *p_date_1;
@@ -7729,11 +7771,13 @@ extern "C" fn days_after_jan01(p_date_1: &DateTime) -> i32 {
                     86400000 as Sqlite3Int64) as i32;
     }
 }
+
 extern "C" fn days_after_sunday(p_date_1: &DateTime) -> i32 {
     { let _ = 0; };
     return (((*p_date_1).i_jd + 129600000 as Sqlite3Int64) /
                     86400000 as Sqlite3Int64) as i32 % 7;
 }
+
 extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10942,6 +10986,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_str(context, p_res, 2) };
     }
 }
+
 extern "C" fn timediff_func(context: *mut Sqlite3Context, not_used1_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -11047,21 +11092,25 @@ extern "C" fn timediff_func(context: *mut Sqlite3Context, not_used1_1: i32,
         unsafe { sqlite3_result_str(context, &mut s_res, 1) };
     }
 }
+
 extern "C" fn ctime_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     time_func(context, 0, core::ptr::null_mut());
 }
+
 extern "C" fn ctimestamp_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     datetime_func(context, 0, core::ptr::null_mut());
 }
+
 extern "C" fn cdate_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     date_func(context, 0, core::ptr::null_mut());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_date_time_functions() -> () {
     unsafe {
@@ -11073,8 +11122,10 @@ pub extern "C" fn sqlite3_register_date_time_functions() -> () {
         };
     }
 }
+
 static a_mx: [u16; 6] =
     [12 as u16, 14 as u16, 24 as u16, 31 as u16, 59 as u16, 14712 as u16];
+
 static mut a_date_time_funcs: [FuncDef; 10] =
     [FuncDef {
                 n_arg: -1 as i16,
@@ -11196,6 +11247,7 @@ static mut a_date_time_funcs: [FuncDef; 10] =
                 z_name: c"current_date".as_ptr() as *const i8,
                 u: FuncDefU0 { p_hash: core::ptr::null_mut() },
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -13988,41 +14040,49 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

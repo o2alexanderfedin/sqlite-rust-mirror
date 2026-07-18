@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod btree_int_h;
@@ -15,7 +16,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Backup {
@@ -403,6 +412,7 @@ struct Sqlite3Backup {
     is_attached: i32,
     p_next: *mut Sqlite3Backup,
 }
+
 extern "C" fn find_btree(p_error_db_1: *mut Sqlite3, p_db_1: *mut Sqlite3,
     z_db_1: *const i8) -> *mut Btree {
     let mut i: i32 = 0;
@@ -435,6 +445,7 @@ extern "C" fn find_btree(p_error_db_1: *mut Sqlite3, p_db_1: *mut Sqlite3,
     }
     return unsafe { (*unsafe { (*p_db_1).a_db.offset(i as isize) }).p_bt };
 }
+
 extern "C" fn check_read_transaction(db: *mut Sqlite3, p: *mut Btree) -> i32 {
     if unsafe { sqlite3_btree_txn_state(p) } != 0 {
         unsafe {
@@ -446,6 +457,7 @@ extern "C" fn check_read_transaction(db: *mut Sqlite3, p: *mut Btree) -> i32 {
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
     z_dest_db_1: *const i8, p_src_db_1: *mut Sqlite3, z_src_db_1: *const i8)
@@ -509,9 +521,11 @@ pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
     unsafe { sqlite3_mutex_leave(unsafe { (*p_src_db_1).mutex }) };
     return p;
 }
+
 extern "C" fn is_fatal_error(rc: i32) -> i32 {
     return (rc != 0 && rc != 5 && rc != 6) as i32;
 }
+
 extern "C" fn set_dest_pgsz(p_dest_1: *mut Btree, p_src_1: *mut Btree)
     -> i32 {
     return unsafe {
@@ -519,6 +533,7 @@ extern "C" fn set_dest_pgsz(p_dest_1: *mut Btree, p_src_1: *mut Btree)
                 unsafe { sqlite3_btree_get_page_size(p_src_1) }, 0, 0)
         };
 }
+
 extern "C" fn backup_one_page(p: &Sqlite3Backup, i_src_pg_1: Pgno,
     z_src_data_1: *const u8, b_update_1: i32) -> i32 {
     unsafe {
@@ -599,6 +614,7 @@ extern "C" fn backup_one_page(p: &Sqlite3Backup, i_src_pg_1: Pgno,
         return rc;
     }
 }
+
 extern "C" fn attach_backup_object(p: *mut Sqlite3Backup) -> () {
     let mut pp: *mut *mut Sqlite3Backup = core::ptr::null_mut();
     { let _ = 0; };
@@ -612,6 +628,7 @@ extern "C" fn attach_backup_object(p: *mut Sqlite3Backup) -> () {
     unsafe { *pp = p };
     unsafe { (*p).is_attached = 1 };
 }
+
 extern "C" fn backup_truncate_file(p_file_1: *mut Sqlite3File, i_size_1: i64)
     -> i32 {
     let mut i_current: i64 = 0 as i64;
@@ -622,6 +639,7 @@ extern "C" fn backup_truncate_file(p_file_1: *mut Sqlite3File, i_size_1: i64)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
     -> i32 {
@@ -957,6 +975,7 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_finish(p: *mut Sqlite3Backup) -> i32 {
     let mut pp: *mut *mut Sqlite3Backup = core::ptr::null_mut();
@@ -1010,14 +1029,17 @@ pub extern "C" fn sqlite3_backup_finish(p: *mut Sqlite3Backup) -> i32 {
     unsafe { sqlite3_leave_mutex_and_close_zombie(p_src_db) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_remaining(p: &Sqlite3Backup) -> i32 {
     return (*p).n_remaining as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_pagecount(p: &Sqlite3Backup) -> i32 {
     return (*p).n_pagecount as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
     p_from_1: *mut Btree) -> i32 {
@@ -1076,6 +1098,7 @@ pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
     unsafe { sqlite3_btree_leave(p_to_1) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_restart(p_backup_1: *mut Sqlite3Backup)
     -> () {
@@ -1093,6 +1116,7 @@ pub extern "C" fn sqlite3_backup_restart(p_backup_1: *mut Sqlite3Backup)
         }
     }
 }
+
 extern "C" fn backup_update(mut p: *mut Sqlite3Backup, i_page_1: Pgno,
     a_data_1: *const u8) -> () {
     { let _ = 0; };
@@ -1124,6 +1148,7 @@ extern "C" fn backup_update(mut p: *mut Sqlite3Backup, i_page_1: Pgno,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_update(p_backup_1: *mut Sqlite3Backup,
     i_page_1: Pgno, a_data_1: *const u8) -> () {
@@ -1131,6 +1156,7 @@ pub extern "C" fn sqlite3_backup_update(p_backup_1: *mut Sqlite3Backup,
         backup_update(p_backup_1, i_page_1, a_data_1);
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3904,41 +3930,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

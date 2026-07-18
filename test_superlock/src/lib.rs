@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SuperlockBusy {
@@ -9,12 +12,14 @@ struct SuperlockBusy {
     p_busy_arg: *mut (),
     n_busy: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Superlock {
     db: *mut Sqlite3,
     b_wal: i32,
 }
+
 extern "C" fn superlock_busy_handler(p_ctx_1: *mut (), unused_1: i32) -> i32 {
     let p_busy: *mut SuperlockBusy = p_ctx_1 as *mut SuperlockBusy;
     if !unsafe { (*p_busy).x_busy.is_some() } as i32 != 0 { return 0; }
@@ -30,6 +35,7 @@ extern "C" fn superlock_busy_handler(p_ctx_1: *mut (), unused_1: i32) -> i32 {
                 })
         };
 }
+
 extern "C" fn superlock_is_wal(p_lock_1: &mut Superlock) -> i32 {
     let mut rc: i32 = 0;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -54,6 +60,7 @@ extern "C" fn superlock_is_wal(p_lock_1: &mut Superlock) -> i32 {
     }
     return unsafe { sqlite3_finalize(p_stmt) };
 }
+
 extern "C" fn superlock_shm_lock(fd: *mut Sqlite3File, idx: i32,
     n_byte_1: i32, p_busy_1: *mut SuperlockBusy) -> i32 {
     let mut rc: i32 = 0;
@@ -72,6 +79,7 @@ extern "C" fn superlock_shm_lock(fd: *mut Sqlite3File, idx: i32,
     }
     return rc;
 }
+
 extern "C" fn superlock_wal_lock(db: *mut Sqlite3,
     p_busy_1: *mut SuperlockBusy) -> i32 {
     let mut rc: i32 = 0;
@@ -96,6 +104,7 @@ extern "C" fn superlock_wal_lock(db: *mut Sqlite3,
     rc = superlock_shm_lock(fd, 3, 8 - 3, p_busy_1);
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3demo_superunlock(p_lock_1: *mut ()) -> () {
     let p: *mut Superlock = p_lock_1 as *mut Superlock;
@@ -125,6 +134,7 @@ pub extern "C" fn sqlite3demo_superunlock(p_lock_1: *mut ()) -> () {
     unsafe { sqlite3_close(unsafe { (*p).db }) };
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3demo_superlock(z_path_1: *const i8,
     z_vfs_1: *const i8,
@@ -184,6 +194,7 @@ pub extern "C" fn sqlite3demo_superlock(z_path_1: *const i8,
     } else { *pp_lock_1 = p_lock as *mut (); }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

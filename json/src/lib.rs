@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -14,8 +15,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinIntptrT = i64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +32,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +112,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +161,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +298,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +322,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +395,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonParse {
@@ -409,6 +419,7 @@ struct JsonParse {
     i_label: u32,
     a_ins: *mut u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonCache {
@@ -416,6 +427,7 @@ struct JsonCache {
     n_used: i32,
     a: [*mut JsonParse; 4],
 }
+
 extern "C" fn json_cache_search(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value) -> *mut JsonParse {
     let mut p: *mut JsonCache = core::ptr::null_mut();
@@ -482,6 +494,7 @@ extern "C" fn json_cache_search(ctx: *mut Sqlite3Context,
         return unsafe { (*p).a[i as usize] };
     } else { return core::ptr::null_mut(); }
 }
+
 extern "C" fn json_parse_reset(p_parse_1: &mut JsonParse) -> () {
     { let _ = 0; };
     if (*p_parse_1).b_json_is_rc_str != 0 {
@@ -499,6 +512,7 @@ extern "C" fn json_parse_reset(p_parse_1: &mut JsonParse) -> () {
         (*p_parse_1).n_blob_alloc = 0 as u32;
     }
 }
+
 extern "C" fn json_parse_free(p_parse_1: *mut JsonParse) -> () {
     if !(p_parse_1).is_null() {
         if unsafe { (*p_parse_1).n_jp_ref } > 1 as u32 {
@@ -517,6 +531,7 @@ extern "C" fn json_parse_free(p_parse_1: *mut JsonParse) -> () {
         }
     }
 }
+
 extern "C" fn jsonb_payload_size(p_parse_1: &JsonParse, i: u32,
     p_sz_1: &mut u32) -> u32 {
     let mut x: u8 = 0 as u8;
@@ -605,6 +620,7 @@ extern "C" fn jsonb_payload_size(p_parse_1: &JsonParse, i: u32,
     *p_sz_1 = sz;
     return n;
 }
+
 static json_is_ok: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
@@ -643,6 +659,7 @@ static json_is_ok: [i8; 256] =
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8];
+
 extern "C" fn json_is2_hex(z: *const i8) -> i32 {
     unsafe {
         return (unsafe {
@@ -657,14 +674,17 @@ extern "C" fn json_is2_hex(z: *const i8) -> i32 {
                                 } as i32 & 8 != 0) as i32;
     }
 }
+
 extern "C" fn json_is4_hex(z: *const i8) -> i32 {
     return (json_is2_hex(z) != 0 &&
                 json_is2_hex(unsafe { &*z.offset(2 as isize) }) != 0) as i32;
 }
+
 extern "C" fn json_hex_to_int(mut h: i32) -> u8 {
     h += 9 * (1 & h >> 6);
     return (h & 15) as u8;
 }
+
 extern "C" fn json_hex_to_int4(z: *const i8) -> u32 {
     let mut v: u32 = 0 as u32;
     v =
@@ -678,6 +698,7 @@ extern "C" fn json_hex_to_int4(z: *const i8) -> u32 {
                     i32) as u32;
     return v;
 }
+
 extern "C" fn json_bytes_to_bypass(z: *const i8, n: u32) -> u32 {
     let mut i: u32 = 0 as u32;
     while (i + 1 as u32) < n {
@@ -709,6 +730,7 @@ extern "C" fn json_bytes_to_bypass(z: *const i8, n: u32) -> u32 {
     }
     return i;
 }
+
 extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
     -> u32 {
     unsafe {
@@ -1638,6 +1660,7 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
         }
     }
 }
+
 extern "C" fn jsonb_validity_check(p_parse_1: *const JsonParse, i: u32,
     i_end_1: u32, i_depth_1: u32) -> u32 {
     unsafe {
@@ -3659,6 +3682,7 @@ extern "C" fn jsonb_validity_check(p_parse_1: *const JsonParse, i: u32,
         }
     }
 }
+
 extern "C" fn json_arg_is_jsonb(p_arg_1: *mut Sqlite3Value, p: *mut JsonParse)
     -> i32 {
     unsafe {
@@ -3698,6 +3722,7 @@ extern "C" fn json_arg_is_jsonb(p_arg_1: *mut Sqlite3Value, p: *mut JsonParse)
         return 0;
     }
 }
+
 extern "C" fn json_blob_expand(p_parse_1: &mut JsonParse, n_1: u32) -> i32 {
     let mut a_new: *mut u8 = core::ptr::null_mut();
     let mut t: u64 = 0 as u64;
@@ -3720,6 +3745,7 @@ extern "C" fn json_blob_expand(p_parse_1: &mut JsonParse, n_1: u32) -> i32 {
     (*p_parse_1).n_blob_alloc = t as u32;
     return 0;
 }
+
 extern "C" fn json_blob_make_editable(p_parse_1: *mut JsonParse,
     n_extra_1: u32) -> i32 {
     let mut a_old: *const u8 = core::ptr::null();
@@ -3738,6 +3764,7 @@ extern "C" fn json_blob_make_editable(p_parse_1: *mut JsonParse,
     };
     return 1;
 }
+
 extern "C" fn json_blob_expand_and_append_node(p_parse_1: *mut JsonParse,
     e_type_1: u8, sz_payload_1: u64, a_payload_1: *const ()) -> () {
     if json_blob_expand(unsafe { &mut *p_parse_1 },
@@ -3749,6 +3776,7 @@ extern "C" fn json_blob_expand_and_append_node(p_parse_1: *mut JsonParse,
         json_blob_append_node(p_parse_1, e_type_1, sz_payload_1, a_payload_1)
     };
 }
+
 extern "C" fn json_blob_append_node(p_parse_1: *mut JsonParse, e_type_1: u8,
     sz_payload_1: u64, a_payload_1: *const ()) -> () {
     let mut a: *mut u8 = core::ptr::null_mut();
@@ -3809,6 +3837,7 @@ extern "C" fn json_blob_append_node(p_parse_1: *mut JsonParse, e_type_1: u8,
         };
     }
 }
+
 extern "C" fn json5_whitespace(z_in_1: *const i8) -> i32 {
     let mut n: i32 = 0;
     let mut z: *const u8 = core::ptr::null();
@@ -4018,6 +4047,7 @@ extern "C" fn json5_whitespace(z_in_1: *const i8) -> i32 {
     }
     unreachable!();
 }
+
 extern "C" fn json_is4_hex_b(z: *const i8, p_op_1: &mut i32) -> i32 {
     if unsafe { *z.offset(0 as isize) } as i32 != 'u' as i32 { return 0; }
     if (json_is4_hex(unsafe { &*z.offset(1 as isize) }) == 0) as i32 != 0 {
@@ -4026,6 +4056,7 @@ extern "C" fn json_is4_hex_b(z: *const i8, p_op_1: &mut i32) -> i32 {
     *p_op_1 = 8;
     return 1;
 }
+
 static json_is_space: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 1 as i8, 1 as i8, 0 as i8, 0 as i8, 1 as i8, 0 as i8,
@@ -4064,8 +4095,10 @@ static json_is_space: [i8; 256] =
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8];
+
 static json_spaces: [i8; 5] =
     [9 as i8, 10 as i8, 13 as i8, 32 as i8, 0 as i8];
+
 extern "C" fn json_blob_change_payload_size(p_parse_1: *mut JsonParse, i: u32,
     sz_payload_1: u32) -> i32 {
     let mut a: *mut u8 = core::ptr::null_mut();
@@ -4158,6 +4191,7 @@ extern "C" fn json_blob_change_payload_size(p_parse_1: *mut JsonParse, i: u32,
     }
     return delta;
 }
+
 extern "C" fn json_blob_expand_and_append_one_byte(p_parse_1: *mut JsonParse,
     c: u8) -> () {
     json_blob_expand(unsafe { &mut *p_parse_1 },
@@ -4176,6 +4210,7 @@ extern "C" fn json_blob_expand_and_append_one_byte(p_parse_1: *mut JsonParse,
         };
     }
 }
+
 extern "C" fn json_blob_append_one_byte(p_parse_1: *mut JsonParse, c: u8)
     -> () {
     if unsafe { (*p_parse_1).n_blob } >= unsafe { (*p_parse_1).n_blob_alloc }
@@ -4194,6 +4229,7 @@ extern "C" fn json_blob_append_one_byte(p_parse_1: *mut JsonParse, c: u8)
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct NanInfName {
@@ -4205,6 +4241,7 @@ struct NanInfName {
     z_match: *mut i8,
     z_repl: *mut i8,
 }
+
 static mut a_nan_inf_name: [NanInfName; 5] =
     [NanInfName {
                 c1: 'i' as i32 as i8,
@@ -4251,6 +4288,7 @@ static mut a_nan_inf_name: [NanInfName; 5] =
                 z_match: c"SNaN".as_ptr() as *mut i8,
                 z_repl: c"null".as_ptr() as *mut i8,
             }];
+
 extern "C" fn json_translate_text_to_blob(p_parse_1: *mut JsonParse,
     mut i: u32) -> i32 {
     unsafe {
@@ -5793,6 +5831,7 @@ extern "C" fn json_translate_text_to_blob(p_parse_1: *mut JsonParse,
         }
     }
 }
+
 extern "C" fn json_convert_text_to_blob(p_parse_1: *mut JsonParse,
     p_ctx_1: *mut Sqlite3Context) -> i32 {
     let mut i: i32 = 0;
@@ -5835,6 +5874,7 @@ extern "C" fn json_convert_text_to_blob(p_parse_1: *mut JsonParse,
     }
     return 0;
 }
+
 extern "C" fn json_cache_delete(p: *mut JsonCache) -> () {
     let mut i: i32 = 0;
     {
@@ -5850,9 +5890,11 @@ extern "C" fn json_cache_delete(p: *mut JsonCache) -> () {
     }
     unsafe { sqlite3_db_free(unsafe { (*p).db }, p as *mut ()) };
 }
+
 extern "C" fn json_cache_delete_generic(p: *mut ()) -> () {
     json_cache_delete(p as *mut JsonCache);
 }
+
 extern "C" fn json_cache_insert(ctx: *mut Sqlite3Context,
     p_parse_1: *mut JsonParse) -> i32 {
     let mut p: *mut JsonCache = core::ptr::null_mut();
@@ -5900,6 +5942,7 @@ extern "C" fn json_cache_insert(ctx: *mut Sqlite3Context,
     { let __p = unsafe { &mut (*p).n_used }; let __t = *__p; *__p += 1; __t };
     return 0;
 }
+
 extern "C" fn json_parse_func_arg(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value, flgs: u32) -> *mut JsonParse {
     let mut e_type: i32 = 0;
@@ -6181,6 +6224,7 @@ extern "C" fn json_parse_func_arg(ctx: *mut Sqlite3Context,
     }
     unreachable!();
 }
+
 extern "C" fn json_bad_path_error(ctx: *mut Sqlite3Context,
     z_path_1: *const i8, rc: i32) -> *mut i8 {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -6216,6 +6260,7 @@ extern "C" fn json_bad_path_error(ctx: *mut Sqlite3Context,
     } else { unsafe { sqlite3_result_error_nomem(ctx) }; }
     return core::ptr::null_mut();
 }
+
 extern "C" fn json_blob_overwrite(a_out_1: *mut u8, a_ins_1: *const u8,
     n_ins_1: u32, d: u32) -> i32 {
     let mut sz_payload: u32 = 0 as u32;
@@ -6321,6 +6366,7 @@ extern "C" fn json_blob_overwrite(a_out_1: *mut u8, a_ins_1: *const u8,
     { let _ = 0; };
     return 1;
 }
+
 extern "C" fn json_blob_edit(p_parse_1: *mut JsonParse, i_del_1: u32,
     n_del_1: u32, a_ins_1: *const u8, n_ins_1: u32) -> () {
     let d: i64 = n_ins_1 as i64 - n_del_1 as i64;
@@ -6364,6 +6410,7 @@ extern "C" fn json_blob_edit(p_parse_1: *mut JsonParse, i_del_1: u32,
         };
     }
 }
+
 extern "C" fn json_label_compare_escaped(mut z_left_1: *const i8,
     mut n_left_1: u32, raw_left_1: i32, mut z_right_1: *const i8,
     mut n_right_1: u32, raw_right_1: i32) -> i32 {
@@ -6453,6 +6500,7 @@ extern "C" fn json_label_compare_escaped(mut z_left_1: *const i8,
         if c_left == 0 as u32 { return 1; }
     }
 }
+
 extern "C" fn json_label_compare(z_left_1: *const i8, n_left_1: u32,
     raw_left_1: i32, z_right_1: *const i8, n_right_1: u32, raw_right_1: i32)
     -> i32 {
@@ -6467,6 +6515,7 @@ extern "C" fn json_label_compare(z_left_1: *const i8, n_left_1: u32,
                 z_right_1, n_right_1, raw_right_1);
     }
 }
+
 extern "C" fn json_after_edit_size_adjust(p_parse_1: *mut JsonParse,
     i_root_1: u32) -> () {
     let mut sz: u32 = 0 as u32;
@@ -6485,6 +6534,7 @@ extern "C" fn json_after_edit_size_adjust(p_parse_1: *mut JsonParse,
             json_blob_change_payload_size(p_parse_1, i_root_1, sz)
     };
 }
+
 extern "C" fn json_create_edit_substructure(p_parse_1: &mut JsonParse,
     p_ins_1: *mut JsonParse, z_tail_1: *const i8) -> u32 {
     let mut rc: i32 = 0;
@@ -6527,6 +6577,7 @@ extern "C" fn json_create_edit_substructure(p_parse_1: &mut JsonParse,
     }
     return rc as u32;
 }
+
 extern "C" fn jsonb_array_count(p_parse_1: *const JsonParse, i_root_1: u32)
     -> u32 {
     let mut n: u32 = 0 as u32;
@@ -6552,6 +6603,7 @@ extern "C" fn jsonb_array_count(p_parse_1: *const JsonParse, i_root_1: u32)
     }
     return k;
 }
+
 extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
     mut z_path_1: *const i8, i_label_1: u32) -> u32 {
     unsafe {
@@ -6901,6 +6953,7 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
         return 4294967294u32;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonString {
@@ -6912,12 +6965,14 @@ struct JsonString {
     e_err: u8,
     z_space: [i8; 100],
 }
+
 extern "C" fn json_string_zero(p: &mut JsonString) -> () {
     (*p).z_buf = &raw mut (*p).z_space[0 as usize] as *mut i8;
     (*p).n_alloc = core::mem::size_of::<[i8; 100]>() as u64;
     (*p).n_used = 0 as u64;
     (*p).b_static = 1 as u8;
 }
+
 extern "C" fn json_string_init(p: *mut JsonString,
     p_ctx_1: *mut Sqlite3Context) -> () {
     unsafe {
@@ -6926,12 +6981,14 @@ extern "C" fn json_string_init(p: *mut JsonString,
         json_string_zero(unsafe { &mut *p });
     }
 }
+
 extern "C" fn json_string_reset(p: *mut JsonString) -> () {
     if (unsafe { (*p).b_static } == 0) as i32 != 0 {
         unsafe { sqlite3_rc_str_unref(unsafe { (*p).z_buf } as *mut ()) };
     }
     json_string_zero(unsafe { &mut *p });
 }
+
 extern "C" fn json_string_oom(p: *mut JsonString) -> () {
     unsafe {
         unsafe { (*p).e_err |= 1 as u8 };
@@ -6941,6 +6998,7 @@ extern "C" fn json_string_oom(p: *mut JsonString) -> () {
         json_string_reset(p);
     }
 }
+
 extern "C" fn json_string_grow(p: *mut JsonString, n_1: u32) -> i32 {
     let n_total: u64 =
         if (n_1 as u64) < unsafe { (*p).n_alloc } {
@@ -6973,6 +7031,7 @@ extern "C" fn json_string_grow(p: *mut JsonString, n_1: u32) -> i32 {
     unsafe { (*p).n_alloc = n_total };
     return 0;
 }
+
 extern "C" fn json_string_expand_and_append(p: *mut JsonString,
     z_in_1: *const i8, n_1: u32) -> () {
     { let _ = 0; };
@@ -6984,6 +7043,7 @@ extern "C" fn json_string_expand_and_append(p: *mut JsonString,
     };
     unsafe { (*p).n_used += n_1 as u64 };
 }
+
 extern "C" fn json_append_raw_nz(p: *mut JsonString, z_in_1: *const i8,
     n_1: u32) -> () {
     { let _ = 0; };
@@ -6998,6 +7058,7 @@ extern "C" fn json_append_raw_nz(p: *mut JsonString, z_in_1: *const i8,
         unsafe { (*p).n_used += n_1 as u64 };
     }
 }
+
 extern "C" fn json_append_raw(p: *mut JsonString, z_in_1: *const i8, n_1: u32)
     -> () {
     if n_1 == 0 as u32 { return; }
@@ -7012,6 +7073,7 @@ extern "C" fn json_append_raw(p: *mut JsonString, z_in_1: *const i8, n_1: u32)
         unsafe { (*p).n_used += n_1 as u64 };
     }
 }
+
 extern "C" fn json_append_char_expand(p: *mut JsonString, c: i8) -> () {
     if json_string_grow(p, 1 as u32) != 0 { return; }
     unsafe {
@@ -7025,6 +7087,7 @@ extern "C" fn json_append_char_expand(p: *mut JsonString, c: i8) -> () {
                 } = c
     };
 }
+
 extern "C" fn json_append_char(p: *mut JsonString, c: i8) -> () {
     if unsafe { (*p).n_used } >= unsafe { (*p).n_alloc } {
         json_append_char_expand(p, c);
@@ -7041,6 +7104,7 @@ extern "C" fn json_append_char(p: *mut JsonString, c: i8) -> () {
         };
     }
 }
+
 unsafe extern "C" fn json_printf(n_1: i32, p: *mut JsonString,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -7065,6 +7129,7 @@ unsafe extern "C" fn json_printf(n_1: i32, p: *mut JsonString,
                     } as i32 as u64
     };
 }
+
 extern "C" fn json_append_control_char(p: &mut JsonString, c: u8) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -7112,6 +7177,7 @@ extern "C" fn json_append_control_char(p: &mut JsonString, c: u8) -> () {
         (*p).n_used += 6 as u64;
     }
 }
+
 extern "C" fn json_append_string(p: *mut JsonString, z_in_1: *const i8,
     mut n_1: u32) -> () {
     let mut k: u32 = 0 as u32;
@@ -7258,6 +7324,7 @@ extern "C" fn json_append_string(p: *mut JsonString, z_in_1: *const i8,
     };
     { let _ = 0; };
 }
+
 extern "C" fn json_string_too_deep(p: *mut JsonString) -> () {
     unsafe {
         unsafe { (*p).e_err |= 4 as u8 };
@@ -7269,12 +7336,14 @@ extern "C" fn json_string_too_deep(p: *mut JsonString) -> () {
         json_string_reset(p);
     }
 }
+
 extern "C" fn json_string_trim_one_char(p: &mut JsonString) -> () {
     if (*p).e_err as i32 == 0 {
         { let _ = 0; };
         { let __p = &mut (*p).n_used; let __t = *__p; *__p -= 1; __t };
     }
 }
+
 extern "C" fn json_translate_blob_to_text(p_parse_1: *mut JsonParse, i: u32,
     p_out_1: *mut JsonString) -> u32 {
     unsafe {
@@ -7983,11 +8052,13 @@ extern "C" fn json_translate_blob_to_text(p_parse_1: *mut JsonParse, i: u32,
         unreachable!();
     }
 }
+
 extern "C" fn json_string_terminate(p: *mut JsonString) -> i32 {
     json_append_char(p, 0 as i8);
     json_string_trim_one_char(unsafe { &mut *p });
     return (unsafe { (*p).e_err } as i32 == 0) as i32;
 }
+
 extern "C" fn json_return_string_as_blob(p_str_1: &JsonString) -> () {
     unsafe {
         let mut px: JsonParse = unsafe { core::mem::zeroed() };
@@ -8018,6 +8089,7 @@ extern "C" fn json_return_string_as_blob(p_str_1: &JsonString) -> () {
         }
     }
 }
+
 extern "C" fn json_return_string(p: *mut JsonString,
     p_parse_1: *mut JsonParse, ctx: *mut Sqlite3Context) -> () {
     unsafe {
@@ -8079,6 +8151,7 @@ extern "C" fn json_return_string(p: *mut JsonString,
         json_string_reset(p);
     }
 }
+
 extern "C" fn json_return_parse(ctx: *mut Sqlite3Context, p: *mut JsonParse)
     -> () {
     let mut flgs: i32 = 0;
@@ -8120,6 +8193,7 @@ extern "C" fn json_return_parse(ctx: *mut Sqlite3Context, p: *mut JsonParse)
         unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
     }
 }
+
 extern "C" fn json_remove_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
@@ -8220,6 +8294,7 @@ extern "C" fn json_remove_func(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn json_append_separator(p: *mut JsonString) -> () {
     let mut c: i8 = 0 as i8;
     if unsafe { (*p).n_used } == 0 as u64 { return; }
@@ -8232,6 +8307,7 @@ extern "C" fn json_append_separator(p: *mut JsonString) -> () {
     if c as i32 == '[' as i32 || c as i32 == '{' as i32 { return; }
     json_append_char(p, ',' as i32 as i8);
 }
+
 extern "C" fn json_append_sql_value(p: *mut JsonString,
     p_value_1: *mut Sqlite3Value) -> () {
     unsafe {
@@ -8446,6 +8522,7 @@ extern "C" fn json_append_sql_value(p: *mut JsonString,
         }
     }
 }
+
 extern "C" fn json_array_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -8469,6 +8546,7 @@ extern "C" fn json_array_func(ctx: *mut Sqlite3Context, argc: i32,
     json_return_string(&mut jx, core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
+
 extern "C" fn json_wrong_num_args(p_ctx_1: *mut Sqlite3Context,
     z_func_name_1: *const i8) -> () {
     let z_msg: *mut i8 =
@@ -8479,6 +8557,7 @@ extern "C" fn json_wrong_num_args(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_result_error(p_ctx_1, z_msg as *const i8, -1) };
     unsafe { sqlite3_free(z_msg as *mut ()) };
 }
+
 extern "C" fn json_function_arg_to_blob(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value, p_parse_1: *mut JsonParse) -> i32 {
     unsafe {
@@ -8778,6 +8857,7 @@ extern "C" fn json_function_arg_to_blob(ctx: *mut Sqlite3Context,
         } else { return 0; }
     }
 }
+
 extern "C" fn json_insert_into_blob(ctx: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, e_edit_1: i32) -> () {
     let mut i: i32 = 0;
@@ -8919,6 +8999,7 @@ extern "C" fn json_insert_into_blob(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn json_set_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -8934,6 +9015,7 @@ extern "C" fn json_set_func(ctx: *mut Sqlite3Context, argc: i32,
             a_edit_type[e_ins_type as usize] as i32);
     }
 }
+
 extern "C" fn json_array_length_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
@@ -8968,6 +9050,7 @@ extern "C" fn json_array_length_func(ctx: *mut Sqlite3Context, argc: i32,
     if (e_err == 0) as i32 != 0 { unsafe { sqlite3_result_int64(ctx, cnt) }; }
     json_parse_free(p);
 }
+
 extern "C" fn json_error_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i_err_pos: i64 = 0 as i64;
@@ -9029,6 +9112,7 @@ extern "C" fn json_error_func(ctx: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_error_nomem(ctx) };
     } else { unsafe { sqlite3_result_int64(ctx, i_err_pos) }; }
 }
+
 extern "C" fn json_all_alphanum(z: *const i8, n: i32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -9051,6 +9135,7 @@ extern "C" fn json_all_alphanum(z: *const i8, n: i32) -> i32 {
         return (i == n) as i32;
     }
 }
+
 extern "C" fn json_return_text_json_from_blob(ctx: *mut Sqlite3Context,
     a_blob_1: *const u8, n_blob_1: u32) -> () {
     let mut x: JsonParse = unsafe { core::mem::zeroed() };
@@ -9066,6 +9151,7 @@ extern "C" fn json_return_text_json_from_blob(ctx: *mut Sqlite3Context,
     json_translate_blob_to_text(&mut x, 0 as u32, &mut s);
     json_return_string(&mut s, core::ptr::null_mut(), core::ptr::null_mut());
 }
+
 extern "C" fn json_return_from_blob(p_parse_1: *const JsonParse, i: u32,
     p_ctx_1: *mut Sqlite3Context, mut e_mode_1: i32) -> () {
     let mut n: u32 = 0 as u32;
@@ -9621,6 +9707,7 @@ extern "C" fn json_return_from_blob(p_parse_1: *const JsonParse, i: u32,
         }
     }
 }
+
 extern "C" fn json_extract_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
@@ -9880,6 +9967,7 @@ extern "C" fn json_extract_func(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn json_object_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -9934,6 +10022,7 @@ extern "C" fn json_object_func(ctx: *mut Sqlite3Context, argc: i32,
     json_return_string(&mut jx, core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
+
 extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
     p_patch_1: *const JsonParse, i_patch_1: u32, i_depth_1: u32) -> i32 {
     let mut x: u8 = 0 as u8;
@@ -10149,6 +10238,7 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
     }
     return if unsafe { (*p_target_1).oom } != 0 { 3 } else { 0 };
 }
+
 extern "C" fn json_patch_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_target: *mut JsonParse = core::ptr::null_mut();
@@ -10187,6 +10277,7 @@ extern "C" fn json_patch_func(ctx: *mut Sqlite3Context, argc: i32,
     }
     json_parse_free(p_target);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonPretty {
@@ -10196,6 +10287,7 @@ struct JsonPretty {
     sz_indent: u32,
     n_indent: u32,
 }
+
 extern "C" fn json_pretty_indent(p_pretty_1: &JsonPretty) -> () {
     let mut jj: u32 = 0 as u32;
     {
@@ -10211,6 +10303,7 @@ extern "C" fn json_pretty_indent(p_pretty_1: &JsonPretty) -> () {
         }
     }
 }
+
 extern "C" fn json_translate_blob_to_pretty_text(p_pretty_1: *mut JsonPretty,
     mut i: u32) -> u32 {
     let mut sz: u32 = 0 as u32;
@@ -10377,6 +10470,7 @@ extern "C" fn json_translate_blob_to_pretty_text(p_pretty_1: *mut JsonPretty,
     }
     return i;
 }
+
 extern "C" fn json_pretty_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut s: JsonString = unsafe { core::mem::zeroed() };
@@ -10406,6 +10500,7 @@ extern "C" fn json_pretty_func(ctx: *mut Sqlite3Context, argc: i32,
     json_return_string(&mut s, core::ptr::null_mut(), core::ptr::null_mut());
     json_parse_free(x.p_parse);
 }
+
 extern "C" fn json_quote_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut jx: JsonString = unsafe { core::mem::zeroed() };
@@ -10415,6 +10510,7 @@ extern "C" fn json_quote_func(ctx: *mut Sqlite3Context, argc: i32,
     json_return_string(&mut jx, core::ptr::null_mut(), core::ptr::null_mut());
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
+
 extern "C" fn json_replace_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if argc < 1 { return; }
@@ -10424,6 +10520,7 @@ extern "C" fn json_replace_func(ctx: *mut Sqlite3Context, argc: i32,
     }
     json_insert_into_blob(ctx, argc, argv as *const *mut Sqlite3Value, 2);
 }
+
 static mut jsonb_type: [*const i8; 17] =
     [c"null".as_ptr() as *const i8, c"true".as_ptr() as *const i8,
             c"false".as_ptr() as *const i8, c"integer".as_ptr() as *const i8,
@@ -10434,6 +10531,7 @@ static mut jsonb_type: [*const i8; 17] =
             c"object".as_ptr() as *const i8, c"".as_ptr() as *const i8,
             c"".as_ptr() as *const i8, c"".as_ptr() as *const i8,
             c"".as_ptr() as *const i8];
+
 extern "C" fn json_type_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10479,6 +10577,7 @@ extern "C" fn json_type_func(ctx: *mut Sqlite3Context, argc: i32,
         json_parse_free(p);
     }
 }
+
 extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
@@ -10619,6 +10718,7 @@ extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_int(ctx, res as i32) };
 }
+
 extern "C" fn json_array_step(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10641,6 +10741,7 @@ extern "C" fn json_array_step(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn json_array_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
     -> () {
     unsafe {
@@ -10708,12 +10809,15 @@ extern "C" fn json_array_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
         unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
     }
 }
+
 extern "C" fn json_array_final(ctx: *mut Sqlite3Context) -> () {
     json_array_compute(ctx, 1);
 }
+
 extern "C" fn json_array_value(ctx: *mut Sqlite3Context) -> () {
     json_array_compute(ctx, 0);
 }
+
 extern "C" fn json_group_inverse(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: u32 = 0 as u32;
@@ -10763,6 +10867,7 @@ extern "C" fn json_group_inverse(ctx: *mut Sqlite3Context, argc: i32,
         unsafe { *z.add(unsafe { (*p_str).n_used } as usize) = 0 as i8 };
     } else { unsafe { (*p_str).n_used = 1 as u64 }; }
 }
+
 extern "C" fn json_object_step(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10804,6 +10909,7 @@ extern "C" fn json_object_step(ctx: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
     -> () {
     unsafe {
@@ -10978,12 +11084,15 @@ extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
         unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
     }
 }
+
 extern "C" fn json_object_final(ctx: *mut Sqlite3Context) -> () {
     json_object_compute(ctx, 1);
 }
+
 extern "C" fn json_object_value(ctx: *mut Sqlite3Context) -> () {
     json_object_compute(ctx, 0);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_json_functions() -> () {
     unsafe {
@@ -10995,6 +11104,7 @@ pub extern "C" fn sqlite3_register_json_functions() -> () {
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonEachConnection {
@@ -11003,6 +11113,7 @@ struct JsonEachConnection {
     e_mode: u8,
     b_recursive: u8,
 }
+
 extern "C" fn json_each_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -11049,6 +11160,7 @@ extern "C" fn json_each_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     return rc;
 }
+
 extern "C" fn json_each_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -11144,12 +11256,14 @@ extern "C" fn json_each_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn json_each_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *const JsonEachConnection =
         p_vtab_1 as *mut JsonEachConnection as *const JsonEachConnection;
     unsafe { sqlite3_db_free(unsafe { (*p).db }, p_vtab_1 as *mut ()) };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonEachCursor {
@@ -11168,6 +11282,7 @@ struct JsonEachCursor {
     path: JsonString,
     s_parse: JsonParse,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonParent {
@@ -11177,6 +11292,7 @@ struct JsonParent {
     n_path: u32,
     i_key: i64,
 }
+
 extern "C" fn json_each_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_vtab: *const JsonEachConnection =
@@ -11196,6 +11312,7 @@ extern "C" fn json_each_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn json_each_cursor_reset(p: &mut JsonEachCursor) -> () {
     unsafe {
         json_parse_reset(&mut (*p).s_parse);
@@ -11210,12 +11327,14 @@ extern "C" fn json_each_cursor_reset(p: &mut JsonEachCursor) -> () {
         (*p).e_type = 0 as u8;
     }
 }
+
 extern "C" fn json_each_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut JsonEachCursor = cur as *mut JsonEachCursor;
     json_each_cursor_reset(unsafe { &mut *p });
     unsafe { sqlite3_db_free(unsafe { (*p).db }, cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn json_each_malformed_input(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         unsafe {
@@ -11237,6 +11356,7 @@ extern "C" fn json_each_malformed_input(cur: *mut Sqlite3VtabCursor) -> i32 {
             } else { 7 };
     }
 }
+
 extern "C" fn json_each_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     unsafe {
@@ -11396,6 +11516,7 @@ extern "C" fn json_each_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
         return 0;
     }
 }
+
 extern "C" fn json_skip_label(p: &mut JsonEachCursor) -> i32 {
     unsafe {
         if (*p).e_type as i32 == 12 {
@@ -11405,6 +11526,7 @@ extern "C" fn json_skip_label(p: &mut JsonEachCursor) -> i32 {
         } else { return (*p).i as i32; }
     }
 }
+
 extern "C" fn json_append_path_name(p: &mut JsonEachCursor) -> () {
     unsafe {
         unsafe {
@@ -11472,6 +11594,7 @@ extern "C" fn json_append_path_name(p: &mut JsonEachCursor) -> () {
         }
     }
 }
+
 extern "C" fn json_each_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p: *mut JsonEachCursor = cur as *mut JsonEachCursor;
@@ -11607,6 +11730,7 @@ extern "C" fn json_each_next(cur: *mut Sqlite3VtabCursor) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn json_each_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p: *const JsonEachCursor =
@@ -11614,6 +11738,7 @@ extern "C" fn json_each_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
         return (unsafe { (*p).i } >= unsafe { (*p).i_end }) as i32;
     }
 }
+
 extern "C" fn json_each_path_length(p: &mut JsonEachCursor) -> i32 {
     unsafe {
         let mut n: u32 = (*p).path.n_used as u32;
@@ -11644,6 +11769,7 @@ extern "C" fn json_each_path_length(p: &mut JsonEachCursor) -> i32 {
         return n as i32;
     }
 }
+
 extern "C" fn json_each_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i_column_1: i32) -> i32 {
     unsafe {
@@ -12524,6 +12650,7 @@ extern "C" fn json_each_column(cur: *mut Sqlite3VtabCursor,
         }
     }
 }
+
 extern "C" fn json_each_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p: *const JsonEachCursor =
@@ -12531,6 +12658,7 @@ extern "C" fn json_each_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p).i_rowid } as SqliteInt64 };
     return 0;
 }
+
 static mut json_each_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -12559,6 +12687,7 @@ static mut json_each_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_json_vtab_register(db: *mut Sqlite3,
     z_name: *const i8) -> *mut Module {
@@ -12591,10 +12720,13 @@ pub extern "C" fn sqlite3_json_vtab_register(db: *mut Sqlite3,
         return core::ptr::null_mut();
     }
 }
+
 static a_type: [u8; 8] =
     [192 as u8, 208 as u8, 0 as u8, 224 as u8, 0 as u8, 0 as u8, 0 as u8,
             240 as u8];
+
 static empty_object_1: [u8; 2] = [11 as u8, 12 as u8];
+
 static a_special: [i8; 32] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             'b' as i32 as i8, 't' as i32 as i8, 'n' as i32 as i8, 0 as i8,
@@ -12602,13 +12734,19 @@ static a_special: [i8; 32] =
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8];
+
 static mut a_null: [u8; 1] = [0 as u8];
+
 static mut az_ins_type: [*const i8; 3] =
     [c"insert".as_ptr() as *const i8, c"set".as_ptr() as *const i8,
             c"array_insert".as_ptr() as *const i8];
+
 static a_edit_type: [u8; 3] = [3 as u8, 4 as u8, 5 as u8];
+
 static empty_array: u8 = 11 as u8;
+
 static empty_object_2: u8 = 12 as u8;
+
 static mut a_json_func: [FuncDef; 36] =
     [FuncDef {
                 n_arg: 1 as i16,
@@ -13078,10 +13216,12 @@ static mut a_json_func: [FuncDef; 36] =
                 z_name: c"jsonb_group_object".as_ptr() as *const i8,
                 u: FuncDefU0 { p_hash: core::ptr::null_mut() },
             }];
+
 static mut az_module: [*const i8; 4] =
     [c"json_each".as_ptr() as *const i8, c"json_tree".as_ptr() as *const i8,
             c"jsonb_each".as_ptr() as *const i8,
             c"jsonb_tree".as_ptr() as *const i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -15888,41 +16028,49 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

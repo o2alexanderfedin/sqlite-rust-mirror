@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     unsafe {
         let mut ms: u64 = 0 as u64;
@@ -64,6 +65,7 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
         return &raw const z_out[0 as usize] as *const i8;
     }
 }
+
 extern "C" fn render_csv(i_file_1: i32, a: *const u8) -> () {
     let mut a2: u32 = 0 as u32;
     let mut a3: u32 = 0 as u32;
@@ -596,6 +598,7 @@ extern "C" fn render_csv(i_file_1: i32, a: *const u8) -> () {
         }
     }
 }
+
 extern "C" fn render_text(a: *const u8) -> () {
     let mut a2: u32 = 0 as u32;
     let mut a3: u32 = 0 as u32;
@@ -1083,6 +1086,7 @@ extern "C" fn render_text(a: *const u8) -> () {
         }
     }
 }
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [--csv] LOGFILE ...\n".as_ptr() as *mut i8 as
@@ -1093,6 +1097,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
                     as *mut i8 as *const i8)
     };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i: i32 = 0;
@@ -1199,13 +1204,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     }
     return Ok(());
 }
+
 static mut z_out: [i8; 50] = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1222,9 +1230,11 @@ extern "C" {
     fn fclose(_: *mut FILE)
     -> i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

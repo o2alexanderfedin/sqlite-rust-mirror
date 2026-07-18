@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mmap_warm(db: *mut Sqlite3, z_db_1: *const i8)
     -> i32 {
@@ -116,6 +118,7 @@ pub extern "C" fn sqlite3_mmap_warm(db: *mut Sqlite3, z_db_1: *const i8)
     { let _ = n_total; };
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

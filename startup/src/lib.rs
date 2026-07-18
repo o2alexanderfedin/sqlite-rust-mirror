@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 static z_help: [i8; 340] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
             37 as i8, 115 as i8, 32 as i8, 67 as i8, 79 as i8, 77 as i8,
@@ -60,10 +63,12 @@ static z_help: [i8; 340] =
             99 as i8, 115 as i8, 32 as i8, 97 as i8, 116 as i8, 32 as i8,
             116 as i8, 104 as i8, 101 as i8, 32 as i8, 101 as i8, 110 as i8,
             100 as i8, 10 as i8, 0 as i8];
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe { printf(&raw const z_help[0 as usize] as *const i8, argv0) };
     unsafe { exit(1) };
 }
+
 static z_test_schema: [i8; 7703] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1349,6 +1354,7 @@ static z_test_schema: [i8; 7703] =
             116 as i8, 98 as i8, 108 as i8, 44 as i8, 105 as i8, 100 as i8,
             120 as i8, 44 as i8, 115 as i8, 116 as i8, 97 as i8, 116 as i8,
             41 as i8, 59 as i8, 10 as i8, 0 as i8];
+
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -1361,6 +1367,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1450,6 +1457,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
         return if is_neg != 0 { -v } else { v } as i32;
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut z_cmd: *const i8 = core::ptr::null();
@@ -1724,12 +1732,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     }
     return Ok(());
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntegerValueS0N16integerValueS0 {
     z_suffix: *mut i8,
     i_mult: i32,
 }
+
 static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
     [IntegerValueS0N16integerValueS0 {
                 z_suffix: c"KiB".as_ptr() as *mut i8,
@@ -1767,12 +1777,14 @@ static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
                 z_suffix: c"G".as_ptr() as *mut i8,
                 i_mult: 1000000000,
             }];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

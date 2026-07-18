@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [options] DATABASE ...\n".as_ptr() as *mut i8 as
@@ -14,6 +17,7 @@ extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     };
     unsafe { exit(0) };
 }
+
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -25,6 +29,7 @@ unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
         unsafe { exit(1) };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VFile {
@@ -33,18 +38,22 @@ struct VFile {
     n_ref: i32,
     a: *mut u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VHandle {
     base: Sqlite3File,
     p_v_file: *mut VFile,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
     a_file: [VFile; 10],
 }
+
 static mut g: GlobalVars = unsafe { core::mem::zeroed() };
+
 extern "C" fn format_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -64,6 +73,7 @@ extern "C" fn format_vfs() -> () {
         }
     }
 }
+
 extern "C" fn reformat_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -94,6 +104,7 @@ extern "C" fn reformat_vfs() -> () {
         }
     }
 }
+
 extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
     unsafe {
         let mut i: i32 = 0;
@@ -121,6 +132,7 @@ extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn create_v_file(z_name_1: *const i8, z_disk_file_1: *const i8)
     -> *mut VFile {
     unsafe {
@@ -190,6 +202,7 @@ extern "C" fn create_v_file(z_name_1: *const i8, z_disk_file_1: *const i8)
         return p_new;
     }
 }
+
 extern "C" fn inmem_close(p_file_1: *mut Sqlite3File) -> i32 {
     let p: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
     let p_v_file: *mut VFile = unsafe { (*p).p_v_file };
@@ -207,6 +220,7 @@ extern "C" fn inmem_close(p_file_1: *mut Sqlite3File) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn inmem_read(p_file_1: *mut Sqlite3File, p_data_1: *mut (),
     mut i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p_handle: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
@@ -233,6 +247,7 @@ extern "C" fn inmem_read(p_file_1: *mut Sqlite3File, p_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn inmem_write(p_file_1: *mut Sqlite3File, p_data_1: *const (),
     i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p_handle: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
@@ -268,6 +283,7 @@ extern "C" fn inmem_write(p_file_1: *mut Sqlite3File, p_data_1: *const (),
     };
     return 0;
 }
+
 extern "C" fn inmem_truncate(p_file_1: *mut Sqlite3File,
     i_size_1: Sqlite3Int64) -> i32 {
     let p_handle: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
@@ -278,9 +294,11 @@ extern "C" fn inmem_truncate(p_file_1: *mut Sqlite3File,
     }
     return 0;
 }
+
 extern "C" fn inmem_sync(p_file_1: *mut Sqlite3File, flags: i32) -> i32 {
     return 0;
 }
+
 extern "C" fn inmem_file_size(p_file_1: *mut Sqlite3File,
     p_size_1: *mut Sqlite3Int64) -> i32 {
     unsafe {
@@ -290,28 +308,35 @@ extern "C" fn inmem_file_size(p_file_1: *mut Sqlite3File,
     };
     return 0;
 }
+
 extern "C" fn inmem_lock(p_file_1: *mut Sqlite3File, type__1: i32) -> i32 {
     return 0;
 }
+
 extern "C" fn inmem_unlock(p_file_1: *mut Sqlite3File, type__1: i32) -> i32 {
     return 0;
 }
+
 extern "C" fn inmem_check_reserved_lock(p_file_1: *mut Sqlite3File,
     p_out_1: *mut i32) -> i32 {
     unsafe { *p_out_1 = 0 };
     return 0;
 }
+
 extern "C" fn inmem_file_control(p_file_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     return 12;
 }
+
 extern "C" fn inmem_sector_size(p_file_1: *mut Sqlite3File) -> i32 {
     return 512;
 }
+
 extern "C" fn inmem_device_characteristics(p_file_1: *mut Sqlite3File)
     -> i32 {
     return 512 | 2048 | 4096;
 }
+
 static mut v_handle_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -334,6 +359,7 @@ static mut v_handle_methods: Sqlite3IoMethods =
         x_fetch: None,
         x_unfetch: None,
     };
+
 extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     p_file_1: *mut Sqlite3File, open_flags_1: i32, p_out_flags_1: *mut i32)
     -> i32 {
@@ -359,6 +385,7 @@ extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
         return 0;
     }
 }
+
 extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     syncdir: i32) -> i32 {
     let p_v_file: *mut VFile = find_v_file(z_filename_1);
@@ -373,12 +400,14 @@ extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     }
     return 10 | 10 << 8;
 }
+
 extern "C" fn inmem_access(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     let p_v_file: *const VFile = find_v_file(z_filename_1) as *const VFile;
     unsafe { *p_res_out_1 = (p_v_file != core::ptr::null_mut()) as i32 };
     return 0;
 }
+
 extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8, n_out_1: i32, z_out_1: *mut i8) -> i32 {
     unsafe {
@@ -387,6 +416,7 @@ extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     };
     return 0;
 }
+
 extern "C" fn inmem_vfs_register() -> () {
     unsafe {
         let p_default: *const Sqlite3Vfs =
@@ -407,7 +437,9 @@ extern "C" fn inmem_vfs_register() -> () {
         unsafe { sqlite3_vfs_register(&mut inmem_vfs, 0) };
     }
 }
+
 extern "C" fn set_alarm(n_1: i32) -> () { { let _ = n_1; }; }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Str {
@@ -416,9 +448,11 @@ struct Str {
     n_alloc: Sqlite3Uint64,
     oom_err: i32,
 }
+
 extern "C" fn str_init(p: *mut Str) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<Str>() as u64) };
 }
+
 extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     let n: Sqlite3Uint64 = unsafe { strlen(z) } as Sqlite3Uint64;
     if unsafe { (*p).n } + n >= unsafe { (*p).n_alloc } {
@@ -449,11 +483,14 @@ extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     unsafe { (*p).n += n };
     unsafe { *unsafe { (*p).z.add(unsafe { (*p).n } as usize) } = 0 as i8 };
 }
+
 extern "C" fn str_str(p: &Str) -> *mut i8 { return (*p).z; }
+
 extern "C" fn str_free(p: *mut Str) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     str_init(p);
 }
+
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -466,6 +503,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -554,6 +592,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
         return if is_neg != 0 { -v } else { v } as i32;
     }
 }
+
 extern "C" fn sql_log(p_not_used_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     unsafe {
@@ -564,6 +603,7 @@ extern "C" fn sql_log(p_not_used_1: *mut (), i_err_code_1: i32,
         unsafe { fflush(__stdoutp) };
     }
 }
+
 extern "C" fn progress_handler(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     if unsafe { *(p_vdbe_limit_flag_1 as *mut i32) } != 0 {
         unsafe {
@@ -573,6 +613,7 @@ extern "C" fn progress_handler(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     }
     return 1;
 }
+
 extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     run_flags_1: u32) -> () {
     let mut z_more: *const i8 = core::ptr::null();
@@ -791,6 +832,7 @@ extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
         }
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -1026,13 +1068,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntegerValueS0N16integerValueS0 {
     z_suffix: *mut i8,
     i_mult: i32,
 }
+
 static mut inmem_vfs: Sqlite3Vfs = unsafe { core::mem::zeroed() };
+
 static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
     [IntegerValueS0N16integerValueS0 {
                 z_suffix: c"KiB".as_ptr() as *mut i8,
@@ -1070,12 +1115,14 @@ static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
                 z_suffix: c"G".as_ptr() as *mut i8,
                 i_mult: 1000000000,
             }];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1898,9 +1945,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

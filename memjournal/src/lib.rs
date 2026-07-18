@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemJournal {
@@ -397,18 +406,21 @@ struct MemJournal {
     p_vfs: *mut Sqlite3Vfs,
     z_journal: *const i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FileChunk {
     p_next: *mut FileChunk,
     z_chunk: [u8; 8],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FilePoint {
     i_offset: Sqlite3Int64,
     p_chunk: *mut FileChunk,
 }
+
 extern "C" fn memjrnl_free_chunks(p_first_1: *mut FileChunk) -> () {
     let mut p_iter: *mut FileChunk = core::ptr::null_mut();
     let mut p_next: *mut FileChunk = core::ptr::null_mut();
@@ -425,12 +437,14 @@ extern "C" fn memjrnl_free_chunks(p_first_1: *mut FileChunk) -> () {
         }
     }
 }
+
 extern "C" fn memjrnl_close(p_jfd_1: *mut Sqlite3File) -> i32 {
     let p: *const MemJournal =
         p_jfd_1 as *mut MemJournal as *const MemJournal;
     memjrnl_free_chunks(unsafe { (*p).p_first });
     return 0;
 }
+
 extern "C" fn memjrnl_read(p_jfd_1: *mut Sqlite3File, z_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut MemJournal = p_jfd_1 as *mut MemJournal;
@@ -501,6 +515,7 @@ extern "C" fn memjrnl_read(p_jfd_1: *mut Sqlite3File, z_buf_1: *mut (),
     unsafe { (*p).readpoint.p_chunk = p_chunk };
     return 0;
 }
+
 extern "C" fn memjrnl_create_file(p: *mut MemJournal) -> i32 {
     let mut rc: i32 = 0;
     let p_real: *mut Sqlite3File = p as *mut Sqlite3File;
@@ -543,6 +558,7 @@ extern "C" fn memjrnl_create_file(p: *mut MemJournal) -> i32 {
     if rc != 0 { unsafe { sqlite3_os_close(p_real) }; unsafe { *p = copy }; }
     return rc;
 }
+
 extern "C" fn memjrnl_truncate(p_jfd: *mut Sqlite3File, size: SqliteInt64)
     -> i32 {
     let p: *mut MemJournal = p_jfd as *mut MemJournal;
@@ -577,6 +593,7 @@ extern "C" fn memjrnl_truncate(p_jfd: *mut Sqlite3File, size: SqliteInt64)
     }
     return 0;
 }
+
 extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut MemJournal = p_jfd_1 as *mut MemJournal;
@@ -655,10 +672,12 @@ extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
     }
     return 0;
 }
+
 extern "C" fn memjrnl_sync(p_jfd_1: *mut Sqlite3File, flags: i32) -> i32 {
     { { let _ = p_jfd_1; }; { let _ = flags; } };
     return 0;
 }
+
 extern "C" fn memjrnl_file_size(p_jfd_1: *mut Sqlite3File,
     p_size_1: *mut SqliteInt64) -> i32 {
     let p: *const MemJournal =
@@ -666,6 +685,7 @@ extern "C" fn memjrnl_file_size(p_jfd_1: *mut Sqlite3File,
     unsafe { *p_size_1 = unsafe { (*p).endpoint.i_offset } as SqliteInt64 };
     return 0;
 }
+
 static mem_journal_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -688,6 +708,7 @@ static mem_journal_methods: Sqlite3IoMethods =
         x_fetch: None,
         x_unfetch: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_open(p_vfs: *mut Sqlite3Vfs,
     z_name: *const i8, p_jfd: *mut Sqlite3File, flags: i32, n_spill: i32)
@@ -723,6 +744,7 @@ pub extern "C" fn sqlite3_journal_open(p_vfs: *mut Sqlite3Vfs,
     unsafe { (*p).p_vfs = p_vfs };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_size(p_vfs: &Sqlite3Vfs) -> i32 {
     return if (*p_vfs).sz_os_file > core::mem::size_of::<MemJournal>() as i32
@@ -730,17 +752,20 @@ pub extern "C" fn sqlite3_journal_size(p_vfs: &Sqlite3Vfs) -> i32 {
             (*p_vfs).sz_os_file
         } else { core::mem::size_of::<MemJournal>() as i32 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_is_in_memory(p: &Sqlite3File) -> i32 {
     return ((*p).p_methods ==
                 &raw const mem_journal_methods as *const Sqlite3IoMethods) as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_journal_open(p_jfd: *mut Sqlite3File) -> () {
     sqlite3_journal_open(core::ptr::null_mut(), core::ptr::null(), p_jfd, 0,
         -1);
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3522,41 +3547,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

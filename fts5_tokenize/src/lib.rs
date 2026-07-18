@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -7,7 +8,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Unicode61Tokenizer {
@@ -19,6 +22,7 @@ struct Unicode61Tokenizer {
     ai_exception: *mut i32,
     a_category: [u8; 32],
 }
+
 extern "C" fn unicode_set_categories(p: &mut Unicode61Tokenizer,
     z_cat_1: *const i8) -> i32 {
     let mut z: *const i8 = z_cat_1;
@@ -56,6 +60,7 @@ extern "C" fn unicode_set_categories(p: &mut Unicode61Tokenizer,
     };
     return 0;
 }
+
 static sqlite3_utf8_trans1: [u8; 64] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -67,6 +72,7 @@ static sqlite3_utf8_trans1: [u8; 64] =
             14 as u8, 15 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8,
             5 as u8, 6 as u8, 7 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8,
             0 as u8, 1 as u8, 0 as u8, 0 as u8];
+
 extern "C" fn fts5_unicode_add_exceptions(p: &mut Unicode61Tokenizer,
     z: *const i8, b_token_chars_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -179,6 +185,7 @@ extern "C" fn fts5_unicode_add_exceptions(p: &mut Unicode61Tokenizer,
     }
     return rc;
 }
+
 extern "C" fn fts5_unicode_delete(p_tok_1: *mut Fts5Tokenizer) -> () {
     if !(p_tok_1).is_null() {
         let p: *mut Unicode61Tokenizer = p_tok_1 as *mut Unicode61Tokenizer;
@@ -188,6 +195,7 @@ extern "C" fn fts5_unicode_delete(p_tok_1: *mut Fts5Tokenizer) -> () {
     }
     return;
 }
+
 extern "C" fn fts5_unicode_create(p_unused_1: *mut (),
     az_arg_1: *mut *const i8, n_arg_1: i32, pp_out_1: *mut *mut Fts5Tokenizer)
     -> i32 {
@@ -307,6 +315,7 @@ extern "C" fn fts5_unicode_create(p_unused_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn fts5_unicode_is_exception(p: &Unicode61Tokenizer, i_code_1: i32)
     -> i32 {
     if (*p).n_exception > 0 {
@@ -324,6 +333,7 @@ extern "C" fn fts5_unicode_is_exception(p: &Unicode61Tokenizer, i_code_1: i32)
     }
     return 0;
 }
+
 extern "C" fn fts5_unicode_is_alnum(p: *mut Unicode61Tokenizer, i_code_1: i32)
     -> i32 {
     return unsafe {
@@ -333,6 +343,7 @@ extern "C" fn fts5_unicode_is_alnum(p: *mut Unicode61Tokenizer, i_code_1: i32)
                 } as i32 ^
             fts5_unicode_is_exception(unsafe { &*p }, i_code_1);
 }
+
 extern "C" fn fts5_unicode_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
     p_ctx_1: *mut (), i_unused_1: i32, p_text_1: *const i8, n_text_1: i32,
     x_token_1:
@@ -805,11 +816,13 @@ extern "C" fn fts5_unicode_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
     }
     unreachable!();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AsciiTokenizer {
     a_token_char: [u8; 128],
 }
+
 static mut a_ascii_token_char: [u8; 128] =
     [0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
             0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
@@ -830,6 +843,7 @@ static mut a_ascii_token_char: [u8; 128] =
             1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8,
             1 as u8, 1 as u8, 1 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
             0 as u8];
+
 extern "C" fn fts5_ascii_add_exceptions(p: &mut AsciiTokenizer,
     z_arg_1: *const i8, b_token_chars_1: i32) -> () {
     let mut i: i32 = 0;
@@ -850,9 +864,11 @@ extern "C" fn fts5_ascii_add_exceptions(p: &mut AsciiTokenizer,
         }
     }
 }
+
 extern "C" fn fts5_ascii_delete(p: *mut Fts5Tokenizer) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 extern "C" fn fts5_ascii_create(p_unused_1: *mut (), az_arg_1: *mut *const i8,
     n_arg_1: i32, pp_out_1: *mut *mut Fts5Tokenizer) -> i32 {
     unsafe {
@@ -916,6 +932,7 @@ extern "C" fn fts5_ascii_create(p_unused_1: *mut (), az_arg_1: *mut *const i8,
         return rc;
     }
 }
+
 extern "C" fn ascii_fold(a_out_1: *mut i8, a_in_1: &[i8]) -> () {
     let mut i: i32 = 0;
     {
@@ -934,6 +951,7 @@ extern "C" fn ascii_fold(a_out_1: *mut i8, a_in_1: &[i8]) -> () {
         }
     }
 }
+
 extern "C" fn fts5_ascii_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
     p_ctx_1: *mut (), i_unused_1: i32, p_text_1: *const i8, n_text_1: i32,
     x_token_1:
@@ -1002,15 +1020,18 @@ extern "C" fn fts5_ascii_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
     if rc == 101 { rc = 0; }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TrigramTokenizer {
     b_fold: i32,
     i_fold_param: i32,
 }
+
 extern "C" fn fts5_tri_delete(p: *mut Fts5Tokenizer) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 extern "C" fn fts5_tri_create(p_unused_1: *mut (), az_arg_1: *mut *const i8,
     n_arg_1: i32, pp_out_1: *mut *mut Fts5Tokenizer) -> i32 {
     let mut rc: i32 = 0;
@@ -1091,6 +1112,7 @@ extern "C" fn fts5_tri_create(p_unused_1: *mut (), az_arg_1: *mut *const i8,
     unsafe { *pp_out_1 = p_new as *mut Fts5Tokenizer };
     return rc;
 }
+
 extern "C" fn fts5_tri_tokenize(p_tok_1: *mut Fts5Tokenizer, p_ctx_1: *mut (),
     unused_flags_1: i32, p_text_1: *const i8, n_text_1: i32,
     x_token_1:
@@ -1448,6 +1470,7 @@ extern "C" fn fts5_tri_tokenize(p_tok_1: *mut Fts5Tokenizer, p_ctx_1: *mut (),
     }
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PorterTokenizer {
@@ -1455,6 +1478,7 @@ struct PorterTokenizer {
     p_tokenizer: *mut Fts5Tokenizer,
     a_buf: [i8; 128],
 }
+
 extern "C" fn fts5_porter_delete(p_tok_1: *mut Fts5Tokenizer) -> () {
     if !(p_tok_1).is_null() {
         let p: *mut PorterTokenizer = p_tok_1 as *mut PorterTokenizer;
@@ -1468,6 +1492,7 @@ extern "C" fn fts5_porter_delete(p_tok_1: *mut Fts5Tokenizer) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn fts5_porter_create(p_ctx_1: *mut (),
     mut az_arg_1: *mut *const i8, mut n_arg_1: i32,
     pp_out_1: *mut *mut Fts5Tokenizer) -> i32 {
@@ -1534,6 +1559,7 @@ extern "C" fn fts5_porter_create(p_ctx_1: *mut (),
     unsafe { *pp_out_1 = p_ret as *mut Fts5Tokenizer };
     return rc;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PorterContext {
@@ -1542,6 +1568,7 @@ struct PorterContext {
         i32) -> i32>,
     a_buf: *mut i8,
 }
+
 extern "C" fn fts5_porter_step1_a(a_buf_1: *const i8, pn_buf_1: &mut i32)
     -> () {
     let n_buf: i32 = *pn_buf_1;
@@ -1564,12 +1591,14 @@ extern "C" fn fts5_porter_step1_a(a_buf_1: *const i8, pn_buf_1: &mut i32)
         }
     }
 }
+
 extern "C" fn fts5_porter_is_vowel(c: i8, b_y_is_vowel_1: i32) -> i32 {
     return (c as i32 == 'a' as i32 || c as i32 == 'e' as i32 ||
                             c as i32 == 'i' as i32 || c as i32 == 'o' as i32 ||
                     c as i32 == 'u' as i32 ||
                 b_y_is_vowel_1 != 0 && c as i32 == 'y' as i32) as i32;
 }
+
 extern "C" fn fts5_porter_gobble_vc(z_stem_1: &[i8], b_prev_cons_1: i32)
     -> i32 {
     let mut i: i32 = 0;
@@ -1613,6 +1642,7 @@ extern "C" fn fts5_porter_gobble_vc(z_stem_1: &[i8], b_prev_cons_1: i32)
     }
     return 0;
 }
+
 extern "C" fn fts5_porter_m_gt0(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
     return ((fts5_porter_gobble_vc(unsafe {
                                     let __p = z_stem_1 as *const i8;
@@ -1623,6 +1653,7 @@ extern "C" fn fts5_porter_m_gt0(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
                                     }
                                 }, 0) == 0) as i32 == 0) as i32 as i32;
 }
+
 extern "C" fn fts5_porter_vowel(z_stem_1: &[i8]) -> i32 {
     let mut i: i32 = 0;
     {
@@ -1641,6 +1672,7 @@ extern "C" fn fts5_porter_vowel(z_stem_1: &[i8]) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn fts5_porter_step1_b(a_buf_1: *mut i8, pn_buf_1: &mut i32)
     -> i32 {
     let mut ret: i32 = 0;
@@ -1711,6 +1743,7 @@ extern "C" fn fts5_porter_step1_b(a_buf_1: *mut i8, pn_buf_1: &mut i32)
     }
     return ret;
 }
+
 extern "C" fn fts5_porter_step1_b2(a_buf_1: *mut i8, pn_buf_1: &mut i32)
     -> i32 {
     let mut ret: i32 = 0;
@@ -1777,6 +1810,7 @@ extern "C" fn fts5_porter_step1_b2(a_buf_1: *mut i8, pn_buf_1: &mut i32)
     }
     return ret;
 }
+
 extern "C" fn fts5_porter_m_eq1(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
     let mut n: i32 = 0;
     n =
@@ -1801,6 +1835,7 @@ extern "C" fn fts5_porter_m_eq1(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn fts5_porter_ostar(z_stem_1: &[i8]) -> i32 {
     if z_stem_1[(z_stem_1.len() as i32 - 1) as usize] as i32 == 'w' as i32 ||
                 z_stem_1[(z_stem_1.len() as i32 - 1) as usize] as i32 ==
@@ -1836,6 +1871,7 @@ extern "C" fn fts5_porter_ostar(z_stem_1: &[i8]) -> i32 {
         return (mask == 5) as i32;
     }
 }
+
 extern "C" fn fts5_porter_step2(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     let ret: i32 = 0;
     let n_buf: i32 = *pn_buf_1;
@@ -2207,6 +2243,7 @@ extern "C" fn fts5_porter_step2(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     }
     return ret;
 }
+
 extern "C" fn fts5_porter_step3(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     let ret: i32 = 0;
     let n_buf: i32 = *pn_buf_1;
@@ -2330,6 +2367,7 @@ extern "C" fn fts5_porter_step3(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     }
     return ret;
 }
+
 extern "C" fn fts5_porter_m_gt1(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
     let mut n: i32 = 0;
     n =
@@ -2353,6 +2391,7 @@ extern "C" fn fts5_porter_m_gt1(z_stem_1: *mut i8, n_stem_1: i32) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn fts5_porter_m_gt1_and_s_or_t(z_stem_1: *mut i8, n_stem_1: i32)
     -> i32 {
     if !(n_stem_1 > 0) as i32 as i64 != 0 {
@@ -2368,6 +2407,7 @@ extern "C" fn fts5_porter_m_gt1_and_s_or_t(z_stem_1: *mut i8, n_stem_1: i32)
                         == 't' as i32) &&
                 fts5_porter_m_gt1(z_stem_1, n_stem_1) != 0) as i32;
 }
+
 extern "C" fn fts5_porter_step4(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     let ret: i32 = 0;
     let n_buf: i32 = *pn_buf_1;
@@ -2605,6 +2645,7 @@ extern "C" fn fts5_porter_step4(a_buf_1: *mut i8, pn_buf_1: &mut i32) -> i32 {
     }
     return ret;
 }
+
 extern "C" fn fts5_porter_cb(p_ctx_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_start_1: i32, i_end_1: i32)
     -> i32 {
@@ -2710,6 +2751,7 @@ extern "C" fn fts5_porter_cb(p_ctx_1: *mut (), tflags: i32,
                 i_start_1, i_end_1)
         };
 }
+
 extern "C" fn fts5_porter_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
     p_ctx_1: *mut (), flags: i32, p_text_1: *const i8, n_text_1: i32,
     p_loc_1: *const i8, n_loc_1: i32,
@@ -2736,6 +2778,7 @@ extern "C" fn fts5_porter_tokenize(p_tokenizer_1: *mut Fts5Tokenizer,
                 flags, p_text_1, n_text_1, p_loc_1, n_loc_1, fts5_porter_cb)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_tokenizer_init(p_api: *mut Fts5Api) -> i32 {
     let mut a_builtin: [BuiltinTokenizerN16BuiltinTokenizer; 3] =
@@ -2815,6 +2858,7 @@ pub extern "C" fn sqlite3_fts5_tokenizer_init(p_api: *mut Fts5Api) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_tokenizer_pattern(x_create:
         Option<unsafe extern "C" fn(*mut (), *mut *const i8, i32,
@@ -2829,6 +2873,7 @@ pub extern "C" fn sqlite3_fts5_tokenizer_pattern(x_create:
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_tokenizer_preload(p: &Fts5TokenizerConfig)
     -> i32 {
@@ -2839,6 +2884,7 @@ pub extern "C" fn sqlite3_fts5_tokenizer_preload(p: &Fts5TokenizerConfig)
                             c"trigram".as_ptr() as *mut i8 as *const i8)
                     }) as i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PorterRule {
@@ -2848,12 +2894,14 @@ struct PorterRule {
     z_output: *const i8,
     n_output: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuiltinTokenizerN16BuiltinTokenizer {
     z_name: *const i8,
     x: fts5_tokenizer,
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

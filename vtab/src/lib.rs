@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -14,7 +15,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -27,6 +30,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -106,6 +110,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -154,6 +159,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -290,6 +296,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -313,6 +320,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -385,6 +393,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtabCtx {
@@ -393,6 +402,7 @@ struct VtabCtx {
     p_prior: *mut VtabCtx,
     b_declared: i32,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_eponymous_table_clear(db: *mut Sqlite3,
     p_mod_1: &mut Module) -> () {
@@ -403,6 +413,7 @@ pub extern "C" fn sqlite3_vtab_eponymous_table_clear(db: *mut Sqlite3,
         (*p_mod_1).p_epo_tab = core::ptr::null_mut();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_module_unref(db: *mut Sqlite3,
     p_mod_1: *mut Module) -> () {
@@ -425,6 +436,7 @@ pub extern "C" fn sqlite3_vtab_module_unref(db: *mut Sqlite3,
         unsafe { sqlite3_db_free(db, p_mod_1 as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_create_module(db: *mut Sqlite3,
     z_name_1: *const i8, p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
@@ -477,6 +489,7 @@ pub extern "C" fn sqlite3_vtab_create_module(db: *mut Sqlite3,
     }
     return p_mod;
 }
+
 extern "C" fn create_module(db: *mut Sqlite3, z_name_1: *const i8,
     p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
     x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
@@ -494,17 +507,20 @@ extern "C" fn create_module(db: *mut Sqlite3, z_name_1: *const i8,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_module(db: *mut Sqlite3, z_name_1: *const i8,
     p_module_1: *const Sqlite3Module, p_aux_1: *mut ()) -> i32 {
     return create_module(db, z_name_1, p_module_1, p_aux_1, None);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_module_v2(db: *mut Sqlite3,
     z_name_1: *const i8, p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
     x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
     return create_module(db, z_name_1, p_module_1, p_aux_1, x_destroy_1);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_modules(db: *mut Sqlite3,
     az_names_1: *const *const i8) -> i32 {
@@ -551,6 +567,7 @@ pub extern "C" fn sqlite3_drop_modules(db: *mut Sqlite3,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
     z_create_table_1: *const i8) -> i32 {
@@ -690,6 +707,7 @@ pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_vtab_config(db: *mut Sqlite3, op: i32,
     mut __va0: ...) -> i32 {
@@ -795,6 +813,7 @@ pub unsafe extern "C" fn sqlite3_vtab_config(db: *mut Sqlite3, op: i32,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_on_conflict(db: &Sqlite3) -> i32 {
     { let _ = 0; };
@@ -802,6 +821,7 @@ pub extern "C" fn sqlite3_vtab_on_conflict(db: &Sqlite3) -> i32 {
     { let _ = 0; };
     return a_map[((*db).vtab_on_conflict as i32 - 1) as usize] as i32;
 }
+
 extern "C" fn vtab_disconnect_all(db: *mut Sqlite3, p: &mut Table)
     -> *mut VTable {
     unsafe {
@@ -831,6 +851,7 @@ extern "C" fn vtab_disconnect_all(db: *mut Sqlite3, p: &mut Table)
         return p_ret;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_clear(db: *mut Sqlite3, p: *mut Table) -> () {
     unsafe {
@@ -864,6 +885,7 @@ pub extern "C" fn sqlite3_vtab_clear(db: *mut Sqlite3, p: *mut Table) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_unlock(p_v_tab_1: *mut VTable) -> () {
     unsafe {
@@ -892,6 +914,7 @@ pub extern "C" fn sqlite3_vtab_unlock(p_v_tab_1: *mut VTable) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_disconnect(db: *mut Sqlite3, p: &mut Table)
     -> () {
@@ -918,6 +941,7 @@ pub extern "C" fn sqlite3_vtab_disconnect(db: *mut Sqlite3, p: &mut Table)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_sync(db: &mut Sqlite3, p: *mut Vdbe) -> i32 {
     unsafe {
@@ -954,6 +978,7 @@ pub extern "C" fn sqlite3_vtab_sync(db: &mut Sqlite3, p: *mut Vdbe) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn call_finaliser(db: *mut Sqlite3, offset: i32) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -998,21 +1023,25 @@ extern "C" fn call_finaliser(db: *mut Sqlite3, offset: i32) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_rollback(db: *mut Sqlite3) -> i32 {
     call_finaliser(db,
         core::mem::offset_of!(Sqlite3Module, x_rollback) as i32);
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_commit(db: *mut Sqlite3) -> i32 {
     call_finaliser(db, core::mem::offset_of!(Sqlite3Module, x_commit) as i32);
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_lock(p_v_tab_1: &mut VTable) -> () {
     { let __p = &mut (*p_v_tab_1).n_ref; let __t = *__p; *__p += 1; __t };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_unlock_list(db: &mut Sqlite3) -> () {
     let mut p: *mut VTable = (*db).p_disconnect;
@@ -1031,6 +1060,7 @@ pub extern "C" fn sqlite3_vtab_unlock_list(db: &mut Sqlite3) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_savepoint(db: &mut Sqlite3, op: i32,
     i_savepoint_1: i32) -> i32 {
@@ -1088,6 +1118,7 @@ pub extern "C" fn sqlite3_vtab_savepoint(db: &mut Sqlite3, op: i32,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_v_table(db: *mut Sqlite3, p_tab_1: &Table)
     -> *mut VTable {
@@ -1107,6 +1138,7 @@ pub extern "C" fn sqlite3_get_v_table(db: *mut Sqlite3, p_tab_1: &Table)
         return p_vtab;
     }
 }
+
 extern "C" fn add_module_argument(p_parse_1: *mut Parse,
     p_table_1: &mut Table, z_arg_1: *mut i8) -> () {
     unsafe {
@@ -1149,6 +1181,7 @@ extern "C" fn add_module_argument(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
     p_mod_1: *mut Module,
     x_construct_1:
@@ -1376,6 +1409,7 @@ extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_eponymous_table_init(p_parse_1: *mut Parse,
     p_mod_1: *mut Module) -> i32 {
@@ -1461,6 +1495,7 @@ pub extern "C" fn sqlite3_vtab_eponymous_table_init(p_parse_1: *mut Parse,
         return 1;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_make_writable(p_parse_1: *mut Parse,
     p_tab_1: *mut Table) -> () {
@@ -1510,6 +1545,7 @@ pub extern "C" fn sqlite3_vtab_make_writable(p_parse_1: *mut Parse,
         };
     } else { unsafe { sqlite3_oom_fault(unsafe { (*p_toplevel).db }) }; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_begin_parse(p_parse_1: *mut Parse,
     p_name1_1: *mut Token, p_name2_1: *mut Token,
@@ -1571,6 +1607,7 @@ pub extern "C" fn sqlite3_vtab_begin_parse(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn add_argument_to_vtab(p_parse_1: *mut Parse) -> () {
     unsafe {
         if !(unsafe { (*p_parse_1).s_arg.z }).is_null() &&
@@ -1584,6 +1621,7 @@ extern "C" fn add_argument_to_vtab(p_parse_1: *mut Parse) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
     p_end_1: *const Token) -> () {
@@ -1678,6 +1716,7 @@ pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_arg_init(p_parse_1: *mut Parse) -> () {
     unsafe {
@@ -1686,6 +1725,7 @@ pub extern "C" fn sqlite3_vtab_arg_init(p_parse_1: *mut Parse) -> () {
         unsafe { (*p_parse_1).s_arg.n = 0 as u32 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_arg_extend(p_parse_1: &mut Parse, p: &Token)
     -> () {
@@ -1708,6 +1748,7 @@ pub extern "C" fn sqlite3_vtab_arg_extend(p_parse_1: &mut Parse, p: &Token)
         }
     }
 }
+
 extern "C" fn grow_v_trans(db: *mut Sqlite3) -> i32 {
     let array_incr: i32 = 5 as i32;
     if unsafe { (*db).n_v_trans } % array_incr as i32 == 0 {
@@ -1734,6 +1775,7 @@ extern "C" fn grow_v_trans(db: *mut Sqlite3) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn add_to_v_trans(db: &mut Sqlite3, p_v_tab_1: *mut VTable) -> () {
     unsafe {
         *(*db).a_v_trans.offset({
@@ -1745,6 +1787,7 @@ extern "C" fn add_to_v_trans(db: &mut Sqlite3, p_v_tab_1: *mut VTable) -> () {
     };
     sqlite3_vtab_lock(unsafe { &mut *p_v_tab_1 });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_call_create(db: *mut Sqlite3, i_db_1: i32,
     z_tab_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
@@ -1802,6 +1845,7 @@ pub extern "C" fn sqlite3_vtab_call_create(db: *mut Sqlite3, i_db_1: i32,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_call_connect(p_parse_1: *mut Parse,
     p_tab_1: *mut Table) -> i32 {
@@ -1854,6 +1898,7 @@ pub extern "C" fn sqlite3_vtab_call_connect(p_parse_1: *mut Parse,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_call_destroy(db: *mut Sqlite3, i_db_1: i32,
     z_tab_1: *const i8) -> i32 {
@@ -1918,6 +1963,7 @@ pub extern "C" fn sqlite3_vtab_call_destroy(db: *mut Sqlite3, i_db_1: i32,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_begin(db: *mut Sqlite3, p_v_tab_1: *mut VTable)
     -> i32 {
@@ -1974,6 +2020,7 @@ pub extern "C" fn sqlite3_vtab_begin(db: *mut Sqlite3, p_v_tab_1: *mut VTable)
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_overload_function(db: *mut Sqlite3,
     p_def_1: *mut FuncDef, n_arg_1: i32, p_expr_1: *const Expr)
@@ -2042,8 +2089,11 @@ pub extern "C" fn sqlite3_vtab_overload_function(db: *mut Sqlite3,
         return p_new;
     }
 }
+
 static a_keyword: [u8; 3] = [17 as u8, 16 as u8, 0 as u8];
+
 static a_map: [u8; 5] = [1 as u8, 4 as u8, 3 as u8, 2 as u8, 5 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4772,41 +4822,49 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

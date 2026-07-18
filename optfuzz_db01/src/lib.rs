@@ -2798,6 +2798,7 @@ pub static mut data001: [u8; 17920] =
             79 as u8, 78 as u8, 32 as u8, 40 as u8, 116 as u8, 49 as u8,
             46 as u8, 97 as u8, 61 as u8, 53 as u8, 48 as u8, 45 as u8,
             99 as u8, 48 as u8, 46 as u8, 120 as u8, 41 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

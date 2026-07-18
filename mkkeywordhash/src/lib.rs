@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 static z_hdr: [i8; 565] =
     [47 as i8, 42 as i8, 42 as i8, 42 as i8, 42 as i8, 42 as i8, 32 as i8,
             84 as i8, 104 as i8, 105 as i8, 115 as i8, 32 as i8, 102 as i8,
@@ -94,6 +95,7 @@ static z_hdr: [i8; 565] =
             109 as i8, 105 as i8, 116 as i8, 101 as i8, 100 as i8, 32 as i8,
             109 as i8, 101 as i8, 109 as i8, 111 as i8, 114 as i8, 121 as i8,
             46 as i8, 10 as i8, 42 as i8, 47 as i8, 10 as i8, 0 as i8];
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Keyword {
@@ -112,6 +114,7 @@ struct Keyword {
     substr_offset: i32,
     z_orig_name: [i8; 20],
 }
+
 static mut a_keyword_table: [Keyword; 148] =
     [Keyword {
                 z_name: c"ABORT".as_ptr() as *mut i8,
@@ -2481,9 +2484,11 @@ static mut a_keyword_table: [Keyword; 148] =
                 substr_offset: 0,
                 z_orig_name: unsafe { core::mem::zeroed() },
             }];
+
 static mut n_keyword: i32 =
     (core::mem::size_of::<[Keyword; 148]>() as u64 /
             core::mem::size_of::<Keyword>() as u64) as i32;
+
 extern "C" fn keyword_compare1(a: *const (), b: *const ()) -> i32 {
     let p_a: *const Keyword = a as *mut Keyword as *const Keyword;
     let p_b: *const Keyword = b as *mut Keyword as *const Keyword;
@@ -2504,6 +2509,7 @@ extern "C" fn keyword_compare1(a: *const (), b: *const ()) -> i32 {
     } else { { let _ = 0; } };
     return n;
 }
+
 extern "C" fn keyword_compare2(a: *const (), b: *const ()) -> i32 {
     let p_a: *const Keyword = a as *mut Keyword as *const Keyword;
     let p_b: *const Keyword = b as *mut Keyword as *const Keyword;
@@ -2526,6 +2532,7 @@ extern "C" fn keyword_compare2(a: *const (), b: *const ()) -> i32 {
     } else { { let _ = 0; } };
     return n;
 }
+
 extern "C" fn keyword_compare3(a: *const (), b: *const ()) -> i32 {
     let p_a: *const Keyword = a as *mut Keyword as *const Keyword;
     let p_b: *const Keyword = b as *mut Keyword as *const Keyword;
@@ -2541,6 +2548,7 @@ extern "C" fn keyword_compare3(a: *const (), b: *const ()) -> i32 {
     } else { { let _ = 0; } };
     return n;
 }
+
 extern "C" fn find_by_id(id: i32) -> *mut Keyword {
     unsafe {
         let mut i: i32 = 0;
@@ -2558,6 +2566,7 @@ extern "C" fn find_by_id(id: i32) -> *mut Keyword {
         return &mut a_keyword_table[i as usize];
     }
 }
+
 extern "C" fn reorder(p_from_1: &mut i32) -> () {
     unsafe {
         let i: i32 = *p_from_1 - 1;
@@ -2577,6 +2586,7 @@ extern "C" fn reorder(p_from_1: &mut i32) -> () {
         reorder(&mut a_keyword_table[i as usize].i_next);
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -3403,12 +3413,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

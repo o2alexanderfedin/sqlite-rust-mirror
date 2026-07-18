@@ -1,16 +1,23 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinTimeT = i64;
+
 type Int32T = i32;
+
 type DarwinSusecondsT = Int32T;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timeval {
     tv_sec: i64,
     tv_usec: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogVfs {
@@ -22,6 +29,7 @@ struct VfslogVfs {
     n_buf: i32,
     a_buf: [i8; 8192],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogFile {
@@ -30,12 +38,14 @@ struct VfslogFile {
     p_vfslog: *mut Sqlite3Vfs,
     i_file_id: i32,
 }
+
 extern "C" fn vfslog_time() -> Sqlite3Uint64 {
     let mut s_time: Timeval = unsafe { core::mem::zeroed() };
     unsafe { gettimeofday(&mut s_time, core::ptr::null_mut()) };
     return s_time.tv_usec as Sqlite3Uint64 +
             s_time.tv_sec as Sqlite3Uint64 * 1000000 as Sqlite3Uint64;
 }
+
 extern "C" fn vfslog_flush(p: &mut VfslogVfs) -> () {
     if (*p).n_buf != 0 {
         unsafe {
@@ -49,12 +59,14 @@ extern "C" fn vfslog_flush(p: &mut VfslogVfs) -> () {
         (*p).n_buf = 0;
     }
 }
+
 extern "C" fn put32bits(p: *mut u8, v: u32) -> () {
     unsafe { *p.offset(0 as isize) = (v >> 24) as u8 };
     unsafe { *p.offset(1 as isize) = (v >> 16) as u8 };
     unsafe { *p.offset(2 as isize) = (v >> 8) as u8 };
     unsafe { *p.offset(3 as isize) = v as u8 };
 }
+
 extern "C" fn vfslog_call(p_vfs: *mut Sqlite3Vfs, e_event: i32, i_fileid: i32,
     n_click: Sqlite3Int64, return_code: i32, size: i32, offset: i32) -> () {
     let p: *mut VfslogVfs = p_vfs as *mut VfslogVfs;
@@ -75,6 +87,7 @@ extern "C" fn vfslog_call(p_vfs: *mut Sqlite3Vfs, e_event: i32, i_fileid: i32,
     put32bits(unsafe { &mut *z_rec.offset(20 as isize) }, offset as u32);
     unsafe { (*p).n_buf += 24 };
 }
+
 extern "C" fn vfslog_close(p_file: *mut Sqlite3File) -> i32 {
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut rc: i32 = 0;
@@ -95,6 +108,7 @@ extern "C" fn vfslog_close(p_file: *mut Sqlite3File) -> i32 {
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 extern "C" fn vfslog_read(p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -114,6 +128,7 @@ extern "C" fn vfslog_read(p_file: *mut Sqlite3File, z_buf: *mut (),
         t as Sqlite3Int64, rc, i_amt, i_ofst as i32);
     return rc;
 }
+
 extern "C" fn vfslog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -133,6 +148,7 @@ extern "C" fn vfslog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
         t as Sqlite3Int64, rc, i_amt, i_ofst as i32);
     return rc;
 }
+
 extern "C" fn vfslog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let mut rc: i32 = 0;
@@ -152,6 +168,7 @@ extern "C" fn vfslog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
         t as Sqlite3Int64, rc, 0, size as i32);
     return rc;
 }
+
 extern "C" fn vfslog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -170,6 +187,7 @@ extern "C" fn vfslog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
         t as Sqlite3Int64, rc, flags, 0);
     return rc;
 }
+
 extern "C" fn vfslog_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -189,6 +207,7 @@ extern "C" fn vfslog_file_size(p_file: *mut Sqlite3File,
         t as Sqlite3Int64, rc, 0, unsafe { *p_size } as i32);
     return rc;
 }
+
 extern "C" fn vfslog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -207,6 +226,7 @@ extern "C" fn vfslog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         t as Sqlite3Int64, rc, e_lock, 0);
     return rc;
 }
+
 extern "C" fn vfslog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -225,6 +245,7 @@ extern "C" fn vfslog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         t as Sqlite3Int64, rc, e_lock, 0);
     return rc;
 }
+
 extern "C" fn vfslog_check_reserved_lock(p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -244,6 +265,7 @@ extern "C" fn vfslog_check_reserved_lock(p_file: *mut Sqlite3File,
         t as Sqlite3Int64, rc, unsafe { *p_res_out }, 0);
     return rc;
 }
+
 extern "C" fn vfslog_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let p: *const VfslogFile = p_file as *mut VfslogFile as *const VfslogFile;
@@ -266,6 +288,7 @@ extern "C" fn vfslog_file_control(p_file: *mut Sqlite3File, op: i32,
     }
     return rc;
 }
+
 extern "C" fn vfslog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -284,6 +307,7 @@ extern "C" fn vfslog_sector_size(p_file: *mut Sqlite3File) -> i32 {
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 extern "C" fn vfslog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -302,6 +326,7 @@ extern "C" fn vfslog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 extern "C" fn vfslog_shm_lock(p_file: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -321,6 +346,7 @@ extern "C" fn vfslog_shm_lock(p_file: *mut Sqlite3File, ofst: i32, n: i32,
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 extern "C" fn vfslog_shm_map(p_file: *mut Sqlite3File, i_region: i32,
     sz_region: i32, is_write: i32, pp: *mut *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -340,6 +366,7 @@ extern "C" fn vfslog_shm_map(p_file: *mut Sqlite3File, i_region: i32,
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 extern "C" fn vfslog_shm_barrier(p_file: *mut Sqlite3File) -> () {
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let p: *const VfslogFile = p_file as *mut VfslogFile as *const VfslogFile;
@@ -355,6 +382,7 @@ extern "C" fn vfslog_shm_barrier(p_file: *mut Sqlite3File) -> () {
     vfslog_call(unsafe { (*p).p_vfslog }, 26, unsafe { (*p).i_file_id },
         t as Sqlite3Int64, 0, 0, 0);
 }
+
 extern "C" fn vfslog_shm_unmap(p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -374,6 +402,7 @@ extern "C" fn vfslog_shm_unmap(p_file: *mut Sqlite3File, delete_flag: i32)
         t as Sqlite3Int64, rc, 0, 0);
     return rc;
 }
+
 static mut vfslog_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 2,
@@ -396,6 +425,7 @@ static mut vfslog_io_methods: Sqlite3IoMethods =
         x_fetch: None,
         x_unfetch: None,
     };
+
 extern "C" fn vfslog_string(p_vfs: *mut Sqlite3Vfs, z_str: *const i8) -> () {
     let p: *mut VfslogVfs = p_vfs as *mut VfslogVfs;
     let mut z_rec: *mut u8 = core::ptr::null_mut();
@@ -419,6 +449,7 @@ extern "C" fn vfslog_string(p_vfs: *mut Sqlite3Vfs, z_str: *const i8) -> () {
     }
     unsafe { (*p).n_buf += 4 + n_str };
 }
+
 extern "C" fn vfslog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -460,6 +491,7 @@ extern "C" fn vfslog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         return rc;
     }
 }
+
 extern "C" fn vfslog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -479,6 +511,7 @@ extern "C" fn vfslog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     vfslog_string(p_vfs, z_path);
     return rc;
 }
+
 extern "C" fn vfslog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -499,6 +532,7 @@ extern "C" fn vfslog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     vfslog_string(p_vfs, z_path);
     return rc;
 }
+
 extern "C" fn vfslog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -510,6 +544,7 @@ extern "C" fn vfslog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
                 n_out, z_out)
         };
 }
+
 extern "C" fn vfslog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -520,6 +555,7 @@ extern "C" fn vfslog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, z_path)
         };
 }
+
 extern "C" fn vfslog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -531,6 +567,7 @@ extern "C" fn vfslog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
             z_err_msg)
     };
 }
+
 extern "C" fn vfslog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -541,6 +578,7 @@ extern "C" fn vfslog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, p, z_sym)
         };
 }
+
 extern "C" fn vfslog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     -> () {
     unsafe {
@@ -551,6 +589,7 @@ extern "C" fn vfslog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
             })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, p_handle)
     };
 }
+
 extern "C" fn vfslog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -562,6 +601,7 @@ extern "C" fn vfslog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
                 z_buf_out)
         };
 }
+
 extern "C" fn vfslog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -571,6 +611,7 @@ extern "C" fn vfslog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, n_micro)
         };
 }
+
 extern "C" fn vfslog_current_time(p_vfs: *mut Sqlite3Vfs,
     p_time_out: *mut f64) -> i32 {
     return unsafe {
@@ -581,6 +622,7 @@ extern "C" fn vfslog_current_time(p_vfs: *mut Sqlite3Vfs,
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, p_time_out)
         };
 }
+
 extern "C" fn vfslog_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32,
     b: *mut i8) -> i32 {
     return unsafe {
@@ -591,6 +633,7 @@ extern "C" fn vfslog_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32,
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, a, b)
         };
 }
+
 extern "C" fn vfslog_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p: *mut Sqlite3Int64) -> i32 {
     return unsafe {
@@ -601,6 +644,7 @@ extern "C" fn vfslog_current_time_int64(p_vfs: *mut Sqlite3Vfs,
                 })(unsafe { (*(p_vfs as *mut VfslogVfs)).p_vfs }, p)
         };
 }
+
 static mut vfslog_vfs: Sqlite3Vfs =
     Sqlite3Vfs {
         i_version: 1,
@@ -626,6 +670,7 @@ static mut vfslog_vfs: Sqlite3Vfs =
         x_get_system_call: None,
         x_next_system_call: None,
     };
+
 extern "C" fn vfslog_finalize(p: *mut VfslogVfs) -> () {
     if !(unsafe { (*unsafe { (*p).p_log }).p_methods }).is_null() {
         vfslog_flush(unsafe { &mut *p });
@@ -639,6 +684,7 @@ extern "C" fn vfslog_finalize(p: *mut VfslogVfs) -> () {
     }
     unsafe { sqlite3_free(p as *mut ()) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfslog_finalize(z_vfs_1: *const i8) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
@@ -651,6 +697,7 @@ pub extern "C" fn sqlite3_vfslog_finalize(z_vfs_1: *const i8) -> i32 {
     vfslog_finalize(p_vfs as *mut VfslogVfs);
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfslog_new(z_vfs_1: *const i8,
     z_parent_vfs_1: *const i8, z_log_1: *const i8) -> i32 {
@@ -734,6 +781,7 @@ pub extern "C" fn sqlite3_vfslog_new(z_vfs_1: *const i8,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfslog_annotate(z_vfs_1: *const i8,
     z_msg_1: *const i8) -> i32 {
@@ -747,6 +795,7 @@ pub extern "C" fn sqlite3_vfslog_annotate(z_vfs_1: *const i8,
     vfslog_string(p_vfs, z_msg_1);
     return 0;
 }
+
 extern "C" fn vfslog_eventname(e_event_1: i32) -> *const i8 {
     let mut z_event: *const i8 = core::ptr::null();
     '__s0:
@@ -799,6 +848,7 @@ extern "C" fn vfslog_eventname(e_event_1: i32) -> *const i8 {
     }
     return z_event;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogVtab {
@@ -807,6 +857,7 @@ struct VfslogVtab {
     n_byte: Sqlite3Int64,
     z_file: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogCsr {
@@ -818,12 +869,14 @@ struct VfslogCsr {
     az_file: *mut *mut i8,
     a_buf: [u8; 1024],
 }
+
 extern "C" fn get32bits(p: *const u8) -> u32 {
     return (((unsafe { *p.offset(0 as isize) } as i32) << 24) +
                         ((unsafe { *p.offset(1 as isize) } as i32) << 16) +
                     ((unsafe { *p.offset(2 as isize) } as i32) << 8) +
                 unsafe { *p.offset(3 as isize) } as i32) as u32;
 }
+
 extern "C" fn dequote(z: *mut i8) -> () {
     let mut quote: i8 = 0 as i8;
     quote = unsafe { *z.offset(0 as isize) };
@@ -869,6 +922,7 @@ extern "C" fn dequote(z: *mut i8) -> () {
         unsafe { *z.offset(i_out as isize) = '\u{0}' as i32 as i8 };
     }
 }
+
 extern "C" fn vlog_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -940,11 +994,13 @@ extern "C" fn vlog_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     } else { unsafe { sqlite3_free(p as *mut ()) }; }
     return rc;
 }
+
 extern "C" fn vlog_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe { (*p_idx_info_1).estimated_cost = 10.0 };
     return 0;
 }
+
 extern "C" fn vlog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut VfslogVtab = p_vtab_1 as *mut VfslogVtab;
     if !(unsafe { (*unsafe { (*p).p_fd }).p_methods }).is_null() {
@@ -960,6 +1016,7 @@ extern "C" fn vlog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn vlog_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut VfslogCsr = core::ptr::null_mut();
@@ -973,6 +1030,7 @@ extern "C" fn vlog_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_csr).base } };
     return 0;
 }
+
 extern "C" fn vlog_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut VfslogCsr = p_cursor_1 as *mut VfslogCsr;
     let mut i: i32 = 0;
@@ -996,6 +1054,7 @@ extern "C" fn vlog_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 extern "C" fn vlog_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut VfslogCsr = p_cursor_1 as *mut VfslogCsr;
     let p: *const VfslogVtab =
@@ -1098,6 +1157,7 @@ extern "C" fn vlog_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { (*p_csr).i_offset += n_read as Sqlite3Int64 };
     return rc;
 }
+
 extern "C" fn vlog_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const VfslogCsr =
         p_cursor_1 as *mut VfslogCsr as *const VfslogCsr;
@@ -1106,6 +1166,7 @@ extern "C" fn vlog_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
             *const VfslogVtab;
     return (unsafe { (*p_csr).i_offset } >= unsafe { (*p).n_byte }) as i32;
 }
+
 extern "C" fn vlog_filter(p_cursor_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_csr: *mut VfslogCsr = p_cursor_1 as *mut VfslogCsr;
@@ -1113,6 +1174,7 @@ extern "C" fn vlog_filter(p_cursor_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     unsafe { (*p_csr).i_offset = 20 as Sqlite3Int64 };
     return vlog_next(p_cursor_1);
 }
+
 extern "C" fn vlog_column(p_cursor_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let mut val: u32 = 0 as u32;
@@ -1184,6 +1246,7 @@ extern "C" fn vlog_column(p_cursor_1: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn vlog_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const VfslogCsr =
@@ -1191,6 +1254,7 @@ extern "C" fn vlog_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_csr).i_rowid } };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfslog_register(db: *mut Sqlite3) -> i32 {
     unsafe {
@@ -1203,6 +1267,7 @@ pub extern "C" fn sqlite3_vfslog_register(db: *mut Sqlite3) -> i32 {
         return 0;
     }
 }
+
 static mut vfslog_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1231,6 +1296,7 @@ static mut vfslog_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

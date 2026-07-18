@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -70,6 +73,7 @@ extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
     }
     return n_key1_1 - i - (n_key2_1 - j);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uint_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -81,6 +85,7 @@ pub extern "C" fn sqlite3_uint_init(db: *mut Sqlite3,
                 core::ptr::null_mut(), Some(uint_coll_func))
         };
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,12 +1,17 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type LogEst = i16;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn log_est_multiply(a: LogEst, b: LogEst) -> LogEst {
     return (a as i32 + b as i32) as LogEst;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn log_est_add(mut a: LogEst, mut b: LogEst) -> LogEst {
     if (a as i32) < b as i32 { let t: LogEst = a; a = b; b = t; }
@@ -14,6 +19,7 @@ pub extern "C" fn log_est_add(mut a: LogEst, mut b: LogEst) -> LogEst {
     if a as i32 > b as i32 + 31 { return (a as i32 + 1) as LogEst; }
     return (a as i32 + x_1[(a as i32 - b as i32) as usize] as i32) as LogEst;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn log_est_from_integer(mut x: Sqlite3Uint64) -> LogEst {
     unsafe {
@@ -38,6 +44,7 @@ pub extern "C" fn log_est_from_integer(mut x: Sqlite3Uint64) -> LogEst {
                 as LogEst;
     }
 }
+
 extern "C" fn log_est_to_int(mut x: LogEst) -> Sqlite3Uint64 {
     let mut n: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if (x as i32) < 10 { return 1 as Sqlite3Uint64; }
@@ -53,6 +60,7 @@ extern "C" fn log_est_to_int(mut x: LogEst) -> Sqlite3Uint64 {
     if x as i32 >= 3 { return (n + 8 as Sqlite3Uint64) << x as i32 - 3; }
     return n + 8 as Sqlite3Uint64 >> 3 - x as i32;
 }
+
 extern "C" fn log_est_from_double(mut x: f64) -> LogEst {
     let mut a: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut e: LogEst = 0 as LogEst;
@@ -82,6 +90,7 @@ extern "C" fn log_est_from_double(mut x: f64) -> LogEst {
     e = ((a >> 52) - 1022 as Sqlite3Uint64) as LogEst;
     return (e as i32 * 10) as LogEst;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn is_integer(mut z: *const i8) -> i32 {
     while unsafe { *z.offset(0 as isize) } as i32 >= '0' as i32 &&
@@ -95,6 +104,7 @@ pub extern "C" fn is_integer(mut z: *const i8) -> i32 {
     }
     return (unsafe { *z.offset(0 as isize) } as i32 == 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn is_float(mut z: *const i8) -> i32 {
     let mut c: i8 = 0 as i8;
@@ -112,6 +122,7 @@ pub extern "C" fn is_float(mut z: *const i8) -> i32 {
     }
     return (unsafe { *z.offset(0 as isize) } as i32 == 0) as i32;
 }
+
 extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s ARGS...\n".as_ptr() as *mut i8 as *const i8,
@@ -123,6 +134,7 @@ extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     };
     unsafe { exit(1) };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i: i32 = 0;
@@ -240,21 +252,25 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     }
     return Ok(());
 }
+
 static x_1: [u8; 32] =
     [10 as u8, 10 as u8, 9 as u8, 9 as u8, 8 as u8, 8 as u8, 7 as u8, 7 as u8,
             7 as u8, 6 as u8, 6 as u8, 6 as u8, 5 as u8, 5 as u8, 5 as u8,
             4 as u8, 4 as u8, 4 as u8, 4 as u8, 3 as u8, 3 as u8, 3 as u8,
             3 as u8, 3 as u8, 3 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
             2 as u8, 2 as u8, 2 as u8];
+
 static mut a_1: [i16; 8] =
     [0 as i16, 2 as i16, 3 as i16, 5 as i16, 6 as i16, 7 as i16, 8 as i16,
             9 as i16];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

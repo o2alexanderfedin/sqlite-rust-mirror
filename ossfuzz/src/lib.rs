@@ -1,11 +1,15 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 static mut m_debug: u32 = 0 as u32;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn ossfuzz_set_debug_flags(x: u32) -> () {
     unsafe { m_debug = x; }
 }
+
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -34,6 +38,7 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
         return t;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzCtx {
@@ -44,6 +49,7 @@ struct FuzzCtx {
     n_cb: u32,
     exec_cnt: u32,
 }
+
 extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     let p: *mut FuzzCtx = p_client_data_1 as *mut FuzzCtx;
     let i_now: Sqlite3Int64 = time_of_day();
@@ -55,6 +61,7 @@ extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     { let __p = unsafe { &mut (*p).n_cb }; let __t = *__p; *__p += 1; __t };
     return rc;
 }
+
 extern "C" fn block_debug_pragmas(notused_1: *mut (), e_code_1: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8,
     z_arg4_1: *const i8) -> i32 {
@@ -71,6 +78,7 @@ extern "C" fn block_debug_pragmas(notused_1: *mut (), e_code_1: i32,
     }
     return 0;
 }
+
 extern "C" fn exec_handler(p_client_data_1: *mut (), argc: i32,
     argv: *mut *mut i8, namev: *mut *mut i8) -> i32 {
     let p: *mut FuzzCtx = p_client_data_1 as *mut FuzzCtx;
@@ -101,6 +109,7 @@ extern "C" fn exec_handler(p_client_data_1: *mut (), argc: i32,
                     } <= 0 as u32 || progress_handler(p_client_data_1) != 0) as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn llvm_fuzzer_test_one_input(mut data: *const u8,
     mut size: u64) -> i32 {
@@ -189,7 +198,9 @@ pub extern "C" fn llvm_fuzzer_test_one_input(mut data: *const u8,
         return 0;
     }
 }
+
 static mut clock_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

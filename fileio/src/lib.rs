@@ -1,42 +1,72 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinTimeT = i64;
+
 type TimeT = DarwinTimeT;
+
 type DarwinSsizeT = i64;
+
 type DarwinSusecondsT = Int32T;
+
 type Uint8T = u8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -59,12 +89,14 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timeval {
     tv_sec: i64,
     tv_usec: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Dirent {
@@ -75,6 +107,7 @@ struct Dirent {
     d_type: u8,
     d_name: [i8; 1024],
 }
+
 extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     z_name_1: *const i8) -> () {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -117,6 +150,7 @@ extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     }
     unsafe { fclose(in_) };
 }
+
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
@@ -127,6 +161,7 @@ extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     if z_name == core::ptr::null() { return; }
     read_file_contents(context, z_name);
 }
+
 unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -137,13 +172,16 @@ unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg as *mut ()) };
     ();
 }
+
 extern "C" fn file_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat) -> i32 {
     return unsafe { stat(z_path_1, p_stat_buf_1) };
 }
+
 extern "C" fn file_link_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat)
     -> i32 {
     return unsafe { lstat(z_path_1, p_stat_buf_1) };
 }
+
 extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     let z_copy: *mut i8 =
         unsafe {
@@ -187,6 +225,7 @@ extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     p_data_1: *mut Sqlite3Value, mode: ModeT, mtime: Sqlite3Int64) -> i32 {
     if z_file_1 == core::ptr::null() { return 1; }
@@ -257,6 +296,7 @@ extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     }
     return 0;
 }
+
 extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_file: *const i8 = core::ptr::null();
@@ -318,6 +358,7 @@ extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
 }
+
 extern "C" fn ls_mode_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -367,6 +408,7 @@ extern "C" fn ls_mode_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirCursor {
@@ -381,17 +423,20 @@ struct FsdirCursor {
     z_path: *mut i8,
     i_rowid: Sqlite3Int64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirLevel {
     p_dir: *mut DIR,
     z_dir: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirTab {
     base: Sqlite3Vtab,
 }
+
 extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -423,10 +468,12 @@ extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     unsafe { *pp_vtab_1 = p_new as *mut Sqlite3Vtab };
     return rc;
 }
+
 extern "C" fn fsdir_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsdirCursor = core::ptr::null_mut();
@@ -445,6 +492,7 @@ extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     let mut i: i32 = 0;
     {
@@ -474,12 +522,14 @@ extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     (*p_cur_1).i_lvl = -1;
     (*p_cur_1).i_rowid = 1 as Sqlite3Int64;
 }
+
 extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     fsdir_reset_cursor(unsafe { &mut *p_cur });
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -490,6 +540,7 @@ unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     };
     ();
 }
+
 extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     let m: ModeT = unsafe { (*p_cur).s_stat.st_mode };
@@ -602,6 +653,7 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { (*p_cur).z_path = core::ptr::null_mut() };
     return 0;
 }
+
 extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -705,6 +757,7 @@ extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -712,11 +765,13 @@ extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 extern "C" fn fsdir_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FsdirCursor =
         cur as *mut FsdirCursor as *const FsdirCursor;
     return (unsafe { (*p_cur).z_path } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let mut z_dir: *const i8 = core::ptr::null();
@@ -840,6 +895,7 @@ extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     }
     return 0;
 }
+
 extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -998,6 +1054,7 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
     unsafe {
         let rc: i32 =
@@ -1010,6 +1067,7 @@ extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
     let mut z_out: *mut i8 = core::ptr::null_mut();
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1035,6 +1093,7 @@ extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
     }
     return z_out;
 }
+
 extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_path: *const i8 = core::ptr::null();
@@ -1173,6 +1232,7 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fileio_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1213,6 +1273,7 @@ pub extern "C" fn sqlite3_fileio_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 static mut fsdir_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1241,6 +1302,7 @@ static mut fsdir_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2070,14 +2132,17 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DIR {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

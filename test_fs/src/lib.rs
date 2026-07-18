@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,32 +14,59 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type Uint64T = u64;
+
 type Uint16T = u16;
+
 type Uint8T = u8;
+
 type DarwinSizeT = u64;
+
 type DarwinSsizeT = i64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type ClientData = *mut ();
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinTimeT = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Dirent {
@@ -49,12 +77,14 @@ struct Dirent {
     d_type: u8,
     d_name: [i8; 1024],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -77,6 +107,7 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -89,6 +120,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -168,6 +200,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -216,6 +249,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -352,6 +386,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -375,6 +410,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -447,6 +483,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsVtab {
@@ -455,6 +492,7 @@ struct FsVtab {
     z_db: *mut i8,
     z_tbl: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsCursor {
@@ -464,11 +502,13 @@ struct FsCursor {
     n_buf: i32,
     n_alloc: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirVtab {
     base: Sqlite3Vtab,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirCsr {
@@ -478,6 +518,7 @@ struct FsdirCsr {
     i_rowid: Sqlite3Int64,
     p_entry: *mut Dirent,
 }
+
 extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -506,10 +547,12 @@ extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     };
     return 0;
 }
+
 extern "C" fn fsdir_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -551,6 +594,7 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 extern "C" fn fsdir_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsdirCsr = core::ptr::null_mut();
@@ -566,6 +610,7 @@ extern "C" fn fsdir_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCsr = cur as *mut FsdirCsr;
     if !(unsafe { (*p_cur).p_dir }).is_null() {
@@ -575,6 +620,7 @@ extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FsdirCsr = cur as *mut FsdirCsr;
     if !(unsafe { (*p_csr).p_dir }).is_null() {
@@ -594,6 +640,7 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn fsdir_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -626,10 +673,12 @@ extern "C" fn fsdir_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     };
     return fsdir_next(p_vtab_cursor_1);
 }
+
 extern "C" fn fsdir_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
     return (unsafe { (*p_csr).p_dir } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
@@ -660,18 +709,21 @@ extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
     unsafe { *p_rowid_1 = unsafe { (*p_csr).i_rowid } };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FstreeVtab {
     base: Sqlite3Vtab,
     db: *mut Sqlite3,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FstreeCsr {
@@ -679,6 +731,7 @@ struct FstreeCsr {
     p_stmt: *mut Sqlite3Stmt,
     fd: i32,
 }
+
 extern "C" fn fstree_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -709,10 +762,12 @@ extern "C" fn fstree_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     };
     return 0;
 }
+
 extern "C" fn fstree_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn fstree_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -757,6 +812,7 @@ extern "C" fn fstree_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).estimated_cost = 1000000000.0 };
     return 0;
 }
+
 extern "C" fn fstree_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FstreeCsr = core::ptr::null_mut();
@@ -771,12 +827,14 @@ extern "C" fn fstree_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn fstree_close_fd(p_csr_1: &mut FstreeCsr) -> () {
     if (*p_csr_1).fd >= 0 {
         unsafe { close((*p_csr_1).fd) };
         (*p_csr_1).fd = -1;
     }
 }
+
 extern "C" fn fstree_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FstreeCsr = cur as *mut FstreeCsr;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_stmt }) };
@@ -784,6 +842,7 @@ extern "C" fn fstree_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn fstree_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FstreeCsr = cur as *mut FstreeCsr;
     let mut rc: i32 = 0;
@@ -805,6 +864,7 @@ extern "C" fn fstree_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn fstree_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -918,10 +978,12 @@ extern "C" fn fstree_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return fstree_next(p_vtab_cursor_1);
     }
 }
+
 extern "C" fn fstree_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const FstreeCsr = cur as *mut FstreeCsr as *const FstreeCsr;
     return (unsafe { (*p_csr).p_stmt } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn fstree_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const FstreeCsr = cur as *mut FstreeCsr as *const FstreeCsr;
@@ -964,11 +1026,13 @@ extern "C" fn fstree_column(cur: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn fstree_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     unsafe { *p_rowid_1 = 0 as SqliteInt64 };
     return 0;
 }
+
 extern "C" fn fs_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1023,10 +1087,12 @@ extern "C" fn fs_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     };
     return 0;
 }
+
 extern "C" fn fs_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn fs_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsCursor = core::ptr::null_mut();
@@ -1037,6 +1103,7 @@ extern "C" fn fs_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn fs_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsCursor = cur as *mut FsCursor;
     unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) };
@@ -1044,6 +1111,7 @@ extern "C" fn fs_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn fs_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FsCursor = cur as *mut FsCursor as *const FsCursor;
     let mut rc: i32 = 0;
@@ -1051,6 +1119,7 @@ extern "C" fn fs_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     if rc == 100 || rc == 101 { rc = 0; }
     return rc;
 }
+
 extern "C" fn fs_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1100,6 +1169,7 @@ extern "C" fn fs_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return rc;
     }
 }
+
 extern "C" fn fs_column(cur: *mut Sqlite3VtabCursor, ctx: *mut Sqlite3Context,
     i: i32) -> i32 {
     let p_cur: *mut FsCursor = cur as *mut FsCursor;
@@ -1162,6 +1232,7 @@ extern "C" fn fs_column(cur: *mut Sqlite3VtabCursor, ctx: *mut Sqlite3Context,
     }
     return 0;
 }
+
 extern "C" fn fs_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const FsCursor = cur as *mut FsCursor as *const FsCursor;
@@ -1171,11 +1242,13 @@ extern "C" fn fs_rowid(cur: *mut Sqlite3VtabCursor,
     };
     return 0;
 }
+
 extern "C" fn fs_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FsCursor = cur as *mut FsCursor as *const FsCursor;
     return (unsafe { sqlite3_data_count(unsafe { (*p_cur).p_stmt }) } == 0) as
             i32;
 }
+
 extern "C" fn fs_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -1216,6 +1289,7 @@ extern "C" fn fs_best_index(tab: *mut Sqlite3Vtab,
     }
     return 0;
 }
+
 static mut fs_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1244,6 +1318,7 @@ static mut fs_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 static mut fsdir_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1272,6 +1347,7 @@ static mut fsdir_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 static mut fstree_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1300,6 +1376,7 @@ static mut fstree_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn register_fs_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1338,6 +1415,7 @@ extern "C" fn register_fs_module(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4152,56 +4230,67 @@ extern "C" {
     fn Tcl_GetString(objPtr: *mut TclObj)
     -> *mut i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DIR {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

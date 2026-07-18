@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,8 +14,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type DarwinIntptrT = i64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -27,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -106,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -154,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -290,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -313,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -385,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn expr_list_is_constant(p_parse_1: *mut Parse, p_row_1: &ExprList)
     -> i32 {
     let mut ii: i32 = 0;
@@ -410,6 +420,7 @@ extern "C" fn expr_list_is_constant(p_parse_1: *mut Parse, p_row_1: &ExprList)
     }
     return 1;
 }
+
 extern "C" fn expr_list_is_no_affinity(p_parse_1: *mut Parse,
     p_row_1: *mut ExprList) -> i32 {
     let mut ii: i32 = 0;
@@ -440,6 +451,7 @@ extern "C" fn expr_list_is_no_affinity(p_parse_1: *mut Parse,
     }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multi_values_end(p_parse: &Parse,
     p_val: *mut Select) -> () {
@@ -467,6 +479,7 @@ pub extern "C" fn sqlite3_multi_values_end(p_parse: &Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multi_values(p_parse: *mut Parse,
     mut p_left: *mut Select, p_row: *mut ExprList) -> *mut Select {
@@ -620,6 +633,7 @@ pub extern "C" fn sqlite3_multi_values(p_parse: *mut Parse,
         return p_left;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_open_table(p_parse: *mut Parse, i_cur: i32,
     i_db: i32, p_tab: *mut Table, opcode: i32) -> () {
@@ -653,6 +667,7 @@ pub extern "C" fn sqlite3_open_table(p_parse: *mut Parse, i_cur: i32,
         unsafe { sqlite3_vdbe_set_p4_key_info(p_parse, p_pk) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_autoincrement_begin(p_parse: *mut Parse) -> () {
     unsafe {
@@ -714,6 +729,7 @@ pub extern "C" fn sqlite3_autoincrement_begin(p_parse: *mut Parse) -> () {
         }
     }
 }
+
 extern "C" fn auto_increment_end(p_parse_1: *mut Parse) -> () {
     unsafe {
         let mut p: *const AutoincInfo = core::ptr::null();
@@ -767,10 +783,12 @@ extern "C" fn auto_increment_end(p_parse_1: *mut Parse) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_autoincrement_end(p_parse: *mut Parse) -> () {
     if unsafe { (*p_parse).uses_ainc() } != 0 { auto_increment_end(p_parse); }
 }
+
 extern "C" fn xfer_compatible_index(p_dest_1: &Index, p_src_1: &Index)
     -> i32 {
     let mut i: i32 = 0;
@@ -836,6 +854,7 @@ extern "C" fn xfer_compatible_index(p_dest_1: &Index, p_src_1: &Index)
     }
     return 1;
 }
+
 extern "C" fn xfer_check_rowid(p_walk_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     if unsafe { (*p_expr_1).op } as i32 == 168 &&
@@ -844,6 +863,7 @@ extern "C" fn xfer_check_rowid(p_walk_1: *mut Walker, p_expr_1: *mut Expr)
         return 2;
     } else { return 0; }
 }
+
 extern "C" fn xfer_compatible_check(p_dest_1: &Table, p_src_1: &Table)
     -> i32 {
     if unsafe {
@@ -864,6 +884,7 @@ extern "C" fn xfer_compatible_check(p_dest_1: &Table, p_src_1: &Table)
     }
     return 1;
 }
+
 extern "C" fn auto_inc_begin(p_parse_1: *mut Parse, i_db_1: i32,
     p_tab_1: *mut Table) -> i32 {
     unsafe {
@@ -947,6 +968,7 @@ extern "C" fn auto_inc_begin(p_parse_1: *mut Parse, i_db_1: i32,
         return mem_id;
     }
 }
+
 extern "C" fn auto_inc_step(p_parse_1: &Parse, mem_id_1: i32,
     reg_rowid_1: i32) -> () {
     if mem_id_1 > 0 {
@@ -956,6 +978,7 @@ extern "C" fn auto_inc_step(p_parse_1: &Parse, mem_id_1: i32,
         };
     }
 }
+
 extern "C" fn xfer_optimization(p_parse: *mut Parse, p_dest: *mut Table,
     p_select: &Select, mut on_error: i32, i_db_dest: i32) -> i32 {
     unsafe {
@@ -1431,6 +1454,7 @@ extern "C" fn xfer_optimization(p_parse: *mut Parse, p_dest: *mut Table,
         }
     }
 }
+
 extern "C" fn reads_table(p: *mut Parse, i_db_1: i32, p_tab_1: *mut Table)
     -> i32 {
     unsafe {
@@ -1480,6 +1504,7 @@ extern "C" fn reads_table(p: *mut Parse, i_db_1: i32, p_tab_1: *mut Table)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_open_table_and_indices(p_parse: *mut Parse,
     p_tab: *mut Table, op: i32, mut p5: u8, mut i_base: i32,
@@ -1558,6 +1583,7 @@ pub extern "C" fn sqlite3_open_table_and_indices(p_parse: *mut Parse,
         return i;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_table_affinity_str(db: *mut Sqlite3, p_tab: &Table)
     -> *mut i8 {
@@ -1611,6 +1637,7 @@ pub extern "C" fn sqlite3_table_affinity_str(db: *mut Sqlite3, p_tab: &Table)
     }
     return z_col_aff;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_table_affinity(v: *mut Vdbe, p_tab: *mut Table,
     i_reg: i32) -> () {
@@ -1669,6 +1696,7 @@ pub extern "C" fn sqlite3_table_affinity(v: *mut Vdbe, p_tab: *mut Table,
         }
     }
 }
+
 extern "C" fn expr_column_flag_union(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -1689,6 +1717,7 @@ extern "C" fn expr_column_flag_union(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_compute_generated_columns(p_parse: *mut Parse,
     i_reg_store: i32, p_tab: *mut Table) -> () {
@@ -1815,6 +1844,7 @@ pub extern "C" fn sqlite3_compute_generated_columns(p_parse: *mut Parse,
         unsafe { (*p_parse).i_self_tab = 0 };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IndexIterator {
@@ -1822,29 +1852,34 @@ struct IndexIterator {
     i: i32,
     u: IndexIteratorU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union IndexIteratorU0 {
     lx: IndexIteratorU0S0,
     ax: IndexIteratorU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IndexIteratorU0S0 {
     p_idx: *mut Index,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IndexIteratorU0S1 {
     n_idx: i32,
     a_idx: *mut IndexListTerm,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IndexListTerm {
     p: *mut Index,
     ix: i32,
 }
+
 extern "C" fn check_constraint_expr_node(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -1865,6 +1900,7 @@ extern "C" fn check_constraint_expr_node(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_references_updated_column(p_expr: *mut Expr,
     ai_chng: *mut i32, chng_rowid: i32) -> i32 {
@@ -1882,6 +1918,7 @@ pub extern "C" fn sqlite3_expr_references_updated_column(p_expr: *mut Expr,
         return (w.e_code as i32 != 0) as i32;
     }
 }
+
 extern "C" fn index_iterator_first(p_iter_1: &IndexIterator, p_ix_1: &mut i32)
     -> *mut Index {
     unsafe {
@@ -1893,6 +1930,7 @@ extern "C" fn index_iterator_first(p_iter_1: &IndexIterator, p_ix_1: &mut i32)
         } else { *p_ix_1 = 0; return (*p_iter_1).u.lx.p_idx; }
     }
 }
+
 extern "C" fn index_iterator_next(p_iter_1: &mut IndexIterator,
     p_ix_1: &mut i32) -> *mut Index {
     unsafe {
@@ -1913,6 +1951,7 @@ extern "C" fn index_iterator_next(p_iter_1: &mut IndexIterator,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_generate_constraint_checks(p_parse: *mut Parse,
     p_tab: *mut Table, a_reg_idx: *mut i32, i_data_cur: i32, i_idx_cur: i32,
@@ -3492,6 +3531,7 @@ pub extern "C" fn sqlite3_generate_constraint_checks(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_complete_insertion(p_parse: &Parse,
     p_tab: *mut Table, i_data_cur: i32, i_idx_cur: i32, reg_new_data: i32,
@@ -3567,6 +3607,7 @@ pub extern "C" fn sqlite3_complete_insertion(p_parse: &Parse,
     }
     unsafe { sqlite3_vdbe_change_p5(v, pik_flags as u16) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_insert(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_select: *mut Select,
@@ -5174,6 +5215,7 @@ pub extern "C" fn sqlite3_insert(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn compute_index_aff_str(db: *mut Sqlite3, p_idx_1: &mut Index)
     -> *const i8 {
     let mut n: i32 = 0;
@@ -5225,6 +5267,7 @@ extern "C" fn compute_index_aff_str(db: *mut Sqlite3, p_idx_1: &mut Index)
     unsafe { *(*p_idx_1).z_col_aff.offset(n as isize) = 0 as i8 };
     return (*p_idx_1).z_col_aff as *const i8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_index_affinity_str(db: *mut Sqlite3,
     p_idx: *mut Index) -> *const i8 {
@@ -5233,7 +5276,9 @@ pub extern "C" fn sqlite3_index_affinity_str(db: *mut Sqlite3,
     }
     return unsafe { (*p_idx).z_col_aff } as *const i8;
 }
+
 static i_ln_1: i32 = 0 as i32;
+
 static auto_inc: [VdbeOpList; 12] =
     [VdbeOpList { opcode: 77 as u8, p1: 0 as i8, p2: 0 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -5302,7 +5347,9 @@ static auto_inc: [VdbeOpList; 12] =
                 p2: 0 as i8,
                 p3: 0 as i8,
             }];
+
 static i_ln_2: i32 = 0 as i32;
+
 static auto_inc_end: [VdbeOpList; 5] =
     [VdbeOpList { opcode: 52 as u8, p1: 0 as i8, p2: 2 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -5329,6 +5376,7 @@ static auto_inc_end: [VdbeOpList; 5] =
                 p2: 0 as i8,
                 p3: 0 as i8,
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -8085,41 +8133,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

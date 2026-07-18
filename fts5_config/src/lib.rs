@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -8,11 +9,14 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn fts5_isopenquote(x: i8) -> i32 {
     return (x as i32 == '\"' as i32 || x as i32 == '\'' as i32 ||
                     x as i32 == '[' as i32 || x as i32 == '`' as i32) as i32;
 }
+
 extern "C" fn fts5_dequote(z: *mut i8) -> i32 {
     let mut q: i8 = 0 as i8;
     let mut i_in: i32 = 1;
@@ -67,6 +71,7 @@ extern "C" fn fts5_dequote(z: *mut i8) -> i32 {
     unsafe { *z.offset(i_out as isize) = '\u{0}' as i32 as i8 };
     return i_in;
 }
+
 extern "C" fn fts5_config_skip_bareword(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     while unsafe { sqlite3_fts5_is_bareword(unsafe { *p }) } != 0 {
@@ -80,6 +85,7 @@ extern "C" fn fts5_config_skip_bareword(p_in_1: *const i8) -> *const i8 {
     if p == p_in_1 { p = core::ptr::null(); }
     return p;
 }
+
 extern "C" fn fts5_config_gobble_word(p_rc_1: &mut i32, z_in_1: *const i8,
     pz_out_1: &mut *mut i8, pb_quoted_1: &mut i32) -> *const i8 {
     let mut z_ret: *const i8 = core::ptr::null();
@@ -123,9 +129,11 @@ extern "C" fn fts5_config_gobble_word(p_rc_1: &mut i32, z_in_1: *const i8,
     } else { *pz_out_1 = z_out; }
     return z_ret;
 }
+
 extern "C" fn fts5_iswhitespace(x: i8) -> i32 {
     return (x as i32 == ' ' as i32) as i32;
 }
+
 extern "C" fn fts5_config_skip_whitespace(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     if !(p).is_null() {
@@ -140,9 +148,11 @@ extern "C" fn fts5_config_skip_whitespace(p_in_1: *const i8) -> *const i8 {
     }
     return p;
 }
+
 extern "C" fn fts5_isdigit(a: i8) -> i32 {
     return (a as i32 >= '0' as i32 && a as i32 <= '9' as i32) as i32;
 }
+
 extern "C" fn fts5_config_skip_literal(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     '__s3:
@@ -308,6 +318,7 @@ extern "C" fn fts5_config_skip_literal(p_in_1: *const i8) -> *const i8 {
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_dequote(z: *mut i8) -> () {
     let mut quote: i8 = 0 as i8;
@@ -326,12 +337,14 @@ pub extern "C" fn sqlite3_fts5_dequote(z: *mut i8) -> () {
         fts5_dequote(z);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Enum {
     z_name: *const i8,
     e_val: i32,
 }
+
 extern "C" fn fts5_config_set_enum(a_enum_1: *const Fts5Enum,
     z_enum_1: *const i8, pe_val_1: &mut i32) -> i32 {
     let n_enum: i32 = unsafe { strlen(z_enum_1) } as i32;
@@ -363,6 +376,7 @@ extern "C" fn fts5_config_set_enum(a_enum_1: *const Fts5Enum,
     *pe_val_1 = i_val;
     return if i_val < 0 { 1 } else { 0 };
 }
+
 extern "C" fn fts5_config_parse_special(p_config_1: &mut Fts5Config,
     z_cmd_1: *const i8, z_arg_1: *const i8, pz_err_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -731,6 +745,7 @@ extern "C" fn fts5_config_parse_special(p_config_1: &mut Fts5Config,
         };
     return 1;
 }
+
 extern "C" fn fts5_config_parse_column(p: &mut Fts5Config, z_col_1: *mut i8,
     z_arg_1: *mut i8, pz_err_1: &mut *mut i8, pb_unindexed_1: &mut i32)
     -> i32 {
@@ -780,6 +795,7 @@ extern "C" fn fts5_config_parse_column(p: &mut Fts5Config, z_col_1: *mut i8,
     };
     return rc;
 }
+
 extern "C" fn fts5_config_make_exprlist(p: &mut Fts5Config) -> i32 {
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
@@ -863,6 +879,7 @@ extern "C" fn fts5_config_make_exprlist(p: &mut Fts5Config) -> i32 {
     (*p).z_content_exprlist = buf.p as *mut i8;
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_free(p_config: *mut Fts5Config) -> () {
     if !(p_config).is_null() {
@@ -919,6 +936,7 @@ pub extern "C" fn sqlite3_fts5_config_free(p_config: *mut Fts5Config) -> () {
         unsafe { sqlite3_free(p_config as *mut ()) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_parse(p_global: *mut Fts5Global,
     db: *mut Sqlite3, n_arg: i32, az_arg: *mut *const i8,
@@ -1176,6 +1194,7 @@ pub extern "C" fn sqlite3_fts5_config_parse(p_global: *mut Fts5Global,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_declare_vtab(p_config: &Fts5Config)
     -> i32 {
@@ -1232,6 +1251,7 @@ pub extern "C" fn sqlite3_fts5_config_declare_vtab(p_config: &Fts5Config)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_tokenize(p_config: *mut Fts5Config, flags: i32,
     p_text: *const i8, n_text: i32, p_ctx: *mut (),
@@ -1276,6 +1296,7 @@ pub extern "C" fn sqlite3_fts5_tokenize(p_config: *mut Fts5Config, flags: i32,
     }
     return rc;
 }
+
 extern "C" fn fts5_config_skip_args(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     loop {
@@ -1298,6 +1319,7 @@ extern "C" fn fts5_config_skip_args(p_in_1: *const i8) -> *const i8 {
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_parse_rank(z_in: *const i8,
     pz_rank: &mut *mut i8, pz_rank_args: &mut *mut i8) -> i32 {
@@ -1378,6 +1400,7 @@ pub extern "C" fn sqlite3_fts5_config_parse_rank(z_in: *const i8,
     } else { *pz_rank = z_rank; *pz_rank_args = z_rank_args; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_set_value(p_config: &mut Fts5Config,
     z_key: *const i8, p_val: *mut Sqlite3Value, pb_badkey: &mut i32) -> i32 {
@@ -1510,6 +1533,7 @@ pub extern "C" fn sqlite3_fts5_config_set_value(p_config: &mut Fts5Config,
     } else { *pb_badkey = 1; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_config_errmsg(p_config: &Fts5Config,
     z_fmt: *const i8, mut __va0: ...) -> () {
@@ -1530,6 +1554,7 @@ pub unsafe extern "C" fn sqlite3_fts5_config_errmsg(p_config: &Fts5Config,
     } else { unsafe { sqlite3_free(z_msg as *mut ()) }; }
     ();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_load(p_config: *mut Fts5Config,
     i_cookie: i32) -> i32 {
@@ -1596,6 +1621,7 @@ pub extern "C" fn sqlite3_fts5_config_load(p_config: *mut Fts5Config,
     if rc == 0 { unsafe { (*p_config).i_cookie = i_cookie }; }
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

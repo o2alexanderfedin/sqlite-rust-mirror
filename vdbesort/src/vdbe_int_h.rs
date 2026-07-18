@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Vdbe {
     pub(crate) db: *mut Sqlite3,
@@ -48,6 +50,7 @@ pub(crate) struct Vdbe {
     pub(crate) p_program: *mut SubProgram,
     pub(crate) p_aux_data: *mut AuxData,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Value {
@@ -63,6 +66,7 @@ pub(crate) struct Sqlite3Value {
     pub(crate) z_malloc: *mut i8,
     pub(crate) x_del: Option<unsafe extern "C" fn(*mut ()) -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union MemValue {
@@ -72,6 +76,7 @@ pub(crate) union MemValue {
     pub(crate) z_p_type: *const i8,
     pub(crate) p_def: *mut FuncDef,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Context {
@@ -86,6 +91,7 @@ pub(crate) struct Sqlite3Context {
     pub(crate) argc: u16,
     pub(crate) argv: [*mut Sqlite3Value; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeCursor {
@@ -115,13 +121,16 @@ pub(crate) struct VdbeCursor {
     pub(crate) p_cache: *mut VdbeTxtBlbCache,
     pub(crate) a_type: [u32; 0],
 }
+
 pub(crate) type Bool = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union VdbeCursorU0 {
     pub(crate) p_btx: *mut Btree,
     pub(crate) a_alt_map: *mut u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union VdbeCursorU1 {
@@ -129,6 +138,7 @@ pub(crate) union VdbeCursorU1 {
     pub(crate) p_v_cur: *mut Sqlite3VtabCursor,
     pub(crate) p_sorter: *mut VdbeSorter,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeTxtBlbCache {
@@ -138,7 +148,9 @@ pub(crate) struct VdbeTxtBlbCache {
     pub(crate) cache_status: u32,
     pub(crate) col_cache_ctr: u32,
 }
+
 pub(crate) type Op = VdbeOp;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeFrame {
@@ -160,6 +172,7 @@ pub(crate) struct VdbeFrame {
     pub(crate) n_change: i64,
     pub(crate) n_db_change: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AuxData {
@@ -169,6 +182,7 @@ pub(crate) struct AuxData {
     pub(crate) x_delete_aux: Option<unsafe extern "C" fn(*mut ()) -> ()>,
     pub(crate) p_next_aux: *mut AuxData,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PreUpdate {
@@ -190,11 +204,13 @@ pub(crate) struct PreUpdate {
     pub(crate) ap_dflt: *mut *mut Sqlite3Value,
     pub(crate) u_key: PreUpdateS0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PreUpdateS0 {
     pub(crate) keyinfo_space: [u8; 32],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ScanStatus {
@@ -206,12 +222,14 @@ pub(crate) struct ScanStatus {
     pub(crate) n_est: LogEst,
     pub(crate) z_name: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct DblquoteStr {
     pub(crate) p_next_str: *mut DblquoteStr,
     pub(crate) z: [i8; 8],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ValueList {

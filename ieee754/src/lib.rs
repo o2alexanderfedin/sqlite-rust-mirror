@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if argc == 1 {
@@ -159,6 +162,7 @@ extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_double(context, r) };
     }
 }
+
 extern "C" fn ieee754func_from_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -193,6 +197,7 @@ extern "C" fn ieee754func_from_blob(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_double(context, r) };
     }
 }
+
 extern "C" fn ieee754func_to_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -238,6 +243,7 @@ extern "C" fn ieee754func_to_blob(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 extern "C" fn ieee754func_from_int(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -255,6 +261,7 @@ extern "C" fn ieee754func_from_int(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_double(context, r) };
     }
 }
+
 extern "C" fn ieee754func_to_int(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -272,6 +279,7 @@ extern "C" fn ieee754func_to_int(context: *mut Sqlite3Context, argc: i32,
         unsafe { sqlite3_result_int64(context, v as Sqlite3Int64) };
     }
 }
+
 extern "C" fn ieee754inc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut r: f64 = 0.0;
@@ -291,6 +299,7 @@ extern "C" fn ieee754inc(context: *mut Sqlite3Context, argc: i32,
     };
     unsafe { sqlite3_result_double(context, r2) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_ieee_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -324,6 +333,7 @@ pub extern "C" fn sqlite3_ieee_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3IeeeInitS0N20sqlite3IeeeInitS0 {
@@ -333,6 +343,7 @@ struct Sqlite3IeeeInitS0N20sqlite3IeeeInitS0 {
     x_func: Option<unsafe extern "C" fn(*mut Sqlite3Context, i32,
         *mut *mut Sqlite3Value) -> ()>,
 }
+
 static mut a_func: [Sqlite3IeeeInitS0N20sqlite3IeeeInitS0; 9] =
     [Sqlite3IeeeInitS0N20sqlite3IeeeInitS0 {
                 z_f_name: c"ieee754".as_ptr() as *mut i8,
@@ -388,6 +399,7 @@ static mut a_func: [Sqlite3IeeeInitS0N20sqlite3IeeeInitS0; 9] =
                 i_aux: 0,
                 x_func: Some(ieee754inc),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

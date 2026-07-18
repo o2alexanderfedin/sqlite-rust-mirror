@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SHA3Context {
@@ -7,12 +8,14 @@ struct SHA3Context {
     n_loaded: u32,
     ix_mask: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union SHA3ContextU0 {
     s: [u64; 25],
     x: [u8; 1600],
 }
+
 extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -539,6 +542,7 @@ extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
         }
     }
 }
+
 extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -557,6 +561,7 @@ extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: &[u8]) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -586,6 +591,7 @@ extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: &[u8]) -> () {
         }
     }
 }
+
 extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -634,6 +640,7 @@ extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
         return unsafe { &mut (*p).u.x[unsafe { (*p).n_rate } as usize] };
     }
 }
+
 extern "C" fn digest_to_base16(mut digest: *const u8, mut z_buf_1: *mut i8,
     n_byte_1: i32) -> () {
     let mut ix: i32 = 0;
@@ -675,6 +682,7 @@ extern "C" fn digest_to_base16(mut digest: *const u8, mut z_buf_1: *mut i8,
     }
     unsafe { *z_buf_1 = '\u{0}' as i32 as i8 };
 }
+
 extern "C" fn sha3sum_file(z_filename_1: *const i8, i_size_1: i32,
     p_cksum_1: *mut i8) -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -714,6 +722,7 @@ extern "C" fn sha3sum_file(z_filename_1: *const i8, i_size_1: i32,
         i_size_1 / 8);
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SHA1Context {
@@ -721,6 +730,7 @@ struct SHA1Context {
     count: [u32; 2],
     buffer: [u8; 64],
 }
+
 extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -2080,6 +2090,7 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
         unsafe { *state.offset(4 as isize) += qq[4 as usize] };
     }
 }
+
 extern "C" fn sha1_init(context: &mut SHA1Context) -> () {
     (*context).state[0 as usize] = 1732584193 as u32;
     (*context).state[1 as usize] = 4023233417u32;
@@ -2092,6 +2103,7 @@ extern "C" fn sha1_init(context: &mut SHA1Context) -> () {
             (*context).count[1 as usize]
         };
 }
+
 extern "C" fn sha1_update(context: &mut SHA1Context, data: *const u8,
     len: u32) -> () {
     let mut i: u32 = 0 as u32;
@@ -2136,6 +2148,7 @@ extern "C" fn sha1_update(context: &mut SHA1Context, data: *const u8,
             };
     };
 }
+
 extern "C" fn sha1_final(digest: *mut u8, context: *mut SHA1Context) -> () {
     let mut i: u32 = 0 as u32;
     let mut finalcount: [u8; 8] = [0; 8];
@@ -2180,6 +2193,7 @@ extern "C" fn sha1_final(digest: *mut u8, context: *mut SHA1Context) -> () {
         }
     }
 }
+
 extern "C" fn sha1sum_file(z_filename_1: *const i8, p_cksum_1: *mut i8)
     -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -2214,6 +2228,7 @@ extern "C" fn sha1sum_file(z_filename_1: *const i8, p_cksum_1: *mut i8)
         p_cksum_1, 20);
     return 0;
 }
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -2224,6 +2239,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn next_token(mut z: *mut i8) -> *mut i8 {
     while unsafe { *z } != 0 &&
             (unsafe { isspace(unsafe { *z } as i32) } == 0) as i32 != 0 {
@@ -2238,6 +2254,7 @@ extern "C" fn next_token(mut z: *mut i8) -> *mut i8 {
     unsafe { *z = 0 as i8 };
     return unsafe { &mut *z.offset(1 as isize) };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -2408,6 +2425,7 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 static rc_1: [u64; 24] =
     [1, 32898, 9223372036854808714u64, 9223372039002292224u64, 32907,
             2147483649u64, 9223372039002292353u64, 9223372036854808585u64,
@@ -2417,18 +2435,23 @@ static rc_1: [u64; 24] =
             9223372036854775936u64, 32778, 9223372039002259466u64,
             9223372039002292353u64, 9223372036854808704u64, 2147483649u64,
             9223372039002292232u64];
+
 static mut one_1: u32 = 1 as u32;
+
 static z_encode: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 static mut one_2: i32 = 1;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2460,9 +2483,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

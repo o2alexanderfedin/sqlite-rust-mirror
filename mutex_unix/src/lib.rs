@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,27 +14,35 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadMutexT {
     __sig: i64,
     __opaque: [i8; 56],
 }
+
 type DarwinPthreadMutexT = OpaquePthreadMutexT;
+
 type PthreadMutexT = DarwinPthreadMutexT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadMutexattrT {
     __sig: i64,
     __opaque: [i8; 8],
 }
+
 type DarwinPthreadMutexattrT = OpaquePthreadMutexattrT;
+
 type PthreadMutexattrT = DarwinPthreadMutexattrT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Mutex {
     mutex: PthreadMutexT,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -46,6 +55,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -125,6 +135,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -173,6 +184,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -309,6 +321,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -332,6 +345,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -404,8 +418,11 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn pthread_mutex_init_1() -> i32 { return 0; }
+
 extern "C" fn pthread_mutex_end() -> i32 { return 0; }
+
 extern "C" fn pthread_mutex_alloc(i_type_1: i32) -> *mut Sqlite3Mutex {
     unsafe {
         unsafe {
@@ -486,6 +503,7 @@ extern "C" fn pthread_mutex_alloc(i_type_1: i32) -> *mut Sqlite3Mutex {
         }
     }
 }
+
 extern "C" fn pthread_mutex_free(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
     {
@@ -493,10 +511,12 @@ extern "C" fn pthread_mutex_free(p: *mut Sqlite3Mutex) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn pthread_mutex_enter(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
     unsafe { pthread_mutex_lock(unsafe { &mut (*p).mutex }) };
 }
+
 extern "C" fn pthread_mutex_try(p: *mut Sqlite3Mutex) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -505,25 +525,30 @@ extern "C" fn pthread_mutex_try(p: *mut Sqlite3Mutex) -> i32 {
     } else { rc = 5; }
     return rc;
 }
+
 extern "C" fn pthread_mutex_leave(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
     { let _ = 0; };
     unsafe { pthread_mutex_unlock(unsafe { &mut (*p).mutex }) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_default_mutex() -> *const Sqlite3MutexMethods {
     return &s_mutex;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memory_barrier() -> () {
     core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union StaticMutexN11staticMutex {
     m: Sqlite3Mutex,
     a_spacer: [i8; 128],
 }
+
 static mut a_mutex: [StaticMutexN11staticMutex; 12] =
     [StaticMutexN11staticMutex {
                 m: Sqlite3Mutex {
@@ -657,6 +682,7 @@ static mut a_mutex: [StaticMutexN11staticMutex; 12] =
                     },
                 },
             }];
+
 static s_mutex: Sqlite3MutexMethods =
     Sqlite3MutexMethods {
         x_mutex_init: Some(pthread_mutex_init_1),
@@ -669,6 +695,7 @@ static s_mutex: Sqlite3MutexMethods =
         x_mutex_held: None,
         x_mutex_notheld: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3469,41 +3496,49 @@ extern "C" {
     fn __sync_synchronize()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

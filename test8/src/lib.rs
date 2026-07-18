@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,8 +14,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type ClientData = *mut ();
+
 type TclCommand = *mut Tcl_Command_;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclDString {
@@ -23,6 +27,7 @@ struct TclDString {
     spaceAvl: i32,
     staticSpace: [i8; 200],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclCmdInfo {
@@ -37,6 +42,7 @@ struct TclCmdInfo {
     deleteData: *mut (),
     namespacePtr: *mut TclNamespace,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -49,6 +55,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -128,6 +135,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -176,6 +184,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +321,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -335,6 +345,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -407,6 +418,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EchoVtab {
@@ -422,12 +434,14 @@ struct EchoVtab {
     a_index: *mut i32,
     a_col: *mut *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EchoCursor {
     base: Sqlite3VtabCursor,
     p_stmt: *mut Sqlite3Stmt,
 }
+
 extern "C" fn simulate_vtab_error(p: &mut EchoVtab, z_method_1: *const i8)
     -> i32 {
     let mut z_err: *const i8 = core::ptr::null();
@@ -452,6 +466,7 @@ extern "C" fn simulate_vtab_error(p: &mut EchoVtab, z_method_1: *const i8)
     }
     return (z_err != core::ptr::null()) as i32;
 }
+
 extern "C" fn dequote_string(z: *mut i8) -> () {
     let mut quote: i32 = 0;
     let mut i: i32 = 0;
@@ -511,6 +526,7 @@ extern "C" fn dequote_string(z: *mut i8) -> () {
         }
     }
 }
+
 extern "C" fn get_column_names(db: *mut Sqlite3, z_tab_1: *const i8,
     pa_col_1: &mut *mut *mut i8, pn_col_1: &mut i32) -> i32 {
     let mut a_col: *mut *mut i8 = core::ptr::null_mut();
@@ -657,6 +673,7 @@ extern "C" fn get_column_names(db: *mut Sqlite3, z_tab_1: *const i8,
     }
     unreachable!();
 }
+
 extern "C" fn get_index_array(db: *mut Sqlite3, z_tab_1: *const i8,
     n_col_1: i32, pa_index_1: &mut *mut i32) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -816,6 +833,7 @@ extern "C" fn get_index_array(db: *mut Sqlite3, z_tab_1: *const i8,
     }
     unreachable!();
 }
+
 extern "C" fn append_to_echo_module(interp: *mut TclInterp,
     z_arg_1: *const i8) -> () {
     let flags: i32 = 4 | 8 | 1;
@@ -826,6 +844,7 @@ extern "C" fn append_to_echo_module(interp: *mut TclInterp,
             } else { c"".as_ptr() as *mut i8 as *const i8 }, flags)
     };
 }
+
 extern "C" fn echo_declare_vtab(p_vtab_1: &mut EchoVtab, db: *mut Sqlite3)
     -> i32 {
     let mut rc: i32 = 0;
@@ -868,6 +887,7 @@ extern "C" fn echo_declare_vtab(p_vtab_1: &mut EchoVtab, db: *mut Sqlite3)
     }
     return rc;
 }
+
 extern "C" fn echo_destructor(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut EchoVtab = p_vtab_1 as *mut EchoVtab;
     unsafe { sqlite3_free(unsafe { (*p).a_index } as *mut ()) };
@@ -878,12 +898,14 @@ extern "C" fn echo_destructor(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EchoModule {
     interp: *mut TclInterp,
     db: *mut Sqlite3,
 }
+
 extern "C" fn echo_constructor(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: &mut *mut Sqlite3Vtab,
     pz_err_1: *const *mut i8) -> i32 {
@@ -961,6 +983,7 @@ extern "C" fn echo_constructor(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     *pp_vtab_1 = unsafe { &mut (*p_vtab).base };
     return 0;
 }
+
 extern "C" fn echo_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1014,6 +1037,7 @@ extern "C" fn echo_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     return rc;
 }
+
 extern "C" fn echo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1022,11 +1046,13 @@ extern "C" fn echo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return echo_constructor(db, p_aux_1, argc, argv,
             unsafe { &mut *pp_vtab_1 }, pz_err_1 as *const *mut i8);
 }
+
 extern "C" fn echo_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     append_to_echo_module(unsafe { (*(p_vtab_1 as *mut EchoVtab)).interp },
         c"xDisconnect".as_ptr() as *mut i8 as *const i8);
     return echo_destructor(p_vtab_1);
 }
+
 extern "C" fn echo_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p: *const EchoVtab = p_vtab_1 as *mut EchoVtab as *const EchoVtab;
@@ -1049,6 +1075,7 @@ extern "C" fn echo_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     if rc == 0 { rc = echo_destructor(p_vtab_1); }
     return rc;
 }
+
 extern "C" fn echo_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut EchoCursor = core::ptr::null_mut();
@@ -1063,6 +1090,7 @@ extern "C" fn echo_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = p_cur as *mut Sqlite3VtabCursor };
     return if !(p_cur).is_null() { 0 } else { 7 };
 }
+
 extern "C" fn echo_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
     let p_cur: *mut EchoCursor = cur as *mut EchoCursor;
@@ -1072,11 +1100,13 @@ extern "C" fn echo_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     rc = unsafe { sqlite3_finalize(p_stmt) };
     return rc;
 }
+
 extern "C" fn echo_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     return if !(unsafe { (*(cur as *mut EchoCursor)).p_stmt }).is_null() {
             0
         } else { 1 };
 }
+
 extern "C" fn echo_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1098,6 +1128,7 @@ extern "C" fn echo_next(cur: *mut Sqlite3VtabCursor) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn echo_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -1121,6 +1152,7 @@ extern "C" fn echo_column(cur: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn echo_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     unsafe {
@@ -1135,6 +1167,7 @@ extern "C" fn echo_rowid(cur: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn hash_string(z_string_1: *const i8) -> i32 {
     let mut val: u32 = 0 as u32;
     let mut ii: i32 = 0;
@@ -1155,6 +1188,7 @@ extern "C" fn hash_string(z_string_1: *const i8) -> i32 {
     }
     return (val & 2147483647 as u32) as i32;
 }
+
 extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1214,6 +1248,7 @@ extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return rc;
     }
 }
+
 extern "C" fn string_concat(pz_str_1: *mut *mut i8, z_append_1: *mut i8,
     do_free_1: i32, p_rc_1: &mut i32) -> () {
     let mut z_in: *mut i8 = unsafe { *pz_str_1 };
@@ -1244,6 +1279,7 @@ extern "C" fn string_concat(pz_str_1: *mut *mut i8, z_append_1: *mut i8,
     unsafe { *pz_str_1 = z_in };
     if do_free_1 != 0 { unsafe { sqlite3_free(z_append_1 as *mut ()) }; }
 }
+
 extern "C" fn echo_select_list(p_tab_1: &EchoVtab,
     p_idx_info_1: &Sqlite3IndexInfo) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -1282,6 +1318,7 @@ extern "C" fn echo_select_list(p_tab_1: &EchoVtab,
     }
     return z_ret;
 }
+
 extern "C" fn echo_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -1491,6 +1528,7 @@ extern "C" fn echo_best_index(tab: *mut Sqlite3Vtab,
     } else { unsafe { (*p_idx_info_1).estimated_cost = n_row as f64 }; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn echo_update(tab: *mut Sqlite3Vtab, n_data_1: i32,
     ap_data_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
@@ -1687,6 +1725,7 @@ pub extern "C" fn echo_update(tab: *mut Sqlite3Vtab, n_data_1: i32,
     }
     return rc;
 }
+
 extern "C" fn echo_transaction_call(tab: *mut Sqlite3Vtab,
     z_call_1: *const i8) -> i32 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1702,6 +1741,7 @@ extern "C" fn echo_transaction_call(tab: *mut Sqlite3Vtab,
     unsafe { sqlite3_free(z as *mut ()) };
     return 0;
 }
+
 extern "C" fn echo_begin(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
@@ -1734,6 +1774,7 @@ extern "C" fn echo_begin(tab: *mut Sqlite3Vtab) -> i32 {
     if rc == 0 { unsafe { (*p_vtab).in_transaction = 1 }; }
     return rc;
 }
+
 extern "C" fn echo_sync(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
@@ -1764,6 +1805,7 @@ extern "C" fn echo_sync(tab: *mut Sqlite3Vtab) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn echo_commit(tab: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
     let mut rc: i32 = 0;
@@ -1780,6 +1822,7 @@ extern "C" fn echo_commit(tab: *mut Sqlite3Vtab) -> i32 {
     unsafe { (*p_vtab).in_transaction = 0 };
     return rc;
 }
+
 extern "C" fn echo_rollback(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
@@ -1790,6 +1833,7 @@ extern "C" fn echo_rollback(tab: *mut Sqlite3Vtab) -> i32 {
     unsafe { (*p_vtab).in_transaction = 0 };
     return rc;
 }
+
 extern "C" fn overloaded_glob_function(p_context_1: *mut Sqlite3Context,
     n_arg_1: i32, ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let interp: *mut TclInterp =
@@ -1841,6 +1885,7 @@ extern "C" fn overloaded_glob_function(p_context_1: *mut Sqlite3Context,
     }
     unsafe { Tcl_ResetResult(interp) };
 }
+
 extern "C" fn echo_find_function(vtab: *mut Sqlite3Vtab, n_arg_1: i32,
     z_func_name_1: *const i8,
     px_func_1:
@@ -1866,6 +1911,7 @@ extern "C" fn echo_find_function(vtab: *mut Sqlite3Vtab, n_arg_1: i32,
     unsafe { *pp_arg_1 = interp as *mut () };
     return 1;
 }
+
 extern "C" fn echo_rename(vtab: *mut Sqlite3Vtab, z_new_name_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -1897,21 +1943,25 @@ extern "C" fn echo_rename(vtab: *mut Sqlite3Vtab, z_new_name_1: *const i8)
     }
     return rc;
 }
+
 extern "C" fn echo_savepoint(p_v_tab_1: *mut Sqlite3Vtab, i_savepoint_1: i32)
     -> i32 {
     { let _ = 0; };
     return 0;
 }
+
 extern "C" fn echo_release(p_v_tab_1: *mut Sqlite3Vtab, i_savepoint_1: i32)
     -> i32 {
     { let _ = 0; };
     return 0;
 }
+
 extern "C" fn echo_rollback_to(p_v_tab_1: *mut Sqlite3Vtab,
     i_savepoint_1: i32) -> i32 {
     { let _ = 0; };
     return 0;
 }
+
 static mut echo_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 1,
@@ -1940,6 +1990,7 @@ static mut echo_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 static mut echo_module_v2: Sqlite3Module =
     Sqlite3Module {
         i_version: 2,
@@ -1968,6 +2019,7 @@ static mut echo_module_v2: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn module_destroy(p: *mut ()) -> () {
     let p_mod: *const EchoModule = p as *mut EchoModule as *const EchoModule;
     unsafe {
@@ -1977,6 +2029,7 @@ extern "C" fn module_destroy(p: *mut ()) -> () {
     };
     unsafe { sqlite3_free(p) };
 }
+
 extern "C" fn register_echo_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -2036,6 +2089,7 @@ extern "C" fn register_echo_module(client_data_1: ClientData,
         return 0;
     }
 }
+
 extern "C" fn declare_vtab(client_data_1: ClientData, interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -2073,6 +2127,7 @@ extern "C" fn declare_vtab(client_data_1: ClientData, interp: *mut TclInterp,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest8_init(interp: *mut TclInterp) -> i32 {
     unsafe {
@@ -2108,6 +2163,7 @@ pub extern "C" fn sqlitetest8_init(interp: *mut TclInterp) -> i32 {
         return 0;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlitetest8InitS0N19sqlitetest8InitS0 {
@@ -2116,6 +2172,7 @@ struct Sqlitetest8InitS0N19sqlitetest8InitS0 {
         *const *mut TclObj) -> i32>,
     client_data: *mut (),
 }
+
 static mut a_obj_cmd: [Sqlitetest8InitS0N19sqlitetest8InitS0; 2] =
     [Sqlitetest8InitS0N19sqlitetest8InitS0 {
                 z_name: c"register_echo_module".as_ptr() as *mut i8,
@@ -2127,6 +2184,7 @@ static mut a_obj_cmd: [Sqlitetest8InitS0N19sqlitetest8InitS0; 2] =
                 x_proc: Some(declare_vtab),
                 client_data: core::ptr::null_mut(),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4960,61 +5018,73 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Tcl_Command_ {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclNamespace {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

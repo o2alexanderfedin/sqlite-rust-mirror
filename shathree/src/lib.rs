@@ -1,10 +1,13 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SHA3Context {
@@ -14,12 +17,14 @@ struct SHA3Context {
     ix_mask: u32,
     i_size: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union SHA3ContextU0 {
     s: [u64; 25],
     x: [u8; 1600],
 }
+
 extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -546,6 +551,7 @@ extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
         }
     }
 }
+
 extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -565,6 +571,7 @@ extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
     n_data_1: u32) -> () {
     unsafe {
@@ -596,6 +603,7 @@ extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
         }
     }
 }
+
 extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -626,6 +634,7 @@ extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
         return unsafe { &mut (*p).u.x[unsafe { (*p).n_rate } as usize] };
     }
 }
+
 extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA3Context = unsafe { core::mem::zeroed() };
@@ -670,6 +679,7 @@ extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -687,6 +697,7 @@ unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
     sha3_update(p, &raw mut z_buf[0 as usize] as *mut u8 as *const u8,
         n as u32);
 }
+
 extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
     p_val_1: *mut Sqlite3Value) -> () {
     '__s3:
@@ -937,6 +948,7 @@ extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
         }
     }
 }
+
 extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -1033,6 +1045,7 @@ extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
@@ -1055,6 +1068,7 @@ extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     }
     sha3_update_from_value(p, unsafe { *argv.offset(0 as isize) });
 }
+
 extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
     p =
@@ -1075,6 +1089,7 @@ extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_shathree_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1135,6 +1150,7 @@ pub extern "C" fn sqlite3_shathree_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 static rc_1: [u64; 24] =
     [1, 32898, 9223372036854808714u64, 9223372039002292224u64, 32907,
             2147483649u64, 9223372039002292353u64, 9223372036854808585u64,
@@ -1144,7 +1160,9 @@ static rc_1: [u64; 24] =
             9223372036854775936u64, 32778, 9223372039002259466u64,
             9223372039002292353u64, 9223372036854808704u64, 2147483649u64,
             9223372039002292232u64];
+
 static mut one: u32 = 1 as u32;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

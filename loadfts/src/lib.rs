@@ -1,10 +1,16 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type Uint64T = u64;
+
 type Uint16T = u16;
+
 type Uint8T = u8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Dirent {
@@ -15,6 +21,7 @@ struct Dirent {
     d_type: u8,
     d_name: [i8; 1024],
 }
+
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
@@ -40,6 +47,7 @@ extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     } else { unsafe { sqlite3_free(p_buf) }; }
     unsafe { fclose(in_) };
 }
+
 extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe {
         printf(c"\nUsage: %s SWITCHES... DB\n\n  This program opens the database named on the command line and attempts to\n  create an FTS table named \"fts\" with a single column. If successful, it\n  recursively traverses the directory named by the -dir option and inserts\n  the contents of each file into the fts table. All files are assumed to\n  contain UTF-8 text.\n\nSwitches are:\n  -fts [345]       FTS version to use (default=5)\n  -idx [01]        Create a mapping from filename to rowid (default=0)\n  -dir <path>      Root of directory tree to load data from (default=.)\n  -trans <integer> Number of inserts per transaction (default=1)\n".as_ptr()
@@ -47,6 +55,7 @@ extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     };
     unsafe { exit(1) };
 }
+
 extern "C" fn error_out(z_text_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -57,6 +66,7 @@ extern "C" fn error_out(z_text_1: *const i8) -> () {
         unsafe { exit(-1) };
     }
 }
+
 extern "C" fn sqlite_error_out(z_text_1: *const i8, db: *mut Sqlite3) -> () {
     unsafe {
         unsafe {
@@ -66,6 +76,7 @@ extern "C" fn sqlite_error_out(z_text_1: *const i8, db: *mut Sqlite3) -> () {
         unsafe { exit(-1) };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VisitContext {
@@ -73,6 +84,7 @@ struct VisitContext {
     db: *mut Sqlite3,
     p_insert: *mut Sqlite3Stmt,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn visit_file(p_ctx_1: *mut (), z_path_1: *const i8) -> () {
     let mut rc: i32 = 0;
@@ -97,6 +109,7 @@ pub extern "C" fn visit_file(p_ctx_1: *mut (), z_path_1: *const i8) -> () {
         };
     }
 }
+
 extern "C" fn traverse(z_dir_1: *const i8, p_ctx_1: *mut (),
     x_callback_1: Option<unsafe extern "C" fn(*mut (), *const i8) -> ()>)
     -> () {
@@ -147,6 +160,7 @@ extern "C" fn traverse(z_dir_1: *const i8, p_ctx_1: *mut (),
     }
     unsafe { closedir(d) };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i_fts: i32 = 5;
@@ -312,12 +326,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     unsafe { sqlite3_free(a_cmd as *mut ()) };
     return Ok(());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1127,14 +1143,17 @@ extern "C" {
     -> *mut ();
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DIR {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

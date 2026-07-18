@@ -1,37 +1,64 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSsizeT = i64;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type Uint32T = u32;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 type DarwinTimeT = i64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -54,6 +81,7 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalData {
@@ -71,11 +99,13 @@ struct GlobalData {
     z_page_use: *mut *mut i8,
     a_page_tag: *mut TmstmpTag,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TmstmpTag {
     a: [u8; 16],
 }
+
 static mut g: GlobalData =
     GlobalData {
         pagesize: 4096 as i64,
@@ -92,6 +122,7 @@ static mut g: GlobalData =
         z_page_use: core::ptr::null_mut(),
         a_page_tag: core::ptr::null_mut(),
     };
+
 extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     let mut v: i64 = 0 as i64;
     let mut i: i32 = 0;
@@ -116,16 +147,19 @@ extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     *p_val_1 = v;
     return 9;
 }
+
 extern "C" fn decode_int32(z: *const u8) -> u32 {
     return (((unsafe { *z.offset(0 as isize) } as i32) << 24) +
                         ((unsafe { *z.offset(1 as isize) } as i32) << 16) +
                     ((unsafe { *z.offset(2 as isize) } as i32) << 8) +
                 unsafe { *z.offset(3 as isize) } as i32) as u32;
 }
+
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
+
 extern "C" fn open_database(z_prg_1: *const i8, z_name_1: *const i8)
     -> *mut Sqlite3 {
     unsafe {
@@ -148,6 +182,7 @@ extern "C" fn open_database(z_prg_1: *const i8, z_name_1: *const i8)
         return db;
     }
 }
+
 extern "C" fn file_open(z_prg_1: *const i8, z_name_1: *const i8) -> () {
     unsafe {
         if !(g.dbfd < 0) as i32 as i64 != 0 {
@@ -187,6 +222,7 @@ extern "C" fn file_open(z_prg_1: *const i8, z_name_1: *const i8) -> () {
         }
     }
 }
+
 extern "C" fn file_close() -> () {
     unsafe {
         if g.b_raw == 0 {
@@ -196,6 +232,7 @@ extern "C" fn file_close() -> () {
         } else { unsafe { close(g.dbfd) }; g.dbfd = -1; }
     }
 }
+
 extern "C" fn file_read(ofst: Sqlite3Int64, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -252,6 +289,7 @@ extern "C" fn file_read(ofst: Sqlite3Int64, n_byte_1: i32) -> *mut u8 {
         return a_data;
     }
 }
+
 extern "C" fn file_getsize() -> i64 {
     unsafe {
         let mut res: i64 = 0 as i64;
@@ -274,6 +312,7 @@ extern "C" fn file_getsize() -> i64 {
         return res;
     }
 }
+
 extern "C" fn print_byte_range(ofst: Sqlite3Int64, n_byte_1: i32,
     print_ofst_1: i32) -> *mut u8 {
     unsafe {
@@ -374,6 +413,7 @@ extern "C" fn print_byte_range(ofst: Sqlite3Int64, n_byte_1: i32,
         return a_data;
     }
 }
+
 extern "C" fn print_page(i_pg_1: u32) -> () {
     unsafe {
         let mut i_start: i64 = 0 as i64;
@@ -389,6 +429,7 @@ extern "C" fn print_page(i_pg_1: u32) -> () {
         unsafe { sqlite3_free(a_data as *mut ()) };
     }
 }
+
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -440,6 +481,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
             &raw mut z_buf[0 as usize] as *mut i8, z_msg_1)
     };
 }
+
 extern "C" fn print_db_header() -> () {
     let mut a_data: *mut u8 = core::ptr::null_mut();
     a_data = print_byte_range(0 as Sqlite3Int64, 100, 0);
@@ -494,6 +536,7 @@ extern "C" fn print_db_header() -> () {
         c"SQLite version number".as_ptr() as *mut i8 as *const i8);
     unsafe { sqlite3_free(a_data as *mut ()) };
 }
+
 extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     mut z_desc_1: *mut i8) -> i64 {
     let mut n_desc: i64 = 0 as i64;
@@ -720,6 +763,7 @@ extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     }
     return n_desc;
 }
+
 extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     unsafe {
         let mut max_local: i64 = 0 as i64;
@@ -750,6 +794,7 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
         return n_local;
     }
 }
+
 extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     show_cell_content_1: i32, pz_desc_1: &mut *mut i8) -> i64 {
     unsafe {
@@ -846,6 +891,7 @@ extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
         return n_local + n as i64;
     }
 }
+
 extern "C" fn print_bytes(a_data_1: *mut u8, a_start_1: *mut u8,
     n_byte_1: i32) -> () {
     let mut j: i32 = 0;
@@ -872,6 +918,7 @@ extern "C" fn print_bytes(a_data_1: *mut u8, a_start_1: *mut u8,
         }
     }
 }
+
 extern "C" fn decode_cell(a: *mut u8, pgno: u32, i_cell_1: i32,
     sz_pg_hdr_1: i32, ofst: i32) -> () {
     let mut i: i32 = 0;
@@ -1185,6 +1232,7 @@ extern "C" fn decode_cell(a: *mut u8, pgno: u32, i_cell_1: i32,
         };
     }
 }
+
 extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     mut z_args_1: *const i8) -> () {
     unsafe {
@@ -1399,6 +1447,7 @@ extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
         }
     }
 }
+
 extern "C" fn decode_trunk_page(mut pgno: u32, detail: i32, recursive: i32)
     -> () {
     unsafe {
@@ -1465,6 +1514,7 @@ extern "C" fn decode_trunk_page(mut pgno: u32, detail: i32, recursive: i32)
         }
     }
 }
+
 unsafe extern "C" fn page_usage_msg(pgno: u32, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -1503,6 +1553,7 @@ unsafe extern "C" fn page_usage_msg(pgno: u32, z_format_1: *const i8,
         unsafe { *g.z_page_use.add(pgno as usize) = z_msg };
     }
 }
+
 extern "C" fn page_usage_cell(c_type_1: u8, mut a: *mut u8, pgno: u32,
     cellno: i32) -> () {
     unsafe {
@@ -1561,6 +1612,7 @@ extern "C" fn page_usage_cell(c_type_1: u8, mut a: *mut u8, pgno: u32,
         }
     }
 }
+
 extern "C" fn all_zero(mut a: *const u8, mut n: i32) -> i32 {
     while n != 0 &&
             unsafe {
@@ -1575,6 +1627,7 @@ extern "C" fn all_zero(mut a: *const u8, mut n: i32) -> i32 {
     }
     return (n == 0) as i32;
 }
+
 extern "C" fn page_usage_btree(pgno: u32, parent: i32, idx: i32,
     z_name_1: *const i8) -> () {
     unsafe {
@@ -1738,6 +1791,7 @@ extern "C" fn page_usage_btree(pgno: u32, parent: i32, idx: i32,
         unsafe { sqlite3_free(a as *mut ()) };
     }
 }
+
 extern "C" fn page_usage_freelist(mut pgno: u32) -> () {
     unsafe {
         let mut a: *mut u8 = core::ptr::null_mut();
@@ -1792,6 +1846,7 @@ extern "C" fn page_usage_freelist(mut pgno: u32) -> () {
         }
     }
 }
+
 extern "C" fn page_usage_ptrmap(a: *const u8) -> () {
     unsafe {
         if decode_int32(unsafe { a.offset(52 as isize) } as *const u8) != 0 {
@@ -1811,6 +1866,7 @@ extern "C" fn page_usage_ptrmap(a: *const u8) -> () {
         }
     }
 }
+
 extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     unsafe {
         let mut ms: u64 = 0 as u64;
@@ -1876,6 +1932,7 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
         return &raw const z_out[0 as usize] as *const i8;
     }
 }
+
 extern "C" fn page_usage_report(z_prg_1: *const i8, z_db_name_1: *const i8)
     -> () {
     unsafe {
@@ -2168,6 +2225,7 @@ extern "C" fn page_usage_report(z_prg_1: *const i8, z_db_name_1: *const i8)
         g.z_page_use = core::ptr::null_mut();
     }
 }
+
 extern "C" fn ptrmap_coverage_report(z_db_name_1: *const i8) -> () {
     unsafe {
         let mut pgno: u64 = 0 as u64;
@@ -2282,6 +2340,7 @@ extern "C" fn ptrmap_coverage_report(z_db_name_1: *const i8) -> () {
         }
     }
 }
+
 extern "C" fn check_page_validity(i_page_1: u32) -> () {
     unsafe {
         if i_page_1 < 1 as u32 || i_page_1 > g.mx_page {
@@ -2290,6 +2349,7 @@ extern "C" fn check_page_validity(i_page_1: u32) -> () {
         }
     }
 }
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -2300,6 +2360,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
         eprintln!("switches:\n    --csv           CSV output for \"pgidx\"\n    --raw           Read db file directly, bypassing SQLite VFS\n    --tmstmp        Interpret tmstmpvfs tags\nargs:\n    dbheader        Show database header\n    pgidx           Index of how each page is used\n    ptrmap          Show all PTRMAP page content\n    NNN..MMM        Show hex of pages NNN through MMM\n    NNN..end        Show hex of pages NNN through end of file\n    NNNb            Decode btree page NNN\n    NNNbc           Decode btree page NNN and show content\n    NNNbm           Decode btree page NNN and show a layout map\n    NNNbdCCC        Decode cell CCC on btree page NNN\n    NNNt            Decode freelist trunk page NNN\n    NNNtd           Show leaf freelist pages on the decode\n    NNNtr           Recursively decode freelist starting at NNN");
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut sz_file: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -2539,14 +2600,18 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         return Ok(());
     }
 }
+
 static mut z_desc_2: [i8; 1000] = unsafe { core::mem::zeroed() };
+
 static mut z_out: [i8; 50] = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *mut *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3371,9 +3436,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

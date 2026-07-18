@@ -1,7 +1,9 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 static z_help: [i8; 1078] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
             119 as i8, 111 as i8, 114 as i8, 100 as i8, 99 as i8, 111 as i8,
@@ -183,8 +185,10 @@ static z_help: [i8; 1078] =
             114 as i8, 101 as i8, 32 as i8, 116 as i8, 104 as i8, 101 as i8,
             32 as i8, 119 as i8, 111 as i8, 114 as i8, 100 as i8, 115 as i8,
             46 as i8, 10 as i8, 0 as i8];
+
 #[unsafe(no_mangle)]
 pub static mut z_tag: *mut i8 = c"--".as_ptr() as *mut i8;
+
 extern "C" fn real_time() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -210,6 +214,7 @@ extern "C" fn real_time() -> Sqlite3Int64 {
         return t;
     }
 }
+
 unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     unsafe {
         let mut ap: *mut i8 = core::ptr::null_mut();
@@ -219,6 +224,7 @@ unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn usage() -> () {
     unsafe {
         printf(c"%s".as_ptr() as *mut i8 as *const i8,
@@ -226,9 +232,11 @@ extern "C" fn usage() -> () {
     };
     unsafe { exit(0) };
 }
+
 extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
     unsafe { printf(c"%s;\n".as_ptr() as *mut i8 as *const i8, z_sql_1) };
 }
+
 extern "C" fn print_result(not_used_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az_nm_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -254,6 +262,7 @@ extern "C" fn print_result(not_used_1: *mut (), n_arg_1: i32,
         return 0;
     }
 }
+
 extern "C" fn add_char_to_hash(a: *mut u32, x: u8) -> () {
     if unsafe { *a.offset(0 as isize) } < 4 as u32 {
         unsafe {
@@ -304,6 +313,7 @@ extern "C" fn add_char_to_hash(a: *mut u32, x: u8) -> () {
         }
     }
 }
+
 extern "C" fn final_hash(a: *mut u32, z: *mut i8) -> () {
     unsafe {
         *a.offset(3 as isize) +=
@@ -322,6 +332,7 @@ extern "C" fn final_hash(a: *mut u32, z: *mut i8) -> () {
             unsafe { *a.offset(4 as isize) })
     };
 }
+
 extern "C" fn checksum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_val: *const u8 = core::ptr::null();
@@ -370,6 +381,7 @@ extern "C" fn checksum_step(context: *mut Sqlite3Context, argc: i32,
         add_char_to_hash(a, '\n' as i32 as u8);
     }
 }
+
 extern "C" fn checksum_finalize(context: *mut Sqlite3Context) -> () {
     let mut a: *mut u32 = core::ptr::null_mut();
     let mut z_result: [i8; 24] = [0; 24];
@@ -387,6 +399,7 @@ extern "C" fn checksum_finalize(context: *mut Sqlite3Context) -> () {
         };
     }
 }
+
 static mut az_mode: [*const i8; 7] =
     [c"--insert".as_ptr() as *const i8, c"--replace".as_ptr() as *const i8,
             c"--upsert".as_ptr() as *const i8,
@@ -394,6 +407,7 @@ static mut az_mode: [*const i8; 7] =
             c"--update".as_ptr() as *const i8,
             c"--delete".as_ptr() as *const i8,
             c"--query".as_ptr() as *const i8];
+
 extern "C" fn all_loop(i_mode_1: i32, pi_loop_cnt_1: &mut i32,
     pi_mode2_1: &mut i32, p_use_without_rowid_1: &mut i32) -> i32 {
     let mut i: i32 = 0;
@@ -409,6 +423,7 @@ extern "C" fn all_loop(i_mode_1: i32, pi_loop_cnt_1: &mut i32,
     *pi_mode2_1 = i >> 1;
     return 1;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -1188,13 +1203,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 static mut clock_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1998,9 +2016,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

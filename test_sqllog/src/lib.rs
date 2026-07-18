@@ -1,11 +1,18 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type Int32T = i32;
+
 type DarwinPidT = Int32T;
+
 type PidT = DarwinPidT;
+
 type DarwinSizeT = u64;
+
 extern "C" fn get_process_id() -> i32 { return unsafe { getpid() } as i32; }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SLConn {
@@ -14,6 +21,7 @@ struct SLConn {
     i_log: i32,
     fd: *mut FILE,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SLGlobal {
@@ -29,13 +37,16 @@ struct SLGlobal {
     i_clock: i32,
     a_conn: [SLConn; 256],
 }
+
 static mut sqllogglobal: SLGlobal = unsafe { core::mem::zeroed() };
+
 extern "C" fn sqllog_isspace(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                             c as i32 == '\n' as i32 || c as i32 == '\u{b}' as i32 ||
                     c as i32 == '\u{c}' as i32 || c as i32 == '\r' as i32) as
             i32;
 }
+
 extern "C" fn sqllog_tokenize(z: *const i8, pz: &mut *const i8, pn: &mut i32)
     -> () {
     let mut p: *const i8 = z;
@@ -58,6 +69,7 @@ extern "C" fn sqllog_tokenize(z: *const i8, pz: &mut *const i8, pn: &mut i32)
     }
     *pn = n;
 }
+
 extern "C" fn sqllog_find_file(z_file_1: *const i8) -> *mut i8 {
     unsafe {
         let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -154,6 +166,7 @@ extern "C" fn sqllog_find_file(z_file_1: *const i8) -> *mut i8 {
         return z_ret;
     }
 }
+
 extern "C" fn sqllog_find_attached(db: *mut Sqlite3, z_search_1: *const i8,
     z_name_1: *mut i8, z_file_1: *mut i8) -> i32 {
     unsafe {
@@ -215,6 +228,7 @@ extern "C" fn sqllog_find_attached(db: *mut Sqlite3, z_search_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
     -> () {
     unsafe {
@@ -334,6 +348,7 @@ extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
         unsafe { sqlite3_free(z_init as *mut ()) };
     }
 }
+
 extern "C" fn sqllog_openlog(p: &mut SLConn) -> () {
     unsafe {
         if (*p).fd == core::ptr::null_mut() {
@@ -404,6 +419,7 @@ extern "C" fn sqllog_openlog(p: &mut SLConn) -> () {
         }
     }
 }
+
 extern "C" fn test_sqllog_stmt(p: *mut SLConn, z_sql_1: *const i8) -> () {
     unsafe {
         let mut z_first: *const i8 = core::ptr::null();
@@ -429,6 +445,7 @@ extern "C" fn test_sqllog_stmt(p: *mut SLConn, z_sql_1: *const i8) -> () {
         } else { sqllog_copydb(unsafe { &*p }, core::ptr::null(), 1); }
     }
 }
+
 extern "C" fn sqllog_trace_db(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut b_ret: i32 = 1;
@@ -467,6 +484,7 @@ extern "C" fn sqllog_trace_db(db: *mut Sqlite3) -> i32 {
         return b_ret;
     }
 }
+
 extern "C" fn test_sqllog(p_ctx_1: *mut (), db: *mut Sqlite3,
     z_sql_1: *const i8, e_type_1: i32) -> () {
     unsafe {
@@ -580,6 +598,7 @@ extern "C" fn test_sqllog(p_ctx_1: *mut (), db: *mut Sqlite3,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_init_sqllog() -> () {
     unsafe {
@@ -611,6 +630,7 @@ pub extern "C" fn sqlite3_init_sqllog() -> () {
         }
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1417,9 +1437,11 @@ extern "C" {
     fn __builtin_expect(_: i64, _: i64)
     -> i64;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

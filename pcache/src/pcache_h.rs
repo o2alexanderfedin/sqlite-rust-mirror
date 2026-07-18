@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PgHdr {
     pub(crate) p_page: *mut Sqlite3PcachePage,

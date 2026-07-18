@@ -1,13 +1,20 @@
 type DarwinSizeT = u64;
+
 static mut page_size: i32 = 1024;
+
 static mut sector_size: i32 = 512;
+
 static mut db: *mut FILE = core::ptr::null_mut();
+
 static mut file_size: i32 = 0;
+
 static mut cksum_nonce: u32 = 0 as u32;
+
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
+
 extern "C" fn read_content(n_1: i32, i_ofst_1: i32) -> *mut u8 {
     unsafe {
         let mut got: i32 = 0;
@@ -30,6 +37,7 @@ extern "C" fn read_content(n_1: i32, i_ofst_1: i32) -> *mut u8 {
         return p_buf;
     }
 }
+
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     z_msg_1: *const i8) -> u32 {
     let mut i: i32 = 0;
@@ -82,6 +90,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     };
     return val;
 }
+
 extern "C" fn decode_journal_header(i_ofst_1: i32) -> u32 {
     unsafe {
         let p_hdr: *mut u8 = read_content(64, i_ofst_1);
@@ -121,6 +130,7 @@ extern "C" fn decode_journal_header(i_ofst_1: i32) -> u32 {
         return n_page;
     }
 }
+
 extern "C" fn print_page(i_ofst_1: i32) -> () {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -137,6 +147,7 @@ extern "C" fn print_page(i_ofst_1: i32) -> () {
         unsafe { free(a_data as *mut ()) };
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -187,12 +198,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -224,9 +237,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

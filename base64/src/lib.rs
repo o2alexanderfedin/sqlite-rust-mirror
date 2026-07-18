@@ -1,8 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 static b64_digit_values: [u8; 128] =
     [130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8,
             130 as u8, 130 as u8, 130 as u8, 129 as u8, 129 as u8, 129 as u8,
@@ -26,6 +28,7 @@ static b64_digit_values: [u8; 128] =
             44 as u8, 45 as u8, 46 as u8, 47 as u8, 48 as u8, 49 as u8,
             50 as u8, 51 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8,
             130 as u8];
+
 static b64_numerals: [i8; 65] =
     [65 as i8, 66 as i8, 67 as i8, 68 as i8, 69 as i8, 70 as i8, 71 as i8,
             72 as i8, 73 as i8, 74 as i8, 75 as i8, 76 as i8, 77 as i8,
@@ -38,6 +41,7 @@ static b64_numerals: [i8; 65] =
             120 as i8, 121 as i8, 122 as i8, 48 as i8, 49 as i8, 50 as i8,
             51 as i8, 52 as i8, 53 as i8, 54 as i8, 55 as i8, 56 as i8,
             57 as i8, 43 as i8, 47 as i8, 0 as i8];
+
 extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -155,6 +159,7 @@ extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     unsafe { *p_out_1 = 0 as i8 };
     return p_out_1;
 }
+
 extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut nc; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -166,6 +171,7 @@ extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     }
     return s;
 }
+
 extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -274,6 +280,7 @@ extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
         return p_out_1;
     }
 }
+
 extern "C" fn base64(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -519,6 +526,7 @@ extern "C" fn base64(context: *mut Sqlite3Context, na: i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_base64_init(db: *mut Sqlite3,
     pz_err_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -531,7 +539,9 @@ pub extern "C" fn sqlite3_base64_init(db: *mut Sqlite3,
                 Some(base64), None, None)
         };
 }
+
 static mut nboi: [i8; 5] = [0 as i8, 0 as i8, 1 as i8, 2 as i8, 3 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

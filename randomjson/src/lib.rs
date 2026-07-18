@@ -1,24 +1,30 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Prng {
     x: u32,
     y: u32,
 }
+
 extern "C" fn prng_seed(p: &mut Prng, i_seed_1: u32) -> () {
     (*p).x = i_seed_1 | 1 as u32;
     (*p).y = i_seed_1;
 }
+
 extern "C" fn prng_int(p: &mut Prng) -> u32 {
     (*p).x = (*p).x >> 1 ^ 1 as u32 + !((*p).x & 1 as u32) & 3489660929u32;
     (*p).y = (*p).y * 1103515245 as u32 + 12345 as u32;
     return (*p).x ^ (*p).y;
 }
+
 static mut az_json_atoms: [*mut i8; 84] =
     [c"0".as_ptr() as *mut i8, c"0".as_ptr() as *mut i8,
             c"1".as_ptr() as *mut i8, c"1".as_ptr() as *mut i8,
@@ -71,6 +77,7 @@ static mut az_json_atoms: [*mut i8; 84] =
             c"\"y\\uXXXXz\"".as_ptr() as *mut i8,
             c"\"y\\uXXXXz\"".as_ptr() as *mut i8, c"\"\"".as_ptr() as *mut i8,
             c"\"\"".as_ptr() as *mut i8];
+
 static mut az_json_template: [*mut i8; 28] =
     [c"{\"a\":%,\"b\":%,\"cDD\":%}".as_ptr() as *mut i8,
             c"{a:%,b:%,cDD:%}".as_ptr() as *mut i8,
@@ -95,6 +102,7 @@ static mut az_json_template: [*mut i8; 28] =
             c"[%,%,%,%]".as_ptr() as *mut i8,
             c"[%,%,%,%,%]".as_ptr() as *mut i8,
             c"[%,%,%,%,%]".as_ptr() as *mut i8];
+
 extern "C" fn json_expand(mut z_src_1: *const i8, z_dest_1: *mut i8,
     p: *mut Prng, e_type_1: i32, mut r: u32) -> () {
     unsafe {
@@ -279,6 +287,7 @@ extern "C" fn json_expand(mut z_src_1: *const i8, z_dest_1: *mut i8,
         }
     }
 }
+
 extern "C" fn rand_json_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i_seed: u32 = 0 as u32;
@@ -309,6 +318,7 @@ extern "C" fn rand_json_func(context: *mut Sqlite3Context, argc: i32,
                 }))
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_randomjson_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -335,8 +345,11 @@ pub extern "C" fn sqlite3_randomjson_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 static mut c_one: i32 = 1;
+
 static mut c_zero: i32 = 0;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

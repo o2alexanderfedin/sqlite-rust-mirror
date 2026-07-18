@@ -1,39 +1,69 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type Int64T = i64;
+
 type DarwinOffT = Int64T;
+
 type OffT = DarwinOffT;
+
 type DarwinSizeT = u64;
+
 type DarwinSsizeT = i64;
+
 type Uint32T = u32;
+
 type DarwinUsecondsT = Uint32T;
+
 type UsecondsT = DarwinUsecondsT;
+
 type DarwinTimeT = i64;
+
 type TimeT = DarwinTimeT;
+
 type Int32T = i32;
+
 type DarwinDevT = Int32T;
+
 type DevT = DarwinDevT;
+
 type Uint16T = u16;
+
 type DarwinModeT = Uint16T;
+
 type ModeT = DarwinModeT;
+
 type NlinkT = Uint16T;
+
 type Uint64T = u64;
+
 type DarwinIno64T = Uint64T;
+
 type DarwinUidT = Uint32T;
+
 type UidT = DarwinUidT;
+
 type DarwinGidT = Uint32T;
+
 type GidT = DarwinGidT;
+
 type DarwinBlkcntT = Int64T;
+
 type BlkcntT = DarwinBlkcntT;
+
 type DarwinBlksizeT = Int32T;
+
 type BlksizeT = DarwinBlksizeT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timespec {
     tv_sec: i64,
     tv_nsec: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stat {
@@ -56,6 +86,7 @@ struct Stat {
     st_lspare: i32,
     st_qspare: [i64; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DemoFile {
@@ -65,6 +96,7 @@ struct DemoFile {
     n_buffer: i32,
     i_buffer_ofst: Sqlite3Int64,
 }
+
 extern "C" fn demo_direct_write(p: &DemoFile, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let mut ofst: OffT = 0 as OffT;
@@ -75,6 +107,7 @@ extern "C" fn demo_direct_write(p: &DemoFile, z_buf_1: *const (),
     if n_write != i_amt_1 as u64 { return 10 | 3 << 8; }
     return 0;
 }
+
 extern "C" fn demo_flush_buffer(p: *mut DemoFile) -> i32 {
     let mut rc: i32 = 0;
     if unsafe { (*p).n_buffer } != 0 {
@@ -86,6 +119,7 @@ extern "C" fn demo_flush_buffer(p: *mut DemoFile) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn demo_close(p_file_1: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -94,6 +128,7 @@ extern "C" fn demo_close(p_file_1: *mut Sqlite3File) -> i32 {
     unsafe { close(unsafe { (*p).fd }) };
     return rc;
 }
+
 extern "C" fn demo_read(p_file_1: *mut Sqlite3File, z_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -120,6 +155,7 @@ extern "C" fn demo_read(p_file_1: *mut Sqlite3File, z_buf_1: *mut (),
     }
     return 10 | 1 << 8;
 }
+
 extern "C" fn demo_write(p_file_1: *mut Sqlite3File, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -173,10 +209,12 @@ extern "C" fn demo_write(p_file_1: *mut Sqlite3File, z_buf_1: *const (),
     }
     return 0;
 }
+
 extern "C" fn demo_truncate(p_file_1: *mut Sqlite3File, size: SqliteInt64)
     -> i32 {
     return 0;
 }
+
 extern "C" fn demo_sync(p_file_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
     let mut rc: i32 = 0;
@@ -185,6 +223,7 @@ extern "C" fn demo_sync(p_file_1: *mut Sqlite3File, flags: i32) -> i32 {
     rc = unsafe { fsync(unsafe { (*p).fd }) };
     return if rc == 0 { 0 } else { 10 | 4 << 8 };
 }
+
 extern "C" fn demo_file_size(p_file_1: *mut Sqlite3File,
     p_size_1: *mut SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -197,27 +236,34 @@ extern "C" fn demo_file_size(p_file_1: *mut Sqlite3File,
     unsafe { *p_size_1 = s_stat.st_size };
     return 0;
 }
+
 extern "C" fn demo_lock(p_file_1: *mut Sqlite3File, e_lock_1: i32) -> i32 {
     return 0;
 }
+
 extern "C" fn demo_unlock(p_file_1: *mut Sqlite3File, e_lock_1: i32) -> i32 {
     return 0;
 }
+
 extern "C" fn demo_check_reserved_lock(p_file_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe { *p_res_out_1 = 0 };
     return 0;
 }
+
 extern "C" fn demo_file_control(p_file_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     return 12;
 }
+
 extern "C" fn demo_sector_size(p_file_1: *mut Sqlite3File) -> i32 {
     return 0;
 }
+
 extern "C" fn demo_device_characteristics(p_file_1: *mut Sqlite3File) -> i32 {
     return 0;
 }
+
 extern "C" fn demo_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_file_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -245,6 +291,7 @@ extern "C" fn demo_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     unsafe { (*p).base.p_methods = &demoio };
     return 0;
 }
+
 extern "C" fn demo_delete(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     dir_sync_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -278,6 +325,7 @@ extern "C" fn demo_delete(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     }
     return if rc == 0 { 0 } else { 10 | 10 << 8 };
 }
+
 extern "C" fn demo_access(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -296,6 +344,7 @@ extern "C" fn demo_access(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     unsafe { *p_res_out_1 = (rc == 0) as i32 };
     return 0;
 }
+
 extern "C" fn demo_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_path_1: *const i8, n_path_out_1: i32, z_path_out_1: *mut i8) -> i32 {
     let mut z_dir: [i8; 513] = [0; 513];
@@ -321,10 +370,12 @@ extern "C" fn demo_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     };
     return 0;
 }
+
 extern "C" fn demo_dl_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8)
     -> *mut () {
     return core::ptr::null_mut();
 }
+
 extern "C" fn demo_dl_error(p_vfs_1: *mut Sqlite3Vfs, n_byte_1: i32,
     z_err_msg_1: *mut i8) -> () {
     unsafe {
@@ -336,6 +387,7 @@ extern "C" fn demo_dl_error(p_vfs_1: *mut Sqlite3Vfs, n_byte_1: i32,
         *z_err_msg_1.offset((n_byte_1 - 1) as isize) = '\u{0}' as i32 as i8
     };
 }
+
 extern "C" fn demo_dl_sym(p_vfs_1: *mut Sqlite3Vfs, p_h_1: *mut (),
     z: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -343,29 +395,35 @@ extern "C" fn demo_dl_sym(p_vfs_1: *mut Sqlite3Vfs, p_h_1: *mut (),
                     unsafe extern "C" fn() -> ()>(0 as *const ())
         };
 }
+
 extern "C" fn demo_dl_close(p_vfs_1: *mut Sqlite3Vfs, p_handle_1: *mut ())
     -> () {
     return;
 }
+
 extern "C" fn demo_randomness(p_vfs_1: *mut Sqlite3Vfs, n_byte_1: i32,
     z_byte_1: *mut i8) -> i32 {
     return 0;
 }
+
 extern "C" fn demo_sleep(p_vfs_1: *mut Sqlite3Vfs, n_micro_1: i32) -> i32 {
     unsafe { sleep((n_micro_1 / 1000000) as u32) };
     unsafe { usleep((n_micro_1 % 1000000) as UsecondsT) };
     return n_micro_1;
 }
+
 extern "C" fn demo_current_time(p_vfs_1: *mut Sqlite3Vfs, p_time_1: *mut f64)
     -> i32 {
     let t: TimeT = unsafe { time(core::ptr::null_mut()) };
     unsafe { *p_time_1 = t as f64 / 86400.0 + 2440587.5 };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_demovfs() -> *mut Sqlite3Vfs {
     unsafe { return &mut demovfs; }
 }
+
 static demoio: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -388,6 +446,7 @@ static demoio: Sqlite3IoMethods =
         x_fetch: None,
         x_unfetch: None,
     };
+
 static mut demovfs: Sqlite3Vfs =
     Sqlite3Vfs {
         i_version: 1,
@@ -413,6 +472,7 @@ static mut demovfs: Sqlite3Vfs =
         x_get_system_call: None,
         x_next_system_call: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 extern "C" fn read_file(z_filename_1: *const i8) -> *mut i8 {
     unsafe {
         let mut in_: *mut FILE = core::ptr::null_mut();
@@ -43,6 +44,7 @@ extern "C" fn read_file(z_filename_1: *const i8) -> *mut i8 {
         return z;
     }
 }
+
 extern "C" fn has_side_effect(z: &[i8]) -> i32 {
     let mut i: u32 = 0 as u32;
     {
@@ -81,6 +83,7 @@ extern "C" fn has_side_effect(z: &[i8]) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn find_close_paren(z: *const i8) -> u32 {
     let mut n_open: u32 = 0 as u32;
     let mut i: u32 = 0 as u32;
@@ -103,6 +106,7 @@ extern "C" fn find_close_paren(z: *const i8) -> u32 {
     }
     return i;
 }
+
 extern "C" fn find_all_side_effects(z: *const i8) -> u32 {
     unsafe {
         let mut lineno: u32 = 1 as u32;
@@ -192,6 +196,7 @@ extern "C" fn find_all_side_effects(z: *const i8) -> u32 {
         return n_err;
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -215,12 +220,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -250,9 +257,11 @@ extern "C" {
     -> ();
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

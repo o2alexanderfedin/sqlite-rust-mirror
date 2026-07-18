@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -14,7 +15,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -27,6 +30,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -106,6 +110,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -154,6 +159,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -290,6 +296,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -313,6 +320,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -385,6 +393,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameToken {
@@ -392,6 +401,7 @@ struct RenameToken {
     t: Token,
     p_next: *mut RenameToken,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
@@ -401,6 +411,7 @@ struct RenameCtx {
     p_tab: *mut Table,
     z_old: *const i8,
 }
+
 extern "C" fn rename_parse_sql(p: *mut Parse, z_db_1: *const i8,
     db: *mut Sqlite3, z_sql_1: *const i8, b_temp_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -437,6 +448,7 @@ extern "C" fn rename_parse_sql(p: *mut Parse, z_db_1: *const i8,
     unsafe { (*db).init.i_db = 0 as u8 };
     return rc;
 }
+
 extern "C" fn rename_token_find(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_ptr_1: *const ()) -> *mut RenameToken {
     unsafe {
@@ -470,6 +482,7 @@ extern "C" fn rename_token_find(p_parse_1: *mut Parse,
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn rename_column_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -493,6 +506,7 @@ extern "C" fn rename_column_expr_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_token_remap(p_parse: &Parse, p_to: *const (),
     p_from: *const ()) -> () {
@@ -514,6 +528,7 @@ pub extern "C" fn sqlite3_rename_token_remap(p_parse: &Parse, p_to: *const (),
         }
     }
 }
+
 extern "C" fn rename_unmap_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -529,6 +544,7 @@ extern "C" fn rename_unmap_expr_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_exprlist_unmap(p_parse: *mut Parse,
     p_e_list: *mut ExprList) -> () {
@@ -565,6 +581,7 @@ pub extern "C" fn sqlite3_rename_exprlist_unmap(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn rename_walk_with(p_walker_1: *mut Walker, p_select_1: &Select)
     -> () {
     unsafe {
@@ -627,6 +644,7 @@ extern "C" fn rename_walk_with(p_walker_1: *mut Walker, p_select_1: &Select)
         }
     }
 }
+
 extern "C" fn rename_column_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     -> i32 {
     if unsafe { (*p).sel_flags } & (2097152 | 67108864) as u32 != 0 {
@@ -635,6 +653,7 @@ extern "C" fn rename_column_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     rename_walk_with(p_walker_1, unsafe { &*p });
     return 0;
 }
+
 extern "C" fn rename_column_parse_error(p_ctx_1: *mut Sqlite3Context,
     z_when_1: *const i8, p_type_1: *mut Sqlite3Value,
     p_object_1: *mut Sqlite3Value, p_parse_1: &Parse) -> () {
@@ -655,6 +674,7 @@ extern "C" fn rename_column_parse_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_result_error(p_ctx_1, z_err as *const i8, -1) };
     unsafe { sqlite3_db_free((*p_parse_1).db, z_err as *mut ()) };
 }
+
 extern "C" fn rename_set_e_names(p_e_list_1: *mut ExprList, val: i32) -> () {
     { let _ = 0; };
     if !(p_e_list_1).is_null() {
@@ -677,6 +697,7 @@ extern "C" fn rename_set_e_names(p_e_list_1: *mut ExprList, val: i32) -> () {
         }
     }
 }
+
 extern "C" fn rename_resolve_trigger(p_parse_1: *mut Parse) -> i32 {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
@@ -862,6 +883,7 @@ extern "C" fn rename_resolve_trigger(p_parse_1: *mut Parse) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn rename_column_elist_names(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_e_list_1: *const ExprList, z_old_1: *const i8)
     -> () {
@@ -891,6 +913,7 @@ extern "C" fn rename_column_elist_names(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn rename_column_idlist_names(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_id_list_1: *const IdList, z_old_1: *const i8)
     -> () {
@@ -916,6 +939,7 @@ extern "C" fn rename_column_idlist_names(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn rename_walk_trigger(p_walker_1: *mut Walker,
     p_trigger_1: &Trigger) -> () {
     unsafe {
@@ -994,6 +1018,7 @@ extern "C" fn rename_walk_trigger(p_walker_1: *mut Walker,
         }
     }
 }
+
 extern "C" fn rename_column_token_next(p_ctx_1: &mut RenameCtx)
     -> *mut RenameToken {
     unsafe {
@@ -1025,6 +1050,7 @@ extern "C" fn rename_column_token_next(p_ctx_1: &mut RenameCtx)
         return p_best;
     }
 }
+
 extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
     p_rename_1: *mut RenameCtx, z_sql_1: *const i8, z_new_1: *const i8,
     b_quote_1: i32) -> i32 {
@@ -1179,6 +1205,7 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
         return rc;
     }
 }
+
 extern "C" fn rename_token_free(db: *mut Sqlite3, p_token_1: *mut RenameToken)
     -> () {
     let mut p_next: *mut RenameToken = core::ptr::null_mut();
@@ -1196,6 +1223,7 @@ extern "C" fn rename_token_free(db: *mut Sqlite3, p_token_1: *mut RenameToken)
         }
     }
 }
+
 extern "C" fn rename_parse_cleanup(p_parse_1: *mut Parse) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
@@ -1221,6 +1249,7 @@ extern "C" fn rename_parse_cleanup(p_parse_1: *mut Parse) -> () {
         unsafe { sqlite3_parse_object_reset(p_parse_1) };
     }
 }
+
 extern "C" fn rename_column_func(context: *mut Sqlite3Context,
     not_used_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1804,6 +1833,7 @@ extern "C" fn rename_column_func(context: *mut Sqlite3Context,
         }
     }
 }
+
 extern "C" fn rename_table_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -1819,6 +1849,7 @@ extern "C" fn rename_table_expr_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn rename_table_select_cb(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -1853,6 +1884,7 @@ extern "C" fn rename_table_select_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn rename_table_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2068,6 +2100,7 @@ extern "C" fn rename_table_func(context: *mut Sqlite3Context, not_used_1: i32,
         return;
     }
 }
+
 extern "C" fn rename_table_test(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2149,6 +2182,7 @@ extern "C" fn rename_table_test(context: *mut Sqlite3Context, not_used_1: i32,
         unsafe { (*db).x_auth = x_auth };
     }
 }
+
 extern "C" fn get_constraint_token(z: *const u8, pi_token_1: &mut i32)
     -> i32 {
     let mut i_off: i32 = 0;
@@ -2184,6 +2218,7 @@ extern "C" fn get_constraint_token(z: *const u8, pi_token_1: &mut i32)
     *pi_token_1 = t;
     return i_off;
 }
+
 extern "C" fn drop_column_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2403,6 +2438,7 @@ extern "C" fn drop_column_func(context: *mut Sqlite3Context, not_used_1: i32,
         }
     }
 }
+
 extern "C" fn rename_quotefix_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2414,6 +2450,7 @@ extern "C" fn rename_quotefix_expr_cb(p_walker_1: *mut Walker,
         return 0;
     }
 }
+
 extern "C" fn rename_quotefix_func(context: *mut Sqlite3Context,
     not_used_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2541,6 +2578,7 @@ extern "C" fn rename_quotefix_func(context: *mut Sqlite3Context,
         unsafe { sqlite3_btree_leave_all(db) };
     }
 }
+
 extern "C" fn skip_create_table(ctx: *mut Sqlite3Context, z_sql_1: *const u8,
     pi_off_1: &mut i32) -> i32 {
     let mut i_off: i32 = 0;
@@ -2565,6 +2603,7 @@ extern "C" fn skip_create_table(ctx: *mut Sqlite3Context, z_sql_1: *const u8,
     *pi_off_1 = i_off;
     return 0;
 }
+
 extern "C" fn get_whitespace(z: *const u8) -> i32 {
     let mut n_ret: i32 = 0;
     loop {
@@ -2579,6 +2618,7 @@ extern "C" fn get_whitespace(z: *const u8) -> i32 {
     }
     return n_ret;
 }
+
 extern "C" fn quoted_compare(ctx: *mut Sqlite3Context, t: i32,
     z_quote_1: *const u8, n_quote_1: i32, z_cmp_1: *const u8,
     p_res_1: &mut i32) -> i32 {
@@ -2599,6 +2639,7 @@ extern "C" fn quoted_compare(ctx: *mut Sqlite3Context, t: i32,
     unsafe { sqlite3_free(z_copy as *mut ()) };
     return 0;
 }
+
 extern "C" fn get_constraint(z: *const u8) -> i32 {
     let mut i_off: i32 = 0;
     let mut t: i32 = 0;
@@ -2615,6 +2656,7 @@ extern "C" fn get_constraint(z: *const u8) -> i32 {
     }
     return i_off;
 }
+
 unsafe extern "C" fn error_m_printf(p_ctx_1: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(p_ctx_1) };
@@ -2628,6 +2670,7 @@ unsafe extern "C" fn error_m_printf(p_ctx_1: *mut Sqlite3Context,
         unsafe { sqlite3_db_free(db, z_err as *mut ()) };
     } else { unsafe { sqlite3_result_error_nomem(p_ctx_1) }; }
 }
+
 extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const u8 =
@@ -2771,6 +2814,7 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
         };
     }
 }
+
 extern "C" fn fail_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_text: *const i8 =
@@ -2782,6 +2826,7 @@ extern "C" fn fail_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     unsafe { sqlite3_result_error(ctx, z_text, -1) };
     unsafe { sqlite3_result_error_code(ctx, err) };
 }
+
 extern "C" fn add_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const u8 =
@@ -2843,6 +2888,7 @@ extern "C" fn add_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     };
     unsafe { sqlite3_result_str(ctx, p_new, 2) };
 }
+
 extern "C" fn find_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const u8 = core::ptr::null();
@@ -2885,6 +2931,7 @@ extern "C" fn find_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     }
     unsafe { sqlite3_result_int(ctx, 0) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_functions() -> () {
     unsafe {
@@ -2896,6 +2943,7 @@ pub extern "C" fn sqlite3_alter_functions() -> () {
         };
     }
 }
+
 extern "C" fn is_alterable_table(p_parse_1: *mut Parse, p_tab_1: &Table)
     -> i32 {
     if 0 ==
@@ -2916,6 +2964,7 @@ extern "C" fn is_alterable_table(p_parse_1: *mut Parse, p_tab_1: &Table)
     }
     return 0;
 }
+
 extern "C" fn rename_reload_schema(p_parse_1: *mut Parse, i_db_1: i32,
     p5: u16) -> () {
     let v: *const Vdbe = unsafe { (*p_parse_1).p_vdbe } as *const Vdbe;
@@ -2934,6 +2983,7 @@ extern "C" fn rename_reload_schema(p_parse_1: *mut Parse, i_db_1: i32,
         }
     }
 }
+
 extern "C" fn rename_test_schema(p_parse_1: *mut Parse, z_db_1: *const i8,
     b_temp_1: i32, z_when_1: *const i8, b_no_dqs_1: i32) -> () {
     unsafe { (*p_parse_1).set_col_names_set(1 as Bft as u32) };
@@ -2951,6 +3001,7 @@ extern "C" fn rename_test_schema(p_parse_1: *mut Parse, z_db_1: *const i8,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
     p_src: *mut SrcList, p_name: *mut Token) -> () {
@@ -3113,6 +3164,7 @@ pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
         unsafe { sqlite3_db_free(db, z_name as *mut ()) };
     }
 }
+
 extern "C" fn is_real_table(p_parse_1: *mut Parse, p_tab_1: &Table,
     i_op_1: i32) -> i32 {
     let mut z_type: *const i8 = core::ptr::null();
@@ -3137,6 +3189,7 @@ extern "C" fn is_real_table(p_parse_1: *mut Parse, p_tab_1: &Table,
     }
     return 0;
 }
+
 extern "C" fn rename_fix_quotes(p_parse_1: *mut Parse, z_db_1: *const i8,
     b_temp_1: i32) -> () {
     unsafe {
@@ -3152,6 +3205,7 @@ extern "C" fn rename_fix_quotes(p_parse_1: *mut Parse, z_db_1: *const i8,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
     p_src: *mut SrcList, p_old: *mut Token, p_new: *mut Token) -> () {
@@ -3258,6 +3312,7 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
         }
     }
 }
+
 extern "C" fn alter_find_table(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     pi_db_1: &mut i32, pz_db_1: &mut *const i8, b_auth_1: i32) -> *mut Table {
     unsafe {
@@ -3299,6 +3354,7 @@ extern "C" fn alter_find_table(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
         return p_tab;
     }
 }
+
 extern "C" fn alter_find_col(p_parse_1: *mut Parse, mut p_tab_1: *mut Table,
     p_col_1: *const Token, pi_col_1: &mut i32) -> i32 {
     unsafe {
@@ -3346,6 +3402,7 @@ extern "C" fn alter_find_col(p_parse_1: *mut Parse, mut p_tab_1: *mut Table,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_drop_constraint(p_parse: *mut Parse,
     p_src: *mut SrcList, p_cons: *mut Token, p_col: *mut Token) -> () {
@@ -3390,6 +3447,7 @@ pub extern "C" fn sqlite3_alter_drop_constraint(p_parse: *mut Parse,
     unsafe { sqlite3_db_free(db, z_arg as *mut ()) };
     rename_reload_schema(p_parse, i_db, 4 as u16);
 }
+
 extern "C" fn alter_rtrim_constraint(db: *mut Sqlite3, p_cons_1: *const i8,
     n_cons_1: i32) -> i32 {
     let z_tmp: *mut u8 =
@@ -3420,6 +3478,7 @@ extern "C" fn alter_rtrim_constraint(db: *mut Sqlite3, p_cons_1: *const i8,
     unsafe { sqlite3_db_free(db, z_tmp as *mut ()) };
     return i_end;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_add_constraint(p_parse: *mut Parse,
     p_src: *mut SrcList, p_first: &Token, p_name: *mut Token,
@@ -3481,6 +3540,7 @@ pub extern "C" fn sqlite3_alter_add_constraint(p_parse: *mut Parse,
         rename_reload_schema(p_parse, i_db, 4 as u16);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
     p_src: *mut SrcList, p_col: *mut Token, p_first: &Token) -> () {
@@ -3520,6 +3580,7 @@ pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
         rename_reload_schema(p_parse, i_db, 4 as u16);
     }
 }
+
 extern "C" fn sqlite3_error_if_not_empty(p_parse_1: *mut Parse,
     z_db_1: *const i8, z_tab_1: *const i8, z_err_1: *const i8) -> () {
     unsafe {
@@ -3528,6 +3589,7 @@ extern "C" fn sqlite3_error_if_not_empty(p_parse_1: *mut Parse,
                 as *const i8, z_err_1, z_db_1, z_tab_1)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
     p_col_def: &mut Token) -> () {
@@ -3700,6 +3762,7 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_begin_add_column(p_parse: *mut Parse,
     p_src: *mut SrcList) -> () {
@@ -3942,6 +4005,7 @@ pub extern "C" fn sqlite3_alter_begin_add_column(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_drop_column(p_parse: *mut Parse,
     p_src: *mut SrcList, p_name: *const Token) -> () {
@@ -4393,6 +4457,7 @@ pub extern "C" fn sqlite3_alter_drop_column(p_parse: *mut Parse,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_token_map(p_parse: &mut Parse,
     p_ptr: *const (), p_token: &Token) -> *const () {
@@ -4415,6 +4480,7 @@ pub extern "C" fn sqlite3_rename_token_map(p_parse: &mut Parse,
         return p_ptr;
     }
 }
+
 extern "C" fn unmap_column_idlist_names(p_parse_1: *mut Parse,
     p_id_list_1: &IdList) -> () {
     let mut ii: i32 = 0;
@@ -4436,6 +4502,7 @@ extern "C" fn unmap_column_idlist_names(p_parse_1: *mut Parse,
         }
     }
 }
+
 extern "C" fn rename_unmap_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     -> i32 {
     unsafe {
@@ -4516,6 +4583,7 @@ extern "C" fn rename_unmap_select_cb(p_walker_1: *mut Walker, p: *mut Select)
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_expr_unmap(p_parse: *mut Parse,
     p_expr: *mut Expr) -> () {
@@ -4532,6 +4600,7 @@ pub extern "C" fn sqlite3_rename_expr_unmap(p_parse: *mut Parse,
     unsafe { sqlite3_walk_expr(&mut s_walker, p_expr) };
     unsafe { (*p_parse).e_parse_mode = e_mode };
 }
+
 static mut a_alter_table_funcs: [FuncDef; 9] =
     [FuncDef {
                 n_arg: 9 as i16,
@@ -4641,6 +4710,7 @@ static mut a_alter_table_funcs: [FuncDef; 9] =
                 z_name: c"sqlite_find_constraint".as_ptr() as *const i8,
                 u: FuncDefU0 { p_hash: core::ptr::null_mut() },
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -7403,36 +7473,43 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

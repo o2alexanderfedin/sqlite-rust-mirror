@@ -1,12 +1,15 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
     e_code: i32,
     z_name: *mut i8,
 }
+
 static mut a_limit: [AnonS0; 12] =
     [AnonS0 { e_code: 0, z_name: c"SQLITE_MAX_LENGTH".as_ptr() as *mut i8 },
             AnonS0 {
@@ -53,10 +56,12 @@ static mut a_limit: [AnonS0; 12] =
                 e_code: 11,
                 z_name: c"SQLITE_MAX_WORKER_THREADS".as_ptr() as *mut i8,
             }];
+
 extern "C" fn max_limit(db: *mut Sqlite3, e_code_1: i32) -> i32 {
     let i_orig: i32 = unsafe { sqlite3_limit(db, e_code_1, 2147483647) };
     return unsafe { sqlite3_limit(db, e_code_1, i_orig) };
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -92,12 +97,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

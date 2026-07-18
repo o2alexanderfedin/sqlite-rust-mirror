@@ -1,7 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbdataTable {
@@ -10,6 +13,7 @@ struct DbdataTable {
     p_stmt: *mut Sqlite3Stmt,
     b_ptr: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbdataCursor {
@@ -32,12 +36,14 @@ struct DbdataCursor {
     enc: u32,
     i_intkey: Sqlite3Int64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DbdataBuffer {
     a_buf: *mut u8,
     n_buf: Sqlite3Int64,
 }
+
 extern "C" fn dbdata_buffer_size(p_buf_1: &mut DbdataBuffer,
     n_min_1: Sqlite3Int64) -> i32 {
     if n_min_1 > (*p_buf_1).n_buf {
@@ -53,6 +59,7 @@ extern "C" fn dbdata_buffer_size(p_buf_1: &mut DbdataBuffer,
     }
     return 0;
 }
+
 extern "C" fn dbdata_buffer_free(p_buf_1: *mut DbdataBuffer) -> () {
     unsafe { sqlite3_free(unsafe { (*p_buf_1).a_buf } as *mut ()) };
     unsafe {
@@ -60,6 +67,7 @@ extern "C" fn dbdata_buffer_free(p_buf_1: *mut DbdataBuffer) -> () {
             core::mem::size_of::<DbdataBuffer>() as u64)
     };
 }
+
 extern "C" fn dbdata_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -101,6 +109,7 @@ extern "C" fn dbdata_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     unsafe { *pp_vtab_1 = p_tab as *mut Sqlite3Vtab };
     return rc;
 }
+
 extern "C" fn dbdata_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *const DbdataTable =
         p_vtab_1 as *mut DbdataTable as *const DbdataTable;
@@ -110,6 +119,7 @@ extern "C" fn dbdata_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn dbdata_best_index(tab: *mut Sqlite3Vtab,
     p_idx_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const DbdataTable =
@@ -210,6 +220,7 @@ extern "C" fn dbdata_best_index(tab: *mut Sqlite3Vtab,
     };
     return 0;
 }
+
 extern "C" fn dbdata_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut DbdataCursor = core::ptr::null_mut();
@@ -230,6 +241,7 @@ extern "C" fn dbdata_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = p_csr as *mut Sqlite3VtabCursor };
     return 0;
 }
+
 extern "C" fn dbdata_reset_cursor(p_csr_1: &mut DbdataCursor) -> () {
     let p_tab: *mut DbdataTable = (*p_csr_1).base.p_vtab as *mut DbdataTable;
     if unsafe { (*p_tab).p_stmt } == core::ptr::null_mut() {
@@ -245,22 +257,26 @@ extern "C" fn dbdata_reset_cursor(p_csr_1: &mut DbdataCursor) -> () {
     (*p_csr_1).a_page = core::ptr::null_mut();
     (*p_csr_1).n_rec = 0 as Sqlite3Int64;
 }
+
 extern "C" fn dbdata_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut DbdataCursor = p_cursor_1 as *mut DbdataCursor;
     dbdata_reset_cursor(unsafe { &mut *p_csr });
     unsafe { sqlite3_free(p_csr as *mut ()) };
     return 0;
 }
+
 extern "C" fn get_uint16(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as i32) << 8 |
                 unsafe { *a.offset(1 as isize) } as i32) as u32;
 }
+
 extern "C" fn get_uint32(a: *const u8) -> u32 {
     return (unsafe { *a.offset(0 as isize) } as u32) << 24 |
                     (unsafe { *a.offset(1 as isize) } as u32) << 16 |
                 (unsafe { *a.offset(2 as isize) } as u32) << 8 |
             unsafe { *a.offset(3 as isize) } as u32;
 }
+
 extern "C" fn dbdata_load_page(p_csr_1: &DbdataCursor, pgno: u32,
     pp_page_1: &mut *mut u8, pn_page_1: &mut i32) -> i32 {
     let mut rc2: i32 = 0;
@@ -300,6 +316,7 @@ extern "C" fn dbdata_load_page(p_csr_1: &DbdataCursor, pgno: u32,
     }
     return rc;
 }
+
 extern "C" fn dbdata_get_varint(z: *const u8, p_val_1: &mut Sqlite3Int64)
     -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -328,6 +345,7 @@ extern "C" fn dbdata_get_varint(z: *const u8, p_val_1: &mut Sqlite3Int64)
     *p_val_1 = u as Sqlite3Int64;
     return 9;
 }
+
 extern "C" fn dbdata_get_varint_u32(z: *const u8, p_val_1: &mut Sqlite3Int64)
     -> i32 {
     let mut val: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -338,6 +356,7 @@ extern "C" fn dbdata_get_varint_u32(z: *const u8, p_val_1: &mut Sqlite3Int64)
     *p_val_1 = val;
     return n_ret;
 }
+
 extern "C" fn dbdata_value_bytes(e_type_1: i32) -> i32 {
     '__s2:
         {
@@ -366,6 +385,7 @@ extern "C" fn dbdata_value_bytes(e_type_1: i32) -> i32 {
         }
     }
 }
+
 extern "C" fn dbdata_value(p_ctx_1: *mut Sqlite3Context, enc: u32,
     e_type_1: i32, mut p_data_1: *mut u8, n_data_1: Sqlite3Int64) -> () {
     if e_type_1 >= 0 {
@@ -2406,6 +2426,7 @@ extern "C" fn dbdata_value(p_ctx_1: *mut Sqlite3Context, enc: u32,
         }
     }
 }
+
 extern "C" fn dbdata_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut DbdataCursor = p_cursor_1 as *mut DbdataCursor;
     let p_tab: *const DbdataTable =
@@ -2792,11 +2813,13 @@ extern "C" fn dbdata_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     } else { { let _ = 0; } };
     return 0;
 }
+
 extern "C" fn dbdata_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const DbdataCursor =
         p_cursor_1 as *mut DbdataCursor as *const DbdataCursor;
     return (unsafe { (*p_csr).a_page } == core::ptr::null_mut()) as i32;
 }
+
 extern "C" fn dbdata_is_function(z_schema_1: *const i8) -> i32 {
     let n: u64 = unsafe { strlen(z_schema_1) };
     if n > 2 as u64 &&
@@ -2808,6 +2831,7 @@ extern "C" fn dbdata_is_function(z_schema_1: *const i8) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn dbdata_dbsize(p_csr_1: &mut DbdataCursor, z_schema_1: *const i8)
     -> i32 {
     let p_tab: *const DbdataTable =
@@ -2844,6 +2868,7 @@ extern "C" fn dbdata_dbsize(p_csr_1: &mut DbdataCursor, z_schema_1: *const i8)
     if rc == 0 { rc = rc2; }
     return rc;
 }
+
 extern "C" fn dbdata_get_encoding(p_csr_1: *mut DbdataCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut n_pg1: i32 = 0;
@@ -2861,6 +2886,7 @@ extern "C" fn dbdata_get_encoding(p_csr_1: *mut DbdataCursor) -> i32 {
     unsafe { sqlite3_free(a_pg1 as *mut ()) };
     return rc;
 }
+
 extern "C" fn dbdata_filter(p_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -2954,6 +2980,7 @@ extern "C" fn dbdata_filter(p_cursor_1: *mut Sqlite3VtabCursor,
     if rc == 0 { rc = dbdata_next(p_cursor_1); }
     return rc;
 }
+
 extern "C" fn dbdata_column(p_cursor_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const DbdataCursor =
@@ -3054,6 +3081,7 @@ extern "C" fn dbdata_column(p_cursor_1: *mut Sqlite3VtabCursor,
     }
     return 0;
 }
+
 extern "C" fn dbdata_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const DbdataCursor =
@@ -3061,6 +3089,7 @@ extern "C" fn dbdata_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_csr).i_rowid } };
     return 0;
 }
+
 extern "C" fn sqlite3_dbdata_register(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 =
@@ -3082,12 +3111,14 @@ extern "C" fn sqlite3_dbdata_register(db: *mut Sqlite3) -> i32 {
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dbdata_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = pz_err_msg_1; };
     return sqlite3_dbdata_register(db);
 }
+
 static mut dbdata_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -3116,6 +3147,7 @@ static mut dbdata_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

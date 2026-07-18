@@ -1,8 +1,11 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Vdbe {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubProgram {
@@ -14,6 +17,7 @@ pub(crate) struct SubProgram {
     pub(crate) token: *mut (),
     pub(crate) p_next: *mut SubProgram,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOp {
@@ -25,6 +29,7 @@ pub(crate) struct VdbeOp {
     pub(crate) p3: i32,
     pub(crate) p4: P4union,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union P4union {
@@ -45,7 +50,9 @@ pub(crate) union P4union {
     pub(crate) p_subrtn_sig: *mut SubrtnSig,
     pub(crate) p_idx: *mut Index,
 }
+
 pub(crate) type Mem = Sqlite3Value;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubrtnSig {
@@ -56,6 +63,7 @@ pub(crate) struct SubrtnSig {
     pub(crate) i_addr: i32,
     pub(crate) reg_return: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOpList {
@@ -64,5 +72,6 @@ pub(crate) struct VdbeOpList {
     pub(crate) p2: i8,
     pub(crate) p3: i8,
 }
+
 pub(crate) type RecordCompare =
     unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord) -> i32;

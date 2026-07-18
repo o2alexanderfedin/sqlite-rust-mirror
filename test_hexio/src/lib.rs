@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,8 +14,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 type TclWideInt = i64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -27,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -106,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -154,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -290,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -313,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -385,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_test_bin_to_hex(mut z_buf_1: &mut [u8]) -> () {
     let z_hex: [u8; 17] =
@@ -414,6 +424,7 @@ pub extern "C" fn sqlite3_test_bin_to_hex(mut z_buf_1: &mut [u8]) -> () {
     }
     { let _ = 0; };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_test_hex_to_bin(z_in_1: &[u8], a_out_1: *mut u8)
     -> i32 {
@@ -490,6 +501,7 @@ pub extern "C" fn sqlite3_test_hex_to_bin(z_in_1: &[u8], a_out_1: *mut u8)
     }
     return j;
 }
+
 extern "C" fn hexio_read(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut offset: i32 = 0;
@@ -549,6 +561,7 @@ extern "C" fn hexio_read(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { sqlite3_free(z_buf as *mut ()) };
     return 0;
 }
+
 extern "C" fn hexio_write(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut offset: i32 = 0;
@@ -615,6 +628,7 @@ extern "C" fn hexio_write(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { Tcl_SetObjResult(interp, unsafe { Tcl_NewIntObj(written) }) };
     return 0;
 }
+
 extern "C" fn hexio_get_int(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -695,6 +709,7 @@ extern "C" fn hexio_get_int(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { Tcl_SetObjResult(interp, unsafe { Tcl_NewIntObj(val) }) };
     return 0;
 }
+
 extern "C" fn hexio_render_int16(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -724,6 +739,7 @@ extern "C" fn hexio_render_int16(client_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn hexio_render_int32(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -755,6 +771,7 @@ extern "C" fn hexio_render_int32(client_data_1: *mut (),
     };
     return 0;
 }
+
 extern "C" fn utf8_to_utf8(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -764,6 +781,7 @@ extern "C" fn utf8_to_utf8(client_data_1: *mut (), interp: *mut TclInterp,
     };
     return 1;
 }
+
 extern "C" fn get_fts3_varint(p: *const i8, v: &mut SqliteInt64) -> i32 {
     let mut q: *const u8 = p as *const u8;
     let mut x: SqliteUint64 = 0 as SqliteUint64;
@@ -794,6 +812,7 @@ extern "C" fn get_fts3_varint(p: *const i8, v: &mut SqliteInt64) -> i32 {
     *v = x as SqliteInt64;
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
+
 extern "C" fn put_fts3_varint(p: *mut i8, v: SqliteInt64) -> i32 {
     let mut q: *mut u8 = p as *mut u8;
     let mut vu: SqliteUint64 = v as SqliteUint64;
@@ -816,6 +835,7 @@ extern "C" fn put_fts3_varint(p: *mut i8, v: SqliteInt64) -> i32 {
     { let _ = 0; };
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
+
 extern "C" fn read_fts3varint(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut n_blob: i32 = 0;
@@ -844,6 +864,7 @@ extern "C" fn read_fts3varint(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { Tcl_SetObjResult(interp, unsafe { Tcl_NewIntObj(n_val) }) };
     return 0;
 }
+
 extern "C" fn make_fts3record(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut a_arg: *mut *mut TclObj = core::ptr::null_mut();
@@ -937,6 +958,7 @@ extern "C" fn make_fts3record(client_data_1: *mut (), interp: *mut TclInterp,
     unsafe { sqlite3_free(a_out as *mut ()) };
     return 0;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3773,57 +3795,69 @@ extern "C" {
     fn Tcl_NewByteArrayObj(bytes: *const u8, length: i32)
     -> *mut TclObj;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

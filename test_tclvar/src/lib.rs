@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,8 +14,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type TclWideInt = i64;
+
 type ClientData = *mut ();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObj {
@@ -24,6 +28,7 @@ struct TclObj {
     typePtr: *mut TclObjType,
     internalRep: TclObjU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 union TclObjU0 {
@@ -34,18 +39,21 @@ union TclObjU0 {
     twoPtrValue: TclObjU0S0,
     ptrAndLongRep: TclObjU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S0 {
     ptr1: *mut (),
     ptr2: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjU0S1 {
     ptr: *mut (),
     value: u64,
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -58,6 +66,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -137,6 +146,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -185,6 +195,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -321,6 +332,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -344,6 +356,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -416,12 +429,14 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclvarVtab {
     base: Sqlite3Vtab,
     interp: *mut TclInterp,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclvarCursor {
@@ -431,6 +446,7 @@ struct TclvarCursor {
     i1: i32,
     i2: i32,
 }
+
 extern "C" fn tclvar_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -447,10 +463,12 @@ extern "C" fn tclvar_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     };
     return 0;
 }
+
 extern "C" fn tclvar_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn tclvar_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut TclvarCursor = core::ptr::null_mut();
@@ -462,6 +480,7 @@ extern "C" fn tclvar_open(p_v_tab_1: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn tclvar_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut TclvarCursor = cur as *mut TclvarCursor;
     if !(unsafe { (*p_cur).p_list1 }).is_null() {
@@ -499,6 +518,7 @@ extern "C" fn tclvar_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn next2(interp: *mut TclInterp, p_cur_1: &mut TclvarCursor,
     p_obj_1: *mut TclObj) -> i32 {
     let mut p: *mut TclObj = core::ptr::null_mut();
@@ -563,6 +583,7 @@ extern "C" fn next2(interp: *mut TclInterp, p_cur_1: &mut TclvarCursor,
     }
     return 1;
 }
+
 extern "C" fn tclvar_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let mut p_obj: *mut TclObj = core::ptr::null_mut();
@@ -596,6 +617,7 @@ extern "C" fn tclvar_next(cur: *mut Sqlite3VtabCursor) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn tclvar_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -744,6 +766,7 @@ extern "C" fn tclvar_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         return tclvar_next(p_vtab_cursor_1);
     }
 }
+
 extern "C" fn tclvar_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -964,16 +987,19 @@ extern "C" fn tclvar_column(cur: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn tclvar_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     unsafe { *p_rowid_1 = 0 as SqliteInt64 };
     return 0;
 }
+
 extern "C" fn tclvar_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const TclvarCursor =
         cur as *mut TclvarCursor as *const TclvarCursor;
     return if !(unsafe { (*p_cur).p_list2 }).is_null() { 0 } else { 1 };
 }
+
 extern "C" fn tclvar_add_to_idxstr(z_str_1: *mut i8, x: i8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -995,6 +1021,7 @@ extern "C" fn tclvar_add_to_idxstr(z_str_1: *mut i8, x: i8) -> i32 {
     unsafe { *z_str_1.offset((i + 1) as isize) = '\u{0}' as i32 as i8 };
     return 0;
 }
+
 extern "C" fn tclvar_set_omit(interp: *mut TclInterp) -> i32 {
     let mut rc: i32 = 0;
     let mut res: i32 = 0;
@@ -1014,6 +1041,7 @@ extern "C" fn tclvar_set_omit(interp: *mut TclInterp) -> i32 {
     }
     return (rc == 0 && res != 0) as i32;
 }
+
 extern "C" fn tclvar_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const TclvarVtab =
@@ -1114,6 +1142,7 @@ extern "C" fn tclvar_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).need_to_free_idx_str = 1 };
     return 0;
 }
+
 extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_tab: *const TclvarVtab =
@@ -1190,6 +1219,7 @@ extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
     };
     return 1;
 }
+
 static mut tclvar_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1218,6 +1248,7 @@ static mut tclvar_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn register_tclvar_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -1253,6 +1284,7 @@ extern "C" fn register_tclvar_module(client_data_1: ClientData,
         return rc;
     }
 }
+
 static z_schema: [i8; 100] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1271,6 +1303,7 @@ static z_schema: [i8; 100] =
             32 as i8, 87 as i8, 73 as i8, 84 as i8, 72 as i8, 79 as i8,
             85 as i8, 84 as i8, 32 as i8, 82 as i8, 79 as i8, 87 as i8,
             73 as i8, 68 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4097,51 +4130,61 @@ extern "C" {
     objv: *const *mut TclObj, message: *const i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclInterp {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclObjType {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

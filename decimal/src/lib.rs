@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Decimal {
@@ -15,15 +18,18 @@ struct Decimal {
     n_frac: i32,
     a: *mut i8,
 }
+
 extern "C" fn decimal_clear(p: &Decimal) -> () {
     unsafe { sqlite3_free((*p).a as *mut ()) };
 }
+
 extern "C" fn decimal_free(p: *mut Decimal) -> () {
     if !(p).is_null() {
         decimal_clear(unsafe { &*p });
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -390,6 +396,7 @@ extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     }
     unreachable!();
 }
+
 extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
     let mut acc: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -571,6 +578,7 @@ extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
         }
     }
 }
+
 extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
     let mut p_x: *mut Decimal = core::ptr::null_mut();
@@ -657,6 +665,7 @@ extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
     }
     unreachable!();
 }
+
 extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     let mut m: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut a: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -703,6 +712,7 @@ extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     decimal_free(p_x);
     return p_a;
 }
+
 extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     p_in_1: *mut Sqlite3Value, b_text_only_1: i32) -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -831,6 +841,7 @@ extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     }
     unreachable!();
 }
+
 extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
     -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -915,6 +926,7 @@ extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
         sqlite3_result_text(p_ctx_1, z as *const i8, i, Some(sqlite3_free))
     };
 }
+
 extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
     -> () {
     let mut n_add_sig: i32 = 0;
@@ -958,6 +970,7 @@ extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
         unsafe { (*p).n_frac += n_add_frac };
     }
 }
+
 extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
     let mut i: i32 = 0;
     let mut n_zero: i32 = 0;
@@ -1039,6 +1052,7 @@ extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
                 *mut (), 0, (unsafe { (*p).n_digit } - n_1) as u64)
     };
 }
+
 extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
     p: *const Decimal, mut n_1: i32) -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1137,6 +1151,7 @@ extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
         sqlite3_result_text(p_ctx_1, z as *const i8, -1, Some(sqlite3_free))
     };
 }
+
 extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     -> i32 {
     let mut n_a_sig: i32 = 0;
@@ -1206,6 +1221,7 @@ extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     }
     return rc;
 }
+
 extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
@@ -1236,6 +1252,7 @@ extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_a);
     decimal_free(p_b);
 }
+
 extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
     let mut n_sig: i32 = 0;
     let mut n_frac: i32 = 0;
@@ -1345,6 +1362,7 @@ extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
         }
     }
 }
+
 extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut Decimal =
@@ -1361,6 +1379,7 @@ extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
         decimal_free(p);
     }
 }
+
 extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -1376,6 +1395,7 @@ extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     decimal_free(p_b);
     return rc;
 }
+
 extern "C" fn decimal_add_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -1388,6 +1408,7 @@ extern "C" fn decimal_add_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_a);
     decimal_free(p_b);
 }
+
 extern "C" fn decimal_sub_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -1403,6 +1424,7 @@ extern "C" fn decimal_sub_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_a);
     decimal_free(p_b);
 }
+
 extern "C" fn decimal_sum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -1434,6 +1456,7 @@ extern "C" fn decimal_sum_step(context: *mut Sqlite3Context, argc: i32,
     decimal_add(p, p_arg);
     decimal_free(p_arg);
 }
+
 extern "C" fn decimal_sum_inverse(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -1458,12 +1481,14 @@ extern "C" fn decimal_sum_inverse(context: *mut Sqlite3Context, argc: i32,
     decimal_add(p, p_arg);
     decimal_free(p_arg);
 }
+
 extern "C" fn decimal_sum_value(context: *mut Sqlite3Context) -> () {
     let p: *mut Decimal =
         unsafe { sqlite3_aggregate_context(context, 0) } as *mut Decimal;
     if p == core::ptr::null_mut() { return; }
     decimal_result(context, p);
 }
+
 extern "C" fn decimal_sum_finalize(context: *mut Sqlite3Context) -> () {
     let p: *mut Decimal =
         unsafe { sqlite3_aggregate_context(context, 0) } as *mut Decimal;
@@ -1471,6 +1496,7 @@ extern "C" fn decimal_sum_finalize(context: *mut Sqlite3Context) -> () {
     decimal_result(context, p);
     decimal_clear(unsafe { &*p });
 }
+
 extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -1496,6 +1522,7 @@ extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_a);
     decimal_free(p_b);
 }
+
 extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -1509,6 +1536,7 @@ extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
         decimal_free(p_a);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_decimal_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -1561,6 +1589,7 @@ pub extern "C" fn sqlite3_decimal_init(db: *mut Sqlite3,
         return rc;
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3DecimalInitS0N23sqlite3DecimalInitS0 {
@@ -1570,6 +1599,7 @@ struct Sqlite3DecimalInitS0N23sqlite3DecimalInitS0 {
     x_func: Option<unsafe extern "C" fn(*mut Sqlite3Context, i32,
         *mut *mut Sqlite3Value) -> ()>,
 }
+
 static mut a_func: [Sqlite3DecimalInitS0N23sqlite3DecimalInitS0; 9] =
     [Sqlite3DecimalInitS0N23sqlite3DecimalInitS0 {
                 z_func_name: c"decimal".as_ptr() as *const i8,
@@ -1625,6 +1655,7 @@ static mut a_func: [Sqlite3DecimalInitS0N23sqlite3DecimalInitS0; 9] =
                 i_arg: 0,
                 x_func: Some(decimal_pow2_func),
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

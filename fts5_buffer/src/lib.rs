@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod fts5_h;
 pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
@@ -8,7 +9,9 @@ mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_size(p_rc: &mut i32,
     p_buf: &mut Fts5Buffer, n_byte: u32) -> i32 {
@@ -27,6 +30,7 @@ pub extern "C" fn sqlite3_fts5_buffer_size(p_rc: &mut i32,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_varint(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, i_val: i64) -> () {
@@ -50,6 +54,7 @@ pub extern "C" fn sqlite3_fts5_buffer_append_varint(p_rc: *mut i32,
             }
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_blob(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, n_data: u32, p_data: *const u8) -> () {
@@ -83,6 +88,7 @@ pub extern "C" fn sqlite3_fts5_buffer_append_blob(p_rc: *mut i32,
         unsafe { (*p_buf).n += n_data as i32 };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_string(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, z_str: *const i8) -> () {
@@ -91,6 +97,7 @@ pub extern "C" fn sqlite3_fts5_buffer_append_string(p_rc: *mut i32,
         z_str as *const u8);
     { let __p = unsafe { &mut (*p_buf).n }; let __t = *__p; *__p -= 1; __t };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_free(p_buf: *mut Fts5Buffer) -> () {
     unsafe { sqlite3_free(unsafe { (*p_buf).p } as *mut ()) };
@@ -98,16 +105,19 @@ pub extern "C" fn sqlite3_fts5_buffer_free(p_buf: *mut Fts5Buffer) -> () {
         memset(p_buf as *mut (), 0, core::mem::size_of::<Fts5Buffer>() as u64)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_zero(p_buf: &mut Fts5Buffer) -> () {
     (*p_buf).n = 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_set(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, n_data: i32, p_data: *const u8) -> () {
     unsafe { (*p_buf).n = 0 };
     sqlite3_fts5_buffer_append_blob(p_rc, p_buf, n_data as u32, p_data);
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_buffer_append_printf(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, z_fmt: *mut i8, mut __va0: ...) -> () {
@@ -126,6 +136,7 @@ pub unsafe extern "C" fn sqlite3_fts5_buffer_append_printf(p_rc: *mut i32,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_mprintf(p_rc: &mut i32,
     z_fmt: *const i8, mut __va0: ...) -> *mut i8 {
@@ -139,6 +150,7 @@ pub unsafe extern "C" fn sqlite3_fts5_mprintf(p_rc: &mut i32,
     }
     return z_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_put32(a_buf: *mut u8, i_val: i32) -> () {
     unsafe { *a_buf.offset(0 as isize) = (i_val >> 24 & 255) as u8 };
@@ -146,6 +158,7 @@ pub extern "C" fn sqlite3_fts5_put32(a_buf: *mut u8, i_val: i32) -> () {
     unsafe { *a_buf.offset(2 as isize) = (i_val >> 8 & 255) as u8 };
     unsafe { *a_buf.offset(3 as isize) = (i_val >> 0 & 255) as u8 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_get32(a_buf: *const u8) -> i32 {
     return (((unsafe { *a_buf.offset(0 as isize) } as u32) << 24) +
@@ -154,6 +167,7 @@ pub extern "C" fn sqlite3_fts5_get32(a_buf: *const u8) -> i32 {
                     ((unsafe { *a_buf.offset(2 as isize) } as i32) << 8) as u32
                 + unsafe { *a_buf.offset(3 as isize) } as u32) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
     pi: &mut i32, pi_off: &mut i64) -> i32 {
@@ -266,6 +280,7 @@ pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_reader_next(p_iter:
         &mut Fts5PoslistReader) -> i32 {
@@ -275,6 +290,7 @@ pub extern "C" fn sqlite3_fts5_poslist_reader_next(p_iter:
     }
     return (*p_iter).b_eof as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_reader_init(a: *const u8, n: i32,
     p_iter: *mut Fts5PoslistReader) -> i32 {
@@ -287,6 +303,7 @@ pub extern "C" fn sqlite3_fts5_poslist_reader_init(a: *const u8, n: i32,
     sqlite3_fts5_poslist_reader_next(unsafe { &mut *p_iter });
     return unsafe { (*p_iter).b_eof } as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_safe_append(p_buf: &mut Fts5Buffer,
     pi_prev: &mut i64, i_pos: i64) -> () {
@@ -317,6 +334,7 @@ pub extern "C" fn sqlite3_fts5_poslist_safe_append(p_buf: &mut Fts5Buffer,
         *pi_prev = i_pos;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_writer_append(p_buf: *mut Fts5Buffer,
     p_writer: &mut Fts5PoslistWriter, i_pos: i64) -> i32 {
@@ -334,6 +352,7 @@ pub extern "C" fn sqlite3_fts5_poslist_writer_append(p_buf: *mut Fts5Buffer,
         &mut (*p_writer).i_prev, i_pos);
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_malloc_zero(p_rc: &mut i32,
     n_byte: Sqlite3Int64) -> *mut () {
@@ -346,6 +365,7 @@ pub extern "C" fn sqlite3_fts5_malloc_zero(p_rc: &mut i32,
     }
     return p_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_strndup(p_rc: &mut i32, p_in: *const i8,
     mut n_in: i32) -> *mut i8 {
@@ -365,6 +385,7 @@ pub extern "C" fn sqlite3_fts5_strndup(p_rc: &mut i32, p_in: *const i8,
     }
     return z_ret;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_is_bareword(t: i8) -> i32 {
     let a_bareword: [u8; 128] =
@@ -389,11 +410,13 @@ pub extern "C" fn sqlite3_fts5_is_bareword(t: i8) -> i32 {
                 0 as u8, 0 as u8];
     return (t as i32 & 128 != 0 || a_bareword[t as i32 as usize] != 0) as i32;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Termset {
     ap_hash: [*mut Fts5TermsetEntry; 512],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5TermsetEntry {
@@ -402,6 +425,7 @@ struct Fts5TermsetEntry {
     i_idx: i32,
     p_next: *mut Fts5TermsetEntry,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_termset_new(pp: &mut *mut Fts5Termset) -> i32 {
     let mut rc: i32 = 0;
@@ -411,6 +435,7 @@ pub extern "C" fn sqlite3_fts5_termset_new(pp: &mut *mut Fts5Termset) -> i32 {
             *mut Fts5Termset;
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_termset_add(p: *mut Fts5Termset, i_idx_1: i32,
     p_term_1: *const i8, n_term_1: i32, pb_present_1: &mut i32) -> i32 {
@@ -483,6 +508,7 @@ pub extern "C" fn sqlite3_fts5_termset_add(p: *mut Fts5Termset, i_idx_1: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_termset_free(p: *mut Fts5Termset) -> () {
     if !(p).is_null() {
@@ -512,7 +538,9 @@ pub extern "C" fn sqlite3_fts5_termset_free(p: *mut Fts5Termset) -> () {
         unsafe { sqlite3_free(p as *mut ()) };
     }
 }
+
 static colmask: i64 = ((2147483647 as i64) << 32) as i64;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

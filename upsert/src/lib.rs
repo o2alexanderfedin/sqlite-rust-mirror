@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 extern "C" fn upsert_delete(db: *mut Sqlite3, mut p: *mut Upsert) -> () {
     '__b0: loop {
         '__c0: loop {
@@ -408,11 +417,13 @@ extern "C" fn upsert_delete(db: *mut Sqlite3, mut p: *mut Upsert) -> () {
         if !(!(p).is_null()) { break '__b0; }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_delete(db: *mut Sqlite3, p: *mut Upsert)
     -> () {
     if !(p).is_null() { upsert_delete(db, p); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_new(db: *mut Sqlite3,
     p_target: *mut ExprList, p_target_where: *mut Expr, p_set: *mut ExprList,
@@ -442,6 +453,7 @@ pub extern "C" fn sqlite3_upsert_new(db: *mut Sqlite3,
     }
     return p_new;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_dup(db: *mut Sqlite3, p: *mut Upsert)
     -> *mut Upsert {
@@ -464,6 +476,7 @@ pub extern "C" fn sqlite3_upsert_dup(db: *mut Sqlite3, p: *mut Upsert)
                     unsafe { (*p).p_upsert_where } as *const Expr, 0)
             }, sqlite3_upsert_dup(db, unsafe { (*p).p_next_upsert }));
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_of_index(mut p_upsert: *mut Upsert,
     p_idx: *mut Index) -> *mut Upsert {
@@ -475,6 +488,7 @@ pub extern "C" fn sqlite3_upsert_of_index(mut p_upsert: *mut Upsert,
     }
     return p_upsert;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_upsert: *mut Upsert, p_all: *mut Upsert)
@@ -688,6 +702,7 @@ pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_do_update(p_parse: *mut Parse,
     mut p_upsert: *mut Upsert, p_tab: *mut Table, p_idx: *mut Index,
@@ -781,6 +796,7 @@ pub extern "C" fn sqlite3_upsert_do_update(p_parse: *mut Parse,
             }, 2, core::ptr::null_mut(), core::ptr::null_mut(), p_upsert)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_next_is_ipk(p_upsert: *mut Upsert) -> i32 {
     let mut p_next: *const Upsert = core::ptr::null();
@@ -799,6 +815,7 @@ pub extern "C" fn sqlite3_upsert_next_is_ipk(p_upsert: *mut Upsert) -> i32 {
     }
     return 0;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3570,41 +3587,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

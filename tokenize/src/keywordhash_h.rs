@@ -1,5 +1,8 @@
-use super::*;#[unsafe(no_mangle)]
+use super::*;
+
+#[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_keyword_count() -> i32 { return 147; }
+
 pub(crate) static z_kw_text: [i8; 666] =
     ['R' as i32 as i8, 'E' as i32 as i8, 'I' as i32 as i8, 'N' as i32 as i8,
             'D' as i32 as i8, 'E' as i32 as i8, 'X' as i32 as i8,
@@ -223,6 +226,7 @@ pub(crate) static z_kw_text: [i8; 666] =
             'Y' as i32 as i8, 'P' as i32 as i8, 'R' as i32 as i8,
             'I' as i32 as i8, 'M' as i32 as i8, 'A' as i32 as i8,
             'R' as i32 as i8, 'Y' as i32 as i8];
+
 pub(crate) static a_kw_offset: [u16; 148] =
     [0 as u16, 0 as u16, 2 as u16, 2 as u16, 8 as u16, 9 as u16, 14 as u16,
             16 as u16, 20 as u16, 23 as u16, 25 as u16, 25 as u16, 29 as u16,
@@ -253,6 +257,7 @@ pub(crate) static a_kw_offset: [u16; 148] =
             610 as u16, 614 as u16, 623 as u16, 628 as u16, 633 as u16,
             639 as u16, 642 as u16, 645 as u16, 648 as u16, 650 as u16,
             655 as u16, 659 as u16];
+
 pub(crate) static a_kw_len: [u8; 148] =
     [0 as u8, 7 as u8, 7 as u8, 5 as u8, 4 as u8, 6 as u8, 4 as u8, 5 as u8,
             3 as u8, 6 as u8, 7 as u8, 3 as u8, 6 as u8, 6 as u8, 7 as u8,
@@ -275,6 +280,7 @@ pub(crate) static a_kw_len: [u8; 148] =
             2 as u8, 5 as u8, 8 as u8, 6 as u8, 4 as u8, 9 as u8, 5 as u8,
             8 as u8, 4 as u8, 3 as u8, 9 as u8, 5 as u8, 5 as u8, 6 as u8,
             4 as u8, 6 as u8, 2 as u8, 2 as u8, 9 as u8, 3 as u8, 7 as u8];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_keyword_name(mut i: i32, pz_name: &mut *const i8,
     pn_name: &mut i32) -> i32 {
@@ -288,6 +294,7 @@ pub extern "C" fn sqlite3_keyword_name(mut i: i32, pz_name: &mut *const i8,
     *pn_name = a_kw_len[i as usize] as i32;
     return 0;
 }
+
 pub(crate) static a_kw_hash: [u8; 127] =
     [84 as u8, 92 as u8, 134 as u8, 82 as u8, 105 as u8, 29 as u8, 0 as u8,
             0 as u8, 94 as u8, 0 as u8, 85 as u8, 72 as u8, 0 as u8, 53 as u8,
@@ -310,6 +317,7 @@ pub(crate) static a_kw_hash: [u8; 127] =
             131 as u8, 128 as u8, 0 as u8, 34 as u8, 0 as u8, 0 as u8,
             132 as u8, 0 as u8, 98 as u8, 38 as u8, 39 as u8, 0 as u8,
             20 as u8, 45 as u8, 117 as u8, 93 as u8];
+
 pub(crate) static a_kw_next: [u8; 148] =
     [0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 4 as u8, 0 as u8, 43 as u8,
             0 as u8, 0 as u8, 106 as u8, 114 as u8, 0 as u8, 0 as u8, 0 as u8,
@@ -333,6 +341,7 @@ pub(crate) static a_kw_next: [u8; 148] =
             99 as u8, 44 as u8, 0 as u8, 55 as u8, 0 as u8, 76 as u8, 0 as u8,
             95 as u8, 32 as u8, 33 as u8, 57 as u8, 25 as u8, 0 as u8,
             102 as u8, 0 as u8, 0 as u8, 87 as u8];
+
 pub(crate) static a_kw_code: [u8; 148] =
     [0 as u8, 99 as u8, 117 as u8, 162 as u8, 39 as u8, 59 as u8, 41 as u8,
             125 as u8, 68 as u8, 33 as u8, 133 as u8, 63 as u8, 64 as u8,
@@ -359,6 +368,7 @@ pub(crate) static a_kw_code: [u8; 148] =
             119 as u8, 12 as u8, 77 as u8, 76 as u8, 91 as u8, 135 as u8,
             145 as u8, 79 as u8, 80 as u8, 165 as u8, 62 as u8, 34 as u8,
             65 as u8, 136 as u8, 123 as u8];
+
 pub(crate) extern "C" fn keyword_code(z: *const i8, n: i64,
     p_type_1: &mut i32) -> i64 {
     unsafe {
@@ -409,12 +419,14 @@ pub(crate) extern "C" fn keyword_code(z: *const i8, n: i64,
         return n;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_keyword_code(z: *const u8, n: i32) -> i32 {
     let mut id: i32 = 60;
     if n >= 2 { keyword_code(z as *mut i8 as *const i8, n as i64, &mut id); }
     return id;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_keyword_check(z_name: *const i8, n_name: i32)
     -> i32 {

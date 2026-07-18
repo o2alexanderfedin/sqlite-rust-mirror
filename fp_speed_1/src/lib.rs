@@ -1,15 +1,21 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinTimeT = i64;
+
 type Int32T = i32;
+
 type DarwinSusecondsT = Int32T;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Timeval {
     tv_sec: i64,
     tv_usec: i32,
 }
+
 static mut a_val: [f64; 100] =
     [-1.0163830486285643e63, 4.924380739158698e-22, 7.381873240734399e-95,
             7.067859521922571, 9.280726631985003e120, 5.88710508619334e135,
@@ -57,12 +63,14 @@ static mut a_val: [f64; 100] =
             -8.81098744795956e142, -4.372736012020322e70,
             -3.110995118966854e170, -948418780317.0427, -3.739845166830441e67,
             4.898404200891596e-91];
+
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     let mut s_now: Timeval = unsafe { core::mem::zeroed() };
     { let _ = unsafe { gettimeofday(&mut s_now, core::ptr::null_mut()) }; };
     return s_now.tv_sec as Sqlite3Int64 * 1000000 as Sqlite3Int64 +
             s_now.tv_usec as Sqlite3Int64;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -161,13 +169,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 static mut z_fmt: *const i8 = c"%.17g".as_ptr() as *mut i8 as *const i8;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -951,9 +962,11 @@ extern "C" {
     -> i32;
     static mut __stdoutp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

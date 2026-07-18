@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Hash {
     pub(crate) htsize: u32,
@@ -6,6 +8,7 @@ pub(crate) struct Hash {
     pub(crate) first: *mut HashElem,
     pub(crate) ht: *mut Ht,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct HashElem {
@@ -15,6 +18,7 @@ pub(crate) struct HashElem {
     pub(crate) p_key: *const i8,
     pub(crate) h: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Ht {

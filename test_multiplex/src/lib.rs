@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -13,13 +16,16 @@ struct AnonS0 {
     s_io_methods_v2: Sqlite3IoMethods,
     is_initialized: i32,
 }
+
 static mut g_multiplex: AnonS0 = unsafe { core::mem::zeroed() };
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MultiplexConn {
     base: Sqlite3File,
     p_group: *mut MultiplexGroup,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MultiplexGroup {
@@ -32,12 +38,14 @@ struct MultiplexGroup {
     b_enabled: u8,
     b_truncate: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MultiplexReal {
     p: *mut Sqlite3File,
     z: *mut i8,
 }
+
 extern "C" fn multiplex_strlen30(z: *const i8) -> i32 {
     let mut z2: *const i8 = z;
     if z == core::ptr::null() { return 0; }
@@ -51,6 +59,7 @@ extern "C" fn multiplex_strlen30(z: *const i8) -> i32 {
     }
     return 1073741823 & unsafe { z2.offset_from(z) } as i64 as i32;
 }
+
 extern "C" fn multiplex_filename(z_base_1: *const i8, n_base_1: i32,
     flags: i32, i_chunk_1: i32, z_out_1: *mut i8) -> () {
     let mut n: i32 = n_base_1;
@@ -74,6 +83,7 @@ extern "C" fn multiplex_filename(z_base_1: *const i8, n_base_1: i32,
     } else { { let _ = 0; } };
     unsafe { *z_out_1.offset((n + 1) as isize) = '\u{0}' as i32 as i8 };
 }
+
 extern "C" fn multiplex_sub_filename(p_group_1: &mut MultiplexGroup,
     i_chunk_1: i32) -> i32 {
     if i_chunk_1 >= (*p_group_1).n_real {
@@ -120,6 +130,7 @@ extern "C" fn multiplex_sub_filename(p_group_1: &mut MultiplexGroup,
     }
     return 0;
 }
+
 extern "C" fn multiplex_sub_open(p_group_1: *mut MultiplexGroup,
     i_chunk_1: i32, rc: &mut i32, p_out_flags_1: *mut i32, create_flag_1: i32)
     -> *mut Sqlite3File {
@@ -225,6 +236,7 @@ extern "C" fn multiplex_sub_open(p_group_1: *mut MultiplexGroup,
         return p_sub_open;
     }
 }
+
 extern "C" fn multiplex_sub_size(p_group_1: *mut MultiplexGroup,
     i_chunk_1: i32, rc: *mut i32) -> Sqlite3Int64 {
     let mut p_sub: *mut Sqlite3File = core::ptr::null_mut();
@@ -244,6 +256,7 @@ extern "C" fn multiplex_sub_size(p_group_1: *mut MultiplexGroup,
     };
     return sz;
 }
+
 extern "C" fn multiplex_sub_close(p_group_1: &MultiplexGroup, i_chunk_1: i32,
     p_orig_vfs_1: *mut Sqlite3Vfs) -> () {
     let p_sub_open: *mut Sqlite3File =
@@ -284,6 +297,7 @@ extern "C" fn multiplex_sub_close(p_group_1: &MultiplexGroup, i_chunk_1: i32,
                 } as *mut (), 0, core::mem::size_of::<MultiplexReal>() as u64)
     };
 }
+
 extern "C" fn multiplex_free_components(p_group_1: *mut MultiplexGroup)
     -> () {
     let mut i: i32 = 0;
@@ -303,6 +317,7 @@ extern "C" fn multiplex_free_components(p_group_1: *mut MultiplexGroup)
     unsafe { (*p_group_1).a_real = core::ptr::null_mut() };
     unsafe { (*p_group_1).n_real = 0 };
 }
+
 extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_conn_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
     unsafe {
@@ -487,6 +502,7 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn multiplex_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     sync_dir_1: i32) -> i32 {
     unsafe {
@@ -566,6 +582,7 @@ extern "C" fn multiplex_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
         return rc;
     }
 }
+
 extern "C" fn multiplex_access(a: *mut Sqlite3Vfs, b: *const i8, c: i32,
     d: *mut i32) -> i32 {
     unsafe {
@@ -576,6 +593,7 @@ extern "C" fn multiplex_access(a: *mut Sqlite3Vfs, b: *const i8, c: i32,
             };
     }
 }
+
 extern "C" fn multiplex_full_pathname(a: *mut Sqlite3Vfs, b: *const i8,
     c: i32, d: *mut i8) -> i32 {
     unsafe {
@@ -586,6 +604,7 @@ extern "C" fn multiplex_full_pathname(a: *mut Sqlite3Vfs, b: *const i8,
             };
     }
 }
+
 extern "C" fn multiplex_dl_open(a: *mut Sqlite3Vfs, b: *const i8) -> *mut () {
     unsafe {
         return unsafe {
@@ -595,6 +614,7 @@ extern "C" fn multiplex_dl_open(a: *mut Sqlite3Vfs, b: *const i8) -> *mut () {
             };
     }
 }
+
 extern "C" fn multiplex_dl_error(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
     -> () {
     unsafe {
@@ -605,6 +625,7 @@ extern "C" fn multiplex_dl_error(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
         };
     }
 }
+
 extern "C" fn multiplex_dl_sym(a: *mut Sqlite3Vfs, b: *mut (), c: *const i8)
     -> unsafe extern "C" fn() -> () {
     unsafe {
@@ -615,6 +636,7 @@ extern "C" fn multiplex_dl_sym(a: *mut Sqlite3Vfs, b: *mut (), c: *const i8)
             };
     }
 }
+
 extern "C" fn multiplex_dl_close(a: *mut Sqlite3Vfs, b: *mut ()) -> () {
     unsafe {
         unsafe {
@@ -624,6 +646,7 @@ extern "C" fn multiplex_dl_close(a: *mut Sqlite3Vfs, b: *mut ()) -> () {
         };
     }
 }
+
 extern "C" fn multiplex_randomness(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
     -> i32 {
     unsafe {
@@ -634,6 +657,7 @@ extern "C" fn multiplex_randomness(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
             };
     }
 }
+
 extern "C" fn multiplex_sleep(a: *mut Sqlite3Vfs, b: i32) -> i32 {
     unsafe {
         return unsafe {
@@ -643,6 +667,7 @@ extern "C" fn multiplex_sleep(a: *mut Sqlite3Vfs, b: i32) -> i32 {
             };
     }
 }
+
 extern "C" fn multiplex_current_time(a: *mut Sqlite3Vfs, b: *mut f64) -> i32 {
     unsafe {
         return unsafe {
@@ -652,6 +677,7 @@ extern "C" fn multiplex_current_time(a: *mut Sqlite3Vfs, b: *mut f64) -> i32 {
             };
     }
 }
+
 extern "C" fn multiplex_get_last_error(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
     -> i32 {
     unsafe {
@@ -664,6 +690,7 @@ extern "C" fn multiplex_get_last_error(a: *mut Sqlite3Vfs, b: i32, c: *mut i8)
         } else { return 0; }
     }
 }
+
 extern "C" fn multiplex_current_time_int64(a: *mut Sqlite3Vfs,
     b: *mut Sqlite3Int64) -> i32 {
     unsafe {
@@ -674,6 +701,7 @@ extern "C" fn multiplex_current_time_int64(a: *mut Sqlite3Vfs,
             };
     }
 }
+
 extern "C" fn multiplex_close(p_conn_1: *mut Sqlite3File) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -683,6 +711,7 @@ extern "C" fn multiplex_close(p_conn_1: *mut Sqlite3File) -> i32 {
     unsafe { sqlite3_free(p_group as *mut ()) };
     return rc;
 }
+
 extern "C" fn multiplex_read(p_conn_1: *mut Sqlite3File, mut p_buf_1: *mut (),
     mut i_amt_1: i32, mut i_ofst_1: Sqlite3Int64) -> i32 {
     let p: *const MultiplexConn =
@@ -737,6 +766,7 @@ extern "C" fn multiplex_read(p_conn_1: *mut Sqlite3File, mut p_buf_1: *mut (),
     }
     return rc;
 }
+
 extern "C" fn multiplex_write(p_conn_1: *mut Sqlite3File,
     mut p_buf_1: *const (), mut i_amt_1: i32, mut i_ofst_1: Sqlite3Int64)
     -> i32 {
@@ -790,6 +820,7 @@ extern "C" fn multiplex_write(p_conn_1: *mut Sqlite3File,
     }
     return rc;
 }
+
 extern "C" fn multiplex_truncate(p_conn_1: *mut Sqlite3File,
     size: Sqlite3Int64) -> i32 {
     unsafe {
@@ -862,6 +893,7 @@ extern "C" fn multiplex_truncate(p_conn_1: *mut Sqlite3File,
         return rc;
     }
 }
+
 extern "C" fn multiplex_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -894,6 +926,7 @@ extern "C" fn multiplex_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn multiplex_file_size(p_conn_1: *mut Sqlite3File,
     p_size_1: *mut Sqlite3Int64) -> i32 {
     let p: *const MultiplexConn =
@@ -938,6 +971,7 @@ extern "C" fn multiplex_file_size(p_conn_1: *mut Sqlite3File,
     }
     return rc;
 }
+
 extern "C" fn multiplex_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -954,6 +988,7 @@ extern "C" fn multiplex_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     }
     return 5;
 }
+
 extern "C" fn multiplex_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -970,6 +1005,7 @@ extern "C" fn multiplex_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     }
     return 10 | 8 << 8;
 }
+
 extern "C" fn multiplex_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     let p: *const MultiplexConn =
@@ -989,6 +1025,7 @@ extern "C" fn multiplex_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     }
     return 10 | 14 << 8;
 }
+
 extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     unsafe {
@@ -1190,6 +1227,7 @@ extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
         return rc;
     }
 }
+
 extern "C" fn multiplex_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -1209,6 +1247,7 @@ extern "C" fn multiplex_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     }
     return 4096;
 }
+
 extern "C" fn multiplex_device_characteristics(p_conn_1: *mut Sqlite3File)
     -> i32 {
     let p: *const MultiplexConn =
@@ -1228,6 +1267,7 @@ extern "C" fn multiplex_device_characteristics(p_conn_1: *mut Sqlite3File)
     }
     return 0;
 }
+
 extern "C" fn multiplex_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     let p: *const MultiplexConn =
@@ -1245,6 +1285,7 @@ extern "C" fn multiplex_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     }
     return 10;
 }
+
 extern "C" fn multiplex_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32,
     n: i32, flags: i32) -> i32 {
     let p: *const MultiplexConn =
@@ -1262,6 +1303,7 @@ extern "C" fn multiplex_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32,
     }
     return 5;
 }
+
 extern "C" fn multiplex_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -1277,6 +1319,7 @@ extern "C" fn multiplex_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
         };
     }
 }
+
 extern "C" fn multiplex_shm_unmap(p_conn_1: *mut Sqlite3File,
     delete_flag_1: i32) -> i32 {
     let p: *const MultiplexConn =
@@ -1294,6 +1337,7 @@ extern "C" fn multiplex_shm_unmap(p_conn_1: *mut Sqlite3File,
     }
     return 0;
 }
+
 extern "C" fn multiplex_control_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut rc: i32 = 0;
@@ -1326,6 +1370,7 @@ extern "C" fn multiplex_control_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_result_error_code(context, rc) };
 }
+
 extern "C" fn multiplex_func_init(db: *mut Sqlite3,
     pz_err_msg_1: *mut *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
@@ -1338,6 +1383,7 @@ extern "C" fn multiplex_func_init(db: *mut Sqlite3,
         };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multiplex_initialize(z_orig_vfs_name: *const i8,
     make_default: i32) -> i32 {
@@ -1416,6 +1462,7 @@ pub extern "C" fn sqlite3_multiplex_initialize(z_orig_vfs_name: *const i8,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multiplex_shutdown(e_force: i32) -> i32 {
     unsafe {
@@ -1427,6 +1474,7 @@ pub extern "C" fn sqlite3_multiplex_shutdown(e_force: i32) -> i32 {
         return rc;
     }
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

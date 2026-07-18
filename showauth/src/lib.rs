@@ -1,8 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 extern "C" fn auth_callback(p_client_data_1: *mut (), op: i32,
     mut z1: *const i8, mut z2: *const i8, mut z3: *const i8,
     mut z4: *const i8) -> i32 {
@@ -98,6 +100,7 @@ extern "C" fn auth_callback(p_client_data_1: *mut (), op: i32,
     };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_showauth_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -111,6 +114,7 @@ pub extern "C" fn sqlite3_showauth_init(db: *mut Sqlite3,
         };
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

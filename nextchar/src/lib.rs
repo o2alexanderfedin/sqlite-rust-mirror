@@ -1,9 +1,12 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct NextCharContext {
@@ -17,6 +20,7 @@ struct NextCharContext {
     malloc_failed: i32,
     other_error: i32,
 }
+
 extern "C" fn next_char_append(p: &mut NextCharContext, c: u32) -> () {
     let mut i: i32 = 0;
     {
@@ -54,6 +58,7 @@ extern "C" fn next_char_append(p: &mut NextCharContext, c: u32) -> () {
                         } as isize) = c
     };
 }
+
 extern "C" fn write_utf8(z: *mut u8, c: u32) -> i32 {
     if c < 128 as u32 {
         unsafe { *z.offset(0 as isize) = (c & 255 as u32) as u8 };
@@ -100,6 +105,7 @@ extern "C" fn write_utf8(z: *mut u8, c: u32) -> i32 {
     };
     return 4;
 }
+
 extern "C" fn read_utf8(z: *const u8, p_out_1: &mut u32) -> i32 {
     let mut c: u32 = unsafe { *z.offset(0 as isize) } as u32;
     if c < 192 as u32 {
@@ -129,6 +135,7 @@ extern "C" fn read_utf8(z: *const u8, p_out_1: &mut u32) -> i32 {
         return n;
     }
 }
+
 extern "C" fn find_next_chars(p: *mut NextCharContext) -> () {
     let mut c_prev: u32 = 0 as u32;
     let mut z_prev: [u8; 8] = [0; 8];
@@ -181,6 +188,7 @@ extern "C" fn find_next_chars(p: *mut NextCharContext) -> () {
         }
     }
 }
+
 extern "C" fn next_char_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut c: NextCharContext = unsafe { core::mem::zeroed() };
@@ -312,6 +320,7 @@ extern "C" fn next_char_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_finalize(c.p_stmt) };
     unsafe { sqlite3_free(c.a_result as *mut ()) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_nextchar_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -344,6 +353,7 @@ pub extern "C" fn sqlite3_nextchar_init(db: *mut Sqlite3,
     }
     return rc;
 }
+
 static valid_bits: [u8; 64] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -355,6 +365,7 @@ static valid_bits: [u8; 64] =
             14 as u8, 15 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8,
             5 as u8, 6 as u8, 7 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8,
             0 as u8, 1 as u8, 0 as u8, 0 as u8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

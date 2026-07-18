@@ -1,5 +1,6 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -14,8 +15,11 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinVaList = *mut i8;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +32,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +112,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +161,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +298,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +322,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +395,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_init(p: &mut StrAccum, db: *mut Sqlite3,
     z_base_1: *mut i8, n: i32, mx: i32) -> () {
@@ -397,7 +407,9 @@ pub extern "C" fn sqlite3_str_accum_init(p: &mut StrAccum, db: *mut Sqlite3,
     (*p).acc_error = 0 as u8;
     (*p).printf_flags = 0 as u8;
 }
+
 type EtByte = u8;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EtInfo {
@@ -409,6 +421,7 @@ struct EtInfo {
     prefix: EtByte,
     i_nxt: i8,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_reset(p: *mut StrAccum) -> () {
     unsafe {
@@ -426,6 +439,7 @@ pub extern "C" fn sqlite3_str_reset(p: *mut StrAccum) -> () {
         unsafe { (*p).z_text = core::ptr::null_mut() };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_set_error(p: *mut StrAccum, e_error_1: u8)
     -> () {
@@ -440,6 +454,7 @@ pub extern "C" fn sqlite3_str_accum_set_error(p: *mut StrAccum, e_error_1: u8)
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_enlarge(p: *mut StrAccum, n_1: i64)
     -> i32 {
@@ -506,6 +521,7 @@ pub extern "C" fn sqlite3_str_accum_enlarge(p: *mut StrAccum, n_1: i64)
     { let _ = 0; };
     return n_1 as i32;
 }
+
 extern "C" fn enlarge_and_append(p: *mut StrAccum, z: *const i8, mut n_1: i32)
     -> () {
     n_1 = sqlite3_str_accum_enlarge(p, n_1 as i64);
@@ -521,6 +537,7 @@ extern "C" fn enlarge_and_append(p: *mut StrAccum, z: *const i8, mut n_1: i32)
         unsafe { (*p).n_char += n_1 as u32 };
     }
 }
+
 extern "C" fn sqlite3_str_append64(p: *mut Sqlite3Str, z: *const i8, n_1: i64)
     -> () {
     { let _ = 0; };
@@ -542,6 +559,7 @@ extern "C" fn sqlite3_str_append64(p: *mut Sqlite3Str, z: *const i8, n_1: i64)
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_append(p: *mut Sqlite3Str, z: *const i8,
     n_1: i32) -> () {
@@ -564,6 +582,7 @@ pub extern "C" fn sqlite3_str_append(p: *mut Sqlite3Str, z: *const i8,
         };
     }
 }
+
 extern "C" fn get_int_arg(p: &mut PrintfArguments) -> Sqlite3Int64 {
     if (*p).n_arg <= (*p).n_used { return 0 as Sqlite3Int64; }
     return unsafe {
@@ -577,6 +596,7 @@ extern "C" fn get_int_arg(p: &mut PrintfArguments) -> Sqlite3Int64 {
                 })
         };
 }
+
 static fmtinfo: [EtInfo; 25] =
     [EtInfo {
                 fmttype: 'd' as i32 as i8,
@@ -803,6 +823,7 @@ static fmtinfo: [EtInfo; 25] =
                 prefix: 0 as EtByte,
                 i_nxt: 23 as i8,
             }];
+
 extern "C" fn printf_temp_buf(p_accum_1: *mut Sqlite3Str, n: Sqlite3Int64)
     -> *mut i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -820,6 +841,7 @@ extern "C" fn printf_temp_buf(p_accum_1: *mut Sqlite3Str, n: Sqlite3Int64)
     }
     return z;
 }
+
 static a_digits: [i8; 33] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 65 as i8, 66 as i8, 67 as i8,
@@ -827,8 +849,10 @@ static a_digits: [i8; 33] =
             51 as i8, 52 as i8, 53 as i8, 54 as i8, 55 as i8, 56 as i8,
             57 as i8, 97 as i8, 98 as i8, 99 as i8, 100 as i8, 101 as i8,
             102 as i8, 0 as i8];
+
 static a_prefix: [i8; 7] =
     [45 as i8, 120 as i8, 48 as i8, 0 as i8, 88 as i8, 48 as i8, 0 as i8];
+
 extern "C" fn get_double_arg(p: &mut PrintfArguments) -> f64 {
     if (*p).n_arg <= (*p).n_used { return 0.0; }
     return unsafe {
@@ -842,6 +866,7 @@ extern "C" fn get_double_arg(p: &mut PrintfArguments) -> f64 {
                 })
         };
 }
+
 extern "C" fn get_text_arg(p: &mut PrintfArguments) -> *mut i8 {
     if (*p).n_arg <= (*p).n_used { return core::ptr::null_mut(); }
     return unsafe {
@@ -855,6 +880,7 @@ extern "C" fn get_text_arg(p: &mut PrintfArguments) -> *mut i8 {
                     })
             } as *mut i8;
 }
+
 extern "C" fn sqlite3_str_appendchar64(p: *mut Sqlite3Str, mut n_1: i64,
     c: i8) -> () {
     if unsafe { (*p).n_char } as i64 + n_1 >= unsafe { (*p).n_alloc } as i64
@@ -879,6 +905,7 @@ extern "C" fn sqlite3_str_appendchar64(p: *mut Sqlite3Str, mut n_1: i64,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_enlarge_if_needed(p: *mut StrAccum,
     n_1: i64) -> i32 {
@@ -887,11 +914,13 @@ pub extern "C" fn sqlite3_str_accum_enlarge_if_needed(p: *mut StrAccum,
     }
     return unsafe { (*p).acc_error } as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_length(p: *const Sqlite3Str) -> i32 {
     return if !(p).is_null() { unsafe { (*p).n_char } } else { 0 as u32 } as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_appendchar(p: *mut Sqlite3Str, mut n_1: i32,
     c: i8) -> () {
@@ -917,16 +946,19 @@ pub extern "C" fn sqlite3_str_appendchar(p: *mut Sqlite3Str, mut n_1: i32,
         };
     }
 }
+
 static a_hex: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_errcode(p: *const Sqlite3Str) -> i32 {
     return if !(p).is_null() {
             (unsafe { (*p).acc_error }) as i32
         } else { 7 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_value(p: *const Sqlite3Str) -> *mut i8 {
     if p == core::ptr::null_mut() || unsafe { (*p).n_char } == 0 as u32 {
@@ -937,11 +969,13 @@ pub extern "C" fn sqlite3_str_value(p: *const Sqlite3Str) -> *mut i8 {
     };
     return unsafe { (*p).z_text };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_appendall(p: *mut Sqlite3Str, z: *const i8)
     -> () {
     sqlite3_str_append(p, z, unsafe { sqlite3_strlen30(z) });
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_record_error_offset_of_expr(db: &mut Sqlite3,
     mut p_expr_1: *const Expr) -> () {
@@ -958,6 +992,7 @@ pub extern "C" fn sqlite3_record_error_offset_of_expr(db: &mut Sqlite3,
         (*db).err_byte_offset = unsafe { (*p_expr_1).w.i_ofst } as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_record_error_byte_offset(db: *mut Sqlite3,
     z: *const i8) -> () {
@@ -979,6 +1014,7 @@ pub extern "C" fn sqlite3_record_error_byte_offset(db: *mut Sqlite3,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_str_appendf(p: *mut StrAccum,
     z_format_1: *const i8, mut __va0: ...) -> () {
@@ -987,6 +1023,7 @@ pub unsafe extern "C" fn sqlite3_str_appendf(p: *mut StrAccum,
     sqlite3_str_vappendf(p as *mut Sqlite3Str, z_format_1, ap as *const i8);
     ();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_vappendf(p_accum_1: *mut Sqlite3Str,
     mut fmt: *const i8, mut ap: *const i8) -> () {
@@ -4027,6 +4064,7 @@ pub extern "C" fn sqlite3_str_vappendf(p_accum_1: *mut Sqlite3Str,
         }
     }
 }
+
 extern "C" fn str_accum_finish_realloc(p: *mut StrAccum) -> *mut i8 {
     let mut z_text: *mut i8 = core::ptr::null_mut();
     { let _ = 0; };
@@ -4045,6 +4083,7 @@ extern "C" fn str_accum_finish_realloc(p: *mut StrAccum) -> *mut i8 {
     unsafe { (*p).z_text = z_text };
     return z_text;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_finish(p: *mut StrAccum) -> *mut i8 {
     if !(unsafe { (*p).z_text }).is_null() {
@@ -4059,6 +4098,7 @@ pub extern "C" fn sqlite3_str_accum_finish(p: *mut StrAccum) -> *mut i8 {
     }
     return unsafe { (*p).z_text };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vmprintf(z_format: *const i8, ap: *mut i8)
     -> *mut i8 {
@@ -4074,6 +4114,7 @@ pub extern "C" fn sqlite3_vmprintf(z_format: *const i8, ap: *mut i8)
     z = sqlite3_str_accum_finish(&mut acc);
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_mprintf(z_format: *const i8, mut __va0: ...)
     -> *mut i8 {
@@ -4085,6 +4126,7 @@ pub unsafe extern "C" fn sqlite3_mprintf(z_format: *const i8, mut __va0: ...)
     ();
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_snprintf(n: i32, z_buf: *mut i8,
     z_format: *const i8, mut __va0: ...) -> *mut i8 {
@@ -4099,6 +4141,7 @@ pub unsafe extern "C" fn sqlite3_snprintf(n: i32, z_buf: *mut i8,
     unsafe { *z_buf.add(acc.n_char as usize) = 0 as i8 };
     return z_buf;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vsnprintf(n: i32, z_buf: *mut i8,
     z_format: *const i8, ap: *mut i8) -> *mut i8 {
@@ -4110,6 +4153,7 @@ pub extern "C" fn sqlite3_vsnprintf(n: i32, z_buf: *mut i8,
     unsafe { *z_buf.add(acc.n_char as usize) = 0 as i8 };
     return z_buf;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_new(db: *const Sqlite3) -> *mut Sqlite3Str {
     unsafe {
@@ -4128,6 +4172,7 @@ pub extern "C" fn sqlite3_str_new(db: *const Sqlite3) -> *mut Sqlite3Str {
         return p;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_finish(p: *mut Sqlite3Str) -> *mut i8 {
     unsafe {
@@ -4140,6 +4185,7 @@ pub extern "C" fn sqlite3_str_finish(p: *mut Sqlite3Str) -> *mut i8 {
         return z;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_free(p: *mut Sqlite3Str) -> () {
     unsafe {
@@ -4150,6 +4196,7 @@ pub extern "C" fn sqlite3_str_free(p: *mut Sqlite3Str) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_truncate(p: *mut Sqlite3Str, n_1: i32) -> () {
     if p != core::ptr::null_mut() && n_1 >= 0 &&
@@ -4161,6 +4208,7 @@ pub extern "C" fn sqlite3_str_truncate(p: *mut Sqlite3Str, n_1: i32) -> () {
         };
     }
 }
+
 extern "C" fn render_log_msg(i_err_code_1: i32, z_format_1: *const i8,
     ap: *mut i8) -> () {
     unsafe {
@@ -4177,6 +4225,7 @@ extern "C" fn render_log_msg(i_err_code_1: i32, z_format_1: *const i8,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_log(i_err_code: i32, z_format: *const i8,
     mut __va0: ...) -> () {
@@ -4189,6 +4238,7 @@ pub unsafe extern "C" fn sqlite3_log(i_err_code: i32, z_format: *const i8,
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vm_printf(db: *mut Sqlite3, z_format_1: *const i8,
     ap: *mut i8) -> *mut i8 {
@@ -4207,6 +4257,7 @@ pub extern "C" fn sqlite3_vm_printf(db: *mut Sqlite3, z_format_1: *const i8,
     if acc.acc_error as i32 == 7 { unsafe { sqlite3_oom_fault(db) }; }
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_m_printf(db: *mut Sqlite3,
     z_format_1: *const i8, mut __va0: ...) -> *mut i8 {
@@ -4217,6 +4268,7 @@ pub unsafe extern "C" fn sqlite3_m_printf(db: *mut Sqlite3,
     ();
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_ref(z: *mut i8) -> *mut i8 {
     let mut p: *mut RCStr = z as *mut RCStr;
@@ -4235,6 +4287,7 @@ pub extern "C" fn sqlite3_rc_str_ref(z: *mut i8) -> *mut i8 {
     };
     return z;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_unref(z: *mut ()) -> () {
     let mut p: *mut RCStr = z as *mut RCStr;
@@ -4255,6 +4308,7 @@ pub extern "C" fn sqlite3_rc_str_unref(z: *mut ()) -> () {
         };
     } else { unsafe { sqlite3_free(p as *mut ()) }; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_new(n: u64) -> *mut i8 {
     let p: *mut RCStr =
@@ -4266,6 +4320,7 @@ pub extern "C" fn sqlite3_rc_str_new(n: u64) -> *mut i8 {
     unsafe { (*p).n_rc_ref = 1 as u64 };
     return unsafe { &raw mut *p.offset(1 as isize) } as *mut i8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_resize(z: *mut i8, n: u64) -> *mut i8 {
     let mut p: *mut RCStr = z as *mut RCStr;
@@ -4290,9 +4345,11 @@ pub extern "C" fn sqlite3_rc_str_resize(z: *mut i8, n: u64) -> *mut i8 {
         return unsafe { &raw mut *p_new.offset(1 as isize) } as *mut i8;
     }
 }
+
 static z_ord: [i8; 9] =
     [116 as i8, 104 as i8, 115 as i8, 116 as i8, 110 as i8, 100 as i8,
             114 as i8, 100 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -7029,41 +7086,49 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,8 +1,10 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 extern "C" fn noopfunc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -16,6 +18,7 @@ extern "C" fn noopfunc(context: *mut Sqlite3Context, argc: i32,
         sqlite3_result_value(context, unsafe { *argv.offset(0 as isize) })
     };
 }
+
 extern "C" fn multitype_text_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -36,6 +39,7 @@ extern "C" fn multitype_text_func(context: *mut Sqlite3Context, argc: i32,
         sqlite3_result_value(context, unsafe { *argv.offset(0 as isize) })
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_noop_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -80,6 +84,7 @@ pub extern "C" fn sqlite3_noop_init(db: *mut Sqlite3,
         };
     return rc;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

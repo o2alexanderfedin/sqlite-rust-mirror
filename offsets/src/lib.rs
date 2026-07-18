@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GState {
@@ -18,6 +21,7 @@ struct GState {
     n_stack: i32,
     b_trace: i32,
 }
+
 unsafe extern "C" fn ofst_error(p: &mut GState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -26,6 +30,7 @@ unsafe extern "C" fn ofst_error(p: &mut GState, z_format_1: *const i8,
     (*p).z_err = unsafe { sqlite3_vmprintf(z_format_1, ap) };
     ();
 }
+
 unsafe extern "C" fn ofst_trace(p: *const GState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -35,6 +40,7 @@ unsafe extern "C" fn ofst_trace(p: *const GState, z_format_1: *const i8,
         ();
     }
 }
+
 extern "C" fn ofst_root_and_column(p: *mut GState, z_file_1: *const i8,
     z_table_1: *const i8, z_column_1: *const i8) -> () {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -269,6 +275,7 @@ extern "C" fn ofst_root_and_column(p: *mut GState, z_file_1: *const i8,
         }
     }
 }
+
 extern "C" fn ofst_pop_page(p: &mut GState) -> () {
     if (*p).n_stack <= 0 { return; }
     { let __p = &mut (*p).n_stack; let __t = *__p; *__p -= 1; __t };
@@ -276,6 +283,7 @@ extern "C" fn ofst_pop_page(p: &mut GState) -> () {
     (*p).pgno = (*p).a_pgno[((*p).n_stack - 1) as usize];
     (*p).a_page = (*p).a_stack[((*p).n_stack - 1) as usize];
 }
+
 extern "C" fn ofst_push_page(p: *mut GState, pgno: i32) -> () {
     let mut p_page: *mut u8 = core::ptr::null_mut();
     let mut got: u64 = 0 as u64;
@@ -328,11 +336,13 @@ extern "C" fn ofst_push_page(p: *mut GState, pgno: i32) -> () {
         ofst_pop_page(unsafe { &mut *p });
     }
 }
+
 extern "C" fn ofst2byte(p: &GState, ofst: i32) -> i32 {
     let x: i32 = unsafe { *(*p).a_page.offset(ofst as isize) } as i32;
     return (x << 8) +
             unsafe { *(*p).a_page.offset((ofst + 1) as isize) } as i32;
 }
+
 extern "C" fn ofst4byte(p: &GState, ofst: i32) -> i32 {
     let mut x: i32 = unsafe { *(*p).a_page.offset(ofst as isize) } as i32;
     x = (x << 8) + unsafe { *(*p).a_page.offset((ofst + 1) as isize) } as i32;
@@ -340,6 +350,7 @@ extern "C" fn ofst4byte(p: &GState, ofst: i32) -> i32 {
     x = (x << 8) + unsafe { *(*p).a_page.offset((ofst + 3) as isize) } as i32;
     return x;
 }
+
 extern "C" fn ofst_varint(p: &GState, p_ofst_1: &mut i32) -> Sqlite3Int64 {
     let mut x: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut a: *const u8 =
@@ -367,9 +378,11 @@ extern "C" fn ofst_varint(p: &GState, p_ofst_1: &mut i32) -> Sqlite3Int64 {
     *p_ofst_1 += n + 1;
     return x;
 }
+
 extern "C" fn ofst_in_file(p: &GState, ofst: i32) -> i32 {
     return (*p).sz_pg * ((*p).pgno - 1) + ofst;
 }
+
 extern "C" fn ofst_serial_size(scode: i32) -> i32 {
     if scode < 5 { return scode; }
     if scode == 5 { return 6; }
@@ -377,6 +390,7 @@ extern "C" fn ofst_serial_size(scode: i32) -> i32 {
     if scode < 12 { return 0; }
     return (scode - 12) / 2;
 }
+
 extern "C" fn ofst_walk_interior_page(p: *mut GState) -> () {
     let mut n_cell: i32 = 0;
     let mut i: i32 = 0;
@@ -399,6 +413,7 @@ extern "C" fn ofst_walk_interior_page(p: *mut GState) -> () {
     }
     unsafe { ofst_walk_page(p, ofst4byte(unsafe { &*p }, 8)) };
 }
+
 extern "C" fn ofst_walk_leaf_page(p: *mut GState) -> () {
     let mut n_cell: i32 = 0;
     let mut i: i32 = 0;
@@ -467,6 +482,7 @@ extern "C" fn ofst_walk_leaf_page(p: *mut GState) -> () {
         }
     }
 }
+
 extern "C" fn ofst_walk_page(p: *mut GState, pgno: i32) -> () {
     if !(unsafe { (*p).z_err }).is_null() { return; }
     ofst_push_page(p, pgno);
@@ -486,6 +502,7 @@ extern "C" fn ofst_walk_page(p: *mut GState, pgno: i32) -> () {
     }
     ofst_pop_page(unsafe { &mut *p });
 }
+
 extern "C" fn __main_inner(mut argc: i32, mut argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -563,12 +580,14 @@ extern "C" fn __main_inner(mut argc: i32, mut argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1366,9 +1385,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

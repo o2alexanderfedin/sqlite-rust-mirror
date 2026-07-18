@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SHA1Context {
@@ -10,6 +13,7 @@ struct SHA1Context {
     count: [u32; 2],
     buffer: [u8; 64],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -18,8 +22,10 @@ struct GlobalVars {
     db: *mut Sqlite3,
     cx: SHA1Context,
 }
+
 #[unsafe(no_mangle)]
 pub static mut g: GlobalVars = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
@@ -1380,6 +1386,7 @@ pub extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
         unsafe { *state.offset(4 as isize) += qq[4 as usize] };
     }
 }
+
 extern "C" fn hash_init() -> () {
     unsafe {
         g.cx.state[0 as usize] = 1732584193 as u32;
@@ -1391,6 +1398,7 @@ extern "C" fn hash_init() -> () {
             { g.cx.count[1 as usize] = 0 as u32; g.cx.count[1 as usize] };
     }
 }
+
 extern "C" fn hash_step(data: *const u8, len: u32) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -1434,6 +1442,7 @@ extern "C" fn hash_step(data: *const u8, len: u32) -> () {
         };
     }
 }
+
 extern "C" fn hash_finish(z_name_1: *const i8) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -1494,6 +1503,7 @@ extern "C" fn hash_finish(z_name_1: *const i8) -> () {
         };
     }
 }
+
 unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -1513,6 +1523,7 @@ unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
         unsafe { exit(1) };
     }
 }
+
 unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -1528,6 +1539,7 @@ unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn db_vprepare(z_format_1: *const i8, ap: *mut i8)
     -> *mut Sqlite3Stmt {
     unsafe {
@@ -1557,6 +1569,7 @@ extern "C" fn db_vprepare(z_format_1: *const i8, ap: *mut i8)
         return p_stmt;
     }
 }
+
 unsafe extern "C" fn db_prepare(z_format_1: *const i8, mut __va0: ...)
     -> *mut Sqlite3Stmt {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -1566,6 +1579,7 @@ unsafe extern "C" fn db_prepare(z_format_1: *const i8, mut __va0: ...)
     ();
     return p_stmt;
 }
+
 unsafe extern "C" fn hash_one_query(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -1898,6 +1912,7 @@ unsafe extern "C" fn hash_one_query(z_format_1: *const i8, mut __va0: ...)
         unsafe { sqlite3_finalize(p_stmt) };
     }
 }
+
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -1910,6 +1925,7 @@ extern "C" fn show_help() -> () {
         };
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut z_db: *const i8 = core::ptr::null();
@@ -2094,18 +2110,23 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         return Ok(());
     }
 }
+
 static mut one: i32 = 1;
+
 static z_encode: [i8; 17] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
+
 static open_flags: i32 = (2 | 64) as i32;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *mut *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2897,9 +2918,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

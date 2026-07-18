@@ -1,4 +1,5 @@
 type DarwinSizeT = u64;
+
 extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     let mut s0: u32 = 0 as u32;
     let mut s1: u32 = 0 as u32;
@@ -60,6 +61,7 @@ extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
         };
     }
 }
+
 extern "C" fn compute_sigs(z_filename_1: *const i8) -> () {
     unsafe {
         let mut in_: *mut FILE = core::ptr::null_mut();
@@ -173,6 +175,7 @@ extern "C" fn compute_sigs(z_filename_1: *const i8) -> () {
         }
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i: i32 = 0;
@@ -190,12 +193,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     }
     return Ok(());
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -215,9 +220,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

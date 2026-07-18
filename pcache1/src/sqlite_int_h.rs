@@ -1,4 +1,6 @@
-use super::*;#[repr(C)]
+use super::*;
+
+#[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3 {
     pub(crate) p_vfs: *mut Sqlite3Vfs,
@@ -102,6 +104,7 @@ pub(crate) struct Sqlite3 {
     pub(crate) p_db_data: *mut DbClientData,
     pub(crate) n_spill: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct CollSeq {
@@ -112,6 +115,7 @@ pub(crate) struct CollSeq {
         i32, *const ()) -> i32>,
     pub(crate) x_del: Option<unsafe extern "C" fn(*mut ()) -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Db {
@@ -121,6 +125,7 @@ pub(crate) struct Db {
     pub(crate) b_sync_set: u8,
     pub(crate) p_schema: *mut Schema,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Schema {
@@ -136,6 +141,7 @@ pub(crate) struct Schema {
     pub(crate) schema_flags: u16,
     pub(crate) cache_size: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Table {
@@ -159,6 +165,7 @@ pub(crate) struct Table {
     pub(crate) p_schema: *mut Schema,
     pub(crate) a_hx: [u8; 16],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Column {
@@ -170,6 +177,7 @@ pub(crate) struct Column {
     pub(crate) i_dflt: u16,
     pub(crate) col_flags: u16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Index {
@@ -192,7 +200,9 @@ pub(crate) struct Index {
     pub(crate) _bitfield_1: u32,
     pub(crate) col_not_idxed: Bitmask,
 }
+
 pub(crate) type LogEst = i16;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Expr {
@@ -212,18 +222,21 @@ pub(crate) struct Expr {
     pub(crate) p_agg_info: *mut AggInfo,
     pub(crate) y: ExprU3,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ExprU0 {
     pub(crate) z_token: *mut i8,
     pub(crate) i_value: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ExprU1 {
     pub(crate) p_list: *mut ExprList,
     pub(crate) p_select: *mut Select,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ExprList {
@@ -231,6 +244,7 @@ pub(crate) struct ExprList {
     pub(crate) n_alloc: i32,
     pub(crate) a: [ExprListItem; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ExprListItem {
@@ -239,24 +253,28 @@ pub(crate) struct ExprListItem {
     pub(crate) fg: ExprListItemS0,
     pub(crate) u: ExprListItemU1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ExprListItemS0 {
     pub(crate) sort_flags: u8,
     pub(crate) _bitfield_1: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ExprListItemU1 {
     pub(crate) x: ExprListItemU1S0,
     pub(crate) i_const_expr_reg: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ExprListItemU1S0 {
     pub(crate) i_order_by_col: u16,
     pub(crate) i_alias: u16,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Select {
@@ -279,6 +297,7 @@ pub(crate) struct Select {
     pub(crate) p_win: *mut Window,
     pub(crate) p_win_defn: *mut Window,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SrcList {
@@ -286,6 +305,7 @@ pub(crate) struct SrcList {
     pub(crate) n_alloc: u32,
     pub(crate) a: [SrcItem; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SrcItem {
@@ -300,13 +320,16 @@ pub(crate) struct SrcItem {
     pub(crate) u3: SrcItemU3,
     pub(crate) u4: SrcItemU4,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SrcItemS0 {
     pub(crate) jointype: u8,
     pub(crate) _bitfield_1: u32,
 }
+
 pub(crate) type Bitmask = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union SrcItemU1 {
@@ -314,12 +337,14 @@ pub(crate) union SrcItemU1 {
     pub(crate) p_func_arg: *mut ExprList,
     pub(crate) n_row: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union SrcItemU2 {
     pub(crate) p_ib_index: *mut Index,
     pub(crate) p_cte_use: *mut CteUse,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct CteUse {
@@ -330,23 +355,27 @@ pub(crate) struct CteUse {
     pub(crate) n_row_est: LogEst,
     pub(crate) e_m10d: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union SrcItemU3 {
     pub(crate) p_on: *mut Expr,
     pub(crate) p_using: *mut IdList,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct IdList {
     pub(crate) n_id: i32,
     pub(crate) a: [IdListItem; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct IdListItem {
     pub(crate) z_name: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union SrcItemU4 {
@@ -354,6 +383,7 @@ pub(crate) union SrcItemU4 {
     pub(crate) z_database: *mut i8,
     pub(crate) p_subq: *mut Subquery,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Subquery {
@@ -362,6 +392,7 @@ pub(crate) struct Subquery {
     pub(crate) reg_return: i32,
     pub(crate) reg_result: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct With {
@@ -370,6 +401,7 @@ pub(crate) struct With {
     pub(crate) p_outer: *mut With,
     pub(crate) a: [Cte; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Cte {
@@ -380,6 +412,7 @@ pub(crate) struct Cte {
     pub(crate) p_use: *mut CteUse,
     pub(crate) e_m10d: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Window {
@@ -412,6 +445,7 @@ pub(crate) struct Window {
     pub(crate) reg_end_rowid: i32,
     pub(crate) b_expr_args: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct FuncDef {
@@ -430,12 +464,14 @@ pub(crate) struct FuncDef {
     pub(crate) z_name: *const i8,
     pub(crate) u: FuncDefU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union FuncDefU0 {
     pub(crate) p_hash: *mut FuncDef,
     pub(crate) p_destructor: *mut FuncDestructor,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct FuncDestructor {
@@ -443,13 +479,16 @@ pub(crate) struct FuncDestructor {
     pub(crate) x_destroy: Option<unsafe extern "C" fn(*mut ()) -> ()>,
     pub(crate) p_user_data: *mut (),
 }
+
 pub(crate) type YnVar = i16;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ExprU2 {
     pub(crate) i_join: i32,
     pub(crate) i_ofst: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AggInfo {
@@ -467,6 +506,7 @@ pub(crate) struct AggInfo {
     pub(crate) n_func: i32,
     pub(crate) sel_id: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AggInfoCol {
@@ -476,6 +516,7 @@ pub(crate) struct AggInfoCol {
     pub(crate) i_column: i32,
     pub(crate) i_sorter_column: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AggInfoFunc {
@@ -488,6 +529,7 @@ pub(crate) struct AggInfoFunc {
     pub(crate) b_ob_unique: u8,
     pub(crate) b_use_subtype: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ExprU3 {
@@ -496,12 +538,14 @@ pub(crate) union ExprU3 {
     pub(crate) n_reg: i32,
     pub(crate) sub: ExprU3S0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ExprU3S0 {
     pub(crate) i_addr: i32,
     pub(crate) reg_return: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union TableU0 {
@@ -509,6 +553,7 @@ pub(crate) union TableU0 {
     pub(crate) view: TableU0S1,
     pub(crate) vtab: TableU0S2,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TableU0S0 {
@@ -516,6 +561,7 @@ pub(crate) struct TableU0S0 {
     pub(crate) p_f_key: *mut FKey,
     pub(crate) p_dflt_list: *mut ExprList,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct FKey {
@@ -530,6 +576,7 @@ pub(crate) struct FKey {
     pub(crate) ap_trigger: [*mut Trigger; 2],
     pub(crate) a_col: [SColMap; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Trigger {
@@ -545,6 +592,7 @@ pub(crate) struct Trigger {
     pub(crate) step_list: *mut TriggerStep,
     pub(crate) p_next: *mut Trigger,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TriggerStep {
@@ -561,6 +609,7 @@ pub(crate) struct TriggerStep {
     pub(crate) p_next: *mut TriggerStep,
     pub(crate) p_last: *mut TriggerStep,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Upsert {
@@ -578,17 +627,20 @@ pub(crate) struct Upsert {
     pub(crate) i_data_cur: i32,
     pub(crate) i_idx_cur: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SColMap {
     pub(crate) i_from: i32,
     pub(crate) z_col: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TableU0S1 {
     pub(crate) p_select: *mut Select,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TableU0S2 {
@@ -596,6 +648,7 @@ pub(crate) struct TableU0S2 {
     pub(crate) az_arg: *mut *mut i8,
     pub(crate) p: *mut VTable,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VTable {
@@ -609,6 +662,7 @@ pub(crate) struct VTable {
     pub(crate) i_savepoint: i32,
     pub(crate) p_next: *mut VTable,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Module {
@@ -619,6 +673,7 @@ pub(crate) struct Module {
     pub(crate) x_destroy: Option<unsafe extern "C" fn(*mut ()) -> ()>,
     pub(crate) p_epo_tab: *mut Table,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3InitInfo {
@@ -628,6 +683,7 @@ pub(crate) struct Sqlite3InitInfo {
     pub(crate) _bitfield_1: u32,
     pub(crate) az_init: *mut *const i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union Sqlite3U0 {
@@ -636,6 +692,7 @@ pub(crate) union Sqlite3U0 {
     pub(crate) x_v2: Option<unsafe extern "C" fn(u32, *mut (), *mut (),
         *mut ()) -> i32>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Parse {
@@ -705,7 +762,9 @@ pub(crate) struct Parse {
     pub(crate) p_with: *mut With,
     pub(crate) p_rename: *mut RenameToken,
 }
+
 pub(crate) type Bft = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct IndexedExpr {
@@ -717,7 +776,9 @@ pub(crate) struct IndexedExpr {
     pub(crate) aff: u8,
     pub(crate) p_ie_next: *mut IndexedExpr,
 }
+
 pub(crate) type YDbMask = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TriggerPrg {
@@ -727,6 +788,7 @@ pub(crate) struct TriggerPrg {
     pub(crate) orconf: i32,
     pub(crate) a_colmask: [u32; 2],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct KeyInfo {
@@ -738,6 +800,7 @@ pub(crate) struct KeyInfo {
     pub(crate) a_sort_flags: *mut u8,
     pub(crate) a_coll: [*mut CollSeq; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ParseCleanup {
@@ -746,18 +809,21 @@ pub(crate) struct ParseCleanup {
     pub(crate) x_cleanup: Option<unsafe extern "C" fn(*mut Sqlite3, *mut ())
         -> ()>,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Token {
     pub(crate) z: *const i8,
     pub(crate) n: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union ParseU0 {
     pub(crate) cr: ParseU0S0,
     pub(crate) d: ParseU0S1,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ParseU0S0 {
@@ -766,11 +832,13 @@ pub(crate) struct ParseU0S0 {
     pub(crate) reg_root: i32,
     pub(crate) constraint_name: Token,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct ParseU0S1 {
     pub(crate) p_returning: *mut Returning,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Returning {
@@ -783,6 +851,7 @@ pub(crate) struct Returning {
     pub(crate) i_ret_reg: i32,
     pub(crate) z_name: [i8; 40],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AutoincInfo {
@@ -791,23 +860,28 @@ pub(crate) struct AutoincInfo {
     pub(crate) i_db: i32,
     pub(crate) reg_ctr: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TableLock {
     pub(crate) _opaque: [u8; 0],
 }
+
 pub(crate) type VList = i32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct RenameToken {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union Sqlite3U1 {
     pub(crate) is_interrupted: i32,
     pub(crate) not_used1: f64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Lookaside {
@@ -826,19 +900,23 @@ pub(crate) struct Lookaside {
     pub(crate) p_end: *mut (),
     pub(crate) p_true_end: *mut (),
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct LookasideSlot {
     pub(crate) p_next: *mut LookasideSlot,
 }
+
 pub(crate) type Sqlite3Xauth =
     unsafe extern "C" fn(*mut (), i32, *const i8, *const i8, *const i8,
         *const i8) -> i32;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VtabCtx {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct BusyHandler {
@@ -847,6 +925,7 @@ pub(crate) struct BusyHandler {
     pub(crate) p_busy_arg: *mut (),
     pub(crate) n_busy: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Savepoint {
@@ -855,6 +934,7 @@ pub(crate) struct Savepoint {
     pub(crate) n_deferred_imm_cons: i64,
     pub(crate) p_next: *mut Savepoint,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct DbClientData {
@@ -863,6 +943,7 @@ pub(crate) struct DbClientData {
     pub(crate) x_destructor: Option<unsafe extern "C" fn(*mut ()) -> ()>,
     pub(crate) z_name: [i8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Str {
@@ -874,19 +955,24 @@ pub(crate) struct Sqlite3Str {
     pub(crate) acc_error: u8,
     pub(crate) printf_flags: u8,
 }
+
 pub(crate) type TRowcnt = u64;
+
 pub(crate) type Uptr = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AuthContext {
     pub(crate) z_auth_context: *const i8,
     pub(crate) p_parse: *mut Parse,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Bitvec {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct DbFixer {
@@ -898,6 +984,7 @@ pub(crate) struct DbFixer {
     pub(crate) z_type: *const i8,
     pub(crate) p_name: *const Token,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Walker {
@@ -913,6 +1000,7 @@ pub(crate) struct Walker {
     pub(crate) m_w_flags: u16,
     pub(crate) u: WalkerU0,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union WalkerU0 {
@@ -937,6 +1025,7 @@ pub(crate) union WalkerU0 {
     pub(crate) a_mem: *mut Mem,
     pub(crate) p_check_on_ctx: *mut CheckOnCtx,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct NameContext {
@@ -950,6 +1039,7 @@ pub(crate) struct NameContext {
     pub(crate) n_nested_select: u32,
     pub(crate) p_win_select: *mut Select,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union NameContextU0 {
@@ -958,6 +1048,7 @@ pub(crate) union NameContextU0 {
     pub(crate) p_upsert: *mut Upsert,
     pub(crate) i_base_reg: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct FpDecode {
@@ -968,11 +1059,13 @@ pub(crate) struct FpDecode {
     pub(crate) sign: i8,
     pub(crate) is_special: i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct FuncDefHash {
     pub(crate) a: [*mut FuncDef; 23],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct IndexSample {
@@ -982,22 +1075,26 @@ pub(crate) struct IndexSample {
     pub(crate) an_lt: *mut TRowcnt,
     pub(crate) an_d_lt: *mut TRowcnt,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct KeyClass {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct OnOrUsing {
     pub(crate) p_on: *mut Expr,
     pub(crate) p_using: *mut IdList,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PreUpdate {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PrintfArguments {
@@ -1005,21 +1102,25 @@ pub(crate) struct PrintfArguments {
     pub(crate) n_used: i32,
     pub(crate) ap_arg: *mut *mut Sqlite3Value,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct RCStr {
     pub(crate) n_rc_ref: u64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct RowSet {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SQLiteThread {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SelectDest {
@@ -1031,12 +1132,15 @@ pub(crate) struct SelectDest {
     pub(crate) z_aff_sdst: *mut i8,
     pub(crate) p_order_by: *mut ExprList,
 }
+
 pub(crate) type StrAccum = Sqlite3Str;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct TreeView {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct UnpackedRecord {
@@ -1051,17 +1155,20 @@ pub(crate) struct UnpackedRecord {
     pub(crate) r2: i8,
     pub(crate) eq_seen: u8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) union UnpackedRecordU0 {
     pub(crate) z: *mut i8,
     pub(crate) i: i64,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct WhereInfo {
     pub(crate) _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Config {
@@ -1111,6 +1218,7 @@ pub(crate) struct Sqlite3Config {
     pub(crate) sz_sorter_ref: u32,
     pub(crate) i_prng_seed: u32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct InitData {

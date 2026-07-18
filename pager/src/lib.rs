@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,7 +16,9 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod wal_h;
 pub(crate) use crate::wal_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -28,6 +31,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -107,6 +111,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -155,6 +160,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -291,6 +297,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -314,6 +321,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -386,6 +394,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Pager {
@@ -454,6 +463,7 @@ struct Pager {
     p_wal: *mut Wal,
     z_wal: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PagerSavepoint {
@@ -465,6 +475,7 @@ struct PagerSavepoint {
     b_truncate_on_release: i32,
     a_wal_data: [u32; 4],
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_database_file_object(mut z_name: *const i8)
     -> *mut Sqlite3File {
@@ -492,6 +503,7 @@ pub extern "C" fn sqlite3_database_file_object(mut z_name: *const i8)
     p_pager = unsafe { *(p as *mut *mut Pager) };
     return unsafe { (*p_pager).fd };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let mut i_ret: i32 = unsafe { sqlite3_os_sector_size(p_file) };
@@ -500,6 +512,7 @@ pub extern "C" fn sqlite3_sector_size(p_file: *mut Sqlite3File) -> i32 {
     } else if i_ret > 65536 { { let _ = 0; }; i_ret = 65536; }
     return i_ret;
 }
+
 extern "C" fn set_sector_size(p_pager_1: &mut Pager) -> () {
     { let _ = 0; };
     if (*p_pager_1).temp_file != 0 ||
@@ -511,6 +524,7 @@ extern "C" fn set_sector_size(p_pager_1: &mut Pager) -> () {
             sqlite3_sector_size((*p_pager_1).fd) as u32;
     }
 }
+
 extern "C" fn pager_reset(p_pager_1: &mut Pager) -> () {
     {
         let __p = &mut (*p_pager_1).i_data_version;
@@ -521,6 +535,7 @@ extern "C" fn pager_reset(p_pager_1: &mut Pager) -> () {
     unsafe { sqlite3_backup_restart((*p_pager_1).p_backup) };
     unsafe { sqlite3_pcache_clear((*p_pager_1).p_p_cache) };
 }
+
 extern "C" fn get_page_error(p_pager_1: *mut Pager, pgno: Pgno,
     pp_page_1: *mut *mut DbPage, flags: i32) -> i32 {
     { let _ = pgno; };
@@ -529,6 +544,7 @@ extern "C" fn get_page_error(p_pager_1: *mut Pager, pgno: Pgno,
     unsafe { *pp_page_1 = core::ptr::null_mut() };
     return unsafe { (*p_pager_1).err_code };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_lookup(p_pager_1: &Pager, pgno: Pgno)
     -> *mut DbPage {
@@ -544,6 +560,7 @@ pub extern "C" fn sqlite3_pager_lookup(p_pager_1: &Pager, pgno: Pgno)
                     p_page)
             } as *mut DbPage;
 }
+
 extern "C" fn pager_acquire_map_page(p_pager_1: *mut Pager, pgno: Pgno,
     p_data_1: *mut (), pp_page_1: &mut *mut PgHdr) -> i32 {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -595,6 +612,7 @@ extern "C" fn pager_acquire_map_page(p_pager_1: *mut Pager, pgno: Pgno,
     };
     return 0;
 }
+
 extern "C" fn add_to_savepoint_bitvecs(p_pager_1: &Pager, pgno: Pgno) -> i32 {
     let mut ii: i32 = 0;
     let mut rc: i32 = 0;
@@ -621,6 +639,7 @@ extern "C" fn add_to_savepoint_bitvecs(p_pager_1: &Pager, pgno: Pgno) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn read_db_page(p_pg_1: &mut PgHdr) -> i32 {
     let p_pager: *mut Pager = (*p_pg_1).p_pager;
     let mut rc: i32 = 0;
@@ -674,6 +693,7 @@ extern "C" fn read_db_page(p_pg_1: &mut PgHdr) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_release_map_page(p_pg_1: *mut PgHdr) -> () {
     let p_pager: *mut Pager = unsafe { (*p_pg_1).p_pager };
     {
@@ -691,6 +711,7 @@ extern "C" fn pager_release_map_page(p_pg_1: *mut PgHdr) -> () {
                 unsafe { (*p_pager).page_size }, unsafe { (*p_pg_1).p_data })
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_unref_not_null(p_pg_1: *mut DbPage) -> () {
     { let _ = 0; };
@@ -700,6 +721,7 @@ pub extern "C" fn sqlite3_pager_unref_not_null(p_pg_1: *mut DbPage) -> () {
     } else { unsafe { sqlite3_pcache_release(p_pg_1 as *mut PgHdr) }; }
     { let _ = 0; };
 }
+
 extern "C" fn pager_undo_callback(p_ctx_1: *mut (), i_pg_1: Pgno) -> i32 {
     let mut rc: i32 = 0;
     let p_pager: *mut Pager = p_ctx_1 as *mut Pager;
@@ -722,6 +744,7 @@ extern "C" fn pager_undo_callback(p_ctx_1: *mut (), i_pg_1: Pgno) -> i32 {
     unsafe { sqlite3_backup_restart(unsafe { (*p_pager).p_backup }) };
     return rc;
 }
+
 extern "C" fn pager_rollback_wal(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     let mut p_list: *const PgHdr = core::ptr::null();
@@ -744,6 +767,7 @@ extern "C" fn pager_rollback_wal(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn read32bits(fd: *mut Sqlite3File, offset: i64, p_res_1: &mut u32)
     -> i32 {
     let mut ac: [u8; 4] = [0; 4];
@@ -761,6 +785,7 @@ extern "C" fn read32bits(fd: *mut Sqlite3File, offset: i64, p_res_1: &mut u32)
     }
     return rc;
 }
+
 extern "C" fn pager_cksum(p_pager_1: &Pager, a_data_1: *const u8) -> u32 {
     let mut cksum: u32 = (*p_pager_1).cksum_init;
     let mut i: i32 = ((*p_pager_1).page_size - 200 as i64) as i32;
@@ -770,6 +795,7 @@ extern "C" fn pager_cksum(p_pager_1: &Pager, a_data_1: *const u8) -> u32 {
     }
     return cksum;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_get(p_pager_1: *mut Pager, pgno: Pgno,
     pp_page_1: *mut *mut DbPage, flags: i32) -> i32 {
@@ -779,6 +805,7 @@ pub extern "C" fn sqlite3_pager_get(p_pager_1: *mut Pager, pgno: Pgno,
                 })(p_pager_1, pgno, pp_page_1 as *mut *mut PgHdr, flags)
         };
 }
+
 extern "C" fn pager_playback_one_page(p_pager_1: *mut Pager,
     p_offset_1: &mut i64, p_done_1: *mut Bitvec, is_main_jrnl_1: i32,
     is_savepnt_1: i32) -> i32 {
@@ -920,6 +947,7 @@ extern "C" fn pager_playback_one_page(p_pager_1: *mut Pager,
     }
     return rc;
 }
+
 extern "C" fn journal_hdr_offset(p_pager_1: &Pager) -> i64 {
     let mut offset: i64 = 0 as i64;
     let c: i64 = (*p_pager_1).journal_off;
@@ -933,9 +961,11 @@ extern "C" fn journal_hdr_offset(p_pager_1: &Pager) -> i64 {
     { let _ = 0; };
     return offset;
 }
+
 static a_journal_magic: [u8; 8] =
     [217 as u8, 213 as u8, 5 as u8, 249 as u8, 32 as u8, 161 as u8, 99 as u8,
             215 as u8];
+
 extern "C" fn read_journal_hdr(p_pager_1: *mut Pager, is_hot_1: i32,
     journal_size_1: i64, p_n_rec_1: *mut u32, p_db_size_1: *mut u32) -> i32 {
     let mut rc: i32 = 0;
@@ -1029,6 +1059,7 @@ extern "C" fn read_journal_hdr(p_pager_1: *mut Pager, is_hot_1: i32,
     };
     return rc;
 }
+
 extern "C" fn pager_playback_savepoint(p_pager_1: *mut Pager,
     p_savepoint_1: *mut PagerSavepoint) -> i32 {
     let mut sz_j: i64 = 0 as i64;
@@ -1144,6 +1175,7 @@ extern "C" fn pager_playback_savepoint(p_pager_1: *mut Pager,
     if rc == 0 { unsafe { (*p_pager_1).journal_off = sz_j }; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_savepoint(p_pager_1: *mut Pager, op: i32,
     i_savepoint_1: i32) -> i32 {
@@ -1219,6 +1251,7 @@ pub extern "C" fn sqlite3_pager_savepoint(p_pager_1: *mut Pager, op: i32,
     }
     return rc;
 }
+
 extern "C" fn release_all_savepoints(p_pager_1: &mut Pager) -> () {
     let mut ii: i32 = 0;
     {
@@ -1246,6 +1279,7 @@ extern "C" fn release_all_savepoints(p_pager_1: &mut Pager) -> () {
     (*p_pager_1).n_savepoint = 0;
     (*p_pager_1).n_sub_rec = 0 as u32;
 }
+
 extern "C" fn zero_journal_hdr(p_pager_1: &Pager, do_truncate_1: i32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -1280,6 +1314,7 @@ extern "C" fn zero_journal_hdr(p_pager_1: &Pager, do_truncate_1: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_flush_on_commit(p_pager_1: &Pager, b_commit_1: i32)
     -> i32 {
     if (*p_pager_1).temp_file as i32 == 0 { return 1; }
@@ -1291,6 +1326,7 @@ extern "C" fn pager_flush_on_commit(p_pager_1: &Pager, b_commit_1: i32)
     return (unsafe { sqlite3_p_cache_percent_dirty((*p_pager_1).p_p_cache) }
                 >= 25) as i32;
 }
+
 extern "C" fn pager_truncate(p_pager_1: &mut Pager, n_page_1: Pgno) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -1329,6 +1365,7 @@ extern "C" fn pager_truncate(p_pager_1: &mut Pager, n_page_1: Pgno) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_unlock_db(p_pager_1: &mut Pager, e_lock_1: i32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -1349,6 +1386,7 @@ extern "C" fn pager_unlock_db(p_pager_1: &mut Pager, e_lock_1: i32) -> i32 {
     (*p_pager_1).change_count_done = (*p_pager_1).temp_file;
     return rc;
 }
+
 extern "C" fn pager_end_transaction(p_pager_1: *mut Pager, has_super_1: i32,
     b_commit_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -1469,6 +1507,7 @@ extern "C" fn pager_end_transaction(p_pager_1: *mut Pager, has_super_1: i32,
     unsafe { (*p_pager_1).set_super = 0 as u8 };
     return if rc == 0 { rc2 } else { rc };
 }
+
 extern "C" fn pager_is_super_jrnl_name(z_super_1: *const i8) -> i32 {
     unsafe {
         let n_super: i32 = unsafe { sqlite3_strlen30(z_super_1) } as i32;
@@ -1506,6 +1545,7 @@ extern "C" fn pager_is_super_jrnl_name(z_super_1: *const i8) -> i32 {
         return 1;
     }
 }
+
 extern "C" fn free_super_journal(z_super_1: *mut i8) -> () {
     if !(z_super_1).is_null() {
         unsafe {
@@ -1514,6 +1554,7 @@ extern "C" fn free_super_journal(z_super_1: *mut i8) -> () {
         };
     }
 }
+
 extern "C" fn read_super_journal(p_jrnl_1: *mut Sqlite3File, n_super_1: u64,
     pz_super_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -1599,6 +1640,7 @@ extern "C" fn read_super_journal(p_jrnl_1: *mut Sqlite3File, n_super_1: u64,
     *pz_super_1 = z_out;
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_sync(p_pager_1: &Pager, z_super_1: *const i8)
     -> i32 {
@@ -1616,6 +1658,7 @@ pub extern "C" fn sqlite3_pager_sync(p_pager_1: &Pager, z_super_1: *const i8)
     }
     return rc;
 }
+
 extern "C" fn pager_delsuper(p_pager_1: &Pager, z_super_1: *const i8) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
     let mut rc: i32 = 0;
@@ -1868,6 +1911,7 @@ extern "C" fn pager_delsuper(p_pager_1: &Pager, z_super_1: *const i8) -> i32 {
     }
     unreachable!();
 }
+
 extern "C" fn pager_playback(p_pager_1: *mut Pager, is_hot_1: i32) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
     let mut sz_j: i64 = 0 as i64;
@@ -2137,6 +2181,7 @@ extern "C" fn pager_playback(p_pager_1: *mut Pager, is_hot_1: i32) -> i32 {
     }
     unreachable!();
 }
+
 extern "C" fn pager_error(p_pager_1: *mut Pager, rc: i32) -> i32 {
     let rc2: i32 = rc & 255;
     { let _ = 0; };
@@ -2148,6 +2193,7 @@ extern "C" fn pager_error(p_pager_1: *mut Pager, rc: i32) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_rollback(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
@@ -2179,6 +2225,7 @@ pub extern "C" fn sqlite3_pager_rollback(p_pager_1: *mut Pager) -> i32 {
     { let _ = 0; };
     return pager_error(p_pager_1, rc);
 }
+
 extern "C" fn pager_unlock(p_pager_1: *mut Pager) -> () {
     { let _ = 0; };
     unsafe { sqlite3_bitvec_destroy(unsafe { (*p_pager_1).p_in_journal }) };
@@ -2256,6 +2303,7 @@ extern "C" fn pager_unlock(p_pager_1: *mut Pager) -> () {
     unsafe { (*p_pager_1).journal_hdr = 0 as i64 };
     unsafe { (*p_pager_1).set_super = 0 as u8 };
 }
+
 extern "C" fn pager_unlock_and_rollback(p_pager_1: *mut Pager) -> () {
     if unsafe { (*p_pager_1).e_state } as i32 != 6 &&
             unsafe { (*p_pager_1).e_state } as i32 != 0 {
@@ -2283,6 +2331,7 @@ extern "C" fn pager_unlock_and_rollback(p_pager_1: *mut Pager) -> () {
     }
     pager_unlock(p_pager_1);
 }
+
 extern "C" fn pager_unlock_if_unused(p_pager_1: *mut Pager) -> () {
     if unsafe { sqlite3_pcache_ref_count(unsafe { (*p_pager_1).p_p_cache }) }
             == 0 as i64 {
@@ -2290,6 +2339,7 @@ extern "C" fn pager_unlock_if_unused(p_pager_1: *mut Pager) -> () {
         pager_unlock_and_rollback(p_pager_1);
     }
 }
+
 extern "C" fn get_page_normal(p_pager_1: *mut Pager, pgno: Pgno,
     pp_page_1: *mut *mut DbPage, flags: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -2403,6 +2453,7 @@ extern "C" fn get_page_normal(p_pager_1: *mut Pager, pgno: Pgno,
     unsafe { *pp_page_1 = core::ptr::null_mut() };
     return rc;
 }
+
 extern "C" fn get_page_m_map(p_pager_1: *mut Pager, pgno: Pgno,
     pp_page_1: *mut *mut DbPage, flags: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -2472,6 +2523,7 @@ extern "C" fn get_page_m_map(p_pager_1: *mut Pager, pgno: Pgno,
     }
     return get_page_normal(p_pager_1, pgno, pp_page_1, flags);
 }
+
 extern "C" fn set_getter_method(p_pager_1: &mut Pager) -> () {
     if (*p_pager_1).err_code != 0 {
         (*p_pager_1).x_get = Some(get_page_error);
@@ -2479,6 +2531,7 @@ extern "C" fn set_getter_method(p_pager_1: &mut Pager) -> () {
         (*p_pager_1).x_get = Some(get_page_m_map);
     } else { (*p_pager_1).x_get = Some(get_page_normal); }
 }
+
 extern "C" fn pager_fix_maplimit(p_pager_1: *mut Pager) -> () {
     let fd: *const Sqlite3File =
         unsafe { (*p_pager_1).fd } as *const Sqlite3File;
@@ -2494,6 +2547,7 @@ extern "C" fn pager_fix_maplimit(p_pager_1: *mut Pager) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_pagesize(p_pager_1: *mut Pager,
     p_page_size_1: &mut u32, mut n_reserve_1: i32) -> i32 {
@@ -2572,6 +2626,7 @@ pub extern "C" fn sqlite3_pager_set_pagesize(p_pager_1: *mut Pager,
         return rc;
     }
 }
+
 extern "C" fn subj_requires_page(p_pg_1: &PgHdr) -> i32 {
     let p_pager: *const Pager = (*p_pg_1).p_pager as *const Pager;
     let mut p: *const PagerSavepoint = core::ptr::null();
@@ -2618,6 +2673,7 @@ extern "C" fn subj_requires_page(p_pg_1: &PgHdr) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn open_sub_journal(p_pager_1: &Pager) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -2638,6 +2694,7 @@ extern "C" fn open_sub_journal(p_pager_1: &Pager) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn write32bits(fd: *mut Sqlite3File, offset: i64, val: u32)
     -> i32 {
     let mut ac: [i8; 4] = [0; 4];
@@ -2647,6 +2704,7 @@ extern "C" fn write32bits(fd: *mut Sqlite3File, offset: i64, val: u32)
                 &raw mut ac[0 as usize] as *mut i8 as *const (), 4, offset)
         };
 }
+
 extern "C" fn subjournal_page(p_pg_1: &PgHdr) -> i32 {
     let mut rc: i32 = 0;
     let p_pager: *mut Pager = (*p_pg_1).p_pager;
@@ -2688,11 +2746,13 @@ extern "C" fn subjournal_page(p_pg_1: &PgHdr) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn subjournal_page_if_required(p_pg_1: *mut PgHdr) -> i32 {
     if subj_requires_page(unsafe { &*p_pg_1 }) != 0 {
         return subjournal_page(unsafe { &*p_pg_1 });
     } else { return 0; }
 }
+
 extern "C" fn pager_write_changecounter(p_pg_1: *mut PgHdr) -> () {
     let mut change_counter: u32 = 0 as u32;
     if p_pg_1 == core::ptr::null_mut() { return; }
@@ -2723,6 +2783,7 @@ extern "C" fn pager_write_changecounter(p_pg_1: *mut PgHdr) -> () {
             }, 3054000 as u32)
     };
 }
+
 extern "C" fn pager_wal_frames(p_pager_1: &mut Pager,
     mut p_list_1: *mut PgHdr, n_truncate_1: Pgno, is_commit_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -2782,6 +2843,7 @@ extern "C" fn pager_wal_frames(p_pager_1: &mut Pager,
     }
     return rc;
 }
+
 extern "C" fn pager_lock_db(p_pager_1: &mut Pager, e_lock_1: i32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -2797,6 +2859,7 @@ extern "C" fn pager_lock_db(p_pager_1: &mut Pager, e_lock_1: i32) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_wait_on_lock(p_pager_1: *mut Pager, locktype: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -2817,6 +2880,7 @@ extern "C" fn pager_wait_on_lock(p_pager_1: *mut Pager, locktype: i32)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_exclusive_lock(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = unsafe { (*p_pager_1).err_code };
@@ -2832,6 +2896,7 @@ pub extern "C" fn sqlite3_pager_exclusive_lock(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn write_journal_hdr(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     let z_header: *mut i8 = unsafe { (*p_pager_1).p_tmp_space };
@@ -2958,6 +3023,7 @@ extern "C" fn write_journal_hdr(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn sync_journal(p_pager_1: *mut Pager, new_hdr_1: i32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -3062,6 +3128,7 @@ extern "C" fn sync_journal(p_pager_1: *mut Pager, new_hdr_1: i32) -> i32 {
     { let _ = 0; };
     return 0;
 }
+
 extern "C" fn pager_opentemp(p_pager_1: &Pager, p_file_1: *mut Sqlite3File,
     mut vfs_flags_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -3074,6 +3141,7 @@ extern "C" fn pager_opentemp(p_pager_1: &Pager, p_file_1: *mut Sqlite3File,
     { let _ = 0; };
     return rc;
 }
+
 extern "C" fn pager_write_pagelist(p_pager_1: *mut Pager,
     mut p_list_1: *mut PgHdr) -> i32 {
     let mut rc: i32 = 0;
@@ -3151,6 +3219,7 @@ extern "C" fn pager_write_pagelist(p_pager_1: *mut Pager,
     }
     return rc;
 }
+
 extern "C" fn pager_stress(p: *mut (), p_pg_1: *mut PgHdr) -> i32 {
     let p_pager: *mut Pager = p as *mut Pager;
     let mut rc: i32 = 0;
@@ -3189,6 +3258,7 @@ extern "C" fn pager_stress(p: *mut (), p_pg_1: *mut PgHdr) -> i32 {
     if rc == 0 { unsafe { sqlite3_pcache_make_clean(p_pg_1) }; }
     return pager_error(p_pager, rc);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_flags(p_pager_1: &mut Pager,
     pg_flags_1: u32) -> () {
@@ -3222,6 +3292,7 @@ pub extern "C" fn sqlite3_pager_set_flags(p_pager_1: &mut Pager,
         (*p_pager_1).do_not_spill &= !1 as u8;
     } else { (*p_pager_1).do_not_spill |= 1 as u8; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_open(p_vfs_1: *mut Sqlite3Vfs,
     pp_pager_1: &mut *mut Pager, mut z_filename_1: *const i8,
@@ -3913,6 +3984,7 @@ pub extern "C" fn sqlite3_pager_open(p_vfs_1: *mut Sqlite3Vfs,
     }
     unreachable!();
 }
+
 extern "C" fn pager_free_map_hdrs(p_pager_1: &Pager) -> () {
     let mut p: *mut PgHdr = core::ptr::null_mut();
     let mut p_next: *mut PgHdr = core::ptr::null_mut();
@@ -3929,6 +4001,7 @@ extern "C" fn pager_free_map_hdrs(p_pager_1: &Pager) -> () {
         }
     }
 }
+
 extern "C" fn database_is_unmoved(p_pager_1: &Pager) -> i32 {
     let mut b_has_moved: i32 = 0;
     let mut rc: i32 = 0;
@@ -3945,6 +4018,7 @@ extern "C" fn database_is_unmoved(p_pager_1: &Pager) -> i32 {
     } else if rc == 0 && b_has_moved != 0 { rc = 8 | 4 << 8; }
     return rc;
 }
+
 extern "C" fn pager_sync_hot_journal(p_pager_1: &mut Pager) -> i32 {
     let mut rc: i32 = 0;
     if ((*p_pager_1).no_sync == 0) as i32 != 0 {
@@ -3959,6 +4033,7 @@ extern "C" fn pager_sync_hot_journal(p_pager_1: &mut Pager) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_close(p_pager_1: *mut Pager, db: *mut Sqlite3)
     -> i32 {
@@ -4003,6 +4078,7 @@ pub extern "C" fn sqlite3_pager_close(p_pager_1: *mut Pager, db: *mut Sqlite3)
     unsafe { sqlite3_free(p_pager_1 as *mut ()) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_read_fileheader(p_pager_1: &Pager, n_1: i32,
     p_dest_1: *mut u8) -> i32 {
@@ -4020,6 +4096,7 @@ pub extern "C" fn sqlite3_pager_read_fileheader(p_pager_1: &Pager, n_1: i32,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_busy_handler(p_pager_1: &mut Pager,
     x_busy_handler_1: unsafe extern "C" fn(*mut ()) -> i32,
@@ -4034,6 +4111,7 @@ pub extern "C" fn sqlite3_pager_set_busy_handler(p_pager_1: &mut Pager,
         sqlite3_os_file_control_hint((*p_pager_1).fd, 15, ap as *mut ())
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_max_page_count(p_pager_1: &mut Pager,
     mx_page_1: Pgno) -> Pgno {
@@ -4041,6 +4119,7 @@ pub extern "C" fn sqlite3_pager_max_page_count(p_pager_1: &mut Pager,
     { let _ = 0; };
     return (*p_pager_1).mx_pgno;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_cachesize(p_pager_1: &Pager,
     mx_page_1: i32) -> () {
@@ -4048,6 +4127,7 @@ pub extern "C" fn sqlite3_pager_set_cachesize(p_pager_1: &Pager,
         sqlite3_pcache_set_cachesize((*p_pager_1).p_p_cache, mx_page_1)
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_spillsize(p_pager_1: &Pager,
     mx_page_1: i32) -> i32 {
@@ -4055,16 +4135,19 @@ pub extern "C" fn sqlite3_pager_set_spillsize(p_pager_1: &Pager,
             sqlite3_pcache_set_spillsize((*p_pager_1).p_p_cache, mx_page_1)
         };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_mmap_limit(p_pager_1: *mut Pager,
     sz_mmap_1: Sqlite3Int64) -> () {
     unsafe { (*p_pager_1).sz_mmap = sz_mmap_1 };
     pager_fix_maplimit(p_pager_1);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_shrink(p_pager_1: &Pager) -> () {
     unsafe { sqlite3_pcache_shrink((*p_pager_1).p_p_cache) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_locking_mode(p_pager_1: &mut Pager,
     e_mode_1: i32) -> i32 {
@@ -4079,6 +4162,7 @@ pub extern "C" fn sqlite3_pager_locking_mode(p_pager_1: &mut Pager,
     }
     return (*p_pager_1).exclusive_mode as i32;
 }
+
 extern "C" fn pager_pagecount(p_pager_1: &mut Pager, pn_page_1: &mut Pgno)
     -> i32 {
     let mut n_page: Pgno = 0 as Pgno;
@@ -4103,6 +4187,7 @@ extern "C" fn pager_pagecount(p_pager_1: &mut Pager, pn_page_1: &mut Pgno)
     *pn_page_1 = n_page;
     return 0;
 }
+
 extern "C" fn has_hot_journal(p_pager_1: *mut Pager, p_exists_1: &mut i32)
     -> i32 {
     let p_vfs: *mut Sqlite3Vfs = unsafe { (*p_pager_1).p_vfs };
@@ -4178,6 +4263,7 @@ extern "C" fn has_hot_journal(p_pager_1: *mut Pager, p_exists_1: &mut i32)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_wal_supported(p_pager_1: &Pager) -> i32 {
     let p_methods: *const Sqlite3IoMethods =
@@ -4187,6 +4273,7 @@ pub extern "C" fn sqlite3_pager_wal_supported(p_pager_1: &Pager) -> i32 {
                 unsafe { (*p_methods).i_version } as i32 >= 2 &&
                     unsafe { (*p_methods).x_shm_map.is_some() }) as i32;
 }
+
 extern "C" fn pager_exclusive_lock(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     let mut e_orig_lock: u8 = 0 as u8;
@@ -4198,6 +4285,7 @@ extern "C" fn pager_exclusive_lock(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_open_wal(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -4219,6 +4307,7 @@ extern "C" fn pager_open_wal(p_pager_1: *mut Pager) -> i32 {
     pager_fix_maplimit(p_pager_1);
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_open_wal(p_pager_1: *mut Pager,
     pb_open_1: &mut i32) -> i32 {
@@ -4243,6 +4332,7 @@ pub extern "C" fn sqlite3_pager_open_wal(p_pager_1: *mut Pager,
     } else { *pb_open_1 = 1; }
     return rc;
 }
+
 extern "C" fn pager_open_wal_if_present(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -4275,6 +4365,7 @@ extern "C" fn pager_open_wal_if_present(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_begin_read_transaction(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
     let mut changed: i32 = 0;
@@ -4299,6 +4390,7 @@ extern "C" fn pager_begin_read_transaction(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_shared_lock(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = 0;
@@ -4431,6 +4523,7 @@ pub extern "C" fn sqlite3_pager_shared_lock(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_set_journal_mode(p_pager_1: *mut Pager,
     mut e_mode_1: i32) -> i32 {
@@ -4485,10 +4578,12 @@ pub extern "C" fn sqlite3_pager_set_journal_mode(p_pager_1: *mut Pager,
     }
     return unsafe { (*p_pager_1).journal_mode } as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_get_journal_mode(p_pager_1: &Pager) -> i32 {
     return (*p_pager_1).journal_mode as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_ok_to_change_journal_mode(p_pager_1: &Pager)
     -> i32 {
@@ -4500,6 +4595,7 @@ pub extern "C" fn sqlite3_pager_ok_to_change_journal_mode(p_pager_1: &Pager)
     }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_journal_size_limit(p_pager_1: &mut Pager,
     i_limit_1: i64) -> i64 {
@@ -4509,11 +4605,13 @@ pub extern "C" fn sqlite3_pager_journal_size_limit(p_pager_1: &mut Pager,
     }
     return (*p_pager_1).journal_size_limit;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_backup_ptr(p_pager_1: &mut Pager)
     -> *mut *mut Sqlite3Backup {
     return &mut (*p_pager_1).p_backup;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_flush(p_pager_1: *mut Pager) -> i32 {
     let mut rc: i32 = unsafe { (*p_pager_1).err_code };
@@ -4533,14 +4631,17 @@ pub extern "C" fn sqlite3_pager_flush(p_pager_1: *mut Pager) -> i32 {
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_ref(p_pg_1: *mut DbPage) -> () {
     unsafe { sqlite3_pcache_ref(p_pg_1 as *mut PgHdr) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_unref(p_pg_1: *mut DbPage) -> () {
     if !(p_pg_1).is_null() { sqlite3_pager_unref_not_null(p_pg_1); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_unref_page_one(p_pg_1: *mut DbPage) -> () {
     let mut p_pager: *mut Pager = core::ptr::null_mut();
@@ -4551,11 +4652,13 @@ pub extern "C" fn sqlite3_pager_unref_page_one(p_pg_1: *mut DbPage) -> () {
     unsafe { sqlite3_pcache_release(p_pg_1 as *mut PgHdr) };
     pager_unlock_if_unused(p_pager);
 }
+
 extern "C" fn jrnl_buffer_size(p_pager_1: *const Pager) -> i32 {
     { let _ = 0; };
     { let _ = p_pager_1; };
     return 0;
 }
+
 extern "C" fn pager_open_journal(p_pager_1: *mut Pager) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -4624,6 +4727,7 @@ extern "C" fn pager_open_journal(p_pager_1: *mut Pager) -> i32 {
         return rc;
     }
 }
+
 extern "C" fn pager_add_page_to_rollback_journal(p_pg_1: &mut PgHdr) -> i32 {
     let p_pager: *mut Pager = (*p_pg_1).p_pager;
     let mut rc: i32 = 0;
@@ -4668,6 +4772,7 @@ extern "C" fn pager_add_page_to_rollback_journal(p_pg_1: &mut PgHdr) -> i32 {
     { let _ = 0; };
     return rc;
 }
+
 extern "C" fn pager_write(p_pg_1: *mut PgHdr) -> i32 {
     let p_pager: *mut Pager = unsafe { (*p_pg_1).p_pager };
     let mut rc: i32 = 0;
@@ -4708,6 +4813,7 @@ extern "C" fn pager_write(p_pg_1: *mut PgHdr) -> i32 {
     }
     return rc;
 }
+
 extern "C" fn pager_write_large_sector(p_pg_1: &PgHdr) -> i32 {
     let mut rc: i32 = 0;
     let mut n_page_count: Pgno = 0 as Pgno;
@@ -4797,6 +4903,7 @@ extern "C" fn pager_write_large_sector(p_pg_1: &PgHdr) -> i32 {
     unsafe { (*p_pager).do_not_spill &= !4 as u8 };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_write(p_pg_1: *mut PgHdr) -> i32 {
     let p_pager: *const Pager = unsafe { (*p_pg_1).p_pager } as *const Pager;
@@ -4817,6 +4924,7 @@ pub extern "C" fn sqlite3_pager_write(p_pg_1: *mut PgHdr) -> i32 {
         return pager_write_large_sector(unsafe { &*p_pg_1 });
     } else { return pager_write(p_pg_1); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_dont_write(p_pg_1: &mut PgHdr) -> () {
     let p_pager: *const Pager = (*p_pg_1).p_pager as *const Pager;
@@ -4827,6 +4935,7 @@ pub extern "C" fn sqlite3_pager_dont_write(p_pg_1: &mut PgHdr) -> () {
         (*p_pg_1).flags &= !4 as u16;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_movepage(p_pager_1: *mut Pager,
     p_pg_1: *mut DbPage, pgno: Pgno, is_commit_1: i32) -> i32 {
@@ -4903,20 +5012,24 @@ pub extern "C" fn sqlite3_pager_movepage(p_pager_1: *mut Pager,
     }
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_page_refcount(p_page_1: *mut DbPage) -> i32 {
     return unsafe { sqlite3_pcache_page_refcount(p_page_1 as *mut PgHdr) } as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_get_data(p_pg_1: &DbPage) -> *mut () {
     { let _ = 0; };
     return (*p_pg_1).p_data;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_get_extra(p_pg_1: &DbPage) -> *mut () {
     return (*p_pg_1).p_extra;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_pagecount(p_pager_1: &Pager,
     pn_page_1: &mut i32) -> () {
@@ -4924,6 +5037,7 @@ pub extern "C" fn sqlite3_pager_pagecount(p_pager_1: &Pager,
     { let _ = 0; };
     *pn_page_1 = (*p_pager_1).db_size as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_begin(p_pager_1: *mut Pager, ex_flag_1: i32,
     subj_in_memory_1: i32) -> i32 {
@@ -4981,6 +5095,7 @@ pub extern "C" fn sqlite3_pager_begin(p_pager_1: *mut Pager, ex_flag_1: i32,
     }
     return rc;
 }
+
 extern "C" fn pager_incr_changecounter(p_pager_1: *mut Pager,
     is_direct_mode_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -5035,6 +5150,7 @@ extern "C" fn pager_incr_changecounter(p_pager_1: *mut Pager,
     }
     return rc;
 }
+
 extern "C" fn write_super_journal(p_pager_1: *mut Pager, z_super_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -5135,6 +5251,7 @@ extern "C" fn write_super_journal(p_pager_1: *mut Pager, z_super_1: *const i8)
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_commit_phase_one(p_pager_1: *mut Pager,
     z_super_1: *const i8, no_sync_1: i32) -> i32 {
@@ -5223,6 +5340,7 @@ pub extern "C" fn sqlite3_pager_commit_phase_one(p_pager_1: *mut Pager,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_commit_phase_two(p_pager_1: *mut Pager)
     -> i32 {
@@ -5250,6 +5368,7 @@ pub extern "C" fn sqlite3_pager_commit_phase_two(p_pager_1: *mut Pager)
             unsafe { (*p_pager_1).set_super } as i32, 1);
     return pager_error(p_pager_1, rc);
 }
+
 extern "C" fn pager_open_savepoint(p_pager_1: &mut Pager, n_savepoint_1: i32)
     -> i32 {
     let rc: i32 = 0;
@@ -5326,6 +5445,7 @@ extern "C" fn pager_open_savepoint(p_pager_1: &mut Pager, n_savepoint_1: i32)
     { let _ = 0; };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_open_savepoint(p_pager_1: *mut Pager,
     n_savepoint_1: i32) -> i32 {
@@ -5337,6 +5457,7 @@ pub extern "C" fn sqlite3_pager_open_savepoint(p_pager_1: *mut Pager,
                 n_savepoint_1);
     } else { return 0; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_checkpoint(p_pager_1: &mut Pager,
     db: *mut Sqlite3, e_mode_1: i32, pn_log_1: *mut i32, pn_ckpt_1: *mut i32)
@@ -5368,10 +5489,12 @@ pub extern "C" fn sqlite3_pager_checkpoint(p_pager_1: &mut Pager,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_wal_callback(p_pager_1: &Pager) -> i32 {
     return unsafe { sqlite3_wal_callback((*p_pager_1).p_wal) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_close_wal(p_pager_1: *mut Pager,
     db: *mut Sqlite3) -> i32 {
@@ -5410,6 +5533,7 @@ pub extern "C" fn sqlite3_pager_close_wal(p_pager_1: *mut Pager,
     }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_direct_read_ok(p_pager_1: &Pager, pgno: Pgno)
     -> i32 {
@@ -5444,14 +5568,17 @@ pub extern "C" fn sqlite3_pager_direct_read_ok(p_pager_1: &Pager, pgno: Pgno)
     }
     return 1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_isreadonly(p_pager_1: &Pager) -> u8 {
     return (*p_pager_1).read_only;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_data_version(p_pager_1: &Pager) -> u32 {
     return (*p_pager_1).i_data_version;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_mem_used(p_pager_1: *const Pager) -> i32 {
     let per_page_size: i32 =
@@ -5466,6 +5593,7 @@ pub extern "C" fn sqlite3_pager_mem_used(p_pager_1: *const Pager) -> i32 {
                             } + unsafe { sqlite3_malloc_size(p_pager_1 as *const ()) })
                     as i64 + unsafe { (*p_pager_1).page_size }) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_filename(p_pager_1: &Pager,
     null_if_mem_db_1: i32) -> *const i8 {
@@ -5477,14 +5605,17 @@ pub extern "C" fn sqlite3_pager_filename(p_pager_1: &Pager,
         return &z_fake[4 as usize];
     } else { return (*p_pager_1).z_filename as *const i8; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_vfs(p_pager_1: &Pager) -> *mut Sqlite3Vfs {
     return (*p_pager_1).p_vfs;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_file(p_pager_1: &Pager) -> *mut Sqlite3File {
     return (*p_pager_1).fd;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_jrnl_file(p_pager_1: &Pager)
     -> *mut Sqlite3File {
@@ -5492,18 +5623,22 @@ pub extern "C" fn sqlite3_pager_jrnl_file(p_pager_1: &Pager)
             unsafe { sqlite3_wal_file((*p_pager_1).p_wal) }
         } else { (*p_pager_1).jfd };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_journalname(p_pager_1: &Pager) -> *const i8 {
     return (*p_pager_1).z_journal as *const i8;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_temp_space(p_pager_1: &Pager) -> *mut () {
     return (*p_pager_1).p_tmp_space as *mut ();
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_is_memdb(p_pager_1: &Pager) -> i32 {
     return ((*p_pager_1).temp_file != 0 || (*p_pager_1).mem_vfs != 0) as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_cache_stat(p_pager_1: &mut Pager,
     mut e_stat_1: i32, reset: i32, pn_val_1: &mut u64) -> () {
@@ -5515,6 +5650,7 @@ pub extern "C" fn sqlite3_pager_cache_stat(p_pager_1: &mut Pager,
     *pn_val_1 += (*p_pager_1).a_stat[e_stat_1 as usize] as u64;
     if reset != 0 { (*p_pager_1).a_stat[e_stat_1 as usize] = 0 as u32; }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_clear_cache(p_pager_1: *mut Pager) -> () {
     { let _ = 0; };
@@ -5522,6 +5658,7 @@ pub extern "C" fn sqlite3_pager_clear_cache(p_pager_1: *mut Pager) -> () {
         pager_reset(unsafe { &mut *p_pager_1 });
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_truncate_image(p_pager_1: &mut Pager,
     n_page_1: Pgno) -> () {
@@ -5529,6 +5666,7 @@ pub extern "C" fn sqlite3_pager_truncate_image(p_pager_1: &mut Pager,
     { let _ = 0; };
     (*p_pager_1).db_size = n_page_1;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pager_rekey(p_pg_1: *mut DbPage, i_new_1: Pgno,
     flags: u16) -> () {
@@ -5536,12 +5674,16 @@ pub extern "C" fn sqlite3_pager_rekey(p_pg_1: *mut DbPage, i_new_1: Pgno,
     unsafe { (*p_pg_1).flags = flags };
     unsafe { sqlite3_pcache_move(p_pg_1 as *mut PgHdr, i_new_1) };
 }
+
 static zero_hdr: [i8; 28] =
     [0 as i8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0];
+
 static zerobyte: u8 = 0 as u8;
+
 static z_fake: [i8; 8] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -8255,41 +8397,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PCache {
@@ -401,6 +410,7 @@ struct PCache {
     p_stress: *mut (),
     p_cache: *mut Sqlite3Pcache,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_initialize() -> i32 {
     unsafe {
@@ -413,6 +423,7 @@ pub extern "C" fn sqlite3_pcache_initialize() -> i32 {
             };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_shutdown() -> () {
     unsafe {
@@ -423,6 +434,7 @@ pub extern "C" fn sqlite3_pcache_shutdown() -> () {
         }
     }
 }
+
 extern "C" fn number_of_cache_pages(p: &PCache) -> i32 {
     if (*p).sz_cache >= 0 {
         return (*p).sz_cache;
@@ -435,6 +447,7 @@ extern "C" fn number_of_cache_pages(p: &PCache) -> i32 {
         return n as i32;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_page_size(p_cache: *mut PCache,
     sz_page: i32) -> i32 {
@@ -468,6 +481,7 @@ pub extern "C" fn sqlite3_pcache_set_page_size(p_cache: *mut PCache,
         return 0;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_open(sz_page: i32, sz_extra: i32,
     b_purgeable: i32,
@@ -485,10 +499,12 @@ pub extern "C" fn sqlite3_pcache_open(sz_page: i32, sz_extra: i32,
     unsafe { (*p).sz_spill = 1 };
     return sqlite3_pcache_set_page_size(p, sz_page);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_size() -> i32 {
     return core::mem::size_of::<PCache>() as i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_fetch(p_cache: &PCache, pgno: Pgno,
     create_flag: i32) -> *mut Sqlite3PcachePage {
@@ -511,6 +527,7 @@ pub extern "C" fn sqlite3_pcache_fetch(p_cache: &PCache, pgno: Pgno,
         return p_res;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_pagecount(p_cache: &PCache) -> i32 {
     unsafe {
@@ -520,6 +537,7 @@ pub extern "C" fn sqlite3_pcache_pagecount(p_cache: &PCache) -> i32 {
             };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_fetch_stress(p_cache: *mut PCache,
     pgno: Pgno, pp_page: &mut *mut Sqlite3PcachePage) -> i32 {
@@ -573,6 +591,7 @@ pub extern "C" fn sqlite3_pcache_fetch_stress(p_cache: *mut PCache,
         return if *pp_page == core::ptr::null_mut() { 7 } else { 0 };
     }
 }
+
 extern "C" fn pcache_fetch_finish_with_init(p_cache_1: *mut PCache,
     pgno: Pgno, p_page_1: *mut Sqlite3PcachePage) -> *mut PgHdr {
     let mut p_pg_hdr: *mut PgHdr = core::ptr::null_mut();
@@ -597,6 +616,7 @@ extern "C" fn pcache_fetch_finish_with_init(p_cache_1: *mut PCache,
     unsafe { (*p_pg_hdr).flags = 1 as u16 };
     return sqlite3_pcache_fetch_finish(p_cache_1, pgno, p_page_1);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_fetch_finish(p_cache: *mut PCache,
     pgno: Pgno, p_page: *mut Sqlite3PcachePage) -> *mut PgHdr {
@@ -621,6 +641,7 @@ pub extern "C" fn sqlite3_pcache_fetch_finish(p_cache: *mut PCache,
     { let _ = 0; };
     return p_pg_hdr;
 }
+
 extern "C" fn pcache_unpin(p: &PgHdr) -> () {
     unsafe {
         if unsafe { (*(*p).p_cache).b_purgeable } != 0 {
@@ -632,6 +653,7 @@ extern "C" fn pcache_unpin(p: &PgHdr) -> () {
         }
     }
 }
+
 extern "C" fn pcache_manage_dirty_list(p_page_1: *mut PgHdr, add_remove_1: u8)
     -> () {
     let p: *mut PCache = unsafe { (*p_page_1).p_cache };
@@ -689,6 +711,7 @@ extern "C" fn pcache_manage_dirty_list(p_page_1: *mut PgHdr, add_remove_1: u8)
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_release(p: *mut PgHdr) -> () {
     { let _ = 0; };
@@ -704,6 +727,7 @@ pub extern "C" fn sqlite3_pcache_release(p: *mut PgHdr) -> () {
         } else { pcache_manage_dirty_list(p, 3 as u8); { let _ = 0; }; }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_drop(p: *mut PgHdr) -> () {
     unsafe {
@@ -725,6 +749,7 @@ pub extern "C" fn sqlite3_pcache_drop(p: *mut PgHdr) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_make_dirty(p: *mut PgHdr) -> () {
     { let _ = 0; };
@@ -740,6 +765,7 @@ pub extern "C" fn sqlite3_pcache_make_dirty(p: *mut PgHdr) -> () {
         { let _ = 0; };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_make_clean(p: *mut PgHdr) -> () {
     { let _ = 0; };
@@ -751,6 +777,7 @@ pub extern "C" fn sqlite3_pcache_make_clean(p: *mut PgHdr) -> () {
     { let _ = 0; };
     if unsafe { (*p).n_ref } == 0 as i64 { pcache_unpin(unsafe { &*p }); }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clean_all(p_cache: &PCache) -> () {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -758,6 +785,7 @@ pub extern "C" fn sqlite3_pcache_clean_all(p_cache: &PCache) -> () {
         sqlite3_pcache_make_clean(p);
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear_writable(p_cache: &mut PCache) -> () {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -774,6 +802,7 @@ pub extern "C" fn sqlite3_pcache_clear_writable(p_cache: &mut PCache) -> () {
     }
     (*p_cache).p_synced = (*p_cache).p_dirty_tail;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_move(p: *mut PgHdr, new_pgno: Pgno) -> () {
     unsafe {
@@ -819,6 +848,7 @@ pub extern "C" fn sqlite3_pcache_move(p: *mut PgHdr, new_pgno: Pgno) -> () {
         }
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
     -> () {
@@ -864,6 +894,7 @@ pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
         }
     }
 }
+
 extern "C" fn pcache_merge_dirty_list(mut p_a_1: *mut PgHdr,
     mut p_b_1: *mut PgHdr) -> *mut PgHdr {
     let mut result: PgHdr = unsafe { core::mem::zeroed() };
@@ -896,6 +927,7 @@ extern "C" fn pcache_merge_dirty_list(mut p_a_1: *mut PgHdr,
     }
     return result.p_dirty;
 }
+
 extern "C" fn pcache_sort_dirty_list(mut p_in_1: *mut PgHdr) -> *mut PgHdr {
     let mut a: [*mut PgHdr; 32] = [core::ptr::null_mut(); 32];
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -947,6 +979,7 @@ extern "C" fn pcache_sort_dirty_list(mut p_in_1: *mut PgHdr) -> *mut PgHdr {
     }
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_dirty_list(p_cache: &PCache) -> *mut PgHdr {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -963,6 +996,7 @@ pub extern "C" fn sqlite3_pcache_dirty_list(p_cache: &PCache) -> *mut PgHdr {
     }
     return pcache_sort_dirty_list((*p_cache).p_dirty);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_close(p_cache: &PCache) -> () {
     unsafe {
@@ -972,6 +1006,7 @@ pub extern "C" fn sqlite3_pcache_close(p_cache: &PCache) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear_sync_flags(p_cache: &mut PCache)
     -> () {
@@ -986,14 +1021,17 @@ pub extern "C" fn sqlite3_pcache_clear_sync_flags(p_cache: &mut PCache)
     }
     (*p_cache).p_synced = (*p_cache).p_dirty_tail;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear(p_cache: *mut PCache) -> () {
     sqlite3_pcache_truncate(unsafe { &*p_cache }, 0 as Pgno);
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_ref_count(p_cache: &PCache) -> i64 {
     return (*p_cache).n_ref_sum;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_ref(p: &mut PgHdr) -> () {
     { let _ = 0; };
@@ -1006,10 +1044,12 @@ pub extern "C" fn sqlite3_pcache_ref(p: &mut PgHdr) -> () {
         __t
     };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_page_refcount(p: &PgHdr) -> i64 {
     return (*p).n_ref;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_cachesize(p_cache: *mut PCache,
     mx_page: i32) -> () {
@@ -1023,6 +1063,7 @@ pub extern "C" fn sqlite3_pcache_set_cachesize(p_cache: *mut PCache,
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_spillsize(p: *mut PCache,
     mut mx_page: i32) -> i32 {
@@ -1041,6 +1082,7 @@ pub extern "C" fn sqlite3_pcache_set_spillsize(p: *mut PCache,
     if res < unsafe { (*p).sz_spill } { res = unsafe { (*p).sz_spill }; }
     return res;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_shrink(p_cache: &PCache) -> () {
     unsafe {
@@ -1050,11 +1092,13 @@ pub extern "C" fn sqlite3_pcache_shrink(p_cache: &PCache) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_header_size_pcache() -> i32 {
     return (core::mem::size_of::<PgHdr>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_cache_percent_dirty(p_cache: *mut PCache) -> i32 {
     let mut p_dirty: *const PgHdr = core::ptr::null();
@@ -1075,10 +1119,12 @@ pub extern "C" fn sqlite3_p_cache_percent_dirty(p_cache: *mut PCache) -> i32 {
             (n_dirty as i64 * 100 as i64 / n_cache as i64) as i32
         } else { 0 };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_cache_is_dirty(p_cache: &PCache) -> i32 {
     return ((*p_cache).p_dirty != core::ptr::null_mut()) as i32;
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -3802,41 +3848,49 @@ extern "C" {
     fn sqlite3_compile_options(pn_opt_1: *mut i32)
     -> *mut *const i8;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -13,7 +14,9 @@ mod sqlite_int_h;
 pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
+
 type DarwinSizeT = u64;
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -26,6 +29,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -105,6 +109,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -153,6 +158,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -289,6 +295,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -312,6 +319,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -384,6 +392,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFile {
@@ -391,6 +400,7 @@ struct MemFile {
     p_store: *mut MemStore,
     e_lock: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemStore {
@@ -406,19 +416,24 @@ struct MemStore {
     n_ref: i32,
     z_f_name: *mut i8,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFS {
     n_mem_store: i32,
     ap_mem_store: *mut *mut MemStore,
 }
+
 static mut memdb_g: MemFS = unsafe { core::mem::zeroed() };
+
 extern "C" fn memdb_enter(p: &MemStore) -> () {
     unsafe { sqlite3_mutex_enter((*p).p_mutex) };
 }
+
 extern "C" fn memdb_leave(p: &MemStore) -> () {
     unsafe { sqlite3_mutex_leave((*p).p_mutex) };
 }
+
 extern "C" fn memdb_close(p_file: *mut Sqlite3File) -> i32 {
     unsafe {
         let p: *mut MemStore = unsafe { (*(p_file as *mut MemFile)).p_store };
@@ -477,6 +492,7 @@ extern "C" fn memdb_close(p_file: *mut Sqlite3File) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn memdb_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     unsafe {
@@ -503,6 +519,7 @@ extern "C" fn memdb_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
         return 0;
     }
 }
+
 extern "C" fn memdb_enlarge(p: &mut MemStore, mut new_sz_1: Sqlite3Int64)
     -> i32 {
     let mut p_new: *mut u8 = core::ptr::null_mut();
@@ -518,6 +535,7 @@ extern "C" fn memdb_enlarge(p: &mut MemStore, mut new_sz_1: Sqlite3Int64)
     (*p).sz_alloc = new_sz_1;
     return 0;
 }
+
 extern "C" fn memdb_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     unsafe {
@@ -556,6 +574,7 @@ extern "C" fn memdb_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
         return 0;
     }
 }
+
 extern "C" fn memdb_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     unsafe {
@@ -569,11 +588,13 @@ extern "C" fn memdb_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
         return rc;
     }
 }
+
 extern "C" fn memdb_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     { let _ = p_file; };
     { let _ = flags; };
     return 0;
 }
+
 extern "C" fn memdb_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     unsafe {
@@ -584,6 +605,7 @@ extern "C" fn memdb_file_size(p_file: *mut Sqlite3File,
         return 0;
     }
 }
+
 extern "C" fn memdb_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p_this: *mut MemFile = p_file as *mut MemFile;
     let p: *mut MemStore = unsafe { (*p_this).p_store };
@@ -695,6 +717,7 @@ extern "C" fn memdb_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     memdb_leave(unsafe { &*p });
     return rc;
 }
+
 extern "C" fn memdb_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p_this: *mut MemFile = p_file as *mut MemFile;
     let p: *mut MemStore = unsafe { (*p_this).p_store };
@@ -730,6 +753,7 @@ extern "C" fn memdb_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     memdb_leave(unsafe { &*p });
     return 0;
 }
+
 extern "C" fn memdb_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     unsafe {
@@ -762,10 +786,12 @@ extern "C" fn memdb_file_control(p_file: *mut Sqlite3File, op: i32,
         return rc;
     }
 }
+
 extern "C" fn memdb_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     { let _ = p_file; };
     return 1 | 4096 | 512 | 1024;
 }
+
 extern "C" fn memdb_fetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     unsafe {
@@ -791,6 +817,7 @@ extern "C" fn memdb_fetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
         return 0;
     }
 }
+
 extern "C" fn memdb_unfetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     let p: *mut MemStore = unsafe { (*(p_file as *mut MemFile)).p_store };
@@ -801,6 +828,7 @@ extern "C" fn memdb_unfetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     memdb_leave(unsafe { &*p });
     return 0;
 }
+
 static memdb_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -823,6 +851,7 @@ static memdb_io_methods: Sqlite3IoMethods =
         x_fetch: Some(memdb_fetch),
         x_unfetch: Some(memdb_unfetch),
     };
+
 extern "C" fn memdb_from_db_schema(db: *mut Sqlite3, z_schema_1: *const i8)
     -> *mut MemFile {
     let mut p: *mut MemFile = core::ptr::null_mut();
@@ -844,6 +873,7 @@ extern "C" fn memdb_from_db_schema(db: *mut Sqlite3, z_schema_1: *const i8)
     memdb_leave(unsafe { &*p_store });
     return p;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_serialize(db: *mut Sqlite3,
     mut z_schema_1: *const i8, pi_size_1: *mut Sqlite3Int64, m_flags_1: u32)
@@ -1134,6 +1164,7 @@ pub extern "C" fn sqlite3_serialize(db: *mut Sqlite3,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_deserialize(db: *mut Sqlite3,
     mut z_schema_1: *const i8, mut p_data_1: *mut u8, sz_db_1: Sqlite3Int64,
@@ -1207,6 +1238,7 @@ pub extern "C" fn sqlite3_deserialize(db: *mut Sqlite3,
         }
     }
 }
+
 extern "C" fn memdb_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_fd: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -1338,6 +1370,7 @@ extern "C" fn memdb_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         return 0;
     }
 }
+
 extern "C" fn memdb_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     { let _ = p_vfs; };
@@ -1346,6 +1379,7 @@ extern "C" fn memdb_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     unsafe { *p_res_out = 0 };
     return 0;
 }
+
 extern "C" fn memdb_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     { let _ = p_vfs; };
@@ -1355,6 +1389,7 @@ extern "C" fn memdb_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     };
     return 0;
 }
+
 extern "C" fn memdb_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -1364,6 +1399,7 @@ extern "C" fn memdb_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, z_path)
         };
 }
+
 extern "C" fn memdb_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -1374,6 +1410,7 @@ extern "C" fn memdb_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
             z_err_msg)
     };
 }
+
 extern "C" fn memdb_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -1384,6 +1421,7 @@ extern "C" fn memdb_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
                 z_sym)
         };
 }
+
 extern "C" fn memdb_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     -> () {
     unsafe {
@@ -1393,6 +1431,7 @@ extern "C" fn memdb_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
             })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, p_handle)
     };
 }
+
 extern "C" fn memdb_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -1403,6 +1442,7 @@ extern "C" fn memdb_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
                 z_buf_out)
         };
 }
+
 extern "C" fn memdb_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -1411,6 +1451,7 @@ extern "C" fn memdb_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, n_micro)
         };
 }
+
 extern "C" fn memdb_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
     -> i32 {
     return unsafe {
@@ -1420,6 +1461,7 @@ extern "C" fn memdb_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, a, b)
         };
 }
+
 extern "C" fn memdb_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     p: *mut Sqlite3Int64) -> i32 {
     return unsafe {
@@ -1429,6 +1471,7 @@ extern "C" fn memdb_current_time_int64(p_vfs: *mut Sqlite3Vfs,
                 })(unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs, p)
         };
 }
+
 static mut memdb_vfs: Sqlite3Vfs =
     Sqlite3Vfs {
         i_version: 2,
@@ -1454,6 +1497,7 @@ static mut memdb_vfs: Sqlite3Vfs =
         x_get_system_call: None,
         x_next_system_call: None,
     };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memdb_init() -> i32 {
     unsafe {
@@ -1470,13 +1514,16 @@ pub extern "C" fn sqlite3_memdb_init() -> i32 {
         return unsafe { sqlite3_vfs_register(&mut memdb_vfs, 0) };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_memdb(p_vfs: *const Sqlite3Vfs) -> i32 {
     unsafe {
         return (p_vfs == &raw mut memdb_vfs as *const Sqlite3Vfs) as i32;
     }
 }
+
 type MemVfs = Sqlite3Vfs;
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4260,41 +4307,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

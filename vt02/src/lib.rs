@@ -1,12 +1,16 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
 pub(crate) use crate::sqlite3ext_h::*;
+
 type DarwinSizeT = u64;
+
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Vt02Vtab {
@@ -14,6 +18,7 @@ struct Vt02Vtab {
     db: *mut Sqlite3,
     busy: i32,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Vt02Cur {
@@ -24,6 +29,7 @@ struct Vt02Cur {
     i_incr: i32,
     m_d: u32,
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn vt02_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_v_tab_1: *mut *mut Sqlite3Vtab,
@@ -71,6 +77,7 @@ pub extern "C" fn vt02_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn vt02_disconnect(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe {
@@ -80,6 +87,7 @@ pub extern "C" fn vt02_disconnect(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
         return 0;
     }
 }
+
 unsafe extern "C" fn vt02_err_msg(p_vtab_1: &mut Sqlite3Vtab,
     z_format_1: *const i8, mut __va0: ...) -> () {
     unsafe {
@@ -97,6 +105,7 @@ unsafe extern "C" fn vt02_err_msg(p_vtab_1: &mut Sqlite3Vtab,
         ();
     }
 }
+
 extern "C" fn vt02_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -119,6 +128,7 @@ extern "C" fn vt02_open(p_v_tab_1: *mut Sqlite3Vtab,
         return 0;
     }
 }
+
 extern "C" fn vt02_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p_cur: *mut Vt02Cur = p_cursor_1 as *mut Vt02Cur;
@@ -128,11 +138,13 @@ extern "C" fn vt02_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
         return 0;
     }
 }
+
 extern "C" fn vt02_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const Vt02Cur = p_cursor_1 as *mut Vt02Cur as *const Vt02Cur;
     return (unsafe { (*p_cur).i } < unsafe { (*p_cur).i_min } ||
                 unsafe { (*p_cur).i } >= unsafe { (*p_cur).i_eof }) as i32;
 }
+
 extern "C" fn vt02_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Vt02Cur = p_cursor_1 as *mut Vt02Cur;
     '__b0: loop {
@@ -154,6 +166,7 @@ extern "C" fn vt02_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     }
     return 0;
 }
+
 extern "C" fn vt02_filter(p_cursor_1: *mut Sqlite3VtabCursor,
     mut idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -622,6 +635,7 @@ extern "C" fn vt02_filter(p_cursor_1: *mut Sqlite3VtabCursor,
         unreachable!();
     }
 }
+
 extern "C" fn vt02_column(p_cursor_1: *mut Sqlite3VtabCursor,
     context: *mut Sqlite3Context, n_1: i32) -> i32 {
     unsafe {
@@ -641,12 +655,14 @@ extern "C" fn vt02_column(p_cursor_1: *mut Sqlite3VtabCursor,
         return 0;
     }
 }
+
 extern "C" fn vt02_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut Sqlite3Int64) -> i32 {
     let p_cur: *const Vt02Cur = p_cursor_1 as *mut Vt02Cur as *const Vt02Cur;
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i } + 1 as Sqlite3Int64 };
     return 0;
 }
+
 unsafe extern "C" fn sqlite3_run_sql(db: *mut Sqlite3,
     p_v_tab_1: &mut Sqlite3Vtab, z_format_1: *const i8, mut __va0: ...)
     -> () {
@@ -709,6 +725,7 @@ unsafe extern "C" fn sqlite3_run_sql(db: *mut Sqlite3,
         }
     }
 }
+
 extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
     z_log_tab_1: *const i8, db: *mut Sqlite3, az_colname_1: *const *const i8,
     p_v_tab_1: *mut Sqlite3Vtab) -> () {
@@ -1098,6 +1115,7 @@ extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
         }
     }
 }
+
 extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     p_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe {
@@ -1586,6 +1604,7 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             } else { 0 };
     }
 }
+
 static vt02_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 2,
@@ -1614,6 +1633,7 @@ static vt02_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn vt02_core_init(db: *mut Sqlite3) -> () {
     unsafe {
         unsafe {
@@ -1637,11 +1657,13 @@ extern "C" fn vt02_core_init(db: *mut Sqlite3) -> () {
         };
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vt02_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe { sqlite3_api = p_api_1; vt02_core_init(db); return 0; }
 }
+
 static z_default_schema: [i8; 89] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1658,12 +1680,15 @@ static z_default_schema: [i8; 89] =
             98 as i8, 32 as i8, 84 as i8, 69 as i8, 88 as i8, 84 as i8,
             32 as i8, 72 as i8, 73 as i8, 68 as i8, 68 as i8, 69 as i8,
             78 as i8, 41 as i8, 59 as i8, 0 as i8];
+
 static i_divisor: [i32; 5] = [1, 1000, 100, 10, 1];
+
 static mut az_colname: [*const i8; 7] =
     [c"x".as_ptr() as *const i8, c"a".as_ptr() as *const i8,
             c"b".as_ptr() as *const i8, c"c".as_ptr() as *const i8,
             c"d".as_ptr() as *const i8, c"flags".as_ptr() as *const i8,
             c"logtab".as_ptr() as *const i8];
+
 static z_pk_x_schema: [i8; 110] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1684,6 +1709,7 @@ static z_pk_x_schema: [i8; 110] =
             69 as i8, 88 as i8, 84 as i8, 32 as i8, 72 as i8, 73 as i8,
             68 as i8, 68 as i8, 69 as i8, 78 as i8, 41 as i8, 59 as i8,
             0 as i8];
+
 static z_pk_abcd_schema: [i8; 147] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1710,6 +1736,7 @@ static z_pk_abcd_schema: [i8; 147] =
             69 as i8, 89 as i8, 40 as i8, 97 as i8, 44 as i8, 98 as i8,
             44 as i8, 99 as i8, 44 as i8, 100 as i8, 41 as i8, 41 as i8,
             59 as i8, 0 as i8];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;

@@ -1,12 +1,17 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[unsafe(no_mangle)]
 pub static mut n_extra: i32 = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub static mut az_extra: *mut *mut i8 = unsafe { core::mem::zeroed() };
+
 #[unsafe(no_mangle)]
 pub extern "C" fn find_option(z_name_1: *const i8, has_arg_1: i32,
     z_default_1: *const i8) -> *const i8 {
@@ -51,6 +56,7 @@ pub extern "C" fn find_option(z_name_1: *const i8, has_arg_1: i32,
         return z_result;
     }
 }
+
 unsafe extern "C" fn prepare(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -78,6 +84,7 @@ unsafe extern "C" fn prepare(db: *mut Sqlite3, z_format_1: *const i8,
         return p_stmt;
     }
 }
+
 unsafe extern "C" fn run_sql(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -93,6 +100,7 @@ unsafe extern "C" fn run_sql(db: *mut Sqlite3, z_format_1: *const i8,
     ();
     return rc;
 }
+
 extern "C" fn show_schema(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt =
@@ -167,6 +175,7 @@ extern "C" fn show_schema(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
     unsafe { sqlite3_finalize(p_stmt) };
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn get_varint(p: *const u8, v: &mut SqliteInt64) -> i32 {
     let mut q: *const u8 = p;
@@ -199,6 +208,7 @@ pub extern "C" fn get_varint(p: *const u8, v: &mut SqliteInt64) -> i32 {
     *v = x as SqliteInt64;
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
+
 extern "C" fn show_stat(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt =
@@ -264,6 +274,7 @@ extern "C" fn show_stat(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
     unsafe { sqlite3_finalize(p_stmt) };
 }
+
 extern "C" fn show_vocabulary(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut z_aux: *mut i8 = core::ptr::null_mut();
     let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -566,6 +577,7 @@ extern "C" fn show_vocabulary(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
         }
     }
 }
+
 extern "C" fn show_segment_stats(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_seg: i32 = 0;
@@ -801,6 +813,7 @@ extern "C" fn show_segment_stats(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
         }
     }
 }
+
 extern "C" fn print_tree_line(i_lower_1: Sqlite3Int64,
     i_upper_1: Sqlite3Int64) -> () {
     unsafe {
@@ -816,6 +829,7 @@ extern "C" fn print_tree_line(i_lower_1: Sqlite3Int64,
     }
     unsafe { printf(c"\n".as_ptr() as *mut i8 as *const i8) };
 }
+
 extern "C" fn is_null_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     i_block_id_1: Sqlite3Int64) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -832,6 +846,7 @@ extern "C" fn is_null_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     unsafe { sqlite3_finalize(p_stmt) };
     return rc;
 }
+
 extern "C" fn show_segdir_map(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut mx_index: i32 = 0;
     let mut i_index: i32 = 0;
@@ -958,6 +973,7 @@ extern "C" fn show_segdir_map(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe { sqlite3_finalize(p_stmt) };
     unsafe { sqlite3_finalize(p_stmt2) };
 }
+
 extern "C" fn decode_segment(a_data_1: *const u8, n_data_1: i32) -> () {
     let mut i_child: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut i_prefix: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1025,6 +1041,7 @@ extern "C" fn decode_segment(a_data_1: *const u8, n_data_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn print_blob(a_data_1: &[u8]) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -1100,6 +1117,7 @@ extern "C" fn print_blob(a_data_1: &[u8]) -> () {
         }
     }
 }
+
 extern "C" fn atoi64(mut z: *const i8) -> Sqlite3Int64 {
     let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
     while unsafe { *z.offset(0 as isize) } as i32 >= '0' as i32 &&
@@ -1117,6 +1135,7 @@ extern "C" fn atoi64(mut z: *const i8) -> Sqlite3Int64 {
     }
     return v;
 }
+
 extern "C" fn prepare_to_get_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     z_id_1: *const i8) -> *mut Sqlite3Stmt {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1138,6 +1157,7 @@ extern "C" fn prepare_to_get_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     }
     return p_stmt;
 }
+
 extern "C" fn show_segment(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe {
         let mut a_data: *const u8 = core::ptr::null();
@@ -1168,6 +1188,7 @@ extern "C" fn show_segment(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
         unsafe { sqlite3_finalize(p_stmt) };
     }
 }
+
 extern "C" fn decode_doclist(a_data_1: *const u8, n_data_1: i32) -> () {
     let mut i_prev_docid: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut i_docid: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1208,6 +1229,7 @@ extern "C" fn decode_doclist(a_data_1: *const u8, n_data_1: i32) -> () {
         }
     }
 }
+
 extern "C" fn show_doclist(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe {
         let mut a_data: *const u8 = core::ptr::null();
@@ -1247,6 +1269,7 @@ extern "C" fn show_doclist(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
         unsafe { sqlite3_finalize(p_stmt) };
     }
 }
+
 extern "C" fn list_big_segments(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut n_top: i32 = 0;
     let mut i: i32 = 0;
@@ -1280,6 +1303,7 @@ extern "C" fn list_big_segments(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
     unsafe { sqlite3_finalize(p_stmt) };
 }
+
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -1291,6 +1315,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -1391,12 +1416,14 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *mut *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2189,9 +2216,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

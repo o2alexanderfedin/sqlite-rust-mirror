@@ -1,8 +1,11 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -16,13 +19,16 @@ struct GlobalVars {
     n_oom_brkpt: i32,
     z_test_name: [i8; 100],
 }
+
 #[unsafe(no_mangle)]
 pub static mut g: GlobalVars = unsafe { core::mem::zeroed() };
+
 extern "C" fn oom_fault() -> () {
     unsafe {
         { let __p = &mut g.n_oom_brkpt; let __t = *__p; *__p += 1; __t };
     }
 }
+
 extern "C" fn oom_malloc(n_byte_1: i32) -> *mut () {
     unsafe {
         if n_byte_1 > 0 && g.b_oom_enable != 0 && g.i_oom_cntdown > 0 {
@@ -47,6 +53,7 @@ extern "C" fn oom_malloc(n_byte_1: i32) -> *mut () {
         return unsafe { g.s_orig_mem.x_malloc.unwrap()(n_byte_1) };
     }
 }
+
 extern "C" fn oom_realloc(p_old_1: *mut (), n_byte_1: i32) -> *mut () {
     unsafe {
         if n_byte_1 > 0 && g.b_oom_enable != 0 && g.i_oom_cntdown > 0 {
@@ -71,6 +78,7 @@ extern "C" fn oom_realloc(p_old_1: *mut (), n_byte_1: i32) -> *mut () {
         return unsafe { g.s_orig_mem.x_realloc.unwrap()(p_old_1, n_byte_1) };
     }
 }
+
 unsafe extern "C" fn abend_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -94,6 +102,7 @@ unsafe extern "C" fn abend_error(z_format_1: *const i8, mut __va0: ...)
         unsafe { abort() };
     }
 }
+
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -117,6 +126,7 @@ unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
         unsafe { exit(1) };
     }
 }
+
 unsafe extern "C" fn sqlexec(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -139,6 +149,7 @@ unsafe extern "C" fn sqlexec(db: *mut Sqlite3, z_format_1: *const i8,
     }
     unsafe { sqlite3_free(z_sql as *mut ()) };
 }
+
 extern "C" fn shell_log(p_not_used_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     unsafe {
@@ -149,10 +160,12 @@ extern "C" fn shell_log(p_not_used_1: *mut (), i_err_code_1: i32,
         unsafe { fflush(__stdoutp) };
     }
 }
+
 extern "C" fn shell_log_noop(p_not_used_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     return;
 }
+
 extern "C" fn exec_callback(not_used_1: *mut (), argc: i32,
     argv: *mut *mut i8, colv: *mut *mut i8) -> i32 {
     unsafe {
@@ -191,10 +204,12 @@ extern "C" fn exec_callback(not_used_1: *mut (), argc: i32,
         return 0;
     }
 }
+
 extern "C" fn exec_noop(not_used_1: *mut (), argc: i32, argv: *mut *mut i8,
     colv: *mut *mut i8) -> i32 {
     return 0;
 }
+
 extern "C" fn trace_callback(not_used_1: *mut (), z_msg_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -203,9 +218,11 @@ extern "C" fn trace_callback(not_used_1: *mut (), z_msg_1: *const i8) -> () {
         unsafe { fflush(__stdoutp) };
     }
 }
+
 extern "C" fn trace_noop(not_used_1: *mut (), z_msg_1: *const i8) -> () {
     return;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Str {
@@ -214,9 +231,11 @@ struct Str {
     n_alloc: Sqlite3Uint64,
     oom_err: i32,
 }
+
 extern "C" fn str_init(p: *mut Str) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<Str>() as u64) };
 }
+
 extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     let n: Sqlite3Uint64 = unsafe { strlen(z) } as Sqlite3Uint64;
     if unsafe { (*p).n } + n >= unsafe { (*p).n_alloc } {
@@ -248,11 +267,14 @@ extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     unsafe { (*p).n += n };
     unsafe { *unsafe { (*p).z.add(unsafe { (*p).n } as usize) } = 0 as i8 };
 }
+
 extern "C" fn str_str(p: &Str) -> *mut i8 { return (*p).z; }
+
 extern "C" fn str_free(p: *mut Str) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     str_init(p);
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EvalResult {
@@ -262,6 +284,7 @@ struct EvalResult {
     n_alloc: Sqlite3Int64,
     n_used: Sqlite3Int64,
 }
+
 extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     colnames: *mut *mut i8) -> i32 {
     let p: *mut EvalResult = p_ctx_1 as *mut EvalResult;
@@ -331,6 +354,7 @@ extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     }
     return 0;
 }
+
 extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const i8 = core::ptr::null();
@@ -373,6 +397,7 @@ extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
         };
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SeriesCursor {
@@ -384,6 +409,7 @@ struct SeriesCursor {
     mx_value: Sqlite3Int64,
     i_step: Sqlite3Int64,
 }
+
 extern "C" fn series_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -414,10 +440,12 @@ extern "C" fn series_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
     return rc;
 }
+
 extern "C" fn series_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
+
 extern "C" fn series_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
@@ -432,10 +460,12 @@ extern "C" fn series_open(p: *mut Sqlite3Vtab,
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_cur).base } };
     return 0;
 }
+
 extern "C" fn series_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
+
 extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut SeriesCursor = cur as *mut SeriesCursor;
     if unsafe { (*p_cur).is_desc } != 0 {
@@ -449,6 +479,7 @@ extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     return 0;
 }
+
 extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -466,6 +497,7 @@ extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     unsafe { sqlite3_result_int64(ctx, x) };
     return 0;
 }
+
 extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -473,6 +505,7 @@ extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     unsafe { *p_rowid_1 = unsafe { (*p_cur).i_rowid } };
     return 0;
 }
+
 extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SeriesCursor =
         cur as *mut SeriesCursor as *const SeriesCursor;
@@ -484,6 +517,7 @@ extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
                 i32;
     }
 }
+
 extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -554,6 +588,7 @@ extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     unsafe { (*p_cur).i_rowid = 1 as Sqlite3Int64 };
     return 0;
 }
+
 extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -660,6 +695,7 @@ extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
     unsafe { (*p_idx_info_1).idx_num = idx_num };
     return 0;
 }
+
 static mut series_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -688,6 +724,7 @@ static mut series_module: Sqlite3Module =
         x_shadow_name: None,
         x_integrity: None,
     };
+
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -700,6 +737,7 @@ extern "C" fn show_help() -> () {
         };
     }
 }
+
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -712,6 +750,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     }
     return -1;
 }
+
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -800,6 +839,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
         return if is_neg != 0 { -v } else { v } as i32;
     }
 }
+
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -825,6 +865,7 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
         return t;
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -1942,13 +1983,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntegerValueS0N16integerValueS0 {
     z_suffix: *mut i8,
     i_mult: i32,
 }
+
 static mut cnt: u32 = 0 as u32;
+
 static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
     [IntegerValueS0N16integerValueS0 {
                 z_suffix: c"KiB".as_ptr() as *mut i8,
@@ -1986,13 +2030,16 @@ static mut a_mult: [IntegerValueS0N16integerValueS0; 9] =
                 z_suffix: c"G".as_ptr() as *mut i8,
                 i_mult: 1000000000,
             }];
+
 static mut clock_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -2817,9 +2864,11 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

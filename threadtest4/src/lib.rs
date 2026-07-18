@@ -1,18 +1,26 @@
 #![feature(c_variadic)]
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 type DarwinPthreadT = *mut OpaquePthreadT;
+
 type PthreadT = DarwinPthreadT;
+
 type DarwinSizeT = u64;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadMutexT {
     __sig: i64,
     __opaque: [i8; 56],
 }
+
 type DarwinPthreadMutexT = OpaquePthreadMutexT;
+
 type PthreadMutexT = DarwinPthreadMutexT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WorkerInfo {
@@ -27,17 +35,20 @@ struct WorkerInfo {
     id: PthreadT,
     p_wr_mutex: *mut PthreadMutexT,
 }
+
 extern "C" fn check_oom(x: *mut ()) -> () {
     if x == core::ptr::null_mut() {
         eprintln!("out of memory");
         unsafe { exit(1) };
     }
 }
+
 extern "C" fn safe_malloc(sz: i32) -> *mut () {
     let x: *mut () = unsafe { sqlite3_malloc(if sz > 0 { sz } else { 1 }) };
     check_oom(x);
     return x;
 }
+
 unsafe extern "C" fn worker_trace(p: &WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -56,6 +67,7 @@ unsafe extern "C" fn worker_trace(p: &WorkerInfo, z_format_1: *const i8,
         unsafe { sqlite3_free(z_msg as *mut ()) };
     }
 }
+
 unsafe extern "C" fn prep_sql(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -86,6 +98,7 @@ unsafe extern "C" fn prep_sql(db: *mut Sqlite3, z_format_1: *const i8,
         return p_stmt;
     }
 }
+
 unsafe extern "C" fn run_sql(p: *mut WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -153,6 +166,7 @@ unsafe extern "C" fn run_sql(p: *mut WorkerInfo, z_format_1: *const i8,
         unsafe { sqlite3_finalize(p_stmt) };
     }
 }
+
 extern "C" fn worker_open_connection(p: *mut WorkerInfo, i_cnt_1: i32) -> () {
     unsafe {
         let mut z_file: *mut i8 = core::ptr::null_mut();
@@ -205,6 +219,7 @@ extern "C" fn worker_open_connection(p: *mut WorkerInfo, i_cnt_1: i32) -> () {
         };
     }
 }
+
 extern "C" fn worker_close_connection(p: *mut WorkerInfo) -> () {
     if !(unsafe { (*p).db }).is_null() {
         unsafe {
@@ -215,6 +230,7 @@ extern "C" fn worker_close_connection(p: *mut WorkerInfo) -> () {
         unsafe { (*p).db = core::ptr::null_mut() };
     }
 }
+
 extern "C" fn worker_delete_all_content(p: *mut WorkerInfo, in_trans_1: i32)
     -> () {
     if in_trans_1 != 0 {
@@ -285,6 +301,7 @@ extern "C" fn worker_delete_all_content(p: *mut WorkerInfo, in_trans_1: i32)
         };
     }
 }
+
 extern "C" fn worker_add_content(p: *mut WorkerInfo, mn: i32, mx: i32,
     i_tab_1: i32) -> () {
     let mut z_tab_def: *mut i8 = core::ptr::null_mut();
@@ -307,6 +324,7 @@ extern "C" fn worker_add_content(p: *mut WorkerInfo, mn: i32, mx: i32,
     unsafe { pthread_mutex_unlock(unsafe { (*p).p_wr_mutex }) };
     { let __p = unsafe { &mut (*p).n_test }; let __t = *__p; *__p += 1; __t };
 }
+
 unsafe extern "C" fn worker_error(p: &mut WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -316,6 +334,7 @@ unsafe extern "C" fn worker_error(p: &mut WorkerInfo, z_format_1: *const i8,
     (*p).z_msg = unsafe { sqlite3_vmprintf(z_format_1, ap) };
     ();
 }
+
 extern "C" fn worker_thread(p_arg_1: *mut ()) -> *mut () {
     unsafe {
         let p: *mut WorkerInfo = p_arg_1 as *mut WorkerInfo;
@@ -474,6 +493,7 @@ extern "C" fn worker_thread(p_arg_1: *mut ()) -> *mut () {
         return core::ptr::null_mut();
     }
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -750,16 +770,19 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Err(n_err);
     }
 }
+
 static a_order: [[u8; 3]; 6] =
     [[1 as u8, 2 as u8, 3 as u8], [1 as u8, 3 as u8, 2 as u8],
             [2 as u8, 1 as u8, 3 as u8], [2 as u8, 3 as u8, 1 as u8],
             [3 as u8, 1 as u8, 2 as u8], [3 as u8, 2 as u8, 1 as u8]];
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -1567,26 +1590,33 @@ extern "C" {
     fn __builtin_va_end(_: &mut *mut i8)
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadT {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadAttrT {
     _opaque: [u8; 0],
 }
+
 type PthreadAttrT = OpaquePthreadAttrT;
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct OpaquePthreadMutexattrT {
     _opaque: [u8; 0],
 }
+
 type PthreadMutexattrT = OpaquePthreadMutexattrT;

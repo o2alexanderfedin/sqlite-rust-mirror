@@ -1,4 +1,5 @@
 #![allow(unused_imports, dead_code)]
+
 mod btree_h;
 pub(crate) use crate::btree_h::*;
 mod hash_h;
@@ -15,6 +16,7 @@ mod vdbe_h;
 pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
 pub(crate) use crate::vdbe_int_h::*;
+
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_expired(&mut self, val: u32) {
@@ -62,6 +64,7 @@ impl Vdbe {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl Parse {
     fn disable_triggers(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -134,6 +137,7 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
     fn set_not_null(&mut self, val: u32) {
@@ -146,6 +150,7 @@ impl Column {
             (self._bitfield_1 & !(0xfu32 << 4u32)) | ((val & 0xfu32) << 4u32);
     }
 }
+
 impl Index {
     fn idx_type(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_idx_type(&mut self, val: u32) {
@@ -225,6 +230,7 @@ impl Index {
                 ((val & 0x1u32) << 11u32);
     }
 }
+
 impl SrcItemS0 {
     fn not_indexed(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -361,6 +367,7 @@ impl SrcItemS0 {
                 ((val & 0x1u32) << 18u32);
     }
 }
+
 impl ExprListItemS0 {
     fn e_e_name(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
     fn set_e_e_name(&mut self, val: u32) {
@@ -409,6 +416,7 @@ impl ExprListItemS0 {
             (self._bitfield_1 & !(0x1u32 << 8u32)) | ((val & 0x1u32) << 8u32);
     }
 }
+
 impl VdbeCursor {
     fn is_ephemeral(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -444,6 +452,7 @@ impl VdbeCursor {
             (self._bitfield_1 & !(0x1u32 << 4u32)) | ((val & 0x1u32) << 4u32);
     }
 }
+
 impl Sqlite3InitInfo {
     fn orphan_trigger(&self) -> i32 {
         ((self._bitfield_1 >> 0u32) & 0x1u32) as i32
@@ -467,6 +476,7 @@ impl Sqlite3InitInfo {
             (self._bitfield_1 & !(0x1u32 << 3u32)) | ((val & 0x1u32) << 3u32);
     }
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Incrblob {
@@ -479,6 +489,7 @@ struct Incrblob {
     z_db: *mut i8,
     p_tab: *mut Table,
 }
+
 extern "C" fn blob_seek_to_row(p: &mut Incrblob, i_row_1: Sqlite3Int64,
     pz_err_1: &mut *mut i8) -> i32 {
     unsafe {
@@ -567,6 +578,7 @@ extern "C" fn blob_seek_to_row(p: &mut Incrblob, i_row_1: Sqlite3Int64,
         return rc;
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_open(db: *mut Sqlite3, z_db_1: *const i8,
     z_table_1: *const i8, z_column_1: *const i8, i_row_1: SqliteInt64,
@@ -1096,6 +1108,7 @@ pub extern "C" fn sqlite3_blob_open(db: *mut Sqlite3, z_db_1: *const i8,
         unreachable!();
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_reopen(p_blob: *mut Sqlite3Blob,
     i_row: Sqlite3Int64) -> i32 {
@@ -1129,6 +1142,7 @@ pub extern "C" fn sqlite3_blob_reopen(p_blob: *mut Sqlite3Blob,
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_close(p_blob: *mut Sqlite3Blob) -> i32 {
     let p: *mut Incrblob = p_blob as *mut Incrblob;
@@ -1144,6 +1158,7 @@ pub extern "C" fn sqlite3_blob_close(p_blob: *mut Sqlite3Blob) -> i32 {
     } else { rc = 0; }
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_bytes(p_blob: *mut Sqlite3Blob) -> i32 {
     let p: *const Incrblob = p_blob as *mut Incrblob as *const Incrblob;
@@ -1151,6 +1166,7 @@ pub extern "C" fn sqlite3_blob_bytes(p_blob: *mut Sqlite3Blob) -> i32 {
             unsafe { (*p).n_byte }
         } else { 0 };
 }
+
 extern "C" fn blob_read_write(p_blob_1: *mut Sqlite3Blob, z: &mut [u8],
     i_offset_1: i32,
     x_call_1:
@@ -1192,6 +1208,7 @@ extern "C" fn blob_read_write(p_blob_1: *mut Sqlite3Blob, z: &mut [u8],
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return rc;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_read(p_blob: *mut Sqlite3Blob, z: *mut (),
     n: i32, i_offset: i32) -> i32 {
@@ -1203,6 +1220,7 @@ pub extern "C" fn sqlite3_blob_read(p_blob: *mut Sqlite3Blob, z: *mut (),
                 } else { core::slice::from_raw_parts_mut(__p, n as usize) }
             }, i_offset, Some(sqlite3_btree_payload_checked));
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_write(p_blob: *mut Sqlite3Blob, z: *const (),
     n: i32, i_offset: i32) -> i32 {
@@ -1214,7 +1232,9 @@ pub extern "C" fn sqlite3_blob_write(p_blob: *mut Sqlite3Blob, z: *const (),
                 } else { core::slice::from_raw_parts_mut(__p, n as usize) }
             }, i_offset, Some(sqlite3_btree_put_data));
 }
+
 static i_ln: i32 = 0 as i32;
+
 static open_blob: [VdbeOpList; 6] =
     [VdbeOpList { opcode: 171 as u8, p1: 0 as i8, p2: 0 as i8, p3: 0 as i8 },
             VdbeOpList {
@@ -1247,6 +1267,7 @@ static open_blob: [VdbeOpList; 6] =
                 p2: 0 as i8,
                 p3: 0 as i8,
             }];
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -4187,41 +4208,49 @@ extern "C" {
     fn __builtin_unreachable()
     -> ();
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CCurHint {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CheckOnCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CoveringIndexCheck {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameCtx {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WhereConst {
     _opaque: [u8; 0],
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowRewrite {

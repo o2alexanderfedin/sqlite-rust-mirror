@@ -1,6 +1,8 @@
 #![allow(unused_imports, dead_code)]
+
 mod sqlite3_h;
 pub(crate) use crate::sqlite3_h::*;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn rename_all_columns_of_table(db: *mut Sqlite3,
     z_tab_1: *const i8, z_col_prefix_1: *const i8,
@@ -38,6 +40,7 @@ pub extern "C" fn rename_all_columns_of_table(db: *mut Sqlite3,
     unsafe { sqlite3_finalize(p_stmt) };
     return 0;
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn rename_all_tables(db: *mut Sqlite3,
     p_convert_1: *mut Sqlite3Str, p_undo_1: *mut Sqlite3Str) -> i32 {
@@ -84,6 +87,7 @@ pub extern "C" fn rename_all_tables(db: *mut Sqlite3,
     unsafe { sqlite3_finalize(p_stmt) };
     return 0;
 }
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -133,12 +137,14 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         return Ok(());
     }
 }
+
 #[unsafe(no_mangle)]
 pub extern "C" fn main(argc: i32, argv: *const *mut i8) -> i32 {
     let __r: Result<(), i32> = __main_inner(argc, argv);
     if __r.is_ok() { return 0; }
     return __r.unwrap_err();
 }
+
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)
     -> bool;
@@ -916,9 +922,11 @@ extern "C" {
     -> i32;
     static mut __stderrp: *mut FILE;
 }
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SFILE {
     _opaque: [u8; 0],
 }
+
 type FILE = SFILE;

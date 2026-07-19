@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinPthreadT = *mut OpaquePthreadT;
 
@@ -36,6 +42,7 @@ struct WorkerInfo {
     p_wr_mutex: *mut PthreadMutexT,
 }
 
+///* Report an OOM error and die if the argument is NULL
 extern "C" fn check_oom(x: *mut ()) -> () {
     if x == core::ptr::null_mut() {
         eprintln!("out of memory");
@@ -43,12 +50,15 @@ extern "C" fn check_oom(x: *mut ()) -> () {
     }
 }
 
+///* Allocate memory.  If the allocation fails, print an error message and
+///* kill the process.
 extern "C" fn safe_malloc(sz: i32) -> *mut () {
     let x: *mut () = unsafe { sqlite3_malloc(if sz > 0 { sz } else { 1 }) };
     check_oom(x);
     return x;
 }
 
+///* Print a trace message for a worker
 unsafe extern "C" fn worker_trace(p: &WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -68,6 +78,7 @@ unsafe extern "C" fn worker_trace(p: &WorkerInfo, z_format_1: *const i8,
     }
 }
 
+///* Prepare a single SQL query
 unsafe extern "C" fn prep_sql(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -99,6 +110,7 @@ unsafe extern "C" fn prep_sql(db: *mut Sqlite3, z_format_1: *const i8,
     }
 }
 
+///* Run a SQL statements.  Panic if unable.
 unsafe extern "C" fn run_sql(p: *mut WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -167,6 +179,8 @@ unsafe extern "C" fn run_sql(p: *mut WorkerInfo, z_format_1: *const i8,
     }
 }
 
+///* Open the database connection for WorkerInfo.  The order in which
+///* the files are opened is a function of the tid value.
 extern "C" fn worker_open_connection(p: *mut WorkerInfo, i_cnt_1: i32) -> () {
     unsafe {
         let mut z_file: *mut i8 = core::ptr::null_mut();
@@ -220,6 +234,7 @@ extern "C" fn worker_open_connection(p: *mut WorkerInfo, i_cnt_1: i32) -> () {
     }
 }
 
+///* Close the worker database connection
 extern "C" fn worker_close_connection(p: *mut WorkerInfo) -> () {
     if !(unsafe { (*p).db }).is_null() {
         unsafe {
@@ -231,6 +246,10 @@ extern "C" fn worker_close_connection(p: *mut WorkerInfo) -> () {
     }
 }
 
+///* Delete all content in the three databases associated with a
+///* single thread.  Make this happen all in a single transaction if
+///* inTrans is true, or separately for each database if inTrans is
+///* false.
 extern "C" fn worker_delete_all_content(p: *mut WorkerInfo, in_trans_1: i32)
     -> () {
     if in_trans_1 != 0 {
@@ -302,6 +321,7 @@ extern "C" fn worker_delete_all_content(p: *mut WorkerInfo, in_trans_1: i32)
     }
 }
 
+///* Create rows mn through mx in table iTab for the given worker
 extern "C" fn worker_add_content(p: *mut WorkerInfo, mn: i32, mx: i32,
     i_tab_1: i32) -> () {
     let mut z_tab_def: *mut i8 = core::ptr::null_mut();
@@ -325,6 +345,7 @@ extern "C" fn worker_add_content(p: *mut WorkerInfo, mn: i32, mx: i32,
     { let __p = unsafe { &mut (*p).n_test }; let __t = *__p; *__p += 1; __t };
 }
 
+///* Set an error message on a worker
 unsafe extern "C" fn worker_error(p: &mut WorkerInfo, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -335,6 +356,7 @@ unsafe extern "C" fn worker_error(p: &mut WorkerInfo, z_format_1: *const i8,
     ();
 }
 
+///* Each thread runs the following function.
 extern "C" fn worker_thread(p_arg_1: *mut ()) -> *mut () {
     unsafe {
         let p: *mut WorkerInfo = p_arg_1 as *mut WorkerInfo;
@@ -494,20 +516,33 @@ extern "C" fn worker_thread(p_arg_1: *mut ()) -> *mut () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut n_worker: i32 = 0;
+        /// Number of worker threads
         let mut i: i32 = 0;
+        /// Loop counter
         let mut a_info: *mut WorkerInfo = core::ptr::null_mut();
+        /// Information for each worker
         let mut wkr_flags: u32 = 0 as u32;
+        /// Default worker flags
         let mut n_err: i32 = 0;
+        /// Number of errors
         let mut n_test: i32 = 0;
+        /// Number of tests
         let mut rc: i32 = 0;
+        /// Return code
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Main database connection
         let mut wr_mutex: PthreadMutexT = unsafe { core::mem::zeroed() };
+        /// The write serialization mutex
         let mut info_top: WorkerInfo = unsafe { core::mem::zeroed() };
+        /// WorkerInfo for the main thread
         let mut p: *mut WorkerInfo = core::ptr::null_mut();
+
+        /// Pointer to infoTop
         unsafe { sqlite3_config(2) };
         {
             i = 1;
@@ -590,29 +625,37 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         unsafe { sqlite3_initialize() };
         unsafe { sqlite3_enable_shared_cache(1) };
         unsafe { pthread_mutex_init(&mut wr_mutex, core::ptr::null()) };
+
+        /// Initialize the test database files
         {
             let _ =
                 unsafe {
                     unlink(c"tt4-test1.db".as_ptr() as *mut i8 as *const i8)
                 };
         };
+
+        /// Initialize the test database files
         {
             let _ =
                 unsafe {
                     unlink(c"tt4-test2.db".as_ptr() as *mut i8 as *const i8)
                 };
         };
+
+        /// Initialize the test database files
         {
             let _ =
                 unsafe {
                     unlink(c"tt4-test3.db".as_ptr() as *mut i8 as *const i8)
                 };
         };
-        rc =
+
+        /// Initialize the test database files
+        (rc =
             unsafe {
                 sqlite3_open(c"tt4-test1.db".as_ptr() as *mut i8 as *const i8,
                     &mut db)
-            };
+            });
         if rc != 0 {
             eprintln!("Unable to open test database: tt4-test2.db");
             unsafe { exit(1) };

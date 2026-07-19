@@ -1,21 +1,36 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -405,6 +420,40 @@ struct Sqlite3AutoExtList {
 static mut sqlite3_autoext: Sqlite3AutoExtList =
     Sqlite3AutoExtList { n_ext: 0 as u32, a_ext: core::ptr::null_mut() };
 
+///* CAPI3REF: Automatically Load Statically Linked Extensions
+///*
+///* ^This interface causes the xEntryPoint() function to be invoked for
+///* each new [database connection] that is created.  The idea here is that
+///* xEntryPoint() is the entry point for a statically linked [SQLite extension]
+///* that is to be automatically loaded into all new database connections.
+///*
+///* ^(Even though the function prototype shows that xEntryPoint() takes
+///* no arguments and returns void, SQLite invokes xEntryPoint() with three
+///* arguments and expects an integer result as if the signature of the
+///* entry point were as follows:
+///*
+///* <blockquote><pre>
+///* &nbsp;  int xEntryPoint(
+///* &nbsp;    sqlite3 *db,
+///* &nbsp;    char **pzErrMsg,
+///* &nbsp;    const struct sqlite3_api_routines *pThunk
+///* &nbsp;  );
+///* </pre></blockquote>)^
+///*
+///* If the xEntryPoint routine encounters an error, it should make *pzErrMsg
+///* point to an appropriate error message (obtained from [sqlite3_mprintf()])
+///* and return an appropriate [error code].  ^SQLite ensures that *pzErrMsg
+///* is NULL before calling the xEntryPoint().  ^SQLite will invoke
+///* [sqlite3_free()] on *pzErrMsg after xEntryPoint() returns.  ^If any
+///* xEntryPoint() returns an error, the [sqlite3_open()], [sqlite3_open16()],
+///* or [sqlite3_open_v2()] call that provoked the xEntryPoint() will fail.
+///*
+///* ^Calling sqlite3_auto_extension(X) with an entry point X that is already
+///* on the list of automatic extensions is a harmless no-op. ^No entry point
+///* will be called more than once for each database connection that is opened.
+///*
+///* See also: [sqlite3_reset_auto_extension()]
+///* and [sqlite3_cancel_auto_extension()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auto_extension(x_init: unsafe extern "C" fn() -> ())
     -> i32 {
@@ -470,6 +519,14 @@ pub extern "C" fn sqlite3_auto_extension(x_init: unsafe extern "C" fn() -> ())
     }
 }
 
+///* CAPI3REF: Cancel Automatic Extension Loading
+///*
+///* ^The [sqlite3_cancel_auto_extension(X)] interface unregisters the
+///* initialization routine X that was registered using a prior call to
+///* [sqlite3_auto_extension(X)].  ^The [sqlite3_cancel_auto_extension(X)]
+///* routine returns 1 if initialization routine X was successfully
+///* unregistered and it returns 0 if X was not on the list of initialization
+///* routines.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_cancel_auto_extension(x_init:
         unsafe extern "C" fn() -> ()) -> i32 {
@@ -510,6 +567,10 @@ pub extern "C" fn sqlite3_cancel_auto_extension(x_init:
     }
 }
 
+///* CAPI3REF: Reset Automatic Extension Loading
+///*
+///* ^This interface disables all automatic extensions previously
+///* registered using [sqlite3_auto_extension()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_reset_auto_extension() -> () {
     unsafe {
@@ -524,6 +585,19 @@ pub extern "C" fn sqlite3_reset_auto_extension() -> () {
     }
 }
 
+///* The following structure contains pointers to all SQLite API routines.
+///* A pointer to this structure is passed into extensions when they are
+///* loaded so that the extension can make calls back into the SQLite
+///* library.
+///*
+///* When adding new APIs, add them to the bottom of this structure
+///* in order to preserve backwards compatibility.
+///*
+///* Extensions that use newer APIs should first call the
+///* sqlite3_libversion_number() to make sure that the API they
+///* intend to use is supported by the library.  Extensions should
+///* also check to make sure that the pointer to the function is
+///* not NULL before calling it.
 static sqlite3_apis: Sqlite3ApiRoutines =
     Sqlite3ApiRoutines {
         aggregate_context: Some(sqlite3_aggregate_context),
@@ -811,6 +885,17 @@ static sqlite3_apis: Sqlite3ApiRoutines =
         result_str: Some(sqlite3_result_str),
     };
 
+///* Attempt to load an SQLite extension library contained in the file
+///* zFile.  The entry point is zProc.  zProc may be 0 in which case a
+///* default entry point name (sqlite3_extension_init) is used.  Use
+///* of the default name is recommended.
+///*
+///* Return SQLITE_OK on success and SQLITE_ERROR if something goes wrong.
+///*
+///* If an error occurs and pzErrMsg is not 0, then fill *pzErrMsg with 
+///* error message text.  The calling function should free this memory
+///* by calling sqlite3DbFree(db, ).
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_load_extension_2(db: *mut Sqlite3, z_file_1: *const i8,
     z_proc_1: *const i8, pz_err_msg_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -826,7 +911,38 @@ extern "C" fn sqlite3_load_extension_2(db: *mut Sqlite3, z_file_1: *const i8,
         let mut n_msg: u64 = 0 as u64;
         let mut ii: i32 = 0;
         let mut rc: i32 = 0;
+        /// Ticket #1863.  To avoid a creating security problems for older
+        ///* applications that relink against newer versions of SQLite, the
+        ///* ability to run load_extension is turned off by default.  One
+        ///* must call either sqlite3_enable_load_extension(db) or
+        ///* sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0)
+        ///* to turn on extension loading.
+        /// tag-20210611-1.  Some dlopen() implementations will segfault if given
+        ///* an oversize filename.  Most filesystems have a pathname limit of 4K,
+        ///* so limit the extension filename length to about twice that.
+        ///* https://sqlite.org/forum/forumpost/08a0d6d9bf
+        ///*
+        ///* Later (2023-03-25): Save an extra 6 bytes for the filename suffix.
+        ///* See https://sqlite.org/forum/forumpost/24083b579d.
+        /// Do not allow sqlite3_load_extension() to link to a copy of the
+        ///* running application, by passing in an empty filename.
         let mut z_alt_file: *mut i8 = core::ptr::null_mut();
+        /// If no entry point was specified and the default legacy
+        ///* entry point name "sqlite3_extension_init" was not found, then
+        ///* construct an entry point name "sqlite3_X_init" where the X is
+        ///* replaced by the lowercase value of every ASCII alphabetic 
+        ///* character in the filename after the last "/" up to the first ".",
+        ///* and skipping the first three characters if they are "lib".  
+        ///* Examples:
+        ///*
+        ///*    /usr/local/lib/libExample5.4.3.so ==>  sqlite3_example_init
+        ///*    C:/lib/mathfuncs.dll              ==>  sqlite3_mathfuncs_init
+        ///*
+        ///* If that still finds no entry point, repeat a second time but this
+        ///* time include both alphabetic and numeric characters up to the first
+        ///* ".".  Example:
+        ///*
+        ///*    /usr/local/lib/libExample5.4.3.so ==>  sqlite3_example5_init
         let mut i_file: i32 = 0;
         let mut i_entry: i32 = 0;
         let mut c: i32 = 0;
@@ -1291,10 +1407,88 @@ extern "C" fn sqlite3_load_extension_2(db: *mut Sqlite3, z_file_1: *const i8,
                 }
             }
         }
+
+        /// Shared library endings to try if zFile cannot be loaded as written
+        /// Ticket #1863.  To avoid a creating security problems for older
+        ///* applications that relink against newer versions of SQLite, the
+        ///* ability to run load_extension is turned off by default.  One
+        ///* must call either sqlite3_enable_load_extension(db) or
+        ///* sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, 0)
+        ///* to turn on extension loading.
+        /// tag-20210611-1.  Some dlopen() implementations will segfault if given
+        ///* an oversize filename.  Most filesystems have a pathname limit of 4K,
+        ///* so limit the extension filename length to about twice that.
+        ///* https://sqlite.org/forum/forumpost/08a0d6d9bf
+        ///*
+        ///* Later (2023-03-25): Save an extra 6 bytes for the filename suffix.
+        ///* See https://sqlite.org/forum/forumpost/24083b579d.
+        /// Do not allow sqlite3_load_extension() to link to a copy of the
+        ///* running application, by passing in an empty filename.
+        /// If no entry point was specified and the default legacy
+        ///* entry point name "sqlite3_extension_init" was not found, then
+        ///* construct an entry point name "sqlite3_X_init" where the X is
+        ///* replaced by the lowercase value of every ASCII alphabetic 
+        ///* character in the filename after the last "/" up to the first ".",
+        ///* and skipping the first three characters if they are "lib".  
+        ///* Examples:
+        ///*
+        ///*    /usr/local/lib/libExample5.4.3.so ==>  sqlite3_example_init
+        ///*    C:/lib/mathfuncs.dll              ==>  sqlite3_mathfuncs_init
+        ///*
+        ///* If that still finds no entry point, repeat a second time but this
+        ///* time include both alphabetic and numeric characters up to the first
+        ///* ".".  Example:
+        ///*
+        ///*    /usr/local/lib/libExample5.4.3.so ==>  sqlite3_example5_init
+        /// zErrmsg would be NULL if not so
+        /// Append the new shared library handle to the db->aExtension array.
+        /// zErrmsg would be NULL if not so
         unreachable!();
     }
 }
 
+///* CAPI3REF: Load An Extension
+///* METHOD: sqlite3
+///*
+///* ^This interface loads an SQLite extension library from the named file.
+///*
+///* ^The sqlite3_load_extension() interface attempts to load an
+///* [SQLite extension] library contained in the file zFile.  If
+///* the file cannot be loaded directly, attempts are made to load
+///* with various operating-system specific filename extensions added.
+///* So for example, if "samplelib" cannot be loaded, then names like
+///* "samplelib.so" or "samplelib.dylib" or "samplelib.dll" might
+///* be tried also.
+///*
+///* ^The entry point is zProc.
+///* ^(zProc may be 0, in which case SQLite will try to come up with an
+///* entry point name on its own.  It first tries "sqlite3_extension_init".
+///* If that does not work, it tries names of the form "sqlite3_X_init"
+///* where X consists of the lower-case equivalent of all ASCII alphabetic
+///* characters or all ASCII alphanumeric characters in the filename from
+///* the last "/" to the first following "." and omitting any initial "lib".)^
+///* ^The sqlite3_load_extension() interface returns
+///* [SQLITE_OK] on success and [SQLITE_ERROR] if something goes wrong.
+///* ^If an error occurs and pzErrMsg is not 0, then the
+///* [sqlite3_load_extension()] interface shall attempt to
+///* fill *pzErrMsg with error message text stored in memory
+///* obtained from [sqlite3_malloc()]. The calling function
+///* should free this memory by calling [sqlite3_free()].
+///*
+///* ^Extension loading must be enabled using
+///* [sqlite3_enable_load_extension()] or
+///* [sqlite3_db_config](db,[SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION],1,NULL)
+///* prior to calling this API,
+///* otherwise an error will be returned.
+///*
+///* <b>Security warning:</b> It is recommended that the
+///* [SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION] method be used to enable only this
+///* interface.  The use of the [sqlite3_enable_load_extension()] interface
+///* should be avoided.  This will keep the SQL function [load_extension()]
+///* disabled and prevent SQL injections from giving attackers
+///* access to extension loading capabilities.
+///*
+///* See also the [load_extension() SQL function].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_load_extension(db: *mut Sqlite3,
     z_file_1: *const i8, z_proc_1: *const i8, pz_err_msg_1: *mut *mut i8)
@@ -1307,6 +1501,29 @@ pub extern "C" fn sqlite3_load_extension(db: *mut Sqlite3,
     return rc;
 }
 
+///* CAPI3REF: Enable Or Disable Extension Loading
+///* METHOD: sqlite3
+///*
+///* ^So as not to open security holes in older applications that are
+///* unprepared to deal with [extension loading], and as a means of disabling
+///* [extension loading] while evaluating user-entered SQL, the following API
+///* is provided to turn the [sqlite3_load_extension()] mechanism on and off.
+///*
+///* ^Extension loading is off by default.
+///* ^Call the sqlite3_enable_load_extension() routine with onoff==1
+///* to turn extension loading on and call it with onoff==0 to turn
+///* it back off again.
+///*
+///* ^This interface enables or disables both the C-API
+///* [sqlite3_load_extension()] and the SQL function [load_extension()].
+///* ^(Use [sqlite3_db_config](db,[SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION],..)
+///* to enable or disable only the C-API.)^
+///*
+///* <b>Security warning:</b> It is recommended that extension loading
+///* be enabled using the [SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION] method
+///* rather than this interface, so the [load_extension()] SQL function
+///* remains disabled. This will prevent SQL injections from giving attackers
+///* access to extension loading capabilities.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_enable_load_extension(db: &mut Sqlite3, onoff: i32)
     -> i32 {
@@ -1318,7 +1535,11 @@ pub extern "C" fn sqlite3_enable_load_extension(db: &mut Sqlite3, onoff: i32)
     return 0;
 }
 
+///* Load all automatic extensions.
+///*
+///* If anything goes wrong, set an error in the database connection.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_auto_load_extensions(db: *mut Sqlite3) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -1327,7 +1548,11 @@ pub extern "C" fn sqlite3_auto_load_extensions(db: *mut Sqlite3) -> () {
         let mut x_init:
                 Option<unsafe extern "C" fn(*mut Sqlite3, *mut *mut i8,
                     *const Sqlite3ApiRoutines) -> i32> = None;
-        if sqlite3_autoext.n_ext == 0 as u32 { return; }
+        if sqlite3_autoext.n_ext == 0 as u32 {
+
+            /// Common case: early out without every having to acquire a mutex
+            return;
+        }
         {
             i = 0 as u32;
             '__b4: loop {
@@ -1375,6 +1600,8 @@ pub extern "C" fn sqlite3_auto_load_extensions(db: *mut Sqlite3) -> () {
     }
 }
 
+///* Call this routine when the database connection is closing in order
+///* to clean up loaded extensions
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_close_extensions(db: *mut Sqlite3) -> () {
     let mut i: i32 = 0;

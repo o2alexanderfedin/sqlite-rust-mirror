@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, InitData, KeyInfo,
+    LogEst, Module, NameContext, OnOrUsing, Parse, ParseCleanup, RowSet,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerPrg, TriggerStep, UnpackedRecord,
+    Upsert, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+///* Free all memory allocations in the pParse object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parse_object_reset(p_parse_1: &mut Parse) -> () {
     unsafe {
@@ -442,6 +458,10 @@ pub extern "C" fn sqlite3_parse_object_reset(p_parse_1: &mut Parse) -> () {
     }
 }
 
+///* Check schema cookies in all databases.  If any cookie is out
+///* of date set pParse->rc to SQLITE_SCHEMA.  If all schema cookies
+///* make no changes to pParse->rc.
+#[allow(unused_doc_comments)]
 extern "C" fn schema_is_valid(p_parse_1: &mut Parse) -> () {
     unsafe {
         let db: *mut Sqlite3 = (*p_parse_1).db;
@@ -456,6 +476,7 @@ extern "C" fn schema_is_valid(p_parse_1: &mut Parse) -> () {
                 if !(i_db < unsafe { (*db).n_db }) { break '__b1; }
                 '__c1: loop {
                     let mut opened_transaction: i32 = 0;
+                    /// True if a transaction is opened
                     let p_bt: *mut Btree =
                         unsafe {
                             (*unsafe { (*db).a_db.offset(i_db as isize) }).p_bt
@@ -473,6 +494,10 @@ extern "C" fn schema_is_valid(p_parse_1: &mut Parse) -> () {
                         if rc != 0 { return; }
                         opened_transaction = 1;
                     }
+
+                    /// Read the schema cookie from the database. If it does not match the 
+                    ///* value stored as part of the in-memory schema representation,
+                    ///* set Parse.rc to SQLITE_SCHEMA.
                     unsafe {
                         sqlite3_btree_get_meta(p_bt, 1, &raw mut cookie as *mut u32)
                     };
@@ -503,17 +528,48 @@ extern "C" fn schema_is_valid(p_parse_1: &mut Parse) -> () {
     }
 }
 
+/// forward declaration
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_prepare_2(db: *mut Sqlite3, z_sql_1: *const i8,
     n_bytes_1: i32, prep_flags_1: u32, p_reprepare_1: *mut Vdbe,
     pp_stmt_1: &mut *mut Sqlite3Stmt, pz_tail_1: *mut *const i8) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Result code
         let mut i: i32 = 0;
+        /// Loop counter
         let mut s_parse: Parse = unsafe { core::mem::zeroed() };
+        /// Parsing context
+        /// sqlite3ParseObjectInit(&sParse, db); // inlined for performance
+        /// For a long-term use prepared statement avoid the use of
+        ///* lookaside memory.
+        /// Check to verify that it is possible to get a read lock on all
+        ///* database schemas.  The inability to get a read lock indicates that
+        ///* some other database connection is holding a write-lock, which in
+        ///* turn means that the other connection has made uncommitted changes
+        ///* to the schema.
+        ///*
+        ///* Were we to proceed and prepare the statement against the uncommitted
+        ///* schema changes and if those schema changes are subsequently rolled
+        ///* back and different changes are made in their place, then when this
+        ///* prepared statement goes to run the schema cookie would fail to detect
+        ///* the schema change.  Disaster would follow.
+        ///*
+        ///* This thread is currently holding mutexes on all Btrees (because
+        ///* of the sqlite3BtreeEnterAll() in sqlite3LockAndPrepare()) so it
+        ///* is not possible for another thread to start a new schema change
+        ///* while this routine is running.  Hence, we do not need to hold 
+        ///* locks on the schema, we just need to make sure nobody else is 
+        ///* holding them.
+        ///*
+        ///* Note that setting READ_UNCOMMITTED overrides most lock detection,
+        ///* but it does *not* override schema lock detection, so this all still
+        ///* works even if READ_UNCOMMITTED is set.
         let mut p_bt: *mut Btree = core::ptr::null_mut();
         let mut z_db: *const i8 = core::ptr::null();
         let mut z_sql_copy: *mut i8 = core::ptr::null_mut();
         let mut mx_len: i32 = 0;
+        /// Delete any TriggerPrg structures allocated while parsing this statement.
         let mut p_t: *mut TriggerPrg = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -858,10 +914,41 @@ extern "C" fn sqlite3_prepare_2(db: *mut Sqlite3, z_sql_1: *const i8,
                 }
             }
         }
+
+        /// Result code
+        /// Loop counter
+        /// Parsing context
+        /// sqlite3ParseObjectInit(&sParse, db); // inlined for performance
+        /// For a long-term use prepared statement avoid the use of
+        ///* lookaside memory.
+        /// Check to verify that it is possible to get a read lock on all
+        ///* database schemas.  The inability to get a read lock indicates that
+        ///* some other database connection is holding a write-lock, which in
+        ///* turn means that the other connection has made uncommitted changes
+        ///* to the schema.
+        ///*
+        ///* Were we to proceed and prepare the statement against the uncommitted
+        ///* schema changes and if those schema changes are subsequently rolled
+        ///* back and different changes are made in their place, then when this
+        ///* prepared statement goes to run the schema cookie would fail to detect
+        ///* the schema change.  Disaster would follow.
+        ///*
+        ///* This thread is currently holding mutexes on all Btrees (because
+        ///* of the sqlite3BtreeEnterAll() in sqlite3LockAndPrepare()) so it
+        ///* is not possible for another thread to start a new schema change
+        ///* while this routine is running.  Hence, we do not need to hold 
+        ///* locks on the schema, we just need to make sure nobody else is 
+        ///* holding them.
+        ///*
+        ///* Note that setting READ_UNCOMMITTED overrides most lock detection,
+        ///* but it does *not* override schema lock detection, so this all still
+        ///* works even if READ_UNCOMMITTED is set.
+        /// Delete any TriggerPrg structures allocated while parsing this statement.
         unreachable!();
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_lock_and_prepare(db: *mut Sqlite3, z_sql_1: *const i8,
     n_bytes_1: i32, prep_flags_1: u32, p_old_1: *mut Vdbe,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_tail_1: *mut *const i8) -> i32 {
@@ -876,9 +963,13 @@ extern "C" fn sqlite3_lock_and_prepare(db: *mut Sqlite3, z_sql_1: *const i8,
     unsafe { sqlite3_btree_enter_all(db) };
     '__b4: loop {
         '__c4: loop {
-            rc =
+
+            /// Make multiple attempts to compile the SQL, until it either succeeds
+            ///* or encounters a permanent error.  A schema problem after one schema
+            ///* reset is considered a permanent error.
+            (rc =
                 sqlite3_prepare_2(db, z_sql_1, n_bytes_1, prep_flags_1,
-                    p_old_1, unsafe { &mut *pp_stmt_1 }, pz_tail_1);
+                    p_old_1, unsafe { &mut *pp_stmt_1 }, pz_tail_1));
             { let _ = 0; };
             if rc == 0 || unsafe { (*db).malloc_failed } != 0 { break '__b4; }
             { let __p = &mut cnt; let __t = *__p; *__p += 1; __t };
@@ -900,7 +991,113 @@ extern "C" fn sqlite3_lock_and_prepare(db: *mut Sqlite3, z_sql_1: *const i8,
     return rc;
 }
 
+///* CAPI3REF: Compiling An SQL Statement
+///* KEYWORDS: {SQL statement compiler}
+///* METHOD: sqlite3
+///* CONSTRUCTOR: sqlite3_stmt
+///*
+///* To execute an SQL statement, it must first be compiled into a byte-code
+///* program using one of these routines.  Or, in other words, these routines
+///* are constructors for the [prepared statement] object.
+///*
+///* The preferred routine to use is [sqlite3_prepare_v2()].  The
+///* [sqlite3_prepare()] interface is legacy and should be avoided.
+///* [sqlite3_prepare_v3()] has an extra
+///* [SQLITE_PREPARE_FROM_DDL|"prepFlags" option] that is sometimes
+///* needed for special purpose or to pass along security restrictions.
+///*
+///* The use of the UTF-8 interfaces is preferred, as SQLite currently
+///* does all parsing using UTF-8.  The UTF-16 interfaces are provided
+///* as a convenience.  The UTF-16 interfaces work by converting the
+///* input text into UTF-8, then invoking the corresponding UTF-8 interface.
+///*
+///* The first argument, "db", is a [database connection] obtained from a
+///* prior successful call to [sqlite3_open()], [sqlite3_open_v2()] or
+///* [sqlite3_open16()].  The database connection must not have been closed.
+///*
+///* The second argument, "zSql", is the statement to be compiled, encoded
+///* as either UTF-8 or UTF-16.  The sqlite3_prepare(), sqlite3_prepare_v2(),
+///* and sqlite3_prepare_v3()
+///* interfaces use UTF-8, and sqlite3_prepare16(), sqlite3_prepare16_v2(),
+///* and sqlite3_prepare16_v3() use UTF-16.
+///*
+///* ^If the nByte argument is negative, then zSql is read up to the
+///* first zero terminator. ^If nByte is positive, then it is the maximum
+///* number of bytes read from zSql.  When nByte is positive, zSql is read
+///* up to the first zero terminator or until the nByte bytes have been read,
+///* whichever comes first.  ^If nByte is zero, then no prepared
+///* statement is generated.
+///* If the caller knows that the supplied string is nul-terminated, then
+///* there is a small performance advantage to passing an nByte parameter that
+///* is the number of bytes in the input string <i>including</i>
+///* the nul-terminator.
+///* Note that nByte measures the length of the input in bytes, not
+///* characters, even for the UTF-16 interfaces.
+///* For the sqlite3_prepare16() and sqlite3_prepare16_v2() interfaces,
+///* the nByte value must be even or undefined behavior can result.
+///*
+///* ^If pzTail is not NULL then *pzTail is made to point to the first byte
+///* past the end of the first SQL statement in zSql.  These routines only
+///* compile the first statement in zSql, so *pzTail is left pointing to
+///* what remains uncompiled.
+///*
+///* ^*ppStmt is left pointing to a compiled [prepared statement] that can be
+///* executed using [sqlite3_step()].  ^If there is an error, *ppStmt is set
+///* to NULL.  ^If the input text contains no SQL (if the input is an empty
+///* string or a comment) then *ppStmt is set to NULL.
+///* The calling procedure is responsible for deleting the compiled
+///* SQL statement using [sqlite3_finalize()] after it has finished with it.
+///* ppStmt may not be NULL.
+///*
+///* ^On success, the sqlite3_prepare() family of routines return [SQLITE_OK];
+///* otherwise an [error code] is returned.
+///*
+///* The sqlite3_prepare_v2(), sqlite3_prepare_v3(), sqlite3_prepare16_v2(),
+///* and sqlite3_prepare16_v3() interfaces are recommended for all new programs.
+///* The older interfaces (sqlite3_prepare() and sqlite3_prepare16())
+///* are retained for backwards compatibility, but their use is discouraged.
+///* ^In the "vX" interfaces, the prepared statement
+///* that is returned (the [sqlite3_stmt] object) contains a copy of the
+///* original SQL text. This causes the [sqlite3_step()] interface to
+///* behave differently in three ways:
+///*
+///* <ol>
+///* <li>
+///* ^If the database schema changes, instead of returning [SQLITE_SCHEMA] as it
+///* always used to do, [sqlite3_step()] will automatically recompile the SQL
+///* statement and try to run it again. As many as [SQLITE_MAX_SCHEMA_RETRY]
+///* retries will occur before sqlite3_step() gives up and returns an error.
+///* </li>
+///*
+///* <li>
+///* ^When an error occurs, [sqlite3_step()] will return one of the detailed
+///* [error codes] or [extended error codes].  ^The legacy behavior was that
+///* [sqlite3_step()] would only return a generic [SQLITE_ERROR] result code
+///* and the application would have to make a second call to [sqlite3_reset()]
+///* in order to find the underlying cause of the problem. With the "v2" prepare
+///* interfaces, the underlying reason for the error is returned immediately.
+///* </li>
+///*
+///* <li>
+///* ^If the specific value bound to a [parameter | host parameter] in the
+///* WHERE clause might influence the choice of query plan for a statement,
+///* then the statement will be automatically recompiled, as if there had been
+///* a schema change, on the first [sqlite3_step()] call following any change
+///* to the [sqlite3_bind_text | bindings] of that [parameter].
+///* ^The specific value of a WHERE-clause [parameter] might influence the
+///* choice of query plan if the parameter is the left-hand side of a [LIKE]
+///* or [GLOB] operator or if the parameter is compared to an indexed column
+///* and the [SQLITE_ENABLE_STAT4] compile-time option is enabled.
+///* </li>
+///* </ol>
+///*
+///* <p>^sqlite3_prepare_v3() differs from sqlite3_prepare_v2() only in having
+///* the extra prepFlags parameter, which is a bit array consisting of zero or
+///* more of the [SQLITE_PREPARE_PERSISTENT|SQLITE_PREPARE_*] flags.  ^The
+///* sqlite3_prepare_v2() interface works exactly the same as
+///* sqlite3_prepare_v3() with a zero prepFlags parameter.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare(db: *mut Sqlite3, z_sql_1: *const i8,
     n_bytes_1: i32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const i8) -> i32 {
@@ -909,37 +1106,60 @@ pub extern "C" fn sqlite3_prepare(db: *mut Sqlite3, z_sql_1: *const i8,
         sqlite3_lock_and_prepare(db, z_sql_1, n_bytes_1, 0 as u32,
             core::ptr::null_mut(), pp_stmt_1, pz_tail_1);
     { let _ = 0; };
+
+    /// VERIFY: F13021
     return rc;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare_v2(db: *mut Sqlite3, z_sql_1: *const i8,
     n_bytes_1: i32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const i8) -> i32 {
     let mut rc: i32 = 0;
-    rc =
+
+    /// EVIDENCE-OF: R-37923-12173 The sqlite3_prepare_v2() interface works
+    ///* exactly the same as sqlite3_prepare_v3() with a zero prepFlags
+    ///* parameter.
+    ///*
+    ///* Proof in that the 5th parameter to sqlite3LockAndPrepare is 0
+    (rc =
         sqlite3_lock_and_prepare(db, z_sql_1, n_bytes_1, 128 as u32,
-            core::ptr::null_mut(), pp_stmt_1, pz_tail_1);
+            core::ptr::null_mut(), pp_stmt_1, pz_tail_1));
     { let _ = 0; };
     return rc;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare_v3(db: *mut Sqlite3, z_sql_1: *const i8,
     n_bytes_1: i32, prep_flags_1: u32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const i8) -> i32 {
     let mut rc: i32 = 0;
-    rc =
+
+    /// EVIDENCE-OF: R-56861-42673 sqlite3_prepare_v3() differs from
+    ///* sqlite3_prepare_v2() only in having the extra prepFlags parameter,
+    ///* which is a bit array consisting of zero or more of the
+    ///* SQLITE_PREPARE_* flags.
+    ///*
+    ///* Proof by comparison to the implementation of sqlite3_prepare_v2()
+    ///* directly above.
+    (rc =
         sqlite3_lock_and_prepare(db, z_sql_1, n_bytes_1,
             128 as u32 | prep_flags_1 & 63 as u32, core::ptr::null_mut(),
-            pp_stmt_1, pz_tail_1);
+            pp_stmt_1, pz_tail_1));
     { let _ = 0; };
     return rc;
 }
 
+///* Compile the UTF-16 encoded SQL statement zSql into a statement handle.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_prepare16_2(db: *mut Sqlite3, z_sql_1: *const (),
     mut n_bytes_1: i32, prep_flags_1: u32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const ()) -> i32 {
+    /// This function currently works by first transforming the UTF-16
+    ///* encoded string to UTF-8, then invoking sqlite3_prepare(). The
+    ///* tricky bit is figuring out the pointer to return in *pzTail.
     let mut z_sql8: *mut i8 = core::ptr::null_mut();
     let mut z_tail8: *const i8 = core::ptr::null();
     let mut rc: i32 = 0;
@@ -988,6 +1208,10 @@ extern "C" fn sqlite3_prepare16_2(db: *mut Sqlite3, z_sql_1: *const (),
                 prep_flags_1, core::ptr::null_mut(), pp_stmt_1, &mut z_tail8);
     }
     if !(z_tail8).is_null() && !(pz_tail_1).is_null() {
+        /// If sqlite3_prepare returns a tail pointer, we calculate the
+        ///* equivalent pointer into the UTF-16 string by counting the unicode
+        ///* characters between zSql8 and zTail8, and then returning a pointer
+        ///* the same number of characters into the UTF-16 string.
         let chars_parsed: i32 =
             unsafe {
                 sqlite3_utf8_char_len(z_sql8 as *const i8,
@@ -1009,7 +1233,14 @@ extern "C" fn sqlite3_prepare16_2(db: *mut Sqlite3, z_sql_1: *const (),
     return rc;
 }
 
+///* Two versions of the official API.  Legacy and new use.  In the legacy
+///* version, the original SQL text is not saved in the prepared statement
+///* and so if a schema change occurs, SQLITE_SCHEMA is returned by
+///* sqlite3_step().  In the new version, the original SQL text is retained
+///* and the statement is automatically recompiled if an schema change
+///* occurs.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare16(db: *mut Sqlite3, z_sql_1: *const (),
     n_bytes_1: i32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const ()) -> i32 {
@@ -1018,10 +1249,13 @@ pub extern "C" fn sqlite3_prepare16(db: *mut Sqlite3, z_sql_1: *const (),
         sqlite3_prepare16_2(db, z_sql_1, n_bytes_1 & !1, 0 as u32, pp_stmt_1,
             pz_tail_1);
     { let _ = 0; };
+
+    /// VERIFY: F13021
     return rc;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare16_v2(db: *mut Sqlite3, z_sql_1: *const (),
     n_bytes_1: i32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const ()) -> i32 {
@@ -1030,10 +1264,13 @@ pub extern "C" fn sqlite3_prepare16_v2(db: *mut Sqlite3, z_sql_1: *const (),
         sqlite3_prepare16_2(db, z_sql_1, n_bytes_1 & !1, 128 as u32,
             pp_stmt_1, pz_tail_1);
     { let _ = 0; };
+
+    /// VERIFY: F13021
     return rc;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_prepare16_v3(db: *mut Sqlite3, z_sql_1: *const (),
     n_bytes_1: i32, prep_flags_1: u32, pp_stmt_1: *mut *mut Sqlite3Stmt,
     pz_tail_1: *mut *const ()) -> i32 {
@@ -1042,9 +1279,14 @@ pub extern "C" fn sqlite3_prepare16_v3(db: *mut Sqlite3, z_sql_1: *const (),
         sqlite3_prepare16_2(db, z_sql_1, n_bytes_1 & !1,
             128 as u32 | prep_flags_1 & 63 as u32, pp_stmt_1, pz_tail_1);
     { let _ = 0; };
+
+    /// VERIFY: F13021
     return rc;
 }
 
+///* Check to see if any sibling index (another index on the same table)
+///* of pIndex has the same root page number, and if it does, return true.
+///* This would indicate a corrupt schema.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_index_has_duplicate_root_page(p_index_1: *mut Index)
     -> i32 {
@@ -1066,6 +1308,8 @@ pub extern "C" fn sqlite3_index_has_duplicate_root_page(p_index_1: *mut Index)
     return 0;
 }
 
+///* Fill the InitData structure with an error message that indicates
+///* that the database is corrupt.
 extern "C" fn corrupt_schema(p_data_1: &mut InitData,
     az_obj_1: *const *mut i8, z_extra_1: *const i8) -> () {
     unsafe {
@@ -1115,7 +1359,20 @@ extern "C" fn corrupt_schema(p_data_1: &mut InitData,
     }
 }
 
+///* This is the callback routine for the code that initializes the
+///* database.  See sqlite3Init() below for additional information.
+///* This routine is also called from the OP_ParseSchema opcode of the VDBE.
+///*
+///* Each callback contains the following information:
+///*
+///*     argv[0] = type of object: "table", "index", "trigger", or "view".
+///*     argv[1] = name of thing being created
+///*     argv[2] = associated table if an index or trigger
+///*     argv[3] = root page number for table or index. 0 for trigger or view.
+///*     argv[4] = SQL text for the CREATE statement.
+///*
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
     argv: *mut *mut i8, not_used: *mut *mut i8) -> i32 {
     unsafe {
@@ -1127,6 +1384,8 @@ pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
         { let _ = 0; };
         unsafe { (*db).m_db_flags |= 64 as u32 };
         if argv == core::ptr::null_mut() { return 0; }
+
+        /// Might happen if EMPTY_RESULT_CALLBACKS are on
         {
             let __p = unsafe { &mut (*p_data).n_init_row };
             let __t = *__p;
@@ -1157,9 +1416,20 @@ pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
                                                 *unsafe { (*argv.offset(4 as isize)).offset(1 as isize) }
                                             } as u8 as usize)
                         } as i32 {
+            /// Call the parser to process a CREATE TABLE, INDEX or VIEW.
+            ///* But because db->init.busy is set to 1, no VDBE code is generated
+            ///* or executed.  All the parser does is build the internal data
+            ///* structures that describe the table, index, or view.
+            ///*
+            ///* No other valid SQL statement, other than the variable CREATE statements,
+            ///* can begin with the letters "C" and "R".  Thus, it is not possible run
+            ///* any other kind of statement while parsing the schema, even a corrupt
+            ///* schema.
             let mut rc: i32 = 0;
             let saved_i_db: u8 = unsafe { (*db).init.i_db };
             let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+
+            /// Return code from sqlite3_prepare()
             { let _ = 0; };
             unsafe { (*db).init.i_db = i_db as u8 };
             if unsafe {
@@ -1206,6 +1476,8 @@ pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
                 (*db).init.az_init =
                     sqlite3_std_type.as_ptr() as *mut *const i8
             };
+
+            /// Any array of string ptrs will do
             unsafe { sqlite3_finalize(p_stmt) };
         } else if unsafe { *argv.offset(1 as isize) } == core::ptr::null_mut()
                 ||
@@ -1217,6 +1489,11 @@ pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
             corrupt_schema(unsafe { &mut *p_data }, argv as *const *mut i8,
                 core::ptr::null());
         } else {
+            /// If the SQL column is blank it means this is an index that
+            ///* was created to be the PRIMARY KEY or to fulfill a UNIQUE
+            ///* constraint for a CREATE TABLE.  The index should have already
+            ///* been created when we processed the CREATE TABLE.  All we have
+            ///* to do here is record the root page number for that index.
             let mut p_index: *mut Index = core::ptr::null_mut();
             p_index =
                 unsafe {
@@ -1247,7 +1524,14 @@ pub extern "C" fn sqlite3_init_callback(p_init: *mut (), argc: i32,
     }
 }
 
+///* Attempt to read the database schema and initialize internal
+///* data structures for a single database file.  The index of the
+///* database file is given by iDb.  iDb==0 is used for the main
+///* database.  iDb==1 should never be used.  iDb>=2 is used for
+///* auxiliary databases.  Return one of the SQLITE_ error codes to
+///* indicate success or failure.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_init_one(db: *mut Sqlite3, i_db_1: i32,
     pz_err_msg_1: *mut *mut i8, m_flags_1: u32) -> i32 {
     unsafe {
@@ -1261,7 +1545,54 @@ pub extern "C" fn sqlite3_init_one(db: *mut Sqlite3, i_db_1: i32,
         let mut z_schema_tab_name: *const i8 = core::ptr::null();
         let mut opened_transaction: i32 = 0;
         let mut mask: i32 = 0;
+        /// ^--- Any non-zero value for init.busy means that we are scanning
+        ///* the sqlite_schema table to build the internal schema representation,
+        ///* rather than running actual CREATE statements.  init.busy==2 has the
+        ///* additional meaning that the scan is happening as part of
+        ///* ALTER TABLE ADD COLUMN, which is stricter in its enforcement of
+        ///* function name resolution.
+        /// Construct the in-memory representation schema tables (sqlite_schema or
+        ///* sqlite_temp_schema) by invoking the parser directly.  The appropriate
+        ///* table name will be inserted automatically by the parser so we can just
+        ///* use the abbreviation "x" here.  The parser will also automatically tag
+        ///* the schema table as read-only.
+        /// Create a cursor to hold the database open
+        /// If there is not already a read-only (or read-write) transaction opened
+        ///* on the b-tree database, open one now. If a transaction is opened, it 
+        ///* will be closed before this function returns.
+        /// Get the database meta information.
+        ///*
+        ///* Meta values are as follows:
+        ///*    meta[0]   Schema cookie.  Changes with each schema change.
+        ///*    meta[1]   File format of schema layer.
+        ///*    meta[2]   Size of the page cache.
+        ///*    meta[3]   Largest rootpage (auto/incr_vacuum mode)
+        ///*    meta[4]   Db text encoding. 1:UTF-8 2:UTF-16LE 3:UTF-16BE
+        ///*    meta[5]   User version
+        ///*    meta[6]   Incremental vacuum mode
+        ///*    meta[7]   unused
+        ///*    meta[8]   unused
+        ///*    meta[9]   unused
+        ///*
+        ///* Note: The #defined SQLITE_UTF* symbols in sqliteInt.h correspond to
+        ///* the possible values of meta[4].
+        /// If opening a non-empty database, check the text encoding. For the
+        ///* main database, set sqlite3.enc to the encoding of the main database.
+        ///* For an attached db, it is an error if the encoding is not the same
+        ///* as sqlite3.enc.
+        /// text encoding
         let mut encoding: u8 = 0 as u8;
+        /// If opening the main database, set ENC(db).
+        /// If opening an attached database, the encoding much match ENC(db)
+        ///* file_format==1    Version 3.0.0.
+        ///* file_format==2    Version 3.1.3.  // ALTER TABLE ADD COLUMN
+        ///* file_format==3    Version 3.1.4.  // ditto but with non-NULL defaults
+        ///* file_format==4    Version 3.3.0.  // DESC indices.  Boolean constants
+        /// Ticket #2804:  When we open a database in the newer file format,
+        ///* clear the legacy_file_format pragma flag so that a VACUUM will
+        ///* not downgrade the database and thus invalidate any descending
+        ///* indices that the user might have created.
+        /// Read the schema information out of the schema tables
         let mut z_sql: *mut i8 = core::ptr::null_mut();
         let mut x_auth:
                 Option<unsafe extern "C" fn(*mut (), i32, *const i8,
@@ -1679,10 +2010,77 @@ pub extern "C" fn sqlite3_init_one(db: *mut Sqlite3, i_db_1: i32,
                 }
             }
         }
+
+        /// ^--- Any non-zero value for init.busy means that we are scanning
+        ///* the sqlite_schema table to build the internal schema representation,
+        ///* rather than running actual CREATE statements.  init.busy==2 has the
+        ///* additional meaning that the scan is happening as part of
+        ///* ALTER TABLE ADD COLUMN, which is stricter in its enforcement of
+        ///* function name resolution.
+        /// Construct the in-memory representation schema tables (sqlite_schema or
+        ///* sqlite_temp_schema) by invoking the parser directly.  The appropriate
+        ///* table name will be inserted automatically by the parser so we can just
+        ///* use the abbreviation "x" here.  The parser will also automatically tag
+        ///* the schema table as read-only.
+        /// Create a cursor to hold the database open
+        /// If there is not already a read-only (or read-write) transaction opened
+        ///* on the b-tree database, open one now. If a transaction is opened, it 
+        ///* will be closed before this function returns.
+        /// Get the database meta information.
+        ///*
+        ///* Meta values are as follows:
+        ///*    meta[0]   Schema cookie.  Changes with each schema change.
+        ///*    meta[1]   File format of schema layer.
+        ///*    meta[2]   Size of the page cache.
+        ///*    meta[3]   Largest rootpage (auto/incr_vacuum mode)
+        ///*    meta[4]   Db text encoding. 1:UTF-8 2:UTF-16LE 3:UTF-16BE
+        ///*    meta[5]   User version
+        ///*    meta[6]   Incremental vacuum mode
+        ///*    meta[7]   unused
+        ///*    meta[8]   unused
+        ///*    meta[9]   unused
+        ///*
+        ///* Note: The #defined SQLITE_UTF* symbols in sqliteInt.h correspond to
+        ///* the possible values of meta[4].
+        /// If opening a non-empty database, check the text encoding. For the
+        ///* main database, set sqlite3.enc to the encoding of the main database.
+        ///* For an attached db, it is an error if the encoding is not the same
+        ///* as sqlite3.enc.
+        /// text encoding
+        /// If opening the main database, set ENC(db).
+        /// If opening an attached database, the encoding much match ENC(db)
+        ///* file_format==1    Version 3.0.0.
+        ///* file_format==2    Version 3.1.3.  // ALTER TABLE ADD COLUMN
+        ///* file_format==3    Version 3.1.4.  // ditto but with non-NULL defaults
+        ///* file_format==4    Version 3.3.0.  // DESC indices.  Boolean constants
+        /// Ticket #2804:  When we open a database in the newer file format,
+        ///* clear the legacy_file_format pragma flag so that a VACUUM will
+        ///* not downgrade the database and thus invalidate any descending
+        ///* indices that the user might have created.
+        /// Read the schema information out of the schema tables
+        /// Hack: If the SQLITE_NoSchemaError flag is set, then consider
+        ///* the schema loaded, even if errors (other than OOM) occurred. In
+        ///* this situation the current sqlite3_prepare() operation will fail,
+        ///* but the following one will attempt to compile the supplied statement
+        ///* against whatever subset of the schema was loaded before the error
+        ///* occurred.
+        ///*
+        ///* The primary purpose of this is to allow access to the sqlite_schema
+        ///* table even when its contents have been corrupted.
+        /// Jump here for an error that occurs after successfully allocating
+        ///* curMain and calling sqlite3BtreeEnter(). For an error that occurs
+        ///* before that point, jump to error_out.
         unreachable!();
     }
 }
 
+///* Initialize all database files - the main database file, the file
+///* used to store temporary tables, and any additional database files
+///* created using ATTACH statements.  Return a success code.  If an
+///* error occurs, write an error message into *pzErrMsg.
+///*
+///* After a database is initialized, the DB_SchemaLoaded bit is set
+///* bit is set in the flags field of the Db structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8)
     -> i32 {
@@ -1737,6 +2135,8 @@ pub extern "C" fn sqlite3_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8)
     }
 }
 
+///* This routine is a no-op if the database schema is already initialized.
+///* Otherwise, the schema is loaded. An error code is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_read_schema(p_parse_1: &mut Parse) -> i32 {
     let mut rc: i32 = 0;
@@ -1759,11 +2159,28 @@ pub extern "C" fn sqlite3_read_schema(p_parse_1: &mut Parse) -> i32 {
     return rc;
 }
 
+///* Convert a schema pointer into the iDb index that indicates
+///* which database file in db->aDb[] the schema refers to.
+///*
+///* If the same database is attached more than once, the first
+///* attached database is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_schema_to_index(db: &Sqlite3,
     p_schema_1: *mut Schema) -> i32 {
     unsafe {
         let mut i: i32 = -32768;
+
+        /// If pSchema is NULL, then return -32768. This happens when code in 
+        ///* expr.c is trying to resolve a reference to a transient table (i.e. one
+        ///* created by a sub-select). In this case the return value of this 
+        ///* function should never be used.
+        ///*
+        ///* We return -32768 instead of the more usual -1 simply because using
+        ///* -32768 as the incorrect index into db->aDb[] is much 
+        ///* more likely to cause a segfault than -1 (of course there are assert()
+        ///* statements too, but it never hurts to play the odds) and
+        ///* -32768 will still fit into a 16-bit signed integer.
         { let _ = 0; };
         if !(p_schema_1).is_null() {
             {
@@ -1787,6 +2204,13 @@ pub extern "C" fn sqlite3_schema_to_index(db: &Sqlite3,
     }
 }
 
+///* Turn bulk memory into a valid Parse object and link that Parse object
+///* into database connection db.
+///*
+///* Call sqlite3ParseObjectReset() to undo this operation.
+///*
+///* Caution:  Do not confuse this routine with sqlite3ParseObjectInit() which
+///* is generated by Lemon.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parse_object_init(p_parse_1: *mut Parse,
     db: *mut Sqlite3) -> () {
@@ -1821,6 +2245,32 @@ pub extern "C" fn sqlite3_parse_object_init(p_parse_1: *mut Parse,
     }
 }
 
+///* Add a new cleanup operation to a Parser.  The cleanup should happen when
+///* the parser object is destroyed.  But, beware: the cleanup might happen
+///* immediately.
+///*
+///* Use this mechanism for uncommon cleanups.  There is a higher setup
+///* cost for this mechanism (an extra malloc), so it should not be used
+///* for common cleanups that happen on most calls.  But for less
+///* common cleanups, we save a single NULL-pointer comparison in
+///* sqlite3ParseObjectReset(), which reduces the total CPU cycle count.
+///*
+///* If a memory allocation error occurs, then the cleanup happens immediately.
+///* When either SQLITE_DEBUG or SQLITE_COVERAGE_TEST are defined, the
+///* pParse->earlyCleanup flag is set in that case.  Calling code show verify
+///* that test cases exist for which this happens, to guard against possible
+///* use-after-free errors following an OOM.  The preferred way to do this is
+///* to immediately follow the call to this routine with:
+///*
+///*       testcase( pParse->earlyCleanup );
+///*
+///* This routine returns a copy of its pPtr input (the third parameter)
+///* except if an early cleanup occurs, in which case it returns NULL.  So
+///* another way to check for early cleanup is to check the return value.
+///* Or, stop using the pPtr parameter with this call and use only its
+///* return value thereafter.  Something like this:
+///*
+///*       pObj = sqlite3ParserAddCleanup(pParse, destructor, pObj);
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_add_cleanup(p_parse_1: &mut Parse,
     x_cleanup_1: Option<unsafe extern "C" fn(*mut Sqlite3, *mut ()) -> ()>,
@@ -1848,7 +2298,14 @@ pub extern "C" fn sqlite3_parser_add_cleanup(p_parse_1: &mut Parse,
     return p_ptr_1;
 }
 
+///* Rerun the compilation of a statement after a schema change.
+///*
+///* If the statement is successfully recompiled, return SQLITE_OK. Otherwise,
+///* if the statement cannot be recompiled because another connection has
+///* locked the sqlite3_schema table, return SQLITE_LOCKED. If any other error
+///* occurs, return SQLITE_SCHEMA.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_reprepare(p: *mut Vdbe) -> i32 {
     let mut rc: i32 = 0;
     let mut p_new: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1858,7 +2315,9 @@ pub extern "C" fn sqlite3_reprepare(p: *mut Vdbe) -> i32 {
     { let _ = 0; };
     z_sql = unsafe { sqlite3_sql(p as *mut Sqlite3Stmt) };
     { let _ = 0; };
-    db = unsafe { sqlite3_vdbe_db(p) };
+
+    /// Reprepare only called for prepare_v2() statements
+    (db = unsafe { sqlite3_vdbe_db(p) });
     { let _ = 0; };
     prep_flags = unsafe { sqlite3_vdbe_prepare_flags(p) };
     rc =

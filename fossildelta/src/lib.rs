@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Must be a 16-bit value
 type S16 = i16;
 
 #[repr(C)]
@@ -18,6 +25,7 @@ struct Hash {
     z: [i8; 16],
 }
 
+///* Initialize the rolling hash using the first NHASH characters of z[]
 extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     let mut a: u16 = 0 as u16;
     let mut b: u16 = 0 as u16;
@@ -44,6 +52,7 @@ extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     (*p_hash_1).i = 0 as u16;
 }
 
+///* Advance the rolling hash by a single character "c"
 extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
     let old: u16 = (*p_hash_1).z[(*p_hash_1).i as usize] as u16;
     (*p_hash_1).z[(*p_hash_1).i as usize] = c as i8;
@@ -54,11 +63,18 @@ extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
             u16;
 }
 
+///* Return a 32-bit hash value
 extern "C" fn hash_32bit(p_hash_1: &Hash) -> u32 {
     return ((*p_hash_1).a as i32 & 65535) as u32 |
             (((*p_hash_1).b as i32 & 65535) as u32) << 16;
 }
 
+///* Compute a hash on NHASH bytes.
+///*
+///* This routine is intended to be equivalent to:
+///*    hash h;
+///*    hash_init(&h, zInput);
+///*    return hash_32bit(&h);
 extern "C" fn hash_once(z: *const i8) -> u32 {
     let mut a: u16 = 0 as u16;
     let mut b: u16 = 0 as u16;
@@ -79,7 +95,10 @@ extern "C" fn hash_once(z: *const i8) -> u32 {
     return a as u32 | (b as u32) << 16;
 }
 
+///* Write an base-64 integer into the given buffer.
+#[allow(unused_doc_comments)]
 extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
+    ///  123456789 123456789 123456789 123456789 123456789 123456789 123
     let mut i: i32 = 0;
     let mut j: i32 = 0;
     let mut z_buf: [i8; 20] = [0; 20];
@@ -128,6 +147,10 @@ extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
     }
 }
 
+///* Read bytes from *pz and convert them into a positive integer.  When
+///* finished, leave *pz pointing to the first character past the end of
+///* the integer.  The *pLen parameter holds the length of the string
+///* in *pz and is decremented once for each character in the integer.
 extern "C" fn delta_get_int(pz: &mut *const i8, p_len_1: &mut i32) -> u32 {
     let mut v: u32 = 0 as u32;
     let mut c: i32 = 0;
@@ -148,6 +171,7 @@ extern "C" fn delta_get_int(pz: &mut *const i8, p_len_1: &mut i32) -> u32 {
     return v;
 }
 
+///* Return the number digits in the base-64 representation of a positive integer
 extern "C" fn digit_count(v: i32) -> i32 {
     let mut i: u32 = 0 as u32;
     let mut x: u32 = 0 as u32;
@@ -165,6 +189,11 @@ extern "C" fn digit_count(v: i32) -> i32 {
     return i as i32;
 }
 
+///* Compute a 32-bit big-endian checksum on the N-byte buffer.  If the
+///* buffer is not a multiple of 4 bytes length, compute the sum that would
+///* have occurred if the buffer was padded with zeros to the next multiple
+///* of four bytes.
+#[allow(unused_doc_comments)]
 extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     let mut z: *const u8 = z_in_1 as *const u8;
     let z_end: *const u8 =
@@ -190,6 +219,7 @@ extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
             };
         }
     } else {
+        /// A little-endian machine
         let mut sum0: u32 = 0 as u32;
         let mut sum1: u32 = 0 as u32;
         let mut sum2: u32 = 0 as u32;
@@ -262,6 +292,67 @@ extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     return sum;
 }
 
+///* Create a new delta.
+///*
+///* The delta is written into a preallocated buffer, zDelta, which
+///* should be at least 60 bytes longer than the target file, zOut.
+///* The delta string will be NUL-terminated, but it might also contain
+///* embedded NUL characters if either the zSrc or zOut files are
+///* binary.  This function returns the length of the delta string
+///* in bytes, excluding the final NUL terminator character.  It returns
+///* 0 if an OOM occurs.
+///*
+///* Output Format:
+///*
+///* The delta begins with a base64 number followed by a newline.  This
+///* number is the number of bytes in the TARGET file.  Thus, given a
+///* delta file z, a program can compute the size of the output file
+///* simply by reading the first line and decoding the base-64 number
+///* found there.  The delta_output_size() routine does exactly this.
+///*
+///* After the initial size number, the delta consists of a series of
+///* literal text segments and commands to copy from the SOURCE file.
+///* A copy command looks like this:
+///*
+///*     NNN@MMM,
+///*
+///* where NNN is the number of bytes to be copied and MMM is the offset
+///* into the source file of the first byte (both base-64).   If NNN is 0
+///* it means copy the rest of the input file.  Literal text is like this:
+///*
+///*     NNN:TTTTT
+///*
+///* where NNN is the number of bytes of text (base-64) and TTTTT is the text.
+///*
+///* The last term is of the form
+///*
+///*     NNN;
+///*
+///* In this case, NNN is a 32-bit bigendian checksum of the output file
+///* that can be used to verify that the delta applied correctly.  All
+///* numbers are in base-64.
+///*
+///* Pure text files generate a pure text delta.  Binary files generate a
+///* delta that may contain some binary data.
+///*
+///* Algorithm:
+///*
+///* The encoder first builds a hash table to help it find matching
+///* patterns in the source file.  16-byte chunks of the source file
+///* sampled at evenly spaced intervals are used to populate the hash
+///* table.
+///*
+///* Next we begin scanning the target file using a sliding 16-byte
+///* window.  The hash of the 16-byte window in the target is used to
+///* search for a matching section in the source file.  When a match
+///* is found, a copy command is added to the delta.  An effort is
+///* made to extend the matching section to regions that come before
+///* and after the 16-byte hash window.  A copy command is only issued
+///* if the result would use less space that just quoting the text
+///* literally. Literal text is added to the delta for sections that
+///* do not match or which can not be encoded efficiently using copy
+///* commands.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
     z_out_1: *const i8, len_out_1: u32, mut z_delta_1: *mut i8) -> i32 {
     let mut i: i32 = 0;
@@ -269,9 +360,15 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
     let z_orig_delta: *const i8 = z_delta_1 as *const i8;
     let mut h: Hash = unsafe { core::mem::zeroed() };
     let mut n_hash: i32 = 0;
+    /// Number of hash table entries
     let mut landmark: *mut i32 = core::ptr::null_mut();
+    /// Primary hash table
     let mut collide: *mut i32 = core::ptr::null_mut();
+    /// Collision chain
     let mut last_read: i32 = -1;
+
+    /// Last byte of zSrc read by a COPY command
+    /// Add the target file size to the beginning of the delta
     put_int(len_out_1, &mut z_delta_1);
     unsafe {
         *{
@@ -311,7 +408,10 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
         };
         return unsafe { z_delta_1.offset_from(z_orig_delta) } as i64 as i32;
     }
-    n_hash = (len_src_1 / 16 as u32) as i32;
+
+    /// Compute the hash table used to locate matching sections in the
+    ///* source file.
+    (n_hash = (len_src_1 / 16 as u32) as i32);
     collide =
         unsafe {
                 sqlite3_malloc64((n_hash as Sqlite3Int64 * 2 as Sqlite3Int64)
@@ -341,7 +441,10 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
             i += 16;
         }
     }
-    base = 0;
+
+    /// Begin scanning the target file and generating copy commands and
+    ///* literal sections of the delta.
+    (base = 0);
     while ((base + 16) as u32) < len_out_1 {
         let mut i_src: i32 = 0;
         let mut i_block: i32 = 0;
@@ -350,7 +453,9 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
         let mut best_litsz: u32 = 0 as u32;
         hash_init(&mut h, unsafe { &*z_out_1.offset(base as isize) });
         i = 0;
-        best_cnt = 0 as u32;
+
+        /// Trying to match a landmark against zOut[base+i]
+        (best_cnt = 0 as u32);
         loop {
             let mut hv: i32 = 0;
             let mut limit: i32 = 250;
@@ -359,6 +464,19 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
             while i_block >= 0 &&
                     { let __p = &mut limit; let __t = *__p; *__p -= 1; __t } > 0
                 {
+                ///* The hash window has identified a potential match against
+                ///* landmark block iBlock.  But we need to investigate further.
+                ///*
+                ///* Look for a region in zOut that matches zSrc. Anchor the search
+                ///* at zSrc[iSrc] and zOut[base+i].  Do not include anything prior to
+                ///* zOut[base] or after zOut[outLen] nor anything after zSrc[srcLen].
+                ///*
+                ///* Set cnt equal to the length of the match and set ofst so that
+                ///* zSrc[ofst] is the first element of the match.  litsz is the number
+                ///* of characters between zOut[base] and the beginning of the match.
+                ///* sz will be the overhead (in bytes) needed to encode the copy
+                ///* command.  Only generate copy command if the overhead of the
+                ///* copy command is less than the amount of literal text to be copied.
                 let mut cnt: i32 = 0;
                 let mut ofst: i32 = 0;
                 let mut litsz: i32 = 0;
@@ -368,7 +486,10 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
                 let mut y: i32 = 0;
                 let mut sz: i32 = 0;
                 let mut limit_x: i32 = 0;
-                i_src = i_block * 16;
+
+                /// Beginning at iSrc, match forwards as far as we can.  j counts
+                ///* the number of characters that match
+                (i_src = i_block * 16);
                 y = base + i;
                 limit_x =
                     if len_src_1 - i_src as u32 <= len_out_1 - y as u32 {
@@ -408,21 +529,34 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
                     }
                 }
                 { let __p = &mut k; let __t = *__p; *__p -= 1; __t };
-                ofst = i_src - k;
+
+                /// Compute the offset and size of the matching region
+                (ofst = i_src - k);
                 cnt = j + k + 1;
                 litsz = i - k;
-                sz =
+
+                /// Number of bytes of literal text before the copy */
+                ///        /* sz will hold the number of bytes needed to encode the "insert"
+                ///* command and the copy command, not counting the "insert" text
+                (sz =
                     digit_count(i - k) + digit_count(cnt) + digit_count(ofst) +
-                        3;
+                        3);
                 if cnt >= sz && cnt as u32 > best_cnt {
-                    best_cnt = cnt as u32;
+
+                    /// Remember this match only if it is the best so far and it
+                    ///* does not increase the file size
+                    (best_cnt = cnt as u32);
                     best_ofst = (i_src - k) as u32;
                     best_litsz = litsz as u32;
                 }
-                i_block = unsafe { *collide.offset(i_block as isize) };
+
+                /// Check the next matching block
+                (i_block = unsafe { *collide.offset(i_block as isize) });
             }
             if best_cnt > 0 as u32 {
                 if best_litsz > 0 as u32 {
+
+                    /// Add an insert command before the copy
                     put_int(best_litsz, &mut z_delta_1);
                     unsafe {
                         *{
@@ -470,6 +604,9 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
                 break;
             }
             if (base + i + 16) as u32 >= len_out_1 {
+
+                /// We have reached the end of the file and have not found any
+                ///* matches.  Do an "insert" for everything that does not match
                 put_int(len_out_1 - base as u32, &mut z_delta_1);
                 unsafe {
                     *{
@@ -492,6 +629,8 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
                 base = len_out_1 as i32;
                 break;
             }
+
+            /// Advance the hash by one character.  Keep looking for a match
             hash_next(&mut h,
                 unsafe { *z_out_1.offset((base + i + 16) as isize) } as i32);
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
@@ -518,6 +657,8 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
             *__p = unsafe { (*__p).add(__n as usize) };
         };
     }
+
+    /// Output the final checksum record.
     put_int(checksum(z_out_1, len_out_1 as u64), &mut z_delta_1);
     unsafe {
         *{
@@ -531,16 +672,45 @@ extern "C" fn delta_create(z_src_1: *const i8, len_src_1: u32,
     return unsafe { z_delta_1.offset_from(z_orig_delta) } as i64 as i32;
 }
 
+///* Return the size (in bytes) of the output from applying
+///* a delta.
+///*
+///* This routine is provided so that an procedure that is able
+///* to call delta_apply() can learn how much space is required
+///* for the output and hence allocate nor more space that is really
+///* needed.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_output_size(mut z_delta_1: *const i8,
     mut len_delta_1: i32) -> i32 {
     let mut size: i32 = 0;
     size = delta_get_int(&mut z_delta_1, &mut len_delta_1) as i32;
     if len_delta_1 <= 0 || unsafe { *z_delta_1 } as i32 != '\n' as i32 {
+
+        /// ERROR: size integer not terminated by "\n"
         return -1;
     }
     return size;
 }
 
+///* Apply a delta.
+///*
+///* The output buffer should be big enough to hold the whole output
+///* file and a NUL terminator at the end.  The delta_output_size()
+///* routine will determine this size for you.
+///*
+///* The delta string should be null-terminated.  But the delta string
+///* may contain embedded NUL characters (if the input and output are
+///* binary files) so we also have to pass in the length of the delta in
+///* the lenDelta parameter.
+///*
+///* This function returns the size of the output file in bytes (excluding
+///* the final NUL terminator character).  Except, if the delta string is
+///* malformed or intended for use with a source file other than zSrc,
+///* then this routine returns -1.
+///*
+///* Refer to the delta_create() documentation above for a description
+///* of the delta file format.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
     mut z_delta_1: *const i8, mut len_delta_1: i32, mut z_out_1: *mut i8)
     -> i32 {
@@ -548,6 +718,8 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
     let mut total: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     limit = delta_get_int(&mut z_delta_1, &mut len_delta_1) as Sqlite3Uint64;
     if len_delta_1 <= 0 || unsafe { *z_delta_1 } as i32 != '\n' as i32 {
+
+        /// ERROR: size integer not terminated by "\n"
         return -1;
     }
     {
@@ -583,6 +755,8 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                         if len_delta_1 > 0 &&
                                 unsafe { *z_delta_1.offset(0 as isize) } as i32 !=
                                     ',' as i32 {
+
+                            /// ERROR: copy command not terminated by ','
                             return -1;
                         }
                         {
@@ -598,8 +772,14 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         total += cnt as Sqlite3Uint64;
-                        if total > limit { return -1; }
+                        if total > limit {
+
+                            /// ERROR: copy exceeds output file size
+                            return -1;
+                        }
                         if ofst as u64 + cnt as u64 > len_src_1 as u64 {
+
+                            /// ERROR: copy extends past end of input
                             return -1;
                         }
                         unsafe {
@@ -628,8 +808,16 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         total += cnt as Sqlite3Uint64;
-                        if total > limit { return -1; }
-                        if cnt > len_delta_1 as u32 { return -1; }
+                        if total > limit {
+
+                            /// ERROR:  insert command gives an output larger than predicted
+                            return -1;
+                        }
+                        if cnt > len_delta_1 as u32 {
+
+                            /// ERROR: insert count exceeds size of delta
+                            return -1;
+                        }
                         unsafe {
                             memcpy(z_out_1 as *mut (), z_delta_1 as *const (),
                                 cnt as u64)
@@ -661,10 +849,18 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         unsafe { *z_out_1.offset(0 as isize) = 0 as i8 };
-                        if total != limit { return -1; }
+                        if total != limit {
+
+                            /// ERROR: generated size does not match predicted size
+                            return -1;
+                        }
                         return total as i32;
                     }
-                    { return -1; }
+                    {
+
+                        /// ERROR: unknown delta operator
+                        return -1;
+                    }
                 }
                 58 => {
                     {
@@ -681,8 +877,16 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         total += cnt as Sqlite3Uint64;
-                        if total > limit { return -1; }
-                        if cnt > len_delta_1 as u32 { return -1; }
+                        if total > limit {
+
+                            /// ERROR:  insert command gives an output larger than predicted
+                            return -1;
+                        }
+                        if cnt > len_delta_1 as u32 {
+
+                            /// ERROR: insert count exceeds size of delta
+                            return -1;
+                        }
                         unsafe {
                             memcpy(z_out_1 as *mut (), z_delta_1 as *const (),
                                 cnt as u64)
@@ -714,10 +918,18 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         unsafe { *z_out_1.offset(0 as isize) = 0 as i8 };
-                        if total != limit { return -1; }
+                        if total != limit {
+
+                            /// ERROR: generated size does not match predicted size
+                            return -1;
+                        }
                         return total as i32;
                     }
-                    { return -1; }
+                    {
+
+                        /// ERROR: unknown delta operator
+                        return -1;
+                    }
                 }
                 59 => {
                     {
@@ -734,26 +946,50 @@ extern "C" fn delta_apply(z_src_1: *const i8, len_src_1: i32,
                             __t
                         };
                         unsafe { *z_out_1.offset(0 as isize) = 0 as i8 };
-                        if total != limit { return -1; }
+                        if total != limit {
+
+                            /// ERROR: generated size does not match predicted size
+                            return -1;
+                        }
                         return total as i32;
                     }
-                    { return -1; }
+                    {
+
+                        /// ERROR: unknown delta operator
+                        return -1;
+                    }
                 }
-                _ => { { return -1; } }
+                _ => {
+                    {
+
+                        /// ERROR: unknown delta operator
+                        return -1;
+                    }
+                }
             }
         }
     }
+
+    /// ERROR: unterminated delta
     return -1;
 }
 
+///* SQL functions:  delta_create(X,Y)
+///*
+///* Return a delta for carrying X into Y.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_create_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_orig: *const i8 = core::ptr::null();
     let mut n_orig: i32 = 0;
+    /// old blob
     let mut a_new: *const i8 = core::ptr::null();
     let mut n_new: i32 = 0;
+    /// new blob
     let mut a_out: *mut i8 = core::ptr::null_mut();
     let mut n_out: i32 = 0;
+
+    /// output delta
     if !(argc == 2) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"deltaCreateFunc".as_ptr() as *const i8,
@@ -802,15 +1038,23 @@ extern "C" fn delta_create_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL functions:  delta_apply(X,D)
+///*
+///* Return the result of applying delta D to input X.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_apply_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_orig: *const i8 = core::ptr::null();
     let mut n_orig: i32 = 0;
+    /// The X input
     let mut a_delta: *const i8 = core::ptr::null();
     let mut n_delta: i32 = 0;
+    /// The input delta (D)
     let mut a_out: *mut i8 = core::ptr::null_mut();
     let mut n_out: i32 = 0;
     let mut n_out2: i32 = 0;
+
+    /// The output
     if !(argc == 2) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"deltaApplyFunc".as_ptr() as *const i8,
@@ -836,7 +1080,9 @@ extern "C" fn delta_apply_func(context: *mut Sqlite3Context, argc: i32,
     a_delta =
         unsafe { sqlite3_value_blob(unsafe { *argv.offset(1 as isize) }) } as
             *const i8;
-    n_out = delta_output_size(a_delta, n_delta);
+
+    /// Figure out the size of the output
+    (n_out = delta_output_size(a_delta, n_delta));
     if n_out < 0 {
         unsafe {
             sqlite3_result_error(context,
@@ -869,11 +1115,18 @@ extern "C" fn delta_apply_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL functions:  delta_output_size(D)
+///*
+///* Return the size of the output that results from applying delta D.
+#[allow(unused_doc_comments)]
 extern "C" fn delta_output_size_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_delta: *const i8 = core::ptr::null();
     let mut n_delta: i32 = 0;
+    /// The input delta (D)
     let mut n_out: i32 = 0;
+
+    /// Size of output
     if !(argc == 1) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"deltaOutputSizeFunc".as_ptr() as *const i8,
@@ -890,7 +1143,9 @@ extern "C" fn delta_output_size_func(context: *mut Sqlite3Context, argc: i32,
     a_delta =
         unsafe { sqlite3_value_blob(unsafe { *argv.offset(0 as isize) }) } as
             *const i8;
-    n_out = delta_output_size(a_delta, n_delta);
+
+    /// Figure out the size of the output
+    (n_out = delta_output_size(a_delta, n_delta));
     if n_out < 0 {
         unsafe {
             sqlite3_result_error(context,
@@ -900,6 +1155,38 @@ extern "C" fn delta_output_size_func(context: *mut Sqlite3Context, argc: i32,
     } else { unsafe { sqlite3_result_int(context, n_out) }; }
 }
 
+///**************************************************************************
+///* Table-valued SQL function:   delta_parse(DELTA)
+///*
+///* Schema:
+///*
+///*     CREATE TABLE delta_parse(
+///*       op TEXT,
+///*       a1 INT,
+///*       a2 ANY,
+///*       delta HIDDEN BLOB
+///*     );
+///*
+///* Given an input DELTA, this function parses the delta and returns
+///* rows for each entry in the delta.  The op column has one of the
+///* values SIZE, COPY, INSERT, CHECKSUM, ERROR.
+///*
+///* Assuming no errors, the first row has op='SIZE'.  a1 is the size of
+///* the output in bytes and a2 is NULL.
+///*
+///* After the initial SIZE row, there are zero or more 'COPY' and/or 'INSERT'
+///* rows.  A COPY row means content is copied from the source into the
+///* output.  Column a1 is the number of bytes to copy and a2 is the offset
+///* into source from which to begin copying.  An INSERT row means to
+///* insert text into the output stream.  Column a1 is the number of bytes
+///* to insert and column is a BLOB that contains the text to be inserted.
+///*
+///* The last row of a well-formed delta will have an op value of 'CHECKSUM'.
+///* The a1 column will be the value of the checksum and a2 will be NULL.
+///*
+///* If the input delta is not well-formed, then a row with an op value
+///* of 'ERROR' is returned.  The a1 value of the ERROR row is the offset
+///* into the delta where the error was encountered and a2 is NULL.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct DeltaparsevtabVtab {
@@ -919,12 +1206,24 @@ struct DeltaparsevtabCursor {
     a2: u32,
 }
 
+/// Operator names:
 static mut az_op: [*const i8; 6] =
     [c"SIZE".as_ptr() as *const i8, c"COPY".as_ptr() as *const i8,
             c"INSERT".as_ptr() as *const i8,
             c"CHECKSUM".as_ptr() as *const i8, c"ERROR".as_ptr() as *const i8,
             c"EOF".as_ptr() as *const i8];
 
+///* The deltaparsevtabConnect() method is invoked to create a new
+///* deltaparse virtual table.
+///*
+///* Think of this routine as the constructor for deltaparsevtab_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the deltaparsevtab_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against the virtual table will look like.
 extern "C" fn deltaparsevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -953,12 +1252,14 @@ extern "C" fn deltaparsevtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     return rc;
 }
 
+///* This method is the destructor for deltaparsevtab_vtab objects.
 extern "C" fn deltaparsevtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut DeltaparsevtabVtab = p_vtab_1 as *mut DeltaparsevtabVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new deltaparsevtab_cursor object.
 extern "C" fn deltaparsevtab_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut DeltaparsevtabCursor = core::ptr::null_mut();
@@ -976,6 +1277,7 @@ extern "C" fn deltaparsevtab_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a deltaparsevtab_cursor.
 extern "C" fn deltaparsevtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut DeltaparsevtabCursor = cur as *mut DeltaparsevtabCursor;
     unsafe { sqlite3_free(unsafe { (*p_cur).a_delta } as *mut ()) };
@@ -983,6 +1285,7 @@ extern "C" fn deltaparsevtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Advance a deltaparsevtab_cursor to its next row of output.
 extern "C" fn deltaparsevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut DeltaparsevtabCursor = cur as *mut DeltaparsevtabCursor;
     let mut z: *const i8 = core::ptr::null();
@@ -1148,6 +1451,8 @@ extern "C" fn deltaparsevtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the deltaparsevtab_cursor
+///* is currently pointing.
 extern "C" fn deltaparsevtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -1332,6 +1637,8 @@ extern "C" fn deltaparsevtab_column(cur: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn deltaparsevtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const DeltaparsevtabCursor =
@@ -1340,6 +1647,8 @@ extern "C" fn deltaparsevtab_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn deltaparsevtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const DeltaparsevtabCursor =
         cur as *mut DeltaparsevtabCursor as *const DeltaparsevtabCursor;
@@ -1348,6 +1657,10 @@ extern "C" fn deltaparsevtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
             as i32;
 }
 
+///* This method is called to "rewind" the deltaparsevtab_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to deltaparsevtabColumn() or deltaparsevtabRowid() or
+///* deltaparsevtabEof().
 extern "C" fn deltaparsevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1416,6 +1729,10 @@ extern "C" fn deltaparsevtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
 extern "C" fn deltaparsevtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -1474,6 +1791,8 @@ extern "C" fn deltaparsevtab_best_index(tab: *mut Sqlite3Vtab,
     return 19;
 }
 
+///* This following structure defines all the methods for the
+///* virtual table.
 static mut deltaparsevtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1504,18 +1823,21 @@ static mut deltaparsevtab_module: Sqlite3Module =
     };
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fossildelta_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         { let _ = p_api_1; };
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Unused parameter
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"delta_create".as_ptr() as *mut i8 as *const i8, 2, enc,
                     core::ptr::null_mut(), Some(delta_create_func), None, None)
-            };
+            });
         if rc == 0 {
             rc =
                 unsafe {

@@ -2,12 +2,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Virtual table cursor type for union vtab.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionCsr {
@@ -17,6 +24,7 @@ struct UnionCsr {
     i_tab: i32,
 }
 
+///* Virtual table  type for union vtab.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionTab {
@@ -35,6 +43,9 @@ struct UnionTab {
     n_max_open: i32,
 }
 
+///* Each source table (row returned by the initialization query) is 
+///* represented by an instance of the following structure stored in the
+///* UnionTab.aSrc[] array.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnionSrc {
@@ -49,6 +60,11 @@ struct UnionSrc {
     p_next_closable: *mut UnionSrc,
 }
 
+///* If *pRc is other than SQLITE_OK when this function is called, it
+///* always returns NULL. Otherwise, it attempts to allocate and return
+///* a pointer to nByte bytes of zeroed memory. If the memory allocation
+///* is attempted but fails, NULL is returned and *pRc is set to 
+///* SQLITE_NOMEM.
 extern "C" fn union_malloc(p_rc_1: &mut i32, n_byte_1: Sqlite3Int64)
     -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
@@ -68,6 +84,11 @@ extern "C" fn union_malloc(p_rc_1: &mut i32, n_byte_1: Sqlite3Int64)
     return p_ret;
 }
 
+///* If *pRc is other than SQLITE_OK when this function is called, it
+///* always returns NULL. Otherwise, it attempts to allocate and return
+///* a copy of the nul-terminated string passed as the second argument.
+///* If the allocation is attempted but fails, NULL is returned and *pRc is 
+///* set to SQLITE_NOMEM.
 extern "C" fn union_strdup(p_rc_1: *mut i32, z_in_1: *const i8) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
     if !(z_in_1).is_null() {
@@ -83,6 +104,14 @@ extern "C" fn union_strdup(p_rc_1: *mut i32, z_in_1: *const i8) -> *mut i8 {
     return z_ret;
 }
 
+///* If the first character of the string passed as the only argument to this
+///* function is one of the 4 that may be used as an open quote character
+///* in SQL, this function assumes that the input is a well-formed quoted SQL 
+///* string. In this case the string is dequoted in place.
+///*
+///* If the first character of the input is not an open quote, then this
+///* function is a no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn union_dequote(z: *mut i8) -> () {
     if !(z).is_null() {
         let mut q: i8 = unsafe { *z.offset(0 as isize) };
@@ -108,10 +137,16 @@ extern "C" fn union_dequote(z: *mut i8) -> () {
                 if unsafe { *z.offset(i_in as isize) } as i32 == q as i32 {
                     if unsafe { *z.offset((i_in + 1) as isize) } as i32 !=
                             q as i32 {
+
+                        /// Character iIn was the close quote.
                         { let __p = &mut i_in; let __t = *__p; *__p += 1; __t };
                         break;
                     } else {
-                        i_in += 2;
+
+                        /// Character iIn and iIn+1 form an escaped quote character. Skip
+                        ///* the input cursor past both and copy a single quote character 
+                        ///* to the output buffer.
+                        (i_in += 2);
                         unsafe {
                             *z.offset({
                                                 let __p = &mut i_out;
@@ -145,6 +180,17 @@ extern "C" fn union_dequote(z: *mut i8) -> () {
     }
 }
 
+///* This function is a no-op if *pRc is set to other than SQLITE_OK when it
+///* is called. NULL is returned in this case.
+///*
+///* Otherwise, the SQL statement passed as the third argument is prepared
+///* against the database handle passed as the second. If the statement is
+///* successfully prepared, a pointer to the new statement handle is 
+///* returned. It is the responsibility of the caller to eventually free the
+///* statement by calling sqlite3_finalize(). Alternatively, if statement
+///* compilation fails, NULL is returned, *pRc is set to an SQLite error
+///* code and *pzErr may be set to an error message buffer allocated by
+///* sqlite3_malloc().
 extern "C" fn union_prepare(p_rc_1: &mut i32, db: *mut Sqlite3,
     z_sql_1: *const i8, pz_err_1: *mut *mut i8) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -175,6 +221,8 @@ extern "C" fn union_prepare(p_rc_1: &mut i32, db: *mut Sqlite3,
     return p_ret;
 }
 
+///* Like unionPrepare(), except prepare the results of vprintf(zFmt, ...)
+///* instead of a constant SQL string.
 unsafe extern "C" fn union_prepare_printf(p_rc_1: *mut i32,
     pz_err_1: *mut *mut i8, db: *mut Sqlite3, z_fmt_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
@@ -197,6 +245,9 @@ unsafe extern "C" fn union_prepare_printf(p_rc_1: *mut i32,
     return p_ret;
 }
 
+///* Call sqlite3_finalize() on SQL statement pStmt. If *pRc is set to 
+///* SQLITE_OK when this function is called, then it is set to the
+///* value returned by sqlite3_finalize() before this function exits.
 extern "C" fn union_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt,
     pz_err_1: &mut *mut i8) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
@@ -213,6 +264,14 @@ extern "C" fn union_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt,
     }
 }
 
+///* If an "openclose" UDF was supplied when this virtual table was created,
+///* invoke it now. The first argument passed is the name of the database
+///* file for source pSrc. The second is integer value bClose.
+///*
+///* If successful, return SQLITE_OK. Otherwise an SQLite error code. In this
+///* case if argument pzErr is not NULL, also set (*pzErr) to an English
+///* language error message. The caller is responsible for eventually freeing 
+///* any error message using sqlite3_free().
 extern "C" fn union_invoke_open_close(p_tab_1: &UnionTab, p_src_1: &UnionSrc,
     b_close_1: i32, pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -248,6 +307,9 @@ extern "C" fn union_invoke_open_close(p_tab_1: &UnionTab, p_src_1: &UnionSrc,
     return rc;
 }
 
+///* This function is a no-op for unionvtab. For swarmvtab, it attempts to
+///* close open database files until at most nMax are open. An SQLite error
+///* code is returned if an error occurs, or SQLITE_OK otherwise.
 extern "C" fn union_close_sources(p_tab_1: *mut UnionTab, n_max_1: i32)
     -> () {
     while !(unsafe { (*p_tab_1).p_closable }).is_null() &&
@@ -288,6 +350,7 @@ extern "C" fn union_close_sources(p_tab_1: *mut UnionTab, n_max_1: i32)
     }
 }
 
+///* xDisconnect method.
 extern "C" fn union_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     if !(p_vtab_1).is_null() {
         let p_tab: *mut UnionTab = p_vtab_1 as *mut UnionTab;
@@ -334,6 +397,10 @@ extern "C" fn union_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Check that the table identified by pSrc is a rowid table. If not,
+///* return SQLITE_ERROR and set (*pzErr) to point to an English language
+///* error message. If the table is a rowid table and no error occurs,
+///* return SQLITE_OK and leave (*pzErr) unmodified.
 extern "C" fn union_is_intkey_table(db: *mut Sqlite3, p_src_1: &UnionSrc,
     pz_err_1: &mut *mut i8) -> i32 {
     let mut b_pk: i32 = 0;
@@ -370,6 +437,21 @@ extern "C" fn union_is_intkey_table(db: *mut Sqlite3, p_src_1: &UnionSrc,
     return rc;
 }
 
+///* This function is a no-op if *pRc is other than SQLITE_OK when it is
+///* called. In this case it returns NULL.
+///*
+///* Otherwise, this function checks that the source table passed as the
+///* second argument (a) exists, (b) is not a view and (c) has a column 
+///* named "_rowid_" of type "integer" that is the primary key.
+///* If this is not the case, *pRc is set to SQLITE_ERROR and NULL is
+///* returned.
+///*
+///* Finally, if the source table passes the checks above, a nul-terminated
+///* string describing the column names and types belonging to the source
+///* table is returned. Tables with the same set of column names and types 
+///* cause this function to return identical strings. Is is the responsibility
+///* of the caller to free the returned string using sqlite3_free() when
+///* it is no longer required.
 extern "C" fn union_source_to_str(p_rc_1: &mut i32, p_tab_1: &UnionTab,
     p_src_1: *mut UnionSrc, pz_err_1: *mut *mut i8) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -406,6 +488,12 @@ extern "C" fn union_source_to_str(p_rc_1: &mut i32, p_tab_1: &UnionTab,
     return z_ret;
 }
 
+///* Check that all configured source tables exist and have the same column
+///* names and datatypes. If this is not the case, or if some other error
+///* occurs, return an SQLite error code. In this case *pzErr may be set
+///* to point to an error message buffer allocated by sqlite3_mprintf().
+///* Or, if no problems regarding the source tables are detected and no
+///* other error occurs, SQLITE_OK is returned.
 extern "C" fn union_source_check(p_tab_1: *mut UnionTab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -454,6 +542,8 @@ extern "C" fn union_source_check(p_tab_1: *mut UnionTab,
     return rc;
 }
 
+///* Try to open the swarmvtab database.  If initially unable, invoke the
+///* not-found callback UDF and then try again.
 extern "C" fn union_open_database_inner(p_tab_1: *mut UnionTab,
     p_src_1: *mut UnionSrc, pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -515,6 +605,19 @@ extern "C" fn union_open_database_inner(p_tab_1: *mut UnionTab,
     return rc;
 }
 
+///* This function may only be called for swarmvtab tables. The results of
+///* calling it on a unionvtab table are undefined.
+///*
+///* For a swarmvtab table, this function ensures that source database iSrc
+///* is open. If the database is opened successfully and the schema is as
+///* expected, or if it is already open when this function is called, SQLITE_OK
+///* is returned.
+///*
+///* Alternatively If an error occurs while opening the databases, or if the
+///* database schema is unsuitable, an SQLite error code is returned and (*pzErr)
+///* may be set to point to an English language error message. In this case it is
+///* the responsibility of the caller to eventually free the error message buffer
+///* using sqlite3_free().
 extern "C" fn union_open_database(p_tab_1: *mut UnionTab, i_src_1: i32,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -579,6 +682,10 @@ extern "C" fn union_open_database(p_tab_1: *mut UnionTab, i_src_1: i32,
     return rc;
 }
 
+///* This function is a no-op for unionvtab tables. For swarmvtab, increment 
+///* the reference count for source table iTab. If the reference count was
+///* zero before it was incremented, also remove the source from the closable
+///* list.
 extern "C" fn union_incr_refcount(p_tab_1: &mut UnionTab, i_tab_1: i32)
     -> () {
     if (*p_tab_1).b_swarm != 0 {
@@ -615,6 +722,12 @@ extern "C" fn union_incr_refcount(p_tab_1: &mut UnionTab, i_tab_1: i32)
     }
 }
 
+///* Finalize the SQL statement pCsr->pStmt and return the result.
+///*
+///* If this is a swarmvtab table (not unionvtab) and pCsr->pStmt was not
+///* NULL when this function was called, also decrement the reference
+///* count on the associated source table. If this means the source tables
+///* refcount is now zero, add it to the closable list.
 extern "C" fn union_finalize_csr_stmt(p_csr_1: &mut UnionCsr) -> i32 {
     let mut rc: i32 = 0;
     if !((*p_csr_1).p_stmt).is_null() {
@@ -653,17 +766,37 @@ extern "C" fn union_finalize_csr_stmt(p_csr_1: &mut UnionCsr) -> i32 {
     return rc;
 }
 
+/// 
+///* Return true if the argument is a space, tab, CR or LF character.
 extern "C" fn union_isspace(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\n' as i32 ||
                     c as i32 == '\r' as i32 || c as i32 == '\t' as i32) as i32;
 }
 
+/// 
+///* Return true if the argument is an alphanumeric character in the 
+///* ASCII range.
 extern "C" fn union_isidchar(c: i8) -> i32 {
     return (c as i32 >= 'a' as i32 && c as i32 <= 'z' as i32 ||
                     c as i32 >= 'A' as i32 && (c as i32) < 'Z' as i32 ||
                 c as i32 >= '0' as i32 && c as i32 <= '9' as i32) as i32;
 }
 
+///* This function is called to handle all arguments following the first 
+///* (the SQL statement) passed to a swarmvtab (not unionvtab) CREATE 
+///* VIRTUAL TABLE statement. It may bind parameters to the SQL statement 
+///* or configure members of the UnionTab object passed as the second
+///* argument.
+///*
+///* Refer to header comments at the top of this file for a description
+///* of the arguments parsed.
+///*
+///* This function is a no-op if *pRc is other than SQLITE_OK when it is
+///* called. Otherwise, if an error occurs, *pRc is set to an SQLite error
+///* code. In this case *pzErr may be set to point to a buffer containing
+///* an English language error message. It is the responsibility of the 
+///* caller to eventually free the buffer using sqlite3_free().
+#[allow(unused_doc_comments)]
 extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
     p_stmt_1: *mut Sqlite3Stmt, az_arg_1: &[*const i8],
     pz_err_1: *mut *mut i8) -> () {
@@ -682,8 +815,12 @@ extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
                     union_strdup(&mut rc, az_arg_1[i as usize]);
                 if !(z_arg).is_null() {
                     let mut n_opt: i32 = 0;
+                    /// Size of option name in bytes
                     let mut z_opt: *mut i8 = core::ptr::null_mut();
+                    /// Pointer to option name
                     let mut z_val: *mut i8 = core::ptr::null_mut();
+
+                    /// Pointer to value
                     union_dequote(z_arg);
                     z_opt = z_arg;
                     while union_isspace(unsafe { *z_opt }) != 0 {
@@ -743,6 +880,7 @@ extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
                             union_dequote(z_val);
                             if unsafe { *z_opt.offset(0 as isize) } as i32 == ':' as i32
                                 {
+                                /// A value to bind to the SQL statement
                                 let i_param: i32 =
                                     unsafe {
                                         sqlite3_bind_parameter_index(p_stmt_1, z_opt as *const i8)
@@ -876,6 +1014,17 @@ extern "C" fn union_configure_vtab(p_rc_1: &mut i32, p_tab_1: &mut UnionTab,
     *p_rc_1 = rc;
 }
 
+/// 
+///* xConnect/xCreate method.
+///*
+///* The argv[] array contains the following:
+///*
+///*   argv[0]   -> module name  ("unionvtab" or "swarmvtab")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[3]   -> SQL statement
+///*   argv[4]   -> not-found callback UDF name
+#[allow(unused_doc_comments)]
 extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -890,6 +1039,8 @@ extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
                 sqlite3_stricmp(c"temp".as_ptr() as *mut i8 as *const i8,
                     unsafe { *argv.offset(1 as isize) })
             } != 0 {
+
+        /// unionvtab tables may only be created in the temp schema
         unsafe {
             *pz_err_1 =
                 unsafe {
@@ -909,9 +1060,17 @@ extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
         rc = 1;
     } else {
         let mut n_alloc: i32 = 0;
+        /// Allocated size of pTab->aSrc[]
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Argument statement
         let z_arg: *mut i8 =
             union_strdup(&mut rc, unsafe { *argv.offset(3 as isize) });
+
+        /// Copy of argument to CVT
+        /// Prepare the SQL statement. Instead of executing it directly, sort
+        ///* the results by the "minimum rowid" field. This makes it easier to
+        ///* check that there are no rowid range overlaps between source tables 
+        ///* and that the UnionTab.aSrc[] array is always sorted by rowid.
         union_dequote(z_arg);
         p_stmt =
             unsafe {
@@ -919,10 +1078,12 @@ extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
                     c"SELECT * FROM (%z) ORDER BY 3".as_ptr() as *mut i8 as
                         *const i8, z_arg)
             };
-        p_tab =
+
+        /// Allocate the UnionTab structure
+        (p_tab =
             union_malloc(&mut rc,
                     core::mem::size_of::<UnionTab>() as Sqlite3Int64) as
-                *mut UnionTab;
+                *mut UnionTab);
         if !(p_tab).is_null() {
             if !(rc == 0) as i32 as i64 != 0 {
                 unsafe {
@@ -1084,19 +1245,26 @@ extern "C" fn union_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* xOpen
+#[allow(unused_doc_comments)]
 extern "C" fn union_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut UnionCsr = core::ptr::null_mut();
     let mut rc: i32 = 0;
     { let _ = p; };
-    p_csr =
+
+    /// Suppress harmless warning
+    (p_csr =
         union_malloc(&mut rc,
                 core::mem::size_of::<UnionCsr>() as Sqlite3Int64) as
-            *mut UnionCsr;
+            *mut UnionCsr);
+
+    /// Suppress harmless warning
     unsafe { *pp_cursor_1 = unsafe { &mut (*p_csr).base } };
     return rc;
 }
 
+///* xClose
 extern "C" fn union_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut UnionCsr = cur as *mut UnionCsr;
     union_finalize_csr_stmt(unsafe { &mut *p_csr });
@@ -1104,6 +1272,10 @@ extern "C" fn union_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* This function does the work of the xNext() method. Except that, if it
+///* returns SQLITE_ROW, it should be called again within the same xNext()
+///* method call. See unionNext() for details.
+#[allow(unused_doc_comments)]
 extern "C" fn do_union_next(p_csr_1: *mut UnionCsr) -> i32 {
     let mut rc: i32 = 0;
     if (unsafe { (*p_csr_1).p_stmt }).is_null() as i32 as i64 != 0 {
@@ -1133,9 +1305,11 @@ extern "C" fn do_union_next(p_csr_1: *mut UnionCsr) -> i32 {
                         } as *const UnionSrc;
                 if unsafe { (*p_csr_1).i_max_rowid } >=
                         unsafe { (*p_src).i_min } {
-                    rc =
+
+                    /// It is necessary to scan the next table.
+                    (rc =
                         union_open_database(p_tab, unsafe { (*p_csr_1).i_tab },
-                            unsafe { &mut (*p_tab).base.z_err_msg });
+                            unsafe { &mut (*p_tab).base.z_err_msg }));
                     unsafe {
                         (*p_csr_1).p_stmt =
                             unsafe {
@@ -1171,6 +1345,7 @@ extern "C" fn do_union_next(p_csr_1: *mut UnionCsr) -> i32 {
     return rc;
 }
 
+///* xNext
 extern "C" fn union_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
     '__b12: loop {
@@ -1183,6 +1358,7 @@ extern "C" fn union_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+///* xColumn
 extern "C" fn union_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
@@ -1195,6 +1371,7 @@ extern "C" fn union_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* xRowid
 extern "C" fn union_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
@@ -1205,11 +1382,13 @@ extern "C" fn union_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* xEof
 extern "C" fn union_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const UnionCsr = cur as *mut UnionCsr as *const UnionCsr;
     return (unsafe { (*p_csr).p_stmt } == core::ptr::null_mut()) as i32;
 }
 
+///* xFilter
 extern "C" fn union_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1409,6 +1588,22 @@ extern "C" fn union_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return union_next(p_vtab_cursor_1);
 }
 
+///* xBestIndex.
+///*
+///* This implementation searches for constraints on the rowid field. EQ, 
+///* LE, LT, GE and GT are handled.
+///*
+///* If there is an EQ comparison, then idxNum is set to INDEX_CONSTRAINT_EQ.
+///* In this case the only argument passed to xFilter is the rhs of the ==
+///* operator.
+///*
+///* Otherwise, if an LE or LT constraint is found, then the INDEX_CONSTRAINT_LE
+///* or INDEX_CONSTRAINT_LT (but not both) bit is set in idxNum. The first
+///* argument to xFilter is the rhs of the <= or < operator.  Similarly, if 
+///* an GE or GT constraint is found, then the INDEX_CONSTRAINT_GE or
+///* INDEX_CONSTRAINT_GT bit is set in idxNum. The rhs of the >= or > operator
+///* is passed as either the first or second argument to xFilter, depending
+///* on whether or not there is also a LT|LE constraint.
 extern "C" fn union_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const UnionTab = tab as *mut UnionTab as *const UnionTab;
@@ -1515,8 +1710,31 @@ extern "C" fn union_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Register the unionvtab virtual table module with database handle db.
+#[allow(unused_doc_comments)]
 extern "C" fn create_union_vtab(db: *mut Sqlite3) -> i32 {
     unsafe {
+        /// iVersion
+        /// xBestIndex - query planner
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         let mut rc: i32 = 0;
         rc =
             unsafe {
@@ -1539,12 +1757,15 @@ extern "C" fn create_union_vtab(db: *mut Sqlite3) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_unionvtab_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc = create_union_vtab(db);
+
+    /// Suppress harmless warning
+    (rc = create_union_vtab(db));
     return rc;
 }
 

@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3expert_h;
-pub(crate) use crate::sqlite3expert_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3expert_h::Sqlite3expert;
 
 type DarwinSizeT = u64;
 
@@ -83,6 +89,7 @@ extern "C" fn read_sql_from_file(p: *mut Sqlite3expert, z_file_1: *const i8,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut z_db: *const i8 = core::ptr::null();
@@ -90,6 +97,7 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         let mut z_err: *mut i8 = core::ptr::null_mut();
         let mut i: i32 = 0;
         let mut i_verbose: i32 = 1;
+        /// -verbose option
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
         let mut p: *mut Sqlite3expert = core::ptr::null_mut();
         if argc < 2 { usage(argv as *const *mut i8); }

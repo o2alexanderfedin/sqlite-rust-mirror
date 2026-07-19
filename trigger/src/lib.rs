@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, Returning, RowSet, SQLiteThread,
+    Schema, Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo,
+    Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token,
+    Trigger, TriggerPrg, TriggerStep, UnpackedRecord, Upsert, VList, VTable,
+    Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+///* Delete a linked list of TriggerStep structures.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_trigger_step(db: *mut Sqlite3,
     mut p_trigger_step: *mut TriggerStep) -> () {
@@ -422,6 +438,8 @@ pub extern "C" fn sqlite3_delete_trigger_step(db: *mut Sqlite3,
     }
 }
 
+/// 
+///* Recursively delete a Trigger structure
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_trigger(db: *mut Sqlite3,
     p_trigger: *mut Trigger) -> () {
@@ -437,19 +455,58 @@ pub extern "C" fn sqlite3_delete_trigger(db: *mut Sqlite3,
     unsafe { sqlite3_db_free(db, p_trigger as *mut ()) };
 }
 
+///* This is called by the parser when it sees a CREATE TRIGGER statement
+///* up to the point of the BEGIN before the trigger actions.  A Trigger
+///* structure is generated based on the information available and stored
+///* in pParse->pNewTrigger.  After the trigger actions have been parsed, the
+///* sqlite3FinishTrigger() function is called to complete the trigger
+///* construction process.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_begin_trigger(p_parse: *mut Parse,
     p_name1: *mut Token, p_name2: *mut Token, mut tr_tm: i32, op: i32,
     mut p_columns: *mut IdList, p_table_name: *mut SrcList,
     mut p_when: *mut Expr, is_temp: i32, no_err: i32) -> () {
     unsafe {
         let mut p_trigger: *mut Trigger = core::ptr::null_mut();
+        /// The new trigger
         let mut p_tab: *const Table = core::ptr::null();
+        /// Table that the trigger fires off of
         let mut z_name: *mut i8 = core::ptr::null_mut();
+        /// Name of the trigger
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut i_db: i32 = 0;
+        /// The database to store the trigger in
         let mut p_name: *mut Token = core::ptr::null_mut();
+        /// The unqualified db name
         let mut s_fix: DbFixer = unsafe { core::mem::zeroed() };
+        /// State vector for the DB fixer
+        /// pName1->z might be NULL, but not pName1 itself
+        /// If TEMP was specified, then the trigger name may not be qualified.
+        /// Figure out the db that the trigger will be created in
+        /// A long-standing parser bug is that this syntax was allowed:
+        ///*
+        ///*    CREATE TRIGGER attached.demo AFTER INSERT ON attached.tab ....
+        ///*                                                 ^^^^^^^^
+        ///*
+        ///* To maintain backwards compatibility, ignore the database
+        ///* name on pTableName if we are reparsing out of the schema table
+        /// If the trigger name was unqualified, and the table is a temp table,
+        ///* then set iDb to 1 to create the trigger in the temporary database.
+        ///* If sqlite3SrcListLookup() returns 0, indicating the table does not
+        ///* exist, the error is caught by the block below.
+        /// Ensure the table name matches database name and that the table exists
+        /// The table does not exist.
+        /// Check that the trigger name is not reserved and that no trigger of the
+        ///* specified name exists
+        /// NB: The SQLITE_ALLOW_TRIGGERS_ON_SYSTEM_TABLES compile-time option is
+        ///* experimental and unsupported. Do not use it unless understand the
+        ///* implications and you cannot get by without this capability.
+        /// Experimental */
+        ///  /* Do not create a trigger on a system table
+        /// INSTEAD of triggers are only for views and views only support INSTEAD
+        ///* of triggers.
         let mut i_tab_db: i32 = 0;
         let mut code: i32 = 0;
         let mut z_db: *const i8 = core::ptr::null();
@@ -930,19 +987,34 @@ pub extern "C" fn sqlite3_begin_trigger(p_parse: *mut Parse,
     }
 }
 
+///* This routine is called after all of the trigger actions have been parsed
+///* in order to complete the process of building the trigger.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_finish_trigger(p_parse: *mut Parse,
     mut p_step_list: *mut TriggerStep, p_all: &mut Token) -> () {
     unsafe {
         let mut p_trig: *mut Trigger = core::ptr::null_mut();
+        /// Trigger being finished
         let mut z_name: *mut i8 = core::ptr::null_mut();
+        /// Name of trigger
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database
         let mut s_fix: DbFixer = unsafe { core::mem::zeroed() };
+        /// Fixer object
         let mut i_db: i32 = 0;
+        /// Database containing the trigger
         let mut name_token: Token = unsafe { core::mem::zeroed() };
+        /// Trigger name for error reporting
+        /// if we are not initializing,
+        ///* build the sqlite_schema entry
         let mut v: *mut Vdbe = core::ptr::null_mut();
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// If this is a new CREATE TABLE statement, and if shadow tables
+        ///* are read-only, and the trigger makes a change to a shadow table,
+        ///* then raise an error - do not allow the trigger to be created.
         let mut p_step: *const TriggerStep = core::ptr::null();
+        /// Make an entry in the sqlite_schema table
         let mut p_link: *mut Trigger = core::ptr::null_mut();
         let mut p_hash: *mut Hash = core::ptr::null_mut();
         let mut p_tab: *mut Table = core::ptr::null_mut();
@@ -1214,6 +1286,8 @@ pub extern "C" fn sqlite3_finish_trigger(p_parse: *mut Parse,
     }
 }
 
+///* Return a pointer to the Table structure for the table that a trigger
+///* is set on.
 extern "C" fn table_of_trigger(p_trigger_1: &Trigger) -> *mut Table {
     return unsafe {
                 sqlite3_hash_find(unsafe {
@@ -1222,6 +1296,7 @@ extern "C" fn table_of_trigger(p_trigger_1: &Trigger) -> *mut Table {
             } as *mut Table;
 }
 
+///* Drop a trigger given a pointer to that trigger.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_trigger_ptr(p_parse: *mut Parse,
     p_trigger: *mut Trigger) -> () {
@@ -1281,6 +1356,12 @@ pub extern "C" fn sqlite3_drop_trigger_ptr(p_parse: *mut Parse,
     }
 }
 
+///* This function is called to drop a trigger from the database schema. 
+///*
+///* This may be called directly from the parser and therefore identifies
+///* the trigger by name.  The sqlite3DropTriggerPtr() routine does the
+///* same job as this routine except it takes a pointer to the trigger
+///* instead of the trigger name.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_trigger(p_parse: *mut Parse,
     p_name: *mut SrcList, no_err: i32) -> () {
@@ -1412,6 +1493,7 @@ pub extern "C" fn sqlite3_drop_trigger(p_parse: *mut Parse,
     }
 }
 
+///* Return true if any TEMP triggers exist
 extern "C" fn temp_triggers_exist(db: &Sqlite3) -> i32 {
     unsafe {
         if unsafe { (*(*db).a_db.offset(1 as isize)).p_schema } ==
@@ -1431,13 +1513,30 @@ extern "C" fn temp_triggers_exist(db: &Sqlite3) -> i32 {
     }
 }
 
+///* Given table pTab, return a list of all the triggers attached to 
+///* the table. The list is connected by Trigger.pNext pointers.
+///*
+///* All of the triggers on pTab that are in the same database as pTab
+///* are already attached to pTab->pTrigger.  But there might be additional
+///* triggers on pTab in the TEMP schema.  This routine prepends all
+///* TEMP triggers on pTab to the beginning of the pTab->pTrigger list
+///* and returns the combined list.
+///*
+///* To state it another way:  This routine returns a list of all triggers
+///* that fire off of pTab.  The list will include any TEMP triggers on
+///* pTab as well as the triggers lised in pTab->pTrigger.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_trigger_list(p_parse: &Parse, p_tab: &Table)
     -> *mut Trigger {
     unsafe {
         let mut p_tmp_schema: *mut Schema = core::ptr::null_mut();
+        /// Schema of the pTab table
         let mut p_list: *mut Trigger = core::ptr::null_mut();
+        /// List of triggers to return
         let mut p: *mut HashElem = core::ptr::null_mut();
+
+        /// Loop variable for TEMP triggers
         { let _ = 0; };
         p_tmp_schema =
             unsafe {
@@ -1476,6 +1575,13 @@ pub extern "C" fn sqlite3_trigger_list(p_parse: &Parse, p_tab: &Table)
     }
 }
 
+///* pEList is the SET clause of an UPDATE statement.  Each entry
+///* in pEList is of the format <id>=<expr>.  If any of the entries
+///* in pEList have an <id> which matches an identifier in pIdList,
+///* then return TRUE.  If pIdList==NULL, then it is considered a
+///* wildcard that matches anything.  Likewise if pEList==NULL then
+///* it matches anything so always return true.  Return false only
+///* if there is no match.
 extern "C" fn check_column_overlap(p_id_list_1: *mut IdList,
     p_e_list_1: *const ExprList) -> i32 {
     let mut e: i32 = 0;
@@ -1505,6 +1611,11 @@ extern "C" fn check_column_overlap(p_id_list_1: *mut IdList,
     return 0;
 }
 
+///* Return a list of all triggers on table pTab if there exists at least
+///* one trigger that must be fired when an operation of type 'op' is 
+///* performed on the table, and, if that operation is an UPDATE, if at
+///* least one of the columns in pChanges is being modified.
+#[allow(unused_doc_comments)]
 extern "C" fn triggers_really_exist(p_parse_1: *mut Parse,
     p_tab_1: *mut Table, op: i32, p_changes_1: *mut ExprList,
     p_mask_1: *mut i32) -> *mut Trigger {
@@ -1639,6 +1750,13 @@ extern "C" fn triggers_really_exist(p_parse_1: *mut Parse,
                 }
             }
         }
+
+        /// The SQLITE_DBCONFIG_ENABLE_TRIGGER setting is off.  That means that
+        ///* only TEMP triggers are allowed.  Truncate the pList so that it
+        ///* includes only TEMP triggers
+        /// The first time a RETURNING trigger is seen, the "op" value tells
+        ///* us what time of trigger it should be.
+        /// Also fire a RETURNING trigger for an UPSERT
         unreachable!();
     }
 }
@@ -1658,6 +1776,9 @@ pub extern "C" fn sqlite3_triggers_exist(p_parse: *mut Parse,
     return triggers_really_exist(p_parse, p_tab, op, p_changes, p_mask);
 }
 
+///* Generate VDBE code for the statements inside the body of a single 
+///* trigger.
+#[allow(unused_doc_comments)]
 extern "C" fn code_trigger_program(p_parse_1: *mut Parse,
     p_step_list_1: *mut TriggerStep, orconf: i32) -> i32 {
     unsafe {
@@ -1672,6 +1793,19 @@ extern "C" fn code_trigger_program(p_parse_1: *mut Parse,
             '__b11: loop {
                 if !(!(p_step).is_null()) { break '__b11; }
                 '__c11: loop {
+
+                    /// Figure out the ON CONFLICT policy that will be used for this step
+                    ///* of the trigger program. If the statement that caused this trigger
+                    ///* to fire had an explicit ON CONFLICT, then use it. Otherwise, use
+                    ///* the ON CONFLICT policy that was specified as part of the trigger
+                    ///* step statement. Example:
+                    ///*
+                    ///*   CREATE TRIGGER AFTER INSERT ON t1 BEGIN;
+                    ///*     INSERT OR REPLACE INTO t2 VALUES(new.a, new.b);
+                    ///*   END;
+                    ///*
+                    ///*   INSERT INTO t1 ... ;            -- insert into t2 uses REPLACE policy
+                    ///*   INSERT OR IGNORE INTO t1 ... ;  -- insert into t2 uses IGNORE policy
                     unsafe {
                         (*p_parse_1).e_orconf =
                             if orconf == 11 {
@@ -1873,6 +2007,9 @@ extern "C" fn code_trigger_program(p_parse_1: *mut Parse,
     }
 }
 
+///* Parse context structure pFrom has just been used to create a sub-vdbe
+///* (trigger program). If an error has occurred, transfer error information
+///* from pFrom to pTo.
 extern "C" fn transfer_parse_error(p_to_1: &mut Parse, p_from_1: &Parse)
     -> () {
     { let _ = 0; };
@@ -1888,21 +2025,38 @@ extern "C" fn transfer_parse_error(p_to_1: &mut Parse, p_from_1: &Parse)
     }
 }
 
+///* Create and populate a new TriggerPrg object with a sub-program 
+///* implementing trigger pTrigger with ON CONFLICT policy orconf.
+#[allow(unused_doc_comments)]
 extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, orconf: i32)
     -> *mut TriggerPrg {
     unsafe {
         let mut p_top: *mut Parse = core::ptr::null_mut();
+        /// Top level Parse object
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// Database handle
         let mut p_prg: *mut TriggerPrg = core::ptr::null_mut();
+        /// Value to return
         let mut p_when: *mut Expr = core::ptr::null_mut();
+        /// Duplicate of trigger WHEN expression
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// Temporary VM
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context for sub-vdbe
         let mut p_program: *mut SubProgram = core::ptr::null_mut();
+        /// Sub-vdbe for trigger program
         let mut i_end_trigger: i32 = 0;
+        /// Label to jump to if WHEN is false
         let mut s_sub_parse: Parse = unsafe { core::mem::zeroed() };
+        /// Parse context for sub-vdbe
         let mut n_depth: i32 = 0;
-        p_top = p_parse_1;
+
+        /// Trigger depth
+        /// Ensure that triggers are not chained too deep.  This test is linear
+        ///* in the chaining depth, but sensible code ought not be chaining
+        ///* triggers excessively, so that shouldn't be a problem.
+        (p_top = p_parse_1);
         {
             n_depth = 0;
             '__b13: loop {
@@ -1930,11 +2084,15 @@ extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
             } else { p_parse_1 };
         { let _ = 0; };
         { let _ = 0; };
-        p_prg =
+
+        /// Allocate the TriggerPrg and SubProgram objects. To ensure that they
+        ///* are freed if an error occurs, link them into the Parse.pTriggerPrg 
+        ///* list of the top-level Parse object sooner rather than later.
+        (p_prg =
             unsafe {
                     sqlite3_db_malloc_zero(db,
                         core::mem::size_of::<TriggerPrg>() as u64)
-                } as *mut TriggerPrg;
+                } as *mut TriggerPrg);
         if (p_prg).is_null() as i32 != 0 { return core::ptr::null_mut(); }
         unsafe { (*p_prg).p_next = unsafe { (*p_top).p_trigger_prg } };
         unsafe { (*p_top).p_trigger_prg = p_prg };
@@ -1958,6 +2116,9 @@ extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
         unsafe { (*p_prg).orconf = orconf };
         unsafe { (*p_prg).a_colmask[0 as usize] = 4294967295u32 };
         unsafe { (*p_prg).a_colmask[1 as usize] = 4294967295u32 };
+
+        /// Allocate and populate a new Parse context to use for coding the 
+        ///* trigger sub-program.
         unsafe { sqlite3_parse_object_init(&mut s_sub_parse, db) };
         unsafe {
             memset(&raw mut s_nc as *mut (), 0,
@@ -2003,6 +2164,8 @@ extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
                 }
                 unsafe { sqlite3_expr_delete(db, p_when) };
             }
+
+            /// Code the trigger program into the sub-vdbe.
             code_trigger_program(&mut s_sub_parse,
                 unsafe { (*p_trigger_1).step_list }, orconf);
             if i_end_trigger != 0 {
@@ -2036,6 +2199,10 @@ extern "C" fn code_row_trigger(p_parse_1: *mut Parse,
     }
 }
 
+///* Return a pointer to a TriggerPrg object containing the sub-program for
+///* trigger pTrigger with default ON CONFLICT algorithm orconf. If no such
+///* TriggerPrg object exists, a new object is allocated and populated before
+///* being returned.
 extern "C" fn get_row_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, orconf: i32)
     -> *mut TriggerPrg {
@@ -2064,12 +2231,18 @@ extern "C" fn get_row_trigger(p_parse_1: *mut Parse,
     return p_prg;
 }
 
+///* Generate code for the trigger program associated with trigger p on 
+///* table pTab. The reg, orconf and ignoreJump parameters passed to this
+///* function are the same as those described in the header function for
+///* sqlite3CodeRowTrigger()
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_code_row_trigger_direct(p_parse: *mut Parse,
     p: *mut Trigger, p_tab: *mut Table, reg: i32, orconf: i32,
     ignore_jump: i32) -> () {
     unsafe {
         let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
+        /// Main VM
         let mut p_prg: *const TriggerPrg = core::ptr::null();
         p_prg = get_row_trigger(p_parse, p, p_tab, orconf);
         { let _ = 0; };
@@ -2087,11 +2260,20 @@ pub extern "C" fn sqlite3_code_row_trigger_direct(p_parse: *mut Parse,
                         *__p
                     }, unsafe { (*p_prg).p_program } as *const i8, -4)
             };
+
+            /// Set the P5 operand of the OP_Program instruction to non-zero if
+            ///* recursive invocation of this trigger program is disallowed. Recursive
+            ///* invocation is disallowed if (a) the sub-program is really a trigger,
+            ///* not a foreign key action, and (b) the flag to enable recursive triggers
+            ///* is clear.
             unsafe { sqlite3_vdbe_change_p5(v, b_recursive as u16) };
         }
     }
 }
 
+///* Return true if the pExpr term from the RETURNING clause argument
+///* list is of the form "*".  Raise an error if the terms if of the
+///* form "table.*".
 extern "C" fn is_asterisk_term(p_parse_1: *mut Parse, p_term_1: &Expr)
     -> i32 {
     { let _ = 0; };
@@ -2108,6 +2290,11 @@ extern "C" fn is_asterisk_term(p_parse_1: *mut Parse, p_term_1: &Expr)
     return 1;
 }
 
+/// The input list pList is the list of result set terms from a RETURNING
+///* clause.  The table that we are returning from is pTab.
+///*
+///* This routine makes a copy of the pList, and at the same time expands
+///* any "*" wildcards to be the complete set of columns from pTab.
 extern "C" fn sqlite3_expand_returning(p_parse_1: *mut Parse,
     p_list_1: &ExprList, p_tab_1: &Table) -> *mut ExprList {
     let mut p_new: *mut ExprList = core::ptr::null_mut();
@@ -2215,6 +2402,11 @@ extern "C" fn sqlite3_expand_returning(p_parse_1: *mut Parse,
     return p_new;
 }
 
+///* If the SELECT references the table pWalker->u.pTab, then do two things:
+///*
+///*    (1) Mark the SELECT as as SF_Correlated.
+///*    (2) Set pWalker->eCode to non-zero so that the caller will know
+///*        that (1) has happened.
 extern "C" fn sqlite3_returning_subquery_correlated(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -2245,6 +2437,9 @@ extern "C" fn sqlite3_returning_subquery_correlated(p_walker_1: *mut Walker,
     }
 }
 
+/// If the Expr node is a subquery or an EXISTS operator or an IN operator that
+///* uses a subquery, and if the subquery is SF_Correlated, then mark the
+///* expression as EP_VarSelect.
 extern "C" fn sqlite3_returning_subquery_var_select(not_used_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2258,6 +2453,13 @@ extern "C" fn sqlite3_returning_subquery_var_select(not_used_1: *mut Walker,
     }
 }
 
+///* Scan the expression list that is the argument to RETURNING looking
+///* for subqueries that depend on the table which is being modified in the
+///* statement that is hosting the RETURNING clause (pTab).  Mark all such
+///* subqueries as SF_Correlated.  If the subqueries are part of an
+///* expression, mark the expression as EP_VarSelect.
+///*
+///* https://sqlite.org/forum/forumpost/2c83569ce8945d39
 extern "C" fn sqlite3_process_returning_subqueries(p_e_list_1: *mut ExprList,
     p_tab_1: *mut Table) -> () {
     unsafe {
@@ -2278,6 +2480,10 @@ extern "C" fn sqlite3_process_returning_subqueries(p_e_list_1: *mut ExprList,
     }
 }
 
+///* Generate code for the RETURNING trigger.  Unlike other triggers
+///* that invoke a subprogram in the bytecode, the code for RETURNING
+///* is generated in-line.
+#[allow(unused_doc_comments)]
 extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
     p_trigger_1: *mut Trigger, p_tab_1: *mut Table, reg_in_1: i32) -> () {
     unsafe {
@@ -2291,6 +2497,9 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
             unsafe { core::mem::zeroed() };
         { let _ = 0; };
         if (unsafe { (*p_parse_1).b_returning() } == 0) as i32 != 0 {
+
+            /// This RETURNING trigger must be for a different statement as
+            ///* this statement lacks a RETURNING clause.
             return;
         }
         { let _ = 0; };
@@ -2298,6 +2507,8 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
         p_returning = unsafe { (*p_parse_1).u1.d.p_returning };
         if p_trigger_1 !=
                 unsafe { &raw mut (*p_returning).ret_trig } as *mut Trigger {
+
+            /// This RETURNING trigger is for a different statement
             return;
         }
         unsafe {
@@ -2323,8 +2534,10 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
                 unsafe { (*p_tab_1).z_name }
         };
         unsafe {
-            (*(unsafe { (*p_from).a.as_ptr() } as
-                                *mut SrcItem).offset(0 as isize)).i_cursor = -1
+
+            /// tag-20240424-1
+            ((*(unsafe { (*p_from).a.as_ptr() } as
+                                *mut SrcItem).offset(0 as isize)).i_cursor = -1)
         };
         unsafe {
             sqlite3_select_prep(p_parse_1, &mut s_select,
@@ -2387,6 +2600,8 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
                                                     *mut ExprListItem).offset(i as isize)).p_expr
                                 };
                             { let _ = 0; };
+
+                            /// Due to !db->mallocFailed ~9 lines above
                             unsafe {
                                 sqlite3_expr_code_factorable(p_parse_1, p_col, reg + i)
                             };
@@ -2416,11 +2631,52 @@ extern "C" fn code_returning_trigger(p_parse_1: *mut Parse,
     }
 }
 
+///* This is called to code the required FOR EACH ROW triggers for an operation
+///* on table pTab. The operation to code triggers for (INSERT, UPDATE or DELETE)
+///* is given by the op parameter. The tr_tm parameter determines whether the
+///* BEFORE or AFTER triggers are coded. If the operation is an UPDATE, then
+///* parameter pChanges is passed the list of columns being modified.
+///*
+///* If there are no triggers that fire at the specified time for the specified
+///* operation on pTab, this function is a no-op.
+///*
+///* The reg argument is the address of the first in an array of registers 
+///* that contain the values substituted for the new.* and old.* references
+///* in the trigger program. If N is the number of columns in table pTab
+///* (a copy of pTab->nCol), then registers are populated as follows:
+///*
+///*   Register       Contains
+///*   ------------------------------------------------------
+///*   reg+0          OLD.rowid
+///*   reg+1          OLD.* value of left-most column of pTab
+///*   ...            ...
+///*   reg+N          OLD.* value of right-most column of pTab
+///*   reg+N+1        NEW.rowid
+///*   reg+N+2        NEW.* value of left-most column of pTab
+///*   ...            ...
+///*   reg+N+N+1      NEW.* value of right-most column of pTab
+///*
+///* For ON DELETE triggers, the registers containing the NEW.* values will
+///* never be accessed by the trigger program, so they are not allocated or 
+///* populated by the caller (there is no data to populate them with anyway). 
+///* Similarly, for ON INSERT triggers the values stored in the OLD.* registers
+///* are never accessed, and so are not allocated by the caller. So, for an
+///* ON INSERT trigger, the value passed to this function as parameter reg
+///* is not a readable register, although registers (reg+N) through 
+///* (reg+N+N+1) are.
+///*
+///* Parameter orconf is the default conflict resolution algorithm for the
+///* trigger program to use (REPLACE, IGNORE etc.). Parameter ignoreJump
+///* is the instruction that control should jump to if a trigger program
+///* raises an IGNORE exception.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_code_row_trigger(p_parse: *mut Parse,
     p_trigger: *mut Trigger, op: i32, p_changes: *mut ExprList, tr_tm: i32,
     p_tab: *mut Table, reg: i32, orconf: i32, ignore_jump: i32) -> () {
     let mut p: *mut Trigger = core::ptr::null_mut();
+
+    /// Used to iterate through pTrigger list
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -2429,6 +2685,10 @@ pub extern "C" fn sqlite3_code_row_trigger(p_parse: *mut Parse,
         '__b19: loop {
             if !(!(p).is_null()) { break '__b19; }
             '__c19: loop {
+
+                /// Sanity checking:  The schema for the trigger and for the table are
+                ///* always defined.  The trigger must be in the same schema as the table
+                ///* or else it must be a TEMP trigger.
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
@@ -2453,6 +2713,8 @@ pub extern "C" fn sqlite3_code_row_trigger(p_parse: *mut Parse,
     }
 }
 
+///* Duplicate a range of text from an SQL statement, then convert all
+///* whitespace characters into ordinary space characters.
 extern "C" fn trigger_span_dup(db: *mut Sqlite3, z_start_1: *const i8,
     z_end_1: *const i8) -> *mut i8 {
     unsafe {
@@ -2484,6 +2746,11 @@ extern "C" fn trigger_span_dup(db: *mut Sqlite3, z_start_1: *const i8,
     }
 }
 
+///* Turn a SELECT statement (that the pSelect parameter points to) into
+///* a trigger step.  Return a pointer to a TriggerStep structure.
+///*
+///* The parser calls this routine when it finds a SELECT statement in
+///* body of a TRIGGER.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_select_step(db: *mut Sqlite3,
     p_select: *mut Select, z_start: *const i8, z_end: *const i8)
@@ -2508,6 +2775,10 @@ pub extern "C" fn sqlite3_trigger_select_step(db: *mut Sqlite3,
     }
 }
 
+///* Allocate space to hold a new trigger step.  The allocated space
+///* holds both the TriggerStep object and the TriggerStep.target.z string.
+///*
+///* If an OOM error occurs, NULL is returned and db->mallocFailed is set.
 extern "C" fn trigger_step_allocate(p_parse_1: *mut Parse, op: u8,
     p_tab_list_1: *mut SrcList, z_start_1: *const i8, z_end_1: *const i8)
     -> *mut TriggerStep {
@@ -2572,6 +2843,11 @@ extern "C" fn trigger_step_allocate(p_parse_1: *mut Parse, op: u8,
     }
 }
 
+///* Build a trigger step out of an INSERT statement.  Return a pointer
+///* to the new trigger step.
+///*
+///* The parser calls this routine when it sees an INSERT inside the
+///* body of a trigger.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_insert_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_column: *mut IdList,
@@ -2614,6 +2890,9 @@ pub extern "C" fn sqlite3_trigger_insert_step(p_parse: *mut Parse,
     }
 }
 
+///* Construct a trigger step that implements an UPDATE statement and return
+///* a pointer to that trigger step.  The parser calls this routine when it
+///* sees an UPDATE statement inside the body of a CREATE TRIGGER.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_update_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_from: *mut SrcList,
@@ -2686,6 +2965,9 @@ pub extern "C" fn sqlite3_trigger_update_step(p_parse: *mut Parse,
     return p_trigger_step;
 }
 
+///* Construct a trigger step that implements a DELETE statement and return
+///* a pointer to that trigger step.  The parser calls this routine when it
+///* sees a DELETE statement inside the body of a CREATE TRIGGER.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_delete_step(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_where: *mut Expr, z_start: *const i8,
@@ -2710,6 +2992,7 @@ pub extern "C" fn sqlite3_trigger_delete_step(p_parse: *mut Parse,
     return p_trigger_step;
 }
 
+///* Remove a trigger from the hash tables of the sqlite* pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_unlink_and_delete_trigger(db: *mut Sqlite3,
     i_db: i32, z_name: *const i8) -> () {
@@ -2756,6 +3039,29 @@ pub extern "C" fn sqlite3_unlink_and_delete_trigger(db: *mut Sqlite3,
     }
 }
 
+///* Triggers may access values stored in the old.* or new.* pseudo-table. 
+///* This function returns a 32-bit bitmask indicating which columns of the 
+///* old.* or new.* tables actually are used by triggers. This information 
+///* may be used by the caller, for example, to avoid having to load the entire
+///* old.* record into memory when executing an UPDATE or DELETE command.
+///*
+///* Bit 0 of the returned mask is set if the left-most column of the
+///* table may be accessed using an [old|new].<col> reference. Bit 1 is set if
+///* the second leftmost column value is required, and so on. If there
+///* are more than 32 columns in the table, and at least one of the columns
+///* with an index greater than 32 may be accessed, 0xffffffff is returned.
+///*
+///* It is not possible to determine if the old.rowid or new.rowid column is 
+///* accessed by triggers. The caller must always assume that it is.
+///*
+///* Parameter isNew must be either 1 or 0. If it is 0, then the mask returned
+///* applies to the old.* table. If 1, the new.* table.
+///*
+///* Parameter tr_tm must be a mask with one or both of the TRIGGER_BEFORE
+///* and TRIGGER_AFTER bits set. Values accessed by BEFORE triggers are only
+///* included in the returned mask if the TRIGGER_BEFORE bit is set in the
+///* tr_tm parameter. Similarly, values accessed by AFTER triggers are only
+///* included in the returned mask if the TRIGGER_AFTER bit is set in tr_tm.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trigger_colmask(p_parse: *mut Parse,
     p_trigger: *mut Trigger, p_changes: *mut ExprList, is_new: i32,

@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64, SqliteUint64,
+};
 
 type TclWideInt = i64;
 
@@ -97,6 +103,13 @@ type TclSize = i32;
 
 type Uptr = u64;
 
+///* There is one instance of this structure for each SQLite database
+///* that has been opened by the SQLite TCL interface.
+///*
+///* If this module is built with SQLITE_TEST defined (to create the SQLite
+///* testfixture executable), then it may be configured to use either
+///* sqlite3_prepare_v2() or sqlite3_prepare() to prepare SQL statements.
+///* If SqliteDb.bLegacyPrepare is true, sqlite3_prepare() is used.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SqliteDb {
@@ -179,6 +192,8 @@ struct IncrblobChannel {
     p_prev: *mut IncrblobChannel,
 }
 
+///* Compute a string length that is limited to what can be stored in
+///* lower 30 bits of a 32-bit signed integer.
 extern "C" fn strlen30(z: *const i8) -> i32 {
     let mut z2: *const i8 = z;
     while unsafe { *z2 } != 0 {
@@ -192,6 +207,9 @@ extern "C" fn strlen30(z: *const i8) -> i32 {
     return 1073741823 & unsafe { z2.offset_from(z) } as i64 as i32;
 }
 
+///* Close all incrblob channels opened using database connection pDb.
+///* This is called when shutting down the database connection.
+#[allow(unused_doc_comments)]
 extern "C" fn close_incrblob_channels(p_db_1: &SqliteDb) -> () {
     let mut p: *const IncrblobChannel = core::ptr::null();
     let mut p_next: *mut IncrblobChannel = core::ptr::null_mut();
@@ -201,6 +219,10 @@ extern "C" fn close_incrblob_channels(p_db_1: &SqliteDb) -> () {
             if !(!(p).is_null()) { break '__b1; }
             '__c1: loop {
                 p_next = unsafe { (*p).p_next };
+
+                /// Note: Calling unregister here call Tcl_Close on the incrblob channel,
+                ///* which deletes the IncrblobChannel structure at *p. So do not
+                ///* call Tcl_Free() here.
                 unsafe {
                     Tcl_UnregisterChannel((*p_db_1).interp,
                         unsafe { (*p).channel })
@@ -212,13 +234,17 @@ extern "C" fn close_incrblob_channels(p_db_1: &SqliteDb) -> () {
     }
 }
 
+///* Close an incremental blob channel.
+#[allow(unused_doc_comments)]
 extern "C" fn incrblob_close2(instance_data_1: ClientData,
     interp: *mut TclInterp, flags: i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
     let mut rc: i32 = 0;
     let db: *mut Sqlite3 = unsafe { (*unsafe { (*p).p_db }).db };
     if flags != 0 { unsafe { (*p).is_closed |= flags as u32 }; return 0; }
-    rc = unsafe { sqlite3_blob_close(unsafe { (*p).p_blob }) };
+
+    /// If we reach this point, then we really do need to close the channel
+    (rc = unsafe { sqlite3_blob_close(unsafe { (*p).p_blob }) });
     if !(unsafe { (*p).p_next }).is_null() {
         unsafe { (*unsafe { (*p).p_next }).p_prev = unsafe { (*p).p_prev } };
     }
@@ -230,6 +256,8 @@ extern "C" fn incrblob_close2(instance_data_1: ClientData,
             (*unsafe { (*p).p_db }).p_incrblob = unsafe { (*p).p_next }
         };
     }
+
+    /// Free the IncrblobChannel structure
     unsafe { Tcl_Free(p as *mut i8) };
     if rc != 0 {
         unsafe {
@@ -249,14 +277,21 @@ extern "C" fn incrblob_close(instance_data_1: ClientData,
     return incrblob_close2(instance_data_1, interp, 0);
 }
 
+///* Read data from an incremental blob channel.
+#[allow(unused_doc_comments)]
 extern "C" fn incrblob_input(instance_data_1: ClientData, buf: *mut i8,
     buf_size_1: i32, error_code_ptr_1: *mut i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
     let mut n_read: Sqlite3Int64 = buf_size_1 as Sqlite3Int64;
+    /// Number of bytes to read
     let mut n_blob: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total size of the blob
     let mut rc: i32 = 0;
-    n_blob =
-        unsafe { sqlite3_blob_bytes(unsafe { (*p).p_blob }) } as Sqlite3Int64;
+
+    /// sqlite error code
+    (n_blob =
+        unsafe { sqlite3_blob_bytes(unsafe { (*p).p_blob }) } as
+            Sqlite3Int64);
     if unsafe { (*p).i_seek } + n_read > n_blob {
         n_read = n_blob - unsafe { (*p).i_seek };
     }
@@ -271,14 +306,21 @@ extern "C" fn incrblob_input(instance_data_1: ClientData, buf: *mut i8,
     return n_read as i32;
 }
 
+///* Write data to an incremental blob channel.
+#[allow(unused_doc_comments)]
 extern "C" fn incrblob_output(instance_data_1: ClientData, buf: *const i8,
     to_write_1: i32, error_code_ptr_1: *mut i32) -> i32 {
     let p: *mut IncrblobChannel = instance_data_1 as *mut IncrblobChannel;
     let n_write: Sqlite3Int64 = to_write_1 as Sqlite3Int64;
+    /// Number of bytes to write
     let mut n_blob: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total size of the blob
     let mut rc: i32 = 0;
-    n_blob =
-        unsafe { sqlite3_blob_bytes(unsafe { (*p).p_blob }) } as Sqlite3Int64;
+
+    /// sqlite error code
+    (n_blob =
+        unsafe { sqlite3_blob_bytes(unsafe { (*p).p_blob }) } as
+            Sqlite3Int64);
     if unsafe { (*p).i_seek } + n_write > n_blob {
         unsafe { *error_code_ptr_1 = 22 };
         return -1;
@@ -295,6 +337,7 @@ extern "C" fn incrblob_output(instance_data_1: ClientData, buf: *const i8,
     return n_write as i32;
 }
 
+///* Seek an incremental blob channel.
 extern "C" fn incrblob_wide_seek(instance_data_1: ClientData,
     offset: TclWideInt, seek_mode_1: i32, error_code_ptr_1: *mut i32)
     -> TclWideInt {
@@ -359,6 +402,8 @@ static mut incrblob_channel_type: TclChannelType =
         truncateProc: None,
     };
 
+///* Create a new incrblob channel.
+#[allow(unused_doc_comments)]
 extern "C" fn create_incrblob_channel(interp: *mut TclInterp,
     p_db_1: *mut SqliteDb, z_db_1: *const i8, z_table_1: *const i8,
     z_column_1: *const i8, i_row_1: SqliteInt64, is_readonly_1: i32) -> i32 {
@@ -413,6 +458,8 @@ extern "C" fn create_incrblob_channel(interp: *mut TclInterp,
                 }
         };
         unsafe { Tcl_RegisterChannel(interp, unsafe { (*p).channel }) };
+
+        /// Link the new channel into the SqliteDb.pIncrblob list.
         unsafe { (*p).p_next = unsafe { (*p_db_1).p_incrblob } };
         unsafe { (*p).p_prev = core::ptr::null_mut() };
         if !(unsafe { (*p).p_next }).is_null() {
@@ -433,7 +480,21 @@ extern "C" fn create_incrblob_channel(interp: *mut TclInterp,
     }
 }
 
+///* Look at the script prefix in pCmd.  We will be executing this script
+///* after first appending one or more arguments.  This routine analyzes
+///* the script to see if it is safe to use Tcl_EvalObjv() on the script
+///* rather than the more general Tcl_EvalEx().  Tcl_EvalObjv() is much
+///* faster.
+///*
+///* Scripts that are safe to use with Tcl_EvalObjv() consists of a
+///* command name followed by zero or more arguments with no [...] or $
+///* or {...} or ; to be seen anywhere.  Most callback scripts consist
+///* of just a single procedure name and they meet this requirement.
+#[allow(unused_doc_comments)]
 extern "C" fn safe_to_use_eval_objv(p_cmd_1: *mut TclObj) -> i32 {
+    /// We could try to do something with Tcl_Parse().  But we will instead
+    ///* just do a search for forbidden characters.  If any of the forbidden
+    ///* characters appear in pCmd, we will report the string as unsafe.
     let mut z: *const i8 = core::ptr::null();
     let mut n: TclSize = 0;
     z = unsafe { Tcl_GetStringFromObj(p_cmd_1, &mut n) } as *const i8;
@@ -452,6 +513,9 @@ extern "C" fn safe_to_use_eval_objv(p_cmd_1: *mut TclObj) -> i32 {
     return 1;
 }
 
+///* Find an SqlFunc structure with the given name.  Or create a new
+///* one if an existing one cannot be found.  Return a pointer to the
+///* structure.
 extern "C" fn find_sql_func(p_db_1: *mut SqliteDb, z_name_1: *const i8)
     -> *mut SqlFunc {
     let mut p: *mut SqlFunc = core::ptr::null_mut();
@@ -495,11 +559,13 @@ extern "C" fn find_sql_func(p_db_1: *mut SqliteDb, z_name_1: *const i8)
     return p_new;
 }
 
+///* Free a single SqlPreparedStmt object.
 extern "C" fn db_free_stmt(p_stmt_1: *mut SqlPreparedStmt) -> () {
     unsafe { sqlite3_finalize(unsafe { (*p_stmt_1).p_stmt }) };
     unsafe { Tcl_Free(p_stmt_1 as *mut i8) };
 }
 
+///* Finalize and free a list of prepared statements
 extern "C" fn flush_stmt_cache(p_db_1: &mut SqliteDb) -> () {
     let mut p_pre_stmt: *mut SqlPreparedStmt = core::ptr::null_mut();
     let mut p_next: *mut SqlPreparedStmt = core::ptr::null_mut();
@@ -520,10 +586,14 @@ extern "C" fn flush_stmt_cache(p_db_1: &mut SqliteDb) -> () {
     (*p_db_1).stmt_list = core::ptr::null_mut();
 }
 
+///* Increment the reference counter on the SqliteDb object. The reference
+///* should be released by calling delDatabaseRef().
 extern "C" fn add_database_ref(p_db_1: &mut SqliteDb) -> () {
     { let __p = &mut (*p_db_1).n_ref; let __t = *__p; *__p += 1; __t };
 }
 
+///* Decrement the reference counter associated with the SqliteDb object.
+///* If it reaches zero, delete the object.
 extern "C" fn del_database_ref(p_db_1: *mut SqliteDb) -> () {
     if !(unsafe { (*p_db_1).n_ref } > 0) as i32 as i64 != 0 {
         unsafe {
@@ -690,11 +760,15 @@ extern "C" fn del_database_ref(p_db_1: *mut SqliteDb) -> () {
     }
 }
 
+///* TCL calls this procedure when an sqlite3 database command is
+///* deleted.
 extern "C" fn db_delete_cmd(db: *mut ()) -> () {
     let p_db: *mut SqliteDb = db as *mut SqliteDb;
     del_database_ref(p_db);
 }
 
+///* This routine is called when a database file is locked while trying
+///* to execute SQL.
 extern "C" fn db_busy_handler(cd: *mut (), n_tries_1: i32) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -721,6 +795,7 @@ extern "C" fn db_busy_handler(cd: *mut (), n_tries_1: i32) -> i32 {
     return 1;
 }
 
+///* This routine is invoked as the 'progress callback' for the database.
 extern "C" fn db_progress_handler(cd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -747,6 +822,8 @@ extern "C" fn db_progress_handler(cd: *mut ()) -> i32 {
     return 0;
 }
 
+///* This routine is called by the SQLite trace handler whenever a new
+///* block of SQL is executed.  The TCL script in pDb->zTrace is executed.
 extern "C" fn db_trace_handler(cd: *mut (), z_sql_1: *const i8) -> () {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut str: TclDString = unsafe { core::mem::zeroed() };
@@ -764,6 +841,10 @@ extern "C" fn db_trace_handler(cd: *mut (), z_sql_1: *const i8) -> () {
     unsafe { Tcl_ResetResult(unsafe { (*p_db).interp }) };
 }
 
+///* This routine is called by the SQLite trace_v2 handler whenever a new
+///* supported event is generated.  Unsupported event types are ignored.
+///* The TCL script in pDb->zTraceV2 is executed, with the arguments for
+///* the event appended to it (as list elements).
 extern "C" fn db_trace_v2_handler(type__1: u32, cd: *mut (), pd: *mut (),
     xd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
@@ -1172,6 +1253,8 @@ extern "C" fn db_trace_v2_handler(type__1: u32, cd: *mut (), pd: *mut (),
     return 0;
 }
 
+///* This routine is called by the SQLite profile handler after a statement
+///* SQL has executed.  The TCL script in pDb->zProfile is evaluated.
 extern "C" fn db_profile_handler(cd: *mut (), z_sql_1: *const i8,
     tm: SqliteUint64) -> () {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
@@ -1200,6 +1283,10 @@ extern "C" fn db_profile_handler(cd: *mut (), z_sql_1: *const i8,
     unsafe { Tcl_ResetResult(unsafe { (*p_db).interp }) };
 }
 
+///* This routine is called when a transaction is committed.  The
+///* TCL script in pDb->zCommit is executed.  If it returns non-zero or
+///* if it throws an exception, the transaction is rolled back instead
+///* of being committed.
 extern "C" fn db_commit_handler(cd: *mut ()) -> i32 {
     let p_db: *const SqliteDb = cd as *mut SqliteDb as *const SqliteDb;
     let mut rc: i32 = 0;
@@ -1238,6 +1325,7 @@ extern "C" fn db_rollback_handler(client_data_1: *mut ()) -> () {
     }
 }
 
+///* This procedure handles wal_hook callbacks.
 extern "C" fn db_wal_handler(client_data_1: *mut (), db: *mut Sqlite3,
     z_db_1: *const i8, n_entry_1: i32) -> i32 {
     let mut ret: i32 = 0;
@@ -1397,6 +1485,8 @@ extern "C" fn tcl_collate_needed(p_ctx_1: *mut (), db: *mut Sqlite3, enc: i32,
     }
 }
 
+///* This routine is called to evaluate an SQL collation function implemented
+///* using TCL script.
 extern "C" fn tcl_sql_collate(p_ctx_1: *mut (), n_a_1: i32, z_a_1: *const (),
     n_b_1: i32, z_b_1: *const ()) -> i32 {
     let p: *const SqlCollate =
@@ -1434,6 +1524,9 @@ extern "C" fn tcl_sql_collate(p_ctx_1: *mut (), n_a_1: i32, z_a_1: *const (),
         };
 }
 
+///* This routine is called to evaluate an SQL function implemented
+///* using TCL script.
+#[allow(unused_doc_comments)]
 extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *const SqlFunc =
@@ -1442,7 +1535,12 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
     if argc == 0 {
-        p_cmd = unsafe { (*p).p_script };
+
+        /// If there are no arguments to the function, call Tcl_EvalObjEx on the
+        ///* script object directly.  This allows the TCL compiler to generate
+        ///* bytecode for the command on the first invocation and thus make
+        ///* subsequent invocations much faster.
+        (p_cmd = unsafe { (*p).p_script });
         { let __p = unsafe { &mut (*p_cmd).refCount }; *__p += 1; *__p };
         rc = unsafe { Tcl_EvalObjEx(unsafe { (*p).interp }, p_cmd, 0) };
         '__b23: loop {
@@ -1459,6 +1557,14 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
             if !(0 != 0) { break '__b23; }
         }
     } else {
+        /// If there are arguments to the function, make a shallow copy of the
+        ///* script object, lappend the arguments, then evaluate the copy.
+        ///*
+        ///* By "shallow" copy, we mean only the outer list Tcl_Obj is duplicated.
+        ///* The new Tcl_Obj contains pointers to the original list elements.
+        ///* That way, when Tcl_EvalObjv() is run and shimmers the first element
+        ///* of the list to tclCmdNameType, that alternate representation will
+        ///* be preserved and reused on the next invocation.
         let mut a_arg: *mut *mut TclObj = core::ptr::null_mut();
         let mut n_arg: TclSize = 0;
         if unsafe {
@@ -1644,6 +1750,10 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
             }
         }
         if (unsafe { (*p).use_eval_objv } == 0) as i32 != 0 {
+
+            /// Tcl_EvalObjEx() will automatically call Tcl_EvalObjv() if pCmd
+            ///* is a list without a string representation.  To prevent this from
+            ///* happening, make sure pCmd has a valid string representation
             unsafe { Tcl_GetString(p_cmd) };
         }
         rc = unsafe { Tcl_EvalObjEx(unsafe { (*p).interp }, p_cmd, 262144) };
@@ -1686,7 +1796,10 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
                                     c"bytearray".as_ptr() as *mut i8 as *const i8)
                             } == 0 && unsafe { (*p_var).bytes } == core::ptr::null_mut()
                 {
-                e_type = 4;
+
+                /// Only return a BLOB type if the Tcl variable is a bytearray and
+                ///* has no string representation.
+                (e_type = 4);
             } else if c as i32 == 'b' as i32 &&
                                     unsafe { (*p_var).bytes } == core::ptr::null_mut() &&
                                 unsafe {
@@ -1848,12 +1961,20 @@ extern "C" fn tcl_sql_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* This is the authentication function.  It appends the authentication
+///* type code and the two arguments to zCmd[] then invokes the result
+///* on the interpreter.  The reply is examined to determine if the
+///* authentication fails or succeeds.
+#[allow(unused_doc_comments)]
 extern "C" fn auth_callback(p_arg_1: *mut (), code: i32, z_arg1_1: *const i8,
     z_arg2_1: *const i8, z_arg3_1: *const i8, z_arg4_1: *const i8) -> i32 {
     let mut z_code: *const i8 = core::ptr::null();
     let mut str: TclDString = unsafe { core::mem::zeroed() };
     let mut rc: i32 = 0;
     let mut z_reply: *const i8 = core::ptr::null();
+    /// EVIDENCE-OF: R-38590-62769 The first parameter to the authorizer
+    ///* callback is a copy of the third parameter to the
+    ///* sqlite3_set_authorizer() interface.
     let p_db: *const SqliteDb = p_arg_1 as *mut SqliteDb as *const SqliteDb;
     if unsafe { (*p_db).disable_auth } != 0 { return 0; }
     '__s29:
@@ -2043,9 +2164,19 @@ extern "C" fn auth_callback(p_arg_1: *mut (), code: i32, z_arg1_1: *const i8,
     return rc;
 }
 
+///* This function is part of the implementation of the command:
+///*
+///*   $db transaction [-deferred|-immediate|-exclusive] SCRIPT
+///*
+///* It is invoked after evaluating the script SCRIPT to commit or rollback
+///* the transaction or savepoint opened by the [transaction] command.
+#[allow(unused_doc_comments)]
 extern "C" fn db_trans_post_cmd(data: *mut ClientData, interp: *mut TclInterp,
     result: i32) -> i32 {
     unsafe {
+        /// rc==TCL_ERROR, nTransaction!=0
+        /// rc!=TCL_ERROR, nTransaction==0
+        /// rc==TCL_ERROR, nTransaction==0
         let p_db: *mut SqliteDb =
             unsafe { *data.offset(0 as isize) } as *mut SqliteDb;
         let mut rc: i32 = result;
@@ -2094,6 +2225,11 @@ extern "C" fn db_trans_post_cmd(data: *mut ClientData, interp: *mut TclInterp,
     }
 }
 
+///* Unless SQLITE_TEST is defined, this function is a simple wrapper around
+///* sqlite3_prepare_v2(). If SQLITE_TEST is defined, then it uses either
+///* sqlite3_prepare_v2() or legacy interface sqlite3_prepare(), depending
+///* on whether or not the [db_use_legacy_prepare] command has been used to
+///* configure the connection.
 extern "C" fn db_prepare(p_db_1: &SqliteDb, z_sql_1: *const i8,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_out_1: *mut *const i8) -> i32 {
     let mut prep_flags: u32 = 0 as u32;
@@ -2104,19 +2240,41 @@ extern "C" fn db_prepare(p_db_1: &SqliteDb, z_sql_1: *const i8,
         };
 }
 
+///* Search the cache for a prepared-statement object that implements the
+///* first SQL statement in the buffer pointed to by parameter zIn. If
+///* no such prepared-statement can be found, allocate and prepare a new
+///* one. In either case, bind the current values of the relevant Tcl
+///* variables to any $var, :var or @var variables in the statement. Before
+///* returning, set *ppPreStmt to point to the prepared-statement object.
+///*
+///* Output parameter *pzOut is set to point to the next SQL statement in
+///* buffer zIn, or to the '\0' byte at the end of zIn if there is no
+///* next statement.
+///*
+///* If successful, TCL_OK is returned. Otherwise, TCL_ERROR is returned
+///* and an error message loaded into interpreter pDb->interp.
+#[allow(unused_doc_comments)]
 extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
     pz_out_1: *mut *const i8, pp_pre_stmt_1: &mut *mut SqlPreparedStmt)
     -> i32 {
     let mut z_sql: *const i8 = z_in_1;
+    /// Pointer to first SQL statement in zIn
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Prepared statement object
     let mut p_pre_stmt: *mut SqlPreparedStmt = core::ptr::null_mut();
+    /// Pointer to cached statement
     let mut n_sql: i32 = 0;
+    /// Length of zSql in bytes
     let mut n_var: i32 = 0;
+    /// Number of variables in statement
     let mut i_parm: i32 = 0;
+    /// Next free entry in apParm
     let mut c: i8 = 0 as i8;
     let mut i: i32 = 0;
     let mut need_result_reset: i32 = 0;
+    /// Need to invoke Tcl_ResetResult()
     let mut rc: i32 = 0;
+    /// Value to return
     let interp: *mut TclInterp = unsafe { (*p_db_1).interp };
     *pp_pre_stmt_1 = core::ptr::null_mut();
     while { c = unsafe { *z_sql.offset(0 as isize) } as i8; c } as i32 ==
@@ -2201,6 +2359,8 @@ extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
         }
         if p_stmt == core::ptr::null_mut() {
             if 0 != unsafe { sqlite3_errcode(unsafe { (*p_db_1).db }) } {
+
+                /// A compile-time error in the statement.
                 unsafe {
                     Tcl_SetObjResult(interp,
                         unsafe {
@@ -2210,7 +2370,12 @@ extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
                         })
                 };
                 return 1;
-            } else { return 0; }
+            } else {
+
+                /// The statement was a no-op.  Continue to the next statement
+                ///* in the SQL string.
+                return 0;
+            }
         }
         if !(p_pre_stmt == core::ptr::null_mut()) as i32 as i64 != 0 {
             unsafe {
@@ -2345,7 +2510,11 @@ extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
                                                     c"bytearray".as_ptr() as *mut i8 as *const i8)
                                             } == 0 && unsafe { (*p_var).bytes } == core::ptr::null_mut()
                             {
-                            data = unsafe { Tcl_GetByteArrayFromObj(p_var, &mut n) };
+
+                            /// Load a BLOB type if the Tcl variable is a bytearray and
+                            ///* it has no string representation or the host
+                            ///* parameter name begins with "@".
+                            (data = unsafe { Tcl_GetByteArrayFromObj(p_var, &mut n) });
                             unsafe {
                                 sqlite3_bind_blob(p_stmt, i, data as *const (), n, None)
                             };
@@ -2435,6 +2604,14 @@ extern "C" fn db_prepare_and_bind(p_db_1: *mut SqliteDb, z_in_1: *const i8,
     return rc;
 }
 
+///* Release a statement reference obtained by calling dbPrepareAndBind().
+///* There should be exactly one call to this function for each call to
+///* dbPrepareAndBind().
+///*
+///* If the discard parameter is non-zero, then the statement is deleted
+///* immediately. Otherwise it is added to the LRU list and may be returned
+///* by a subsequent call to dbPrepareAndBind().
+#[allow(unused_doc_comments)]
 extern "C" fn db_release_stmt(p_db_1: &mut SqliteDb,
     p_pre_stmt_1: *mut SqlPreparedStmt, discard: i32) -> () {
     let mut i: i32 = 0;
@@ -2472,8 +2649,12 @@ extern "C" fn db_release_stmt(p_db_1: &mut SqliteDb,
     }
     unsafe { (*p_pre_stmt_1).n_parm = 0 };
     if (*p_db_1).max_stmt <= 0 || discard != 0 {
+
+        /// If the cache is turned off, deallocated the statement
         db_free_stmt(p_pre_stmt_1);
     } else {
+
+        /// Add the prepared statement to the beginning of the cache list.
         unsafe { (*p_pre_stmt_1).p_next = (*p_db_1).stmt_list };
         unsafe { (*p_pre_stmt_1).p_prev = core::ptr::null_mut() };
         if !((*p_db_1).stmt_list).is_null() {
@@ -2527,6 +2708,8 @@ struct DbEvalContext {
     ap_col_name: *mut *mut TclObj,
 }
 
+///* Release any cache of column names currently held as part of
+///* the DbEvalContext structure passed as the first argument.
 extern "C" fn db_release_column_names(p: &mut DbEvalContext) -> () {
     if !((*p).ap_col_name).is_null() {
         let mut i: i32 = 0;
@@ -2566,6 +2749,16 @@ extern "C" fn db_release_column_names(p: &mut DbEvalContext) -> () {
     (*p).n_col = 0;
 }
 
+///* Initialize a DbEvalContext structure.
+///*
+///* If pVarName is not NULL, then it contains the name of a Tcl array
+///* variable. The "*" member of this array is set to a list containing
+///* the names of the columns returned by the statement as part of each
+///* call to dbEvalStep(), in order from left to right. e.g. if the names
+///* of the returned columns are a, b and c, it does the equivalent of the
+///* tcl command:
+///*
+///*     set ${pVarName}(*) {a b c}
 extern "C" fn db_eval_init(p: *mut DbEvalContext, p_db_1: *mut SqliteDb,
     p_sql_1: *mut TclObj, p_var_name_1: *mut TclObj, eval_flags_1: i32)
     -> () {
@@ -2588,15 +2781,22 @@ extern "C" fn db_eval_init(p: *mut DbEvalContext, p_db_1: *mut SqliteDb,
     add_database_ref(unsafe { &mut *unsafe { (*p).p_db } });
 }
 
+///* Obtain information about the row that the DbEvalContext passed as the
+///* first argument currently points to.
+#[allow(unused_doc_comments)]
 extern "C" fn db_eval_row_info(p: &mut DbEvalContext, pn_col_1: *mut i32,
     pap_col_name_1: *mut *mut *mut TclObj) -> () {
     if core::ptr::null_mut() == (*p).ap_col_name {
         let p_stmt: *mut Sqlite3Stmt = unsafe { (*(*p).p_pre_stmt).p_stmt };
         let mut i: i32 = 0;
+        /// Iterator variable
         let mut n_col: i32 = 0;
+        /// Number of columns returned by pStmt
         let mut ap_col_name: *mut *mut TclObj = core::ptr::null_mut();
-        (*p).n_col =
-            { n_col = unsafe { sqlite3_column_count(p_stmt) }; n_col };
+
+        /// Array of column names
+        ((*p).n_col =
+            { n_col = unsafe { sqlite3_column_count(p_stmt) }; n_col });
         if n_col > 0 &&
                 (!(pap_col_name_1).is_null() || !((*p).p_var_name).is_null())
             {
@@ -2736,6 +2936,16 @@ extern "C" fn db_eval_row_info(p: &mut DbEvalContext, pn_col_1: *mut i32,
     if !(pn_col_1).is_null() { unsafe { *pn_col_1 = (*p).n_col }; }
 }
 
+///* Return one of TCL_OK, TCL_BREAK or TCL_ERROR. If TCL_ERROR is
+///* returned, then an error message is stored in the interpreter before
+///* returning.
+///*
+///* A return value of TCL_OK means there is a row of data available. The
+///* data may be accessed using dbEvalRowInfo() and dbEvalColumnValue(). This
+///* is analogous to a return of SQLITE_ROW from sqlite3_step(). If TCL_BREAK
+///* is returned, then the SQL script has finished executing and there are
+///* no further rows available. This is similar to SQLITE_DONE.
+#[allow(unused_doc_comments)]
 extern "C" fn db_eval_step(p: *mut DbEvalContext) -> i32 {
     let mut z_prev_sql: *const i8 = core::ptr::null();
     while unsafe { *unsafe { (*p).z_sql.offset(0 as isize) } } != 0 ||
@@ -2779,6 +2989,9 @@ extern "C" fn db_eval_step(p: *mut DbEvalContext) -> i32 {
             db_release_column_names(unsafe { &mut *p });
             unsafe { (*p).p_pre_stmt = core::ptr::null_mut() };
             if rcs != 0 {
+
+                /// If a run-time error occurs, report the error and stop reading
+                ///* the SQL.
                 db_release_stmt(unsafe { &mut *p_db }, p_pre_stmt, 1);
                 unsafe {
                     Tcl_SetObjResult(unsafe { (*p_db).interp },
@@ -2792,9 +3005,14 @@ extern "C" fn db_eval_step(p: *mut DbEvalContext) -> i32 {
             } else { db_release_stmt(unsafe { &mut *p_db }, p_pre_stmt, 0); }
         }
     }
+
+    /// Finished
     return 3;
 }
 
+///* Free all resources currently held by the DbEvalContext structure passed
+///* as the first argument. There should be exactly one call to this function
+///* for each call to dbEvalInit().
 extern "C" fn db_eval_finalize(p: *mut DbEvalContext) -> () {
     if !(unsafe { (*p).p_pre_stmt }).is_null() {
         unsafe {
@@ -2838,6 +3056,9 @@ extern "C" fn db_eval_finalize(p: *mut DbEvalContext) -> () {
     del_database_ref(unsafe { (*p).p_db });
 }
 
+///* Return a pointer to a Tcl_Obj structure with ref-count 0 that contains
+///* the value for the iCol'th column of the row currently pointed to by
+///* the DbEvalContext structure passed as the first argument.
 extern "C" fn db_eval_column_value(p: &DbEvalContext, i_col_1: i32)
     -> *mut TclObj {
     let p_stmt: *mut Sqlite3Stmt = unsafe { (*(*p).p_pre_stmt).p_stmt };
@@ -2931,9 +3152,18 @@ extern "C" fn db_eval_column_value(p: &DbEvalContext, i_col_1: i32)
         };
 }
 
+///* This function is part of the implementation of the command:
+///*
+///*   $db eval SQL ?TGT-NAME? SCRIPT
+#[allow(unused_doc_comments)]
 extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
     result: i32) -> i32 {
     let mut rc: i32 = result;
+    /// Return code
+    /// The first element of the data[] array is a pointer to a DbEvalContext
+    ///* structure allocated using Tcl_Alloc(). The second element of data[]
+    ///* is a pointer to a Tcl_Obj containing the script to run for each row
+    ///* returned by the queries encapsulated in data[0].
     let p: *mut DbEvalContext =
         unsafe { *data.offset(0 as isize) } as *mut DbEvalContext;
     let p_script: *mut TclObj =
@@ -2963,6 +3193,8 @@ extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
                                         }, i)
                                 } == 5 {
                         if 0 == 2 & unsafe { (*p).eval_flags } {
+
+                            /// Target is an array
                             unsafe {
                                 Tcl_UnsetVar2(interp,
                                     unsafe { Tcl_GetString(p_var_name) } as *const i8,
@@ -2971,6 +3203,7 @@ extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
                                         } as *const i8, 0)
                             };
                         } else {
+                            /// Target is a dict
                             let mut p_dict: *mut TclObj =
                                 unsafe {
                                     Tcl_ObjGetVar2(interp, p_var_name,
@@ -3010,12 +3243,15 @@ extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
                             }
                         }
                     } else if 0 == 2 & unsafe { (*p).eval_flags } {
+
+                        /// Target is an array: set target(colName) = colValue
                         unsafe {
                             Tcl_ObjSetVar2(interp, p_var_name,
                                 unsafe { *ap_col_name.offset(i as isize) },
                                 db_eval_column_value(unsafe { &*p }, i), 0)
                         };
                     } else {
+                        /// Target is a dict: set target(colName) = colValue
                         let mut p_dict_1: *mut TclObj =
                             unsafe {
                                 Tcl_ObjGetVar2(interp, p_var_name,
@@ -3084,6 +3320,13 @@ extern "C" fn db_eval_next_cmd(data: *mut ClientData, interp: *mut TclInterp,
     return rc;
 }
 
+///* This function is used by the implementations of the following database
+///* handle sub-commands:
+///*
+///*   $db update_hook ?SCRIPT?
+///*   $db wal_hook ?SCRIPT?
+///*   $db commit_hook ?SCRIPT?
+///*   $db preupdate hook ?SCRIPT?
 extern "C" fn db_hook_cmd(interp: *mut TclInterp, p_db_1: *mut SqliteDb,
     p_arg_1: *mut TclObj, pp_hook_1: &mut *mut TclObj) -> () {
     let db: *mut Sqlite3 = unsafe { (*p_db_1).db };
@@ -3161,6 +3404,68 @@ extern "C" fn db_hook_cmd(interp: *mut TclInterp, p_db_1: *mut SqliteDb,
     };
 }
 
+///* Implementation of the "db format" command.
+///*
+///* Based on provided options, format the results of the SQL statement(s)
+///* provided into human-readable form using the Query Result Formatter (QRF)
+///* and return the resuling text.
+///*
+///* Syntax:    db format OPTIONS SQL
+///*
+///* OPTIONS may be:
+///*
+///*     -style ("auto"|"box"|"column"|...)      Output style
+///*     -esc ("auto"|"off"|"ascii"|"symbol")    How to deal with ctrl chars
+///*     -text ("auto"|"off"|"sql"|"csv"|...)    How to escape TEXT values
+///*     -title ("auto"|"off"|"sql"|...|"off")   How to escape column names
+///*     -blob ("auto"|"text"|"sql"|...)         How to escape BLOB values
+///*     -wordwrap ("auto"|"off"|"on")           Try to wrap at word boundry?
+///*     -textjsonb ("auto"|"off"|"on")          Auto-convert JSONB to text?
+///*     -splitcolumn ("auto"|"off"|"on")        Enable split-column mode
+///*     -defaultalign ("auto"|"left"|...)       Default alignment
+///*     -titalalign ("auto"|"left"|"right"|...) Default column name alignment
+///*     -border ("auto"|"off"|"on")             Border for box and table styles
+///*     -wrap NUMBER                            Max width of any single column
+///*     -screenwidth NUMBER                     Width of the display TTY
+///*     -linelimit NUMBER                       Max lines for any cell
+///*     -charlimit NUMBER                       Content truncated to this size
+///*     -titlelimit NUMBER                      Max width of column titles
+///*     -multiinsert NUMBER                     Multi-row INSERT byte size
+///*     -align LIST-OF-ALIGNMENT                Alignment of columns
+///*     -widths LIST-OF-NUMBERS                 Widths for individual columns
+///*     -columnsep TEXT                         Column separator text
+///*     -rowsep TEXT                            Row separator text
+///*     -tablename TEXT                         Table name for style "insert"
+///*     -null TEXT                              Text for NULL values
+///*
+///* A mapping from TCL "format" command options to sqlite3_qrf_spec fields
+///* is below.  Use this to reference the QRF documentation:
+///*
+///*     TCL Option        spec field
+///*     ----------        ----------
+///*     -style            eStyle
+///*     -esc              eEsc
+///*     -text             eText
+///*     -title            eTitle, bTitle
+///*     -blob             eBlob
+///*     -wordwrap         bWordWrap
+///*     -textjsonb        bTextJsonb
+///*     -splitcolumn      bSplitColumn
+///*     -defaultalign     eDfltAlign
+///*     -titlealign       eTitleAlign
+///*     -border           bBorder
+///*     -wrap             nWrap
+///*     -screenwidth      nScreenWidth
+///*     -linelimit        nLineLimit
+///*     -charlimit        nCharLimit
+///*     -titlelimit       nTitleLimit
+///*     -multiinsert      nMultiInsert
+///*     -align            nAlign, aAlign
+///*     -widths           nWidth, aWidth
+///*     -columnsep        zColumnSep
+///*     -rowsep           zRowSep
+///*     -tablename        zTableName
+///*     -null             zNull
 extern "C" fn db_qrf(p_db_1: &SqliteDb, objc: i32, objv: *const *mut TclObj)
     -> i32 {
     unsafe {
@@ -3174,64 +3479,193 @@ extern "C" fn db_qrf(p_db_1: &SqliteDb, objc: i32, objv: *const *mut TclObj)
     return 1;
 }
 
+///* The "sqlite" command below creates a new Tcl command for each
+///* connection it opens to an SQLite database.  This routine is invoked
+///* whenever one of those connection-specific commands is executed
+///* in Tcl.  For example, if you run Tcl code like this:
+///*
+///*       sqlite3 db1  "my_database"
+///*       db1 close
+///*
+///* The first command opens a connection to the "my_database" database
+///* and calls that connection "db1".  The second command causes this
+///* subroutine to be invoked.
+#[allow(unused_doc_comments)]
 extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
     mut objc: i32, mut objv: *const *mut TclObj) -> i32 {
     unsafe {
         let mut p_db: *mut SqliteDb = core::ptr::null_mut();
         let mut choice: i32 = 0;
         let mut rc: i32 = 0;
+        /// don't leave trailing commas on DB_enum, it confuses the AIX xlc compiler
+        ///    $db authorizer ?CALLBACK?
+        ///*
+        ///* Invoke the given callback to authorize each SQL operation as it is
+        ///* compiled.  5 arguments are appended to the callback before it is
+        ///* invoked:
+        ///*
+        ///*   (1) The authorization type (ex: SQLITE_CREATE_TABLE, SQLITE_INSERT, ...)
+        ///*   (2) First descriptive name (depends on authorization type)
+        ///*   (3) Second descriptive name
+        ///*   (4) Name of the database (ex: "main", "temp")
+        ///*   (5) Name of trigger that is doing the access
+        ///*
+        ///* The callback should return one of the following strings: SQLITE_OK,
+        ///* SQLITE_IGNORE, or SQLITE_DENY.  Any other return value is an error.
+        ///*
+        ///* If this method is invoked with no arguments, the current authorization
+        ///* callback string is returned.
         let mut z_auth: *const i8 = core::ptr::null();
         let mut len: TclSize = 0;
+        ///    $db backup ?DATABASE? FILENAME
+        ///*
+        ///* Open or create a database file named FILENAME.  Transfer the
+        ///* content of local database DATABASE (default: "main") into the
+        ///* FILENAME database.
         let mut z_dest_file: *const i8 = core::ptr::null();
         let mut z_src_db: *const i8 = core::ptr::null();
         let mut p_dest: *mut Sqlite3 = core::ptr::null_mut();
         let mut p_backup: *mut Sqlite3Backup = core::ptr::null_mut();
+        ///    $db bind_fallback ?CALLBACK?
+        ///*
+        ///* When resolving bind parameters in an SQL statement, if the parameter
+        ///* cannot be associated with a TCL variable then invoke CALLBACK with a
+        ///* single argument that is the name of the parameter and use the return
+        ///* value of the CALLBACK as the binding.  If CALLBACK returns something
+        ///* other than TCL_OK or TCL_ERROR then bind a NULL.
+        ///*
+        ///* If CALLBACK is an empty string, then revert to the default behavior 
+        ///* which is to set the binding to NULL.
+        ///*
+        ///* If CALLBACK returns an error, that causes the statement execution to
+        ///* abort.  Hence, to configure a connection so that it throws an error
+        ///* on an attempt to bind an unknown variable, do something like this:
+        ///*
+        ///*     proc bind_error {name} {error "no such variable: $name"}
+        ///*     db bind_fallback bind_error
         let mut z_callback: *const i8 = core::ptr::null();
         let mut len__1: TclSize = 0;
+        ///    $db busy ?CALLBACK?
+        ///*
+        ///* Invoke the given callback if an SQL statement attempts to open
+        ///* a locked database file.
         let mut z_busy: *const i8 = core::ptr::null();
         let mut len__2: TclSize = 0;
+        ///     $db cache flush
+        ///*     $db cache size n
+        ///*
+        ///* Flush the prepared statement cache, or set the maximum number of
+        ///* cached statements.
         let mut sub_cmd: *const i8 = core::ptr::null();
         let mut n: i32 = 0;
+        ///     $db changes
+        ///*
+        ///* Return the number of rows that were modified, inserted, or deleted by
+        ///* the most recent INSERT, UPDATE or DELETE statement, not including
+        ///* any changes made by trigger programs.
         let mut p_result: *mut TclObj = core::ptr::null_mut();
+        ///    $db close
+        ///*
+        ///* Shutdown the database
+        ///*     $db collate NAME SCRIPT
+        ///*
+        ///* Create a new SQL collation function called NAME.  Whenever
+        ///* that function is called, invoke SCRIPT to evaluate the function.
         let mut p_collate: *mut SqlCollate = core::ptr::null_mut();
         let mut z_name: *const i8 = core::ptr::null();
         let mut z_script: *const i8 = core::ptr::null();
         let mut n_script: TclSize = 0;
+        ///*     $db collation_needed SCRIPT
+        ///*
+        ///* Create a new SQL collation function called NAME.  Whenever
+        ///* that function is called, invoke SCRIPT to evaluate the function.
+        ///    $db commit_hook ?CALLBACK?
+        ///*
+        ///* Invoke the given callback just before committing every SQL transaction.
+        ///* If the callback throws an exception or returns non-zero, then the
+        ///* transaction is aborted.  If CALLBACK is an empty string, the callback
+        ///* is disabled.
         let mut z_commit: *const i8 = core::ptr::null();
         let mut len__3: TclSize = 0;
+        ///    $db complete SQL
+        ///*
+        ///* Return TRUE if SQL is a complete SQL statement.  Return FALSE if
+        ///* additional lines of input are needed.  This is similar to the
+        ///* built-in "info complete" command of Tcl.
         let mut p_result_1: *mut TclObj = core::ptr::null_mut();
         let mut is_complete: i32 = 0;
         let mut p_result_2: *mut TclObj = core::ptr::null_mut();
         let mut ii: i32 = 0;
+        /// With no arguments, list all configuration options and with the
+        ///* current value
         let mut v: i32 = 0;
         let mut z_opt: *const i8 = core::ptr::null();
         let mut onoff: i32 = 0;
         let mut v__1: i32 = 0;
+        ///    $db copy conflict-algorithm table filename ?SEPARATOR? ?NULLINDICATOR?
+        ///*
+        ///* Copy data into table from filename, optionally using SEPARATOR
+        ///* as column separators.  If a column contains a null string, or the
+        ///* value of NULLINDICATOR, a NULL is inserted for the column.
+        ///* conflict-algorithm is one of the sqlite conflict algorithms:
+        ///*    rollback, abort, fail, ignore, replace
+        ///* On success, return the number of lines processed, not necessarily same
+        ///* as 'db changes' due to conflict-algorithm selected.
+        ///*
+        ///* This code is basically an implementation/enhancement of
+        ///* the sqlite3 shell.c ".import" command.
+        ///*
+        ///* This command usage is equivalent to the sqlite2.x COPY statement,
+        ///* which imports file data into a table using the PostgreSQL COPY file format:
+        ///*   $db copy $conflict_algorithm $table_name $filename \t \\N
         let mut z_table: *mut i8 = core::ptr::null_mut();
+        /// Insert data into this table
         let mut z_file: *mut i8 = core::ptr::null_mut();
+        /// The file from which to extract data
         let mut z_conflict: *mut i8 = core::ptr::null_mut();
+        /// The conflict algorithm to use
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// A statement
         let mut n_col: i32 = 0;
+        /// Number of columns in the table
         let mut n_byte: i32 = 0;
+        /// Number of bytes in an SQL string
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut n_sep: i32 = 0;
+        /// Number of bytes in zSep[]
         let mut n_null: i32 = 0;
+        /// Number of bytes in zNull[]
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// An SQL statement
         let mut z_line: *mut i8 = core::ptr::null_mut();
+        /// A single line of input from the file
         let mut az_col: *mut *mut i8 = core::ptr::null_mut();
+        /// zLine[] broken up into columns
         let mut z_commit_1: *const i8 = core::ptr::null();
+        /// How to commit changes
         let mut in_: TclChannel = core::ptr::null_mut();
+        /// The input file
         let mut lineno: i32 = 0;
+        /// Line number of input file
         let mut z_line_num: [i8; 80] = [0; 80];
+        /// Line number print buffer
         let mut str: *mut TclObj = core::ptr::null_mut();
         let mut p_result_3: *mut TclObj = core::ptr::null_mut();
+        /// interp result
         let mut z_sep: *const i8 = core::ptr::null();
         let mut z_null: *const i8 = core::ptr::null();
         let mut z: *mut i8 = core::ptr::null_mut();
         let mut byte_len: TclSize = 0;
         let mut z_err: *mut i8 = core::ptr::null_mut();
         let mut n_err: i32 = 0;
+        /// check for null data, if so, bind as null
+        /// success, set result as number of lines processed
+        /// failure, append lineno where failed
+        ///*     $db deserialize ?-maxsize N? ?-readonly BOOL? ?DATABASE? VALUE
+        ///*
+        ///* Reopen DATABASE (default "main") using the content in $VALUE
         let mut z_schema: *const i8 = core::ptr::null();
         let mut p_value: *mut TclObj = core::ptr::null_mut();
         let mut p_ba: *const u8 = core::ptr::null();
@@ -3244,9 +3678,35 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
         let mut z__1: *const i8 = core::ptr::null();
         let mut x: TclWideInt = 0 as TclWideInt;
         let mut flags: i32 = 0;
+        ///*    $db enable_load_extension BOOLEAN
+        ///*
+        ///* Turn the extension loading feature on or off.  It if off by
+        ///* default.
         let mut onoff__1: i32 = 0;
+        ///*    $db errorcode
+        ///*
+        ///* Return the numeric error code that was returned by the most recent
+        ///* call to sqlite3_exec().
+        ///*    $db erroroffset
+        ///*
+        ///* Return the numeric error code that was returned by the most recent
+        ///* call to sqlite3_exec().
+        ///*    $db exists $sql
+        ///*    $db onecolumn $sql
+        ///*
+        ///* The onecolumn method is the equivalent of:
+        ///*     lindex [$db eval $sql] 0
         let mut p_result_4: *mut TclObj = core::ptr::null_mut();
         let mut s_eval: DbEvalContext = unsafe { core::mem::zeroed() };
+        ///*    $db eval ?options? $sql ?varName? ?{  ...code... }?
+        ///*
+        ///* The SQL statement in $sql is evaluated.  For each row, the values
+        ///* are placed in elements of the array or dict named $varName and
+        ///* ...code... is executed.  If $varName and $code are omitted, then
+        ///* no callback is ever invoked.  If $varName is an empty string,
+        ///* then the values are placed in variables that have the same name
+        ///* as the fields extracted by the query, and those variables are
+        ///* accessible during the eval of $code.
         let mut eval_flags: i32 = 0;
         let mut z_opt_1: *const i8 = core::ptr::null();
         let mut s_eval_1: DbEvalContext = unsafe { core::mem::zeroed() };
@@ -3257,6 +3717,22 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
         let mut p: *mut DbEvalContext = core::ptr::null_mut();
         let mut p_var_name: *mut TclObj = core::ptr::null_mut();
         let mut p_script: *mut TclObj = core::ptr::null_mut();
+        ///*     $db format [OPTIONS] SQL
+        ///*
+        ///* Run the SQL statement(s) given as the final argument.  Use the
+        ///* Query Result Formatter extension of SQLite to format the output as
+        ///* text and return that text.
+        ///*     $db function NAME [OPTIONS] SCRIPT
+        ///*
+        ///* Create a new SQL function called NAME.  Whenever that function is
+        ///* called, invoke SCRIPT to evaluate the function.
+        ///*
+        ///* Options:
+        ///*         --argcount N           Function has exactly N arguments
+        ///*         --deterministic        The function is pure
+        ///*         --directonly           Prohibit use inside triggers and views
+        ///*         --innocuous            Has no side effects or information leaks
+        ///*         --returntype TYPE      Specify the return type of the function
         let mut flags__1: i32 = 0;
         let mut p_func: *mut SqlFunc = core::ptr::null_mut();
         let mut p_script_1: *mut TclObj = core::ptr::null_mut();
@@ -3271,35 +3747,91 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
                     c"text".as_ptr() as *const i8,
                     c"blob".as_ptr() as *const i8, c"any".as_ptr() as *const i8,
                     core::ptr::null()];
+        ///*     $db incrblob ?-readonly? ?DB? TABLE COLUMN ROWID
         let mut is_readonly_1: i32 = 0;
         let mut z_db: *const i8 = core::ptr::null();
         let mut z_table_1: *const i8 = core::ptr::null();
         let mut z_column: *const i8 = core::ptr::null();
         let mut i_row: TclWideInt = 0 as TclWideInt;
+        /// Check for the -readonly option
+        ///*     $db interrupt
+        ///*
+        ///* Interrupt the execution of the inner-most SQL interpreter.  This
+        ///* causes the SQL statement to return an error of SQLITE_INTERRUPT.
+        ///*     $db nullvalue ?STRING?
+        ///*
+        ///* Change text used when a NULL comes back from the database. If ?STRING?
+        ///* is not present, then the current string used for NULL is returned.
+        ///* If STRING is present, then STRING is returned.
+        ///*
         let mut len__5: TclSize = 0;
         let mut z_null_1: *const i8 = core::ptr::null();
+        ///*     $db last_insert_rowid
+        ///*
+        ///* Return an integer which is the ROWID for the most recent insert.
         let mut p_result_5: *mut TclObj = core::ptr::null_mut();
         let mut rowid: TclWideInt = 0 as TclWideInt;
+        ///* The DB_ONECOLUMN method is implemented together with DB_EXISTS.
+        ///    $db progress ?N CALLBACK?
+        ///*
+        ///* Invoke the given callback every N virtual machine opcodes while executing
+        ///* queries.
         let mut z_progress: *const i8 = core::ptr::null();
         let mut len__6: TclSize = 0;
         let mut n__2: i32 = 0;
+        ///    $db profile ?CALLBACK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine after each SQL statement
+        ///* that has run.  The text of the SQL and the amount of elapse time are
+        ///* appended to CALLBACK before the script is run.
         let mut z_profile: *const i8 = core::ptr::null();
         let mut len__7: TclSize = 0;
+        ///*     $db rekey KEY
+        ///*
+        ///* Change the encryption key on the currently open database.
+        ///    $db restore ?DATABASE? FILENAME
+        ///*
+        ///* Open a database file named FILENAME.  Transfer the content
+        ///* of FILENAME into the local database DATABASE (default: "main").
         let mut z_src_file: *const i8 = core::ptr::null();
         let mut z_dest_db: *const i8 = core::ptr::null();
         let mut p_src: *mut Sqlite3 = core::ptr::null_mut();
         let mut p_backup_1: *mut Sqlite3Backup = core::ptr::null_mut();
         let mut n_timeout: i32 = 0;
+        ///*     $db serialize ?DATABASE?
+        ///*
+        ///* Return a serialization of a database.
         let mut z_schema_1: *const i8 = core::ptr::null();
         let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut p_data_1: *mut u8 = core::ptr::null_mut();
         let mut need_free: i32 = 0;
+        ///*     $db status (step|sort|autoindex|vmstep)
+        ///*
+        ///* Display SQLITE_STMTSTATUS_FULLSCAN_STEP or
+        ///* SQLITE_STMTSTATUS_SORT for the most recent eval.
         let mut v__2: i32 = 0;
         let mut z_op: *const i8 = core::ptr::null();
+        ///*     $db timeout MILLESECONDS
+        ///*
+        ///* Delay for the number of milliseconds specified when a file is locked.
         let mut ms: i32 = 0;
+        ///*     $db total_changes
+        ///*
+        ///* Return the number of rows that were modified, inserted, or deleted
+        ///* since the database handle was created.
         let mut p_result_6: *mut TclObj = core::ptr::null_mut();
+        ///    $db trace ?CALLBACK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine for each SQL statement
+        ///* that is executed.  The text of the SQL is appended to CALLBACK before
+        ///* it is executed.
         let mut z_trace: *const i8 = core::ptr::null();
         let mut len__8: TclSize = 0;
+        ///    $db trace_v2 ?CALLBACK? ?MASK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine for each trace event
+        ///* matching the mask that is generated.  The parameters are appended to
+        ///* CALLBACK before it is executed.
         let mut z_trace_v2: *const i8 = core::ptr::null();
         let mut len__9: TclSize = 0;
         let mut w_mask: TclWideInt = 0 as TclWideInt;
@@ -3308,10 +3840,43 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
         let mut ttype: i32 = 0;
         let mut w_type: TclWideInt = 0 as TclWideInt;
         let mut p_error: *mut TclObj = core::ptr::null_mut();
+        /// use the "legacy" default
+        ///    $db transaction [-deferred|-immediate|-exclusive] SCRIPT
+        ///*
+        ///* Start a new transaction (if we are not already in the midst of a
+        ///* transaction) and execute the TCL script SCRIPT.  After SCRIPT
+        ///* completes, either commit the transaction or roll it back if SCRIPT
+        ///* throws an exception.  Or if no new transaction was started, do nothing.
+        ///* pass the exception on up the stack.
+        ///*
+        ///* This command was inspired by Dave Thomas's talk on Ruby at the
+        ///* 2005 O'Reilly Open Source Convention (OSCON).
         let mut p_script_2: *mut TclObj = core::ptr::null_mut();
         let mut z_begin: *const i8 = core::ptr::null();
         let mut ttype__1: i32 = 0;
+        /// no-op
+        /// Run the SQLite BEGIN command to open a transaction or savepoint.
+        /// If using NRE, schedule a callback to invoke the script pScript, then
+        ///* a second callback to commit (or rollback) the transaction or savepoint
+        ///* opened above. If not using NRE, evaluate the script directly, then
+        ///* call function DbTransPostCmd() to commit (or rollback) the transaction
+        ///* or savepoint.
+        /// DbTransPostCmd() calls delDatabaseRef()
+        ///*    $db unlock_notify ?script?
+        ///*    $db preupdate_hook count
+        ///*    $db preupdate_hook hook ?SCRIPT?
+        ///*    $db preupdate_hook new INDEX
+        ///*    $db preupdate_hook old INDEX
+        /// SQLITE_ENABLE_PREUPDATE_HOOK
+        ///*    $db wal_hook ?script?
+        ///*    $db update_hook ?script?
+        ///*    $db rollback_hook ?script?
+        /// set ppHook to point at pUpdateHook or pRollbackHook, depending on
+        ///* whether [$db update_hook] or [$db rollback_hook] was invoked.
         let mut pp_hook: *mut *mut TclObj = core::ptr::null_mut();
+        ///    $db version
+        ///*
+        ///* Return the version string for this database.
         let mut i__5: i32 = 0;
         let mut z_arg: *const i8 = core::ptr::null();
         let mut __state: i32 = 0;
@@ -7054,10 +7619,268 @@ extern "C" fn db_obj_cmd(mut cd: *mut (), interp: *mut TclInterp,
                 }
             }
         }
+
+        /// don't leave trailing commas on DB_enum, it confuses the AIX xlc compiler
+        ///    $db authorizer ?CALLBACK?
+        ///*
+        ///* Invoke the given callback to authorize each SQL operation as it is
+        ///* compiled.  5 arguments are appended to the callback before it is
+        ///* invoked:
+        ///*
+        ///*   (1) The authorization type (ex: SQLITE_CREATE_TABLE, SQLITE_INSERT, ...)
+        ///*   (2) First descriptive name (depends on authorization type)
+        ///*   (3) Second descriptive name
+        ///*   (4) Name of the database (ex: "main", "temp")
+        ///*   (5) Name of trigger that is doing the access
+        ///*
+        ///* The callback should return one of the following strings: SQLITE_OK,
+        ///* SQLITE_IGNORE, or SQLITE_DENY.  Any other return value is an error.
+        ///*
+        ///* If this method is invoked with no arguments, the current authorization
+        ///* callback string is returned.
+        ///    $db backup ?DATABASE? FILENAME
+        ///*
+        ///* Open or create a database file named FILENAME.  Transfer the
+        ///* content of local database DATABASE (default: "main") into the
+        ///* FILENAME database.
+        ///    $db bind_fallback ?CALLBACK?
+        ///*
+        ///* When resolving bind parameters in an SQL statement, if the parameter
+        ///* cannot be associated with a TCL variable then invoke CALLBACK with a
+        ///* single argument that is the name of the parameter and use the return
+        ///* value of the CALLBACK as the binding.  If CALLBACK returns something
+        ///* other than TCL_OK or TCL_ERROR then bind a NULL.
+        ///*
+        ///* If CALLBACK is an empty string, then revert to the default behavior 
+        ///* which is to set the binding to NULL.
+        ///*
+        ///* If CALLBACK returns an error, that causes the statement execution to
+        ///* abort.  Hence, to configure a connection so that it throws an error
+        ///* on an attempt to bind an unknown variable, do something like this:
+        ///*
+        ///*     proc bind_error {name} {error "no such variable: $name"}
+        ///*     db bind_fallback bind_error
+        ///    $db busy ?CALLBACK?
+        ///*
+        ///* Invoke the given callback if an SQL statement attempts to open
+        ///* a locked database file.
+        ///     $db cache flush
+        ///*     $db cache size n
+        ///*
+        ///* Flush the prepared statement cache, or set the maximum number of
+        ///* cached statements.
+        ///     $db changes
+        ///*
+        ///* Return the number of rows that were modified, inserted, or deleted by
+        ///* the most recent INSERT, UPDATE or DELETE statement, not including
+        ///* any changes made by trigger programs.
+        ///    $db close
+        ///*
+        ///* Shutdown the database
+        ///*     $db collate NAME SCRIPT
+        ///*
+        ///* Create a new SQL collation function called NAME.  Whenever
+        ///* that function is called, invoke SCRIPT to evaluate the function.
+        ///*     $db collation_needed SCRIPT
+        ///*
+        ///* Create a new SQL collation function called NAME.  Whenever
+        ///* that function is called, invoke SCRIPT to evaluate the function.
+        ///    $db commit_hook ?CALLBACK?
+        ///*
+        ///* Invoke the given callback just before committing every SQL transaction.
+        ///* If the callback throws an exception or returns non-zero, then the
+        ///* transaction is aborted.  If CALLBACK is an empty string, the callback
+        ///* is disabled.
+        ///    $db complete SQL
+        ///*
+        ///* Return TRUE if SQL is a complete SQL statement.  Return FALSE if
+        ///* additional lines of input are needed.  This is similar to the
+        ///* built-in "info complete" command of Tcl.
+        ///    $db config ?OPTION? ?BOOLEAN?
+        ///*
+        ///* Configure the database connection using the sqlite3_db_config()
+        ///* interface.
+        /// With no arguments, list all configuration options and with the
+        ///* current value
+        ///    $db copy conflict-algorithm table filename ?SEPARATOR? ?NULLINDICATOR?
+        ///*
+        ///* Copy data into table from filename, optionally using SEPARATOR
+        ///* as column separators.  If a column contains a null string, or the
+        ///* value of NULLINDICATOR, a NULL is inserted for the column.
+        ///* conflict-algorithm is one of the sqlite conflict algorithms:
+        ///*    rollback, abort, fail, ignore, replace
+        ///* On success, return the number of lines processed, not necessarily same
+        ///* as 'db changes' due to conflict-algorithm selected.
+        ///*
+        ///* This code is basically an implementation/enhancement of
+        ///* the sqlite3 shell.c ".import" command.
+        ///*
+        ///* This command usage is equivalent to the sqlite2.x COPY statement,
+        ///* which imports file data into a table using the PostgreSQL COPY file format:
+        ///*   $db copy $conflict_algorithm $table_name $filename \t \\N
+        /// Insert data into this table
+        /// The file from which to extract data
+        /// The conflict algorithm to use
+        /// A statement
+        /// Number of columns in the table
+        /// Number of bytes in an SQL string
+        /// Loop counters
+        /// Number of bytes in zSep[]
+        /// Number of bytes in zNull[]
+        /// An SQL statement
+        /// A single line of input from the file
+        /// zLine[] broken up into columns
+        /// How to commit changes
+        /// The input file
+        /// Line number of input file
+        /// Line number print buffer
+        /// interp result
+        /// check for null data, if so, bind as null
+        /// success, set result as number of lines processed
+        /// failure, append lineno where failed
+        ///*     $db deserialize ?-maxsize N? ?-readonly BOOL? ?DATABASE? VALUE
+        ///*
+        ///* Reopen DATABASE (default "main") using the content in $VALUE
+        ///*    $db enable_load_extension BOOLEAN
+        ///*
+        ///* Turn the extension loading feature on or off.  It if off by
+        ///* default.
+        ///*    $db errorcode
+        ///*
+        ///* Return the numeric error code that was returned by the most recent
+        ///* call to sqlite3_exec().
+        ///*    $db erroroffset
+        ///*
+        ///* Return the numeric error code that was returned by the most recent
+        ///* call to sqlite3_exec().
+        ///*    $db exists $sql
+        ///*    $db onecolumn $sql
+        ///*
+        ///* The onecolumn method is the equivalent of:
+        ///*     lindex [$db eval $sql] 0
+        ///*    $db eval ?options? $sql ?varName? ?{  ...code... }?
+        ///*
+        ///* The SQL statement in $sql is evaluated.  For each row, the values
+        ///* are placed in elements of the array or dict named $varName and
+        ///* ...code... is executed.  If $varName and $code are omitted, then
+        ///* no callback is ever invoked.  If $varName is an empty string,
+        ///* then the values are placed in variables that have the same name
+        ///* as the fields extracted by the query, and those variables are
+        ///* accessible during the eval of $code.
+        ///*     $db format [OPTIONS] SQL
+        ///*
+        ///* Run the SQL statement(s) given as the final argument.  Use the
+        ///* Query Result Formatter extension of SQLite to format the output as
+        ///* text and return that text.
+        ///*     $db function NAME [OPTIONS] SCRIPT
+        ///*
+        ///* Create a new SQL function called NAME.  Whenever that function is
+        ///* called, invoke SCRIPT to evaluate the function.
+        ///*
+        ///* Options:
+        ///*         --argcount N           Function has exactly N arguments
+        ///*         --deterministic        The function is pure
+        ///*         --directonly           Prohibit use inside triggers and views
+        ///*         --innocuous            Has no side effects or information leaks
+        ///*         --returntype TYPE      Specify the return type of the function
+        ///*     $db incrblob ?-readonly? ?DB? TABLE COLUMN ROWID
+        /// Check for the -readonly option
+        ///*     $db interrupt
+        ///*
+        ///* Interrupt the execution of the inner-most SQL interpreter.  This
+        ///* causes the SQL statement to return an error of SQLITE_INTERRUPT.
+        ///*     $db nullvalue ?STRING?
+        ///*
+        ///* Change text used when a NULL comes back from the database. If ?STRING?
+        ///* is not present, then the current string used for NULL is returned.
+        ///* If STRING is present, then STRING is returned.
+        ///*
+        ///*     $db last_insert_rowid
+        ///*
+        ///* Return an integer which is the ROWID for the most recent insert.
+        ///* The DB_ONECOLUMN method is implemented together with DB_EXISTS.
+        ///    $db progress ?N CALLBACK?
+        ///*
+        ///* Invoke the given callback every N virtual machine opcodes while executing
+        ///* queries.
+        ///    $db profile ?CALLBACK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine after each SQL statement
+        ///* that has run.  The text of the SQL and the amount of elapse time are
+        ///* appended to CALLBACK before the script is run.
+        ///*     $db rekey KEY
+        ///*
+        ///* Change the encryption key on the currently open database.
+        ///    $db restore ?DATABASE? FILENAME
+        ///*
+        ///* Open a database file named FILENAME.  Transfer the content
+        ///* of FILENAME into the local database DATABASE (default: "main").
+        ///*     $db serialize ?DATABASE?
+        ///*
+        ///* Return a serialization of a database.
+        ///*     $db status (step|sort|autoindex|vmstep)
+        ///*
+        ///* Display SQLITE_STMTSTATUS_FULLSCAN_STEP or
+        ///* SQLITE_STMTSTATUS_SORT for the most recent eval.
+        ///*     $db timeout MILLESECONDS
+        ///*
+        ///* Delay for the number of milliseconds specified when a file is locked.
+        ///*     $db total_changes
+        ///*
+        ///* Return the number of rows that were modified, inserted, or deleted
+        ///* since the database handle was created.
+        ///    $db trace ?CALLBACK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine for each SQL statement
+        ///* that is executed.  The text of the SQL is appended to CALLBACK before
+        ///* it is executed.
+        ///    $db trace_v2 ?CALLBACK? ?MASK?
+        ///*
+        ///* Make arrangements to invoke the CALLBACK routine for each trace event
+        ///* matching the mask that is generated.  The parameters are appended to
+        ///* CALLBACK before it is executed.
+        /// use the "legacy" default
+        ///    $db transaction [-deferred|-immediate|-exclusive] SCRIPT
+        ///*
+        ///* Start a new transaction (if we are not already in the midst of a
+        ///* transaction) and execute the TCL script SCRIPT.  After SCRIPT
+        ///* completes, either commit the transaction or roll it back if SCRIPT
+        ///* throws an exception.  Or if no new transaction was started, do nothing.
+        ///* pass the exception on up the stack.
+        ///*
+        ///* This command was inspired by Dave Thomas's talk on Ruby at the
+        ///* 2005 O'Reilly Open Source Convention (OSCON).
+        /// no-op
+        /// Run the SQLite BEGIN command to open a transaction or savepoint.
+        /// If using NRE, schedule a callback to invoke the script pScript, then
+        ///* a second callback to commit (or rollback) the transaction or savepoint
+        ///* opened above. If not using NRE, evaluate the script directly, then
+        ///* call function DbTransPostCmd() to commit (or rollback) the transaction
+        ///* or savepoint.
+        /// DbTransPostCmd() calls delDatabaseRef()
+        ///*    $db unlock_notify ?script?
+        ///*    $db preupdate_hook count
+        ///*    $db preupdate_hook hook ?SCRIPT?
+        ///*    $db preupdate_hook new INDEX
+        ///*    $db preupdate_hook old INDEX
+        /// SQLITE_ENABLE_PREUPDATE_HOOK
+        ///*    $db wal_hook ?script?
+        ///*    $db update_hook ?script?
+        ///*    $db rollback_hook ?script?
+        /// set ppHook to point at pUpdateHook or pRollbackHook, depending on
+        ///* whether [$db update_hook] or [$db rollback_hook] was invoked.
+        ///    $db version
+        ///*
+        ///* Return the version string for this database.
+        /// Optional arguments to $db version are used for testing purpose
+        /// SQLITE_TEST
+        /// End of the SWITCH statement
         unreachable!();
     }
 }
 
+///* Issue the usage message when the "sqlite3" command arguments are
+///* incorrect.
 extern "C" fn sqlite_cmd_usage(interp: *mut TclInterp,
     objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -7080,6 +7903,9 @@ pub extern "C" fn tclsqlite3_unload(interp: *const TclInterp, flags: i32)
     return 0;
 }
 
+/// Because it accesses the file-system and uses persistent state, SQLite
+///* is not considered appropriate for safe interpreters.  Hence, we cause
+///* the _SafeInit() interfaces return TCL_ERROR.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_safe_init(interp: *const TclInterp) -> i32 {
     return 1;

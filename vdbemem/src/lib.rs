@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -481,7 +499,14 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* Memory cell pMem contains the context of an aggregate function.
+///* This routine calls the finalize method for that function.  The
+///* result of the aggregate is stored back into pMem.
+///*
+///* Return SQLITE_ERROR if the finalizer reports an error.  SQLITE_OK
+///* otherwise.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_finalize(p_mem_1: *mut Mem,
     p_func_1: *mut FuncDef) -> i32 {
     unsafe {
@@ -508,6 +533,8 @@ pub extern "C" fn sqlite3_vdbe_mem_finalize(p_mem_1: *mut Mem,
         ctx.p_func = p_func_1;
         ctx.enc = unsafe { (*t.db).enc };
         unsafe { (unsafe { (*p_func_1).x_finalize.unwrap() })(&mut ctx) };
+
+        /// IMP: R-24505-23230
         { let _ = 0; };
         if unsafe { (*p_mem_1).sz_malloc } > 0 {
             unsafe {
@@ -523,6 +550,13 @@ pub extern "C" fn sqlite3_vdbe_mem_finalize(p_mem_1: *mut Mem,
     }
 }
 
+///* If the memory cell contains a value that must be freed by
+///* invoking the external callback in Mem.xDel, then this routine
+///* will free that value.  It also sets Mem.flags to MEM_Null.
+///*
+///* This is a helper routine for sqlite3VdbeMemSetNull() and
+///* for sqlite3VdbeMemRelease().  Use those other routines as the
+///* entry point for releasing Mem resources.
 extern "C" fn vdbe_mem_clear_extern_and_set_null(p: *mut Mem) -> () {
     unsafe {
         { let _ = 0; };
@@ -541,6 +575,16 @@ extern "C" fn vdbe_mem_clear_extern_and_set_null(p: *mut Mem) -> () {
     }
 }
 
+///* Delete any previous value and set the value stored in *pMem to NULL.
+///*
+///* This routine calls the Mem.xDel destructor to dispose of values that
+///* require the destructor.  But it preserves the Mem.zMalloc memory allocation.
+///* To free all resources, use sqlite3VdbeMemRelease(), which both calls this
+///* routine to invoke the destructor and deallocates Mem.zMalloc.
+///*
+///* Use this routine to reset the Mem prior to insert a new value.
+///*
+///* Use sqlite3VdbeMemRelease() to complete erase the Mem prior to abandoning it.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_set_null(p_mem_1: *mut Mem) -> () {
     if unsafe { (*p_mem_1).flags } as i32 & (32768 | 4096) != 0 {
@@ -548,6 +592,9 @@ pub extern "C" fn sqlite3_vdbe_mem_set_null(p_mem_1: *mut Mem) -> () {
     } else { unsafe { (*p_mem_1).flags = 1 as u16 }; }
 }
 
+///* The pMem is known to contain content that needs to be destroyed prior
+///* to a value change.  So invoke the destructor, then set the value to
+///* a 64-bit integer.
 extern "C" fn vdbe_release_and_set_int64(p_mem_1: *mut Mem, val: i64) -> () {
     unsafe {
         sqlite3_vdbe_mem_set_null(p_mem_1);
@@ -556,6 +603,8 @@ extern "C" fn vdbe_release_and_set_int64(p_mem_1: *mut Mem, val: i64) -> () {
     }
 }
 
+///* Delete any previous value and set the value stored in *pMem to val,
+///* manifest type INTEGER.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_set_int64(p_mem_1: *mut Mem, val: i64)
     -> () {
@@ -569,6 +618,7 @@ pub extern "C" fn sqlite3_vdbe_mem_set_int64(p_mem_1: *mut Mem, val: i64)
     }
 }
 
+///* Set the iIdx'th entry of array aMem[] to contain integer value val.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_set_array_int64(a_mem_1: *mut Sqlite3Value,
     i_idx_1: i32, val: i64) -> () {
@@ -577,6 +627,14 @@ pub extern "C" fn sqlite3_mem_set_array_int64(a_mem_1: *mut Sqlite3Value,
             } as *mut Mem, val);
 }
 
+/// Compare a floating point value to an integer.  Return true if the two
+///* values are the same within the precision of the floating point value.
+///*
+///* This function assumes that i was obtained by assignment from r1.
+///*
+///* For some versions of GCC on 32-bit machines, if you do the more obvious
+///* comparison of "r1==(double)i" you sometimes get an answer of false even
+///* though the r1 and (double)i values are bit-for-bit the same.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_real_same_as_int(mut r1: f64, i: Sqlite3Int64)
     -> i32 {
@@ -589,6 +647,9 @@ pub extern "C" fn sqlite3_real_same_as_int(mut r1: f64, i: Sqlite3Int64)
                     i < 2251799813685248i64) as i32;
 }
 
+/// Convert a floating point value to its closest integer.  Do so in
+///* a way that avoids 'outside the range of representable values' warnings
+///* from UBSAN.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_real_to_i64(r: f64) -> i64 {
     if r < -9.223372036854775e18 {
@@ -600,12 +661,22 @@ pub extern "C" fn sqlite3_real_to_i64(r: f64) -> i64 {
     return r as i64;
 }
 
+///* Make sure pMem->z points to a writable allocation of at least n bytes.
+///*
+///* If the bPreserve argument is true, then copy of the content of
+///* pMem->z into the new allocation.  pMem must be either a string or
+///* blob if bPreserve is true.  If bPreserve is false, any prior content
+///* in pMem->z is discarded.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_grow(p_mem_1: *mut Mem, n: i32,
     mut b_preserve_1: i32) -> i32 {
     unsafe {
         { let _ = 0; };
         { let _ = 0; };
+
+        /// If the bPreserve flag is set to true, then the memory cell must already
+        ///* contain a valid string or blob value.
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*p_mem_1).sz_malloc } > 0 && b_preserve_1 != 0 &&
@@ -688,6 +759,7 @@ pub extern "C" fn sqlite3_vdbe_mem_grow(p_mem_1: *mut Mem, n: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_expand_blob(p_mem_1: *mut Mem) -> i32 {
     unsafe {
         let mut n_byte: i32 = 0;
@@ -696,7 +768,9 @@ pub extern "C" fn sqlite3_vdbe_mem_expand_blob(p_mem_1: *mut Mem) -> i32 {
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
-        n_byte = unsafe { (*p_mem_1).n } + unsafe { (*p_mem_1).u.n_zero };
+
+        /// Set nByte to the number of bytes required to store the expanded blob.
+        (n_byte = unsafe { (*p_mem_1).n } + unsafe { (*p_mem_1).u.n_zero });
         if n_byte <= 0 {
             if unsafe { (*p_mem_1).flags } as i32 & 16 == 0 { return 0; }
             n_byte = 1;
@@ -717,7 +791,19 @@ pub extern "C" fn sqlite3_vdbe_mem_expand_blob(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* If pMem is an object with a valid string representation, this routine
+///* ensures the internal encoding for the string representation is
+///* 'desiredEnc', one of SQLITE_UTF8, SQLITE_UTF16LE or SQLITE_UTF16BE.
+///*
+///* If pMem is not a string object, or the encoding of the string
+///* representation is already stored using the requested encoding, then this
+///* routine is a no-op.
+///*
+///* SQLITE_OK is returned if the conversion is successful (or not required).
+///* SQLITE_NOMEM may be returned if a malloc() fails during conversion
+///* between formats.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_change_encoding(p_mem_1: *mut Mem,
     desired_enc_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -730,13 +816,24 @@ pub extern "C" fn sqlite3_vdbe_change_encoding(p_mem_1: *mut Mem,
     }
     if unsafe { (*p_mem_1).enc } as i32 == desired_enc_1 { return 0; }
     { let _ = 0; };
-    rc = unsafe { sqlite3_vdbe_mem_translate(p_mem_1, desired_enc_1 as u8) };
+
+    /// MemTranslate() may return SQLITE_OK or SQLITE_NOMEM. If NOMEM is returned,
+    ///* then the encoding of the value may not have changed.
+    (rc =
+        unsafe { sqlite3_vdbe_mem_translate(p_mem_1, desired_enc_1 as u8) });
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     return rc;
 }
 
+///* It is already known that pMem contains an unterminated string.
+///* Add the zero terminator.
+///*
+///* Three bytes of zero are added.  In this way, there is guaranteed
+///* to be a double-zero byte at an even byte boundary in order to
+///* terminate a UTF16 string, even if the initial size of the buffer
+///* is an odd number of bytes.
 extern "C" fn vdbe_mem_add_terminator(p_mem_1: *mut Mem) -> i32 {
     unsafe {
         if sqlite3_vdbe_mem_grow(p_mem_1, unsafe { (*p_mem_1).n } + 3, 1) != 0
@@ -762,6 +859,10 @@ extern "C" fn vdbe_mem_add_terminator(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* Change pMem so that its MEM_Str or MEM_Blob value is stored in
+///* MEM.zMalloc, where it can be safely written.
+///*
+///* Return SQLITE_OK on success or SQLITE_NOMEM if malloc fails.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_make_writeable(p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -785,6 +886,7 @@ pub extern "C" fn sqlite3_vdbe_mem_make_writeable(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* Make sure the given Mem is \u0000 terminated.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_nul_terminate(p_mem_1: *mut Mem) -> i32 {
     { let _ = 0; };
@@ -794,6 +896,17 @@ pub extern "C" fn sqlite3_vdbe_mem_nul_terminate(p_mem_1: *mut Mem) -> i32 {
     } else { return vdbe_mem_add_terminator(p_mem_1); }
 }
 
+///* Change the pMem->zMalloc allocation to be at least szNew bytes.
+///* If pMem->zMalloc already meets or exceeds the requested size, this
+///* routine is a no-op.
+///*
+///* Any prior string or blob content in the pMem object may be discarded.
+///* The pMem->xDel destructor is called, if it exists.  Though MEM_Str
+///* and MEM_Blob values may be discarded, MEM_Int, MEM_Real, MEM_IntReal,
+///* and MEM_Null values are preserved.
+///*
+///* Return SQLITE_OK on success or an error code (probably SQLITE_NOMEM)
+///* if unable to complete the resizing.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_clear_and_resize(p_mem_1: *mut Mem,
     sz_new_1: i32) -> i32 {
@@ -810,6 +923,9 @@ pub extern "C" fn sqlite3_vdbe_mem_clear_and_resize(p_mem_1: *mut Mem,
     }
 }
 
+///* Render a Mem object which is one of MEM_Int, MEM_Real, or MEM_IntReal
+///* into a buffer.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_mem_render_num(sz: i32, z_buf_1: *mut i8, p: &mut Mem)
     -> () {
     unsafe {
@@ -839,11 +955,25 @@ extern "C" fn vdbe_mem_render_num(sz: i32, z_buf_1: *mut i8, p: &mut Mem)
             };
             { let _ = 0; };
             unsafe { *z_buf_1.add(acc.n_char as usize) = 0 as i8 };
-            (*p).n = acc.n_char as i32;
+
+            /// Fast version of sqlite3StrAccumFinish(&acc)
+            ((*p).n = acc.n_char as i32);
         }
     }
 }
 
+///* Add MEM_Str to the set of representations for the given Mem.  This
+///* routine is only called if pMem is a number of some kind, not a NULL
+///* or a BLOB.
+///*
+///* Existing representations MEM_Int, MEM_Real, or MEM_IntReal are invalidated
+///* if bForce is true but are retained if bForce is false.
+///*
+///* A MEM_Null value will never be passed to this function. This function is
+///* used for converting values to text for returning to the user (i.e. via
+///* sqlite3_value_text()), or for ensuring that values to be used as btree
+///* keys are strings. In the former case a NULL pointer is returned the
+///* user and the latter is an internal programming error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_stringify(p_mem_1: *mut Mem, enc: u8,
     b_force_1: u8) -> i32 {
@@ -874,6 +1004,9 @@ pub extern "C" fn sqlite3_vdbe_mem_stringify(p_mem_1: *mut Mem, enc: u8,
     }
 }
 
+///* The pVal argument is known to be a value other than NULL.
+///* Convert it into a string with encoding enc and return a pointer
+///* to a zero-terminated version of that string.
 extern "C" fn value_to_text(p_val_1: *mut Sqlite3Value, enc: u8)
     -> *const () {
     unsafe {
@@ -913,6 +1046,15 @@ extern "C" fn value_to_text(p_val_1: *mut Sqlite3Value, enc: u8)
     }
 }
 
+/// This function is only available internally, it is not part of the
+///* external API. It works in a similar way to sqlite3_value_text(),
+///* except the data returned is in the encoding specified by the second
+///* parameter, which must be one of SQLITE_UTF16BE, SQLITE_UTF16LE or
+///* SQLITE_UTF8.
+///*
+///* (2006-02-16:)  The enc value can be or-ed with SQLITE_UTF16_ALIGNED.
+///* If that is the case, then the result must be aligned on an even byte
+///* boundary.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3ValueText(p_val_1: *mut Sqlite3Value, enc: u8)
     -> *const () {
@@ -933,6 +1075,11 @@ pub extern "C" fn sqlite3ValueText(p_val_1: *mut Sqlite3Value, enc: u8)
     }
 }
 
+/// Return true if sqlit3_value object pVal is a string or blob value
+///* that uses the destructor specified in the second argument.
+///*
+///* TODO:  Maybe someday promote this interface into a published API so
+///* that third-party extensions can get access to it?
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_is_of_class(p_val_1: *const Sqlite3Value,
     x_free_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
@@ -944,6 +1091,9 @@ pub extern "C" fn sqlite3_value_is_of_class(p_val_1: *const Sqlite3Value,
     } else { return 0; }
 }
 
+///* The sqlite3ValueBytes() routine returns the number of bytes in the
+///* sqlite3_value object assuming that it uses the encoding "enc".
+///* The valueBytes() routine is a helper function.
 extern "C" fn value_bytes(p_val_1: *mut Sqlite3Value, enc: u8) -> i32 {
     unsafe {
         return if value_to_text(p_val_1, enc) != core::ptr::null() {
@@ -976,6 +1126,12 @@ pub extern "C" fn sqlite3ValueBytes(p_val_1: *mut Sqlite3Value, enc: u8)
     }
 }
 
+///* Release memory held by the Mem p, both external memory cleared
+///* by p->xDel and memory in p->zMalloc.
+///*
+///* This is a helper routine invoked by sqlite3VdbeMemRelease() in
+///* the unusual case where there really is memory in p that needs
+///* to be freed.
 extern "C" fn vdbe_mem_clear(p: *mut Mem) -> () {
     unsafe {
         if unsafe { (*p).flags } as i32 & (32768 | 4096) != 0 {
@@ -992,6 +1148,14 @@ extern "C" fn vdbe_mem_clear(p: *mut Mem) -> () {
     }
 }
 
+///* Release any memory resources held by the Mem.  Both the memory that is
+///* free by Mem.xDel and the Mem.zMalloc allocation are freed.
+///*
+///* Use this routine prior to clean up prior to abandoning a Mem, or to
+///* reset a Mem back to its minimum memory utilization.
+///*
+///* Use sqlite3VdbeMemSetNull() to release just the Mem.xDel space
+///* prior to inserting new content into the Mem.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_release(p: *mut Mem) -> () {
     { let _ = 0; };
@@ -1001,14 +1165,39 @@ pub extern "C" fn sqlite3_vdbe_mem_release(p: *mut Mem) -> () {
     }
 }
 
+///* Change the value of a Mem to be a string or a BLOB.
+///*
+///* The memory management strategy depends on the value of the xDel
+///* parameter. If the value passed is SQLITE_TRANSIENT, then the 
+///* string is copied into a (possibly existing) buffer managed by the 
+///* Mem structure. Otherwise, any existing buffer is freed and the
+///* pointer copied.
+///*
+///* If the string is too large (if it exceeds the SQLITE_LIMIT_LENGTH
+///* size limit) then no memory allocation occurs.  If the string can be
+///* stored without allocating memory, then it is.  If a memory allocation
+///* is required to store the string, then value of pMem is unchanged.  In
+///* either case, SQLITE_TOOBIG is returned.
+///*
+///* The "enc" parameter is the text encoding for the string, or zero
+///* to store a blob.
+///*
+///* If n is negative, then the string consists of all bytes up to but
+///* excluding the first zero character.  The n parameter must be
+///* non-negative for blobs.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_set_str(p_mem_1: *mut Mem, z: *const i8,
     n: i64, mut enc: u8, x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
     -> i32 {
     unsafe {
         let mut n_byte: i64 = n;
+        /// New value for pMem->n
         let mut i_limit: i32 = 0;
+        /// Maximum allowed string or blob size
         let mut flags: u16 = 0 as u16;
+
+        /// New value for pMem->flags
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -1124,6 +1313,7 @@ pub extern "C" fn sqlite3_vdbe_mem_set_str(p_mem_1: *mut Mem, z: *const i8,
     }
 }
 
+///* Change the string value of an sqlite3_value object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_set_str(v: *mut Sqlite3Value, n: i32,
     z: *const (), enc: u8,
@@ -1139,6 +1329,7 @@ pub extern "C" fn sqlite3_value_set_null(p: *mut Sqlite3Value) -> () {
     sqlite3_vdbe_mem_set_null(p as *mut Mem);
 }
 
+///* Free an sqlite3_value object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3ValueFree(v: *mut Sqlite3Value) -> () {
     if (v).is_null() as i32 != 0 { return; }
@@ -1148,6 +1339,7 @@ pub extern "C" fn sqlite3ValueFree(v: *mut Sqlite3Value) -> () {
     };
 }
 
+///* Create a new sqlite3_value object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_new(db: *mut Sqlite3) -> *mut Sqlite3Value {
     let p: *mut Mem =
@@ -1161,6 +1353,8 @@ pub extern "C" fn sqlite3_value_new(db: *mut Sqlite3) -> *mut Sqlite3Value {
     return p as *mut Sqlite3Value;
 }
 
+///* Context object passed by sqlite3Stat4ProbeSetValue() through to 
+///* valueNew(). See comments above valueNew() for details.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ValueNewStat4Ctx {
@@ -1170,11 +1364,22 @@ struct ValueNewStat4Ctx {
     i_val: i32,
 }
 
+///* If pMem is already a string, detect if it is a zero-terminated
+///* string, or make it into one if possible, and mark it as such.
+///*
+///* This is an optimization.  Correct operation continues even if
+///* this routine is a no-op.
+///*
+///* Return true if the strig is zero-terminated after this routine is
+///* called and false if it is not.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_zero_terminate_if_able(p_mem_1: &mut Mem)
     -> i32 {
     unsafe {
         if (*p_mem_1).flags as i32 & (2 | 512 | 16384 | 8192) != 2 {
+
+            /// pMem must be a string, and it cannot be an ephemeral or static string
             return 0;
         }
         if (*p_mem_1).enc as i32 != 1 { return 0; }
@@ -1190,7 +1395,9 @@ pub extern "C" fn sqlite3_vdbe_mem_zero_terminate_if_able(p_mem_1: &mut Mem)
                 return 1;
             }
             if (*p_mem_1).x_del == Some(sqlite3_rc_str_unref) {
-                (*p_mem_1).flags |= 512 as u16;
+
+                /// Blindly assume that all RCStr objects are zero-terminated
+                ((*p_mem_1).flags |= 512 as u16);
                 return 1;
             }
         } else if (*p_mem_1).sz_malloc >= (*p_mem_1).n + 1 {
@@ -1202,6 +1409,22 @@ pub extern "C" fn sqlite3_vdbe_mem_zero_terminate_if_able(p_mem_1: &mut Mem)
     }
 }
 
+///* This routine implements the uncommon and slower path for
+///* sqlite3MemRealValueRC() that has to deal with input strings
+///* that are not UTF8 or that are not zero-terminated.  It is
+///* broken out into a separate no-inline routine so that the
+///* main sqlite3MemRealValueRC() routine can avoid unnecessary
+///* stack pushes.
+///*
+///* A text->float translation of pMem->z is written into *pValue.
+///*
+///* Result code invariants:
+///*
+///*    rc==0         =>   ERROR: Input string not well-formed, or OOM
+///*    rc<0          =>   Some prefix of the input is well-formed
+///*    rc>0          =>   All of the input is well-formed
+///*    (rc&2)==0     =>   The number is expressed as an integer, with no
+///*                       decimal point or eNNN suffix.
 extern "C" fn sqlite3_mem_real_value_rc_slow_path(p_mem_1: &Mem,
     p_value_1: *mut f64) -> i32 {
     unsafe {
@@ -1288,6 +1511,19 @@ extern "C" fn sqlite3_mem_real_value_rc_slow_path(p_mem_1: &Mem,
     }
 }
 
+///* Invoke sqlite3AtoF() on the text value of pMem.  Write the
+///* translation of the text input into *pValue.
+///*
+///* The caller must ensure that pMem->db!=0 and that pMem is in
+///* mode MEM_Str or MEM_Blob.
+///*
+///* Result code invariants:
+///*
+///*    rc==0         =>   ERROR: Input string not well-formed, or OOM
+///*    rc<0          =>   Some prefix of the input is well-formed
+///*    rc>0          =>   All of the input is well-formed
+///*    (rc&2)==0     =>   The number is expressed as an integer, with no
+///*                       decimal point or eNNN suffix.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_real_value_rc(p_mem_1: *mut Mem,
     p_value_1: *mut f64) -> i32 {
@@ -1315,6 +1551,12 @@ pub extern "C" fn sqlite3_mem_real_value_rc(p_mem_1: *mut Mem,
     }
 }
 
+///* Convert pMem so that it has type MEM_Real or MEM_Int.
+///* Invalidate any prior representations.
+///*
+///* Every effort is made to force the conversion, even if the input
+///* is a string that does not look completely like a number.  Convert
+///* as much of the string as we can and ignore the rest.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_numerify(p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -1355,6 +1597,15 @@ pub extern "C" fn sqlite3_vdbe_mem_numerify(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* Return some kind of integer value which is the best we can do
+///* at representing the value that *pMem describes as an integer.
+///* If pMem is an integer, then the value is exact.  If pMem is
+///* a floating-point then the value returned is the integer part.
+///* If pMem is a string or blob, then we make an attempt to convert
+///* it into an integer and return that.  If pMem represents an
+///* an SQL-NULL value, return 0.
+///*
+///* If pMem represents a string value, its encoding might be changed.
 extern "C" fn mem_int_value(p_mem_1: &Mem) -> i64 {
     unsafe {
         let mut value: i64 = 0 as i64;
@@ -1385,6 +1636,7 @@ pub extern "C" fn sqlite3_vdbe_int_value(p_mem_1: *const Mem) -> i64 {
     }
 }
 
+///* Convert pMem to type integer.  Invalidate any prior representations.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_integerify(p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -1404,13 +1656,21 @@ pub extern "C" fn sqlite3_vdbe_mem_integerify(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* This routine acts as a bridge from sqlite3VdbeRealValue() to
+///* sqlite3VdbeRealValueRC, allowing sqlite3VdbeRealValue() to avoid
+///* stuffing values onto the stack.
 extern "C" fn sqlite3_mem_real_value_no_rc(p_mem_1: *mut Mem) -> f64 {
     let mut r: f64 = 0.0;
     { let _ = sqlite3_mem_real_value_rc(p_mem_1, &mut r); };
     return r;
 }
 
+///* Return the best representation of pMem that we can get into a
+///* double.  If pMem is already a double or an integer, return its
+///* value.  If it is a string or blob, try to convert it to a double.
+///* If it is a NULL, return 0.0.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_real_value(p_mem_1: *mut Mem) -> f64 {
     unsafe {
         { let _ = 0; };
@@ -1422,10 +1682,16 @@ pub extern "C" fn sqlite3_vdbe_real_value(p_mem_1: *mut Mem) -> f64 {
             return unsafe { (*p_mem_1).u.i } as f64;
         } else if unsafe { (*p_mem_1).flags } as i32 & (2 | 16) != 0 {
             return sqlite3_mem_real_value_no_rc(p_mem_1);
-        } else { return 0 as f64; }
+        } else {
+
+            /// (double)0 In case of SQLITE_OMIT_FLOATING_POINT...
+            return 0 as f64;
+        }
     }
 }
 
+///* Convert pMem so that it is of type MEM_Real.
+///* Invalidate any prior representations.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_realify(p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -1442,6 +1708,11 @@ pub extern "C" fn sqlite3_vdbe_mem_realify(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* Cast the datatype of the value in pMem according to the affinity
+///* "aff".  Casting is different from applying affinity in that a cast
+///* is forced.  In other words, the value is converted into the desired
+///* affinity even if that results in loss of data.  This routine is
+///* used (for example) to implement the SQL "cast()" operator.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_cast(p_mem_1: *mut Mem, aff: u8,
     encoding: u8) -> i32 {
@@ -1609,12 +1880,33 @@ pub extern "C" fn sqlite3_vdbe_mem_cast(p_mem_1: *mut Mem, aff: u8,
     }
 }
 
+///* Allocate and return a pointer to a new sqlite3_value object. If
+///* the second argument to this function is NULL, the object is allocated
+///* by calling sqlite3ValueNew().
+///*
+///* Otherwise, if the second argument is non-zero, then this function is 
+///* being called indirectly by sqlite3Stat4ProbeSetValue(). If it has not
+///* already been allocated, allocate the UnpackedRecord structure that 
+///* that function will return to its caller here. Then return a pointer to
+///* an sqlite3_value within the UnpackedRecord.a[] array.
+#[allow(unused_doc_comments)]
 extern "C" fn value_new(db: *mut Sqlite3, p: *const ValueNewStat4Ctx)
     -> *mut Sqlite3Value {
     { let _ = p; };
+
+    /// defined(SQLITE_ENABLE_STAT4)
     return sqlite3_value_new(db);
 }
 
+///* Extract a value from the supplied expression in the manner described
+///* above sqlite3ValueFromExpr(). Allocate the sqlite3_value object
+///* using valueNew().
+///*
+///* If pCtx is NULL and an error occurs after the sqlite3_value object
+///* has been allocated, it is freed before returning. Or, if pCtx is not
+///* NULL, it is assumed that the caller will free any allocated object
+///* in all cases.
+#[allow(unused_doc_comments)]
 extern "C" fn value_from_expr(db: *mut Sqlite3, mut p_expr_1: *const Expr,
     enc: u8, affinity: u8, pp_val_1: *mut *mut Sqlite3Value,
     p_ctx_1: *mut ValueNewStat4Ctx) -> i32 {
@@ -1625,9 +1917,22 @@ extern "C" fn value_from_expr(db: *mut Sqlite3, mut p_expr_1: *const Expr,
         let mut neg_int: i32 = 0;
         let mut z_neg: *const i8 = core::ptr::null();
         let mut rc: i32 = 0;
+        /// Compressed expressions only appear when parsing the DEFAULT clause
+        ///* on a table column definition, and hence only when pCtx==0.  This
+        ///* check ensures that an EP_TokenOnly expression is never passed down
+        ///* into valueFromFunction().
         let mut aff: u8 = 0 as u8;
+        /// zero-blobs only come from functions, not literal values.  And
+        ///* functions are only processed under STAT4
+        /// Handle negative integers in a single step.  This is needed in the
+        ///* case when the value is -9223372036854775808. Except - do not do this
+        ///* for hexadecimal literals.
         let mut p_left: *const Expr = core::ptr::null();
         let mut i_val: i64 = 0 as i64;
+        /// This case is required by -9223372036854775808 and other strings
+        ///* that look like integers but cannot be handled by the
+        ///* sqlite3DecOrHexToI64() call above.
+        /// This branch happens for multiple negative signs.  Ex: -(-5)
         let mut n_val: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -2026,10 +2331,32 @@ extern "C" fn value_from_expr(db: *mut Sqlite3, mut p_expr_1: *const Expr,
                 }
             }
         }
+
+        /// Compressed expressions only appear when parsing the DEFAULT clause
+        ///* on a table column definition, and hence only when pCtx==0.  This
+        ///* check ensures that an EP_TokenOnly expression is never passed down
+        ///* into valueFromFunction().
+        /// zero-blobs only come from functions, not literal values.  And
+        ///* functions are only processed under STAT4
+        /// Handle negative integers in a single step.  This is needed in the
+        ///* case when the value is -9223372036854775808. Except - do not do this
+        ///* for hexadecimal literals.
+        /// This case is required by -9223372036854775808 and other strings
+        ///* that look like integers but cannot be handled by the
+        ///* sqlite3DecOrHexToI64() call above.
+        /// This branch happens for multiple negative signs.  Ex: -(-5)
         unreachable!();
     }
 }
 
+///* Create a new sqlite3_value object, containing the value of pExpr.
+///*
+///* This only works for very simple expressions that consist of one constant
+///* token (i.e. "5", "5.1", "'a string'"). If the expression can
+///* be converted directly into a value, then the value is allocated and
+///* a pointer written to *ppVal. The caller is responsible for deallocating
+///* the value by passing it to sqlite3ValueFree() later on. If the expression
+///* cannot be converted to a value, then *ppVal is set to NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_from_expr(db: *mut Sqlite3,
     p_expr_1: *const Expr, enc: u8, affinity: u8,
@@ -2040,11 +2367,14 @@ pub extern "C" fn sqlite3_value_from_expr(db: *mut Sqlite3,
         } else { 0 };
 }
 
+/// A no-op destructor
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_noop_destructor(p: *mut ()) -> () {
     { let _ = p; };
 }
 
+///* Return true if the Mem object contains a TEXT or BLOB that is
+///* too large - whose size exceeds SQLITE_MAX_LENGTH.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_too_big(p: &Mem) -> i32 {
     unsafe {
@@ -2058,6 +2388,8 @@ pub extern "C" fn sqlite3_vdbe_mem_too_big(p: &Mem) -> i32 {
     }
 }
 
+///* Make a full copy of pFrom into pTo.  Prior contents of pTo are
+///* freed before the copy is made.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_copy(p_to_1: *mut Mem,
     p_from_1: *const Mem) -> i32 {
@@ -2080,6 +2412,10 @@ pub extern "C" fn sqlite3_vdbe_mem_copy(p_to_1: *mut Mem,
     return rc;
 }
 
+///* Make an shallow copy of pFrom into pTo.  Prior contents of
+///* pTo are freed.  The pFrom->z field is not duplicated.  If
+///* pFrom->z is used, then pTo->z points to the same thing as pFrom->z
+///* and flags gets srcType (either MEM_Ephem or MEM_Static).
 extern "C" fn vdbe_clr_copy(p_to_1: *mut Mem, p_from_1: *const Mem,
     e_type_1: i32) -> () {
     vdbe_mem_clear_extern_and_set_null(p_to_1);
@@ -2107,6 +2443,10 @@ pub extern "C" fn sqlite3_vdbe_mem_shallow_copy(p_to_1: *mut Mem,
     }
 }
 
+///* Transfer the contents of pFrom to pTo. Any existing value in pTo is
+///* freed. If pFrom contains ephemeral data, a copy is made.
+///*
+///* pFrom contains an SQL NULL when this routine returns.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_move(p_to_1: *mut Mem, p_from_1: *mut Mem)
     -> () {
@@ -2122,11 +2462,17 @@ pub extern "C" fn sqlite3_vdbe_mem_move(p_to_1: *mut Mem, p_from_1: *mut Mem)
     unsafe { (*p_from_1).sz_malloc = 0 };
 }
 
+/// Like sqlite3VdbeMemSetStr() except:
+///*
+///*   enc is always SQLITE_UTF8
+///*   pMem->db is always non-NULL
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_set_text(p_mem_1: *mut Mem, z: *const i8,
     n: i64, x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
     unsafe {
         let mut n_byte: i64 = n;
+        /// New value for pMem->n
         let mut flags: u16 = 0 as u16;
         { let _ = 0; };
         { let _ = 0; };
@@ -2219,6 +2565,8 @@ pub extern "C" fn sqlite3_vdbe_mem_set_text(p_mem_1: *mut Mem, z: *const i8,
     }
 }
 
+///* Delete any previous value and set the value stored in *pMem to val,
+///* manifest type REAL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_set_double(p_mem_1: *mut Mem, val: f64)
     -> () {
@@ -2231,6 +2579,8 @@ pub extern "C" fn sqlite3_vdbe_mem_set_double(p_mem_1: *mut Mem, val: f64)
     }
 }
 
+///* Set the value stored in *pMem should already be a NULL.
+///* Also store a pointer to go with it.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_set_pointer(p_mem_1: *mut Mem,
     p_ptr_1: *mut (), z_p_type_1: *const i8,
@@ -2256,6 +2606,9 @@ pub extern "C" fn sqlite3_vdbe_mem_set_pointer(p_mem_1: *mut Mem,
     }
 }
 
+///* Initialize bulk memory to be a consistent Mem object.
+///*
+///* The minimum amount of initialization feasible is performed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_init(p_mem_1: &mut Mem, db: *mut Sqlite3,
     flags: u16) -> () {
@@ -2279,6 +2632,11 @@ pub extern "C" fn sqlite3_vdbe_mem_set_zero_blob(p_mem_1: *mut Mem,
     }
 }
 
+///* Delete any previous value and set the value of pMem to be an
+///* empty boolean index.
+///*
+///* Return SQLITE_OK on success and SQLITE_NOMEM if a memory allocation
+///* error occurs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_set_row_set(p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -2296,6 +2654,8 @@ pub extern "C" fn sqlite3_vdbe_mem_set_row_set(p_mem_1: *mut Mem) -> i32 {
     }
 }
 
+///* Return 1 if pMem represents true, and return 0 if pMem represents false.
+///* Return the value ifNull if pMem is NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_boolean_value(p_mem_1: *mut Mem,
     if_null_1: i32) -> i32 {
@@ -2308,6 +2668,8 @@ pub extern "C" fn sqlite3_vdbe_boolean_value(p_mem_1: *mut Mem,
     }
 }
 
+///* The MEM structure is already a MEM_Real or MEM_IntReal. Try to 
+///* make it a MEM_Int if we can.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_integer_affinity(p_mem_1: &mut Mem) -> () {
     unsafe {
@@ -2334,7 +2696,21 @@ pub extern "C" fn sqlite3_vdbe_integer_affinity(p_mem_1: &mut Mem) -> () {
     }
 }
 
+///* Move data out of a btree key or data field and into a Mem structure.
+///* The data is payload from the entry that pCur is currently pointing
+///* to.  offset and amt determine what portion of the data or key to retrieve.
+///* The result is written into the pMem element.
+///*
+///* The pMem object must have been initialized.  This routine will use
+///* pMem->zMalloc to hold the content from the btree, if possible.  New
+///* pMem->zMalloc space will be allocated if necessary.  The calling routine
+///* is responsible for making sure that the pMem object is eventually
+///* destroyed.
+///*
+///* If this routine fails for any reason (malloc returns NULL or unable
+///* to read from the disk) then the pMem is left in an inconsistent state.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_from_btree(p_cur_1: *mut BtCursor,
     offset: u32, amt: u32, p_mem_1: *mut Mem) -> i32 {
     unsafe {
@@ -2361,6 +2737,8 @@ pub extern "C" fn sqlite3_vdbe_mem_from_btree(p_cur_1: *mut BtCursor,
                 unsafe {
                     *unsafe { (*p_mem_1).z.add(amt as usize) } = 0 as i8
                 };
+
+                /// Overrun area used when reading malformed records
                 unsafe { (*p_mem_1).flags = 16 as u16 };
                 unsafe { (*p_mem_1).n = amt as i32 };
             } else { sqlite3_vdbe_mem_release(p_mem_1); }
@@ -2370,13 +2748,20 @@ pub extern "C" fn sqlite3_vdbe_mem_from_btree(p_cur_1: *mut BtCursor,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_from_btree_zero_offset(p_cur_1:
         *mut BtCursor, amt: u32, p_mem_1: *mut Mem) -> i32 {
     unsafe {
         let mut available: u32 = 0 as u32;
+        /// Number of bytes available on the local btree page
         let mut rc: i32 = 0;
+
+        /// Return code
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Note: the calls to BtreeKeyFetch() and DataFetch() below assert() 
+        ///* that both the BtShared and database handle mutexes are held.
         { let _ = 0; };
         unsafe {
             (*p_mem_1).z =
@@ -2395,6 +2780,8 @@ pub extern "C" fn sqlite3_vdbe_mem_from_btree_zero_offset(p_cur_1:
     }
 }
 
+/// Like sqlite3VdbeMemRelease() but faster for cases where we
+///* know in advance that the Mem is not MEM_Dyn or MEM_Agg.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_release_malloc(p: *mut Mem) -> () {
     { let _ = 0; };

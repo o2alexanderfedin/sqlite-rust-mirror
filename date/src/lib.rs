@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -461,12 +476,16 @@ impl DateTime {
     }
 }
 
+///* Clear the YMD and HMS and the TZ
 extern "C" fn clear_ymd_hms_tz(p: &mut DateTime) -> () {
     (*p).valid_ymd = 0 as i8;
     (*p).valid_hms = 0 as i8;
     (*p).tz = 0;
 }
 
+///* Set the time to the current time reported by the VFS.
+///*
+///* Return the number of errors.
 extern "C" fn set_date_time_to_current(context: *mut Sqlite3Context,
     p: *mut DateTime) -> i32 {
     unsafe { (*p).i_jd = unsafe { sqlite3_stmt_current_time(context) } };
@@ -479,6 +498,10 @@ extern "C" fn set_date_time_to_current(context: *mut Sqlite3Context,
     } else { return 1; }
 }
 
+///* Input "r" is a numeric quantity which might be a julian day number,
+///* or the number of seconds since 1970.  If the value if r is within
+///* range of a julian day number, install it as such and set validJD.
+///* If the value is a valid unix timestamp, put it in p->s and set p->rawS.
 extern "C" fn set_raw_date_number(p: &mut DateTime, r: f64) -> () {
     (*p).s = r;
     (*p).set_raw_s(1 as u32 as u32);
@@ -488,6 +511,32 @@ extern "C" fn set_raw_date_number(p: &mut DateTime, r: f64) -> () {
     }
 }
 
+///* Convert zDate into one or more integers according to the conversion
+///* specifier zFormat.
+///*
+///* zFormat[] contains 4 characters for each integer converted, except for
+///* the last integer which is specified by three characters.  The meaning
+///* of a four-character format specifiers ABCD is:
+///*
+///*    A:   number of digits to convert.  Always "2" or "4".
+///*    B:   minimum value.  Always "0" or "1".
+///*    C:   maximum value, decoded as:
+///*           a:  12
+///*           b:  14
+///*           c:  24
+///*           d:  31
+///*           e:  59
+///*           f:  9999
+///*    D:   the separator character, or \000 to indicate this is the
+///*         last number to convert.
+///*
+///* Example:  To translate an ISO-8601 date YYYY-MM-DD, the format would
+///* be "40f-21a-20c".  The "40f-" indicates the 4-digit year followed by "-".
+///* The "21a-" indicates the 2-digit month followed by "-".  The "20c" indicates
+///* the 2-digit day which is the last integer in the set.
+///*
+///* The function returns the number of successful conversions.
+#[allow(unused_doc_comments)]
 extern "C" fn get_digits(mut z_date_1: *const i8, mut z_format_1: *const i8,
     __va: &[*mut i32]) -> i32 {
     unsafe {
@@ -612,10 +661,28 @@ extern "C" fn get_digits(mut z_date_1: *const i8, mut z_format_1: *const i8,
                 }
             }
         }
+
+        /// The aMx[] array translates the 3rd character of each format
+        ///* spec into a max size:    a   b   c   d   e      f
         unreachable!();
     }
 }
 
+///* Parse a timezone extension on the end of a date-time.
+///* The extension is of the form:
+///*
+///*        (+/-)HH:MM
+///*
+///* Or the "zulu" notation:
+///*
+///*        Z
+///*
+///* If the parse is successful, write the number of minutes
+///* of change in p->tz and return 0.  If a parser error occurs,
+///* return non-zero.
+///*
+///* A missing specifier is not considered an error.
+#[allow(unused_doc_comments)]
 extern "C" fn parse_timezone(mut z_date_1: *const i8, p: &mut DateTime)
     -> i32 {
     unsafe {
@@ -731,10 +798,17 @@ extern "C" fn parse_timezone(mut z_date_1: *const i8, p: &mut DateTime)
                 }
             }
         }
+
+        /// Forum post 2025-09-17T10:12:14z
         unreachable!();
     }
 }
 
+///* Parse times of the form HH:MM or HH:MM:SS or HH:MM:SS.FFFF.
+///* The HH, MM, and SS must each be exactly 2 digits.  The
+///* fractional seconds FFFF can be one or more digits.
+///*
+///* Return 1 if there is a parsing error and 0 on success.
 extern "C" fn parse_hh_mm_ss(mut z_date_1: *const i8, p: *mut DateTime)
     -> i32 {
     unsafe {
@@ -809,6 +883,10 @@ extern "C" fn parse_hh_mm_ss(mut z_date_1: *const i8, p: *mut DateTime)
     }
 }
 
+///* Given the YYYY-MM-DD information current in p, determine if there
+///* is day-of-month overflow and set nFloor to the number of days that
+///* would need to be subtracted from the date in order to bring the
+///* date back to the end of the month.
 extern "C" fn compute_floor(p: &mut DateTime) -> () {
     unsafe {
         { let _ = 0; };
@@ -826,6 +904,7 @@ extern "C" fn compute_floor(p: &mut DateTime) -> () {
     }
 }
 
+///* Put the DateTime object into its error state.
 extern "C" fn datetime_error(p: *mut DateTime) -> () {
     unsafe {
         memset(p as *mut (), 0, core::mem::size_of::<DateTime>() as u64)
@@ -833,6 +912,11 @@ extern "C" fn datetime_error(p: *mut DateTime) -> () {
     unsafe { (*p).set_is_error(1 as u32 as u32) };
 }
 
+///* Convert from YYYY-MM-DD HH:MM:SS to julian day.  We always assume
+///* that the YYYY-MM-DD is according to the Gregorian calendar.
+///*
+///* Reference:  Meeus page 61
+#[allow(unused_doc_comments)]
 extern "C" fn compute_jd(p: *mut DateTime) -> () {
     unsafe {
         let mut y: i32 = 0;
@@ -847,7 +931,13 @@ extern "C" fn compute_jd(p: *mut DateTime) -> () {
             y = unsafe { (*p).y };
             m = unsafe { (*p).m_1 };
             d = unsafe { (*p).d };
-        } else { y = 2000; m = 1; d = 1; }
+        } else {
+            y = 2000;
+
+            /// If no YMD specified, assume 2000-Jan-01
+            (m = 1);
+            d = 1;
+        }
         if y < -4713 || y > 9999 || unsafe { (*p).raw_s() } != 0 {
             datetime_error(p);
             return;
@@ -887,6 +977,16 @@ extern "C" fn compute_jd(p: *mut DateTime) -> () {
     }
 }
 
+///* Parse dates of the form
+///*
+///*     YYYY-MM-DD HH:MM:SS.FFF
+///*     YYYY-MM-DD HH:MM:SS
+///*     YYYY-MM-DD HH:MM
+///*     YYYY-MM-DD
+///*
+///* Write the result into the DateTime structure and return 0
+///* on success and 1 if the input string is not a well-formed
+///* date.
 extern "C" fn parse_yyyy_mm_dd(mut z_date_1: *const i8, p: *mut DateTime)
     -> i32 {
     unsafe {
@@ -942,6 +1042,20 @@ extern "C" fn parse_yyyy_mm_dd(mut z_date_1: *const i8, p: *mut DateTime)
     }
 }
 
+///* Attempt to parse the given string into a julian day number.  Return
+///* the number of errors.
+///*
+///* The following are acceptable forms for the input string:
+///*
+///*      YYYY-MM-DD HH:MM:SS.FFF  +/-HH:MM
+///*      DDDD.DD 
+///*      now
+///*
+///* In the first form, the +/-HH:MM is always optional.  The fractional
+///* seconds extension (the ".FFF") is optional.  The seconds portion
+///* (":SS.FFF") is option.  The year and date can be omitted as long
+///* as there is a time string.  The time string can be omitted as long
+///* as there is a year and date.
 extern "C" fn parse_date_or_time(context: *mut Sqlite3Context,
     z_date_1: *const i8, p: *mut DateTime) -> i32 {
     let mut r: f64 = 0.0;
@@ -971,6 +1085,9 @@ extern "C" fn parse_date_or_time(context: *mut Sqlite3Context,
     return 1;
 }
 
+///* If the DateTime p is raw number, try to figure out if it is
+///* a julian day number of a unix timestamp.  Set the p value
+///* appropriately.
 extern "C" fn auto_adjust_date(p: *mut DateTime) -> () {
     if (unsafe { (*p).raw_s() } == 0) as i32 != 0 ||
             unsafe { (*p).valid_jd } != 0 {
@@ -986,11 +1103,15 @@ extern "C" fn auto_adjust_date(p: *mut DateTime) -> () {
     }
 }
 
+///* Return TRUE if the given julian day number is within range.
+///*
+///* The input is the JulianDay times 86400000.
 extern "C" fn valid_julian_day(i_jd_1: Sqlite3Int64) -> i32 {
     return (i_jd_1 >= 0 as i64 &&
                 i_jd_1 <= (108096 as i64) << 32 | 275971583 as i64) as i32;
 }
 
+///* Compute the Year, Month, and Day from the julian day number.
 extern "C" fn compute_ymd(p: *mut DateTime) -> () {
     unsafe {
         let mut z: i32 = 0;
@@ -1031,6 +1152,7 @@ extern "C" fn compute_ymd(p: *mut DateTime) -> () {
     }
 }
 
+///* Compute the Hour, Minute, and Seconds from the julian day number.
 extern "C" fn compute_hms(p: *mut DateTime) -> () {
     let mut day_ms: i32 = 0;
     let mut day_min: i32 = 0;
@@ -1047,11 +1169,26 @@ extern "C" fn compute_hms(p: *mut DateTime) -> () {
     unsafe { (*p).valid_hms = 1 as i8 };
 }
 
+///* Compute both YMD and HMS
 extern "C" fn compute_ymd_hms(p: *mut DateTime) -> () {
     compute_ymd(p);
     compute_hms(p);
 }
 
+///* The following routine implements the rough equivalent of localtime_r()
+///* using whatever operating-system specific localtime facility that
+///* is available.  This routine returns 0 on success and
+///* non-zero on any kind of error.
+///*
+///* If the sqlite3GlobalConfig.bLocaltimeFault variable is non-zero then this
+///* routine will always fail.  If bLocaltimeFault is nonzero and
+///* sqlite3GlobalConfig.xAltLocaltime is not NULL, then xAltLocaltime() is
+///* invoked in place of the OS-defined localtime() function.
+///*
+///* EVIDENCE-OF: R-62172-00036 In this implementation, the standard C
+///* library function localtime_r() is used to assist in the calculation of
+///* local time.
+#[allow(unused_doc_comments)]
 extern "C" fn os_localtime(t: *const TimeT, p_tm_1: *mut Tm) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1066,16 +1203,23 @@ extern "C" fn os_localtime(t: *const TimeT, p_tm_1: *mut Tm) -> i32 {
         rc =
             (unsafe { localtime_r(t as *const TimeT, p_tm_1) } ==
                     core::ptr::null_mut()) as i32;
+
+        /// HAVE_LOCALTIME_R
+        /// HAVE_LOCALTIME_R || HAVE_LOCALTIME_S
         return rc;
     }
 }
 
+///* Assuming the input DateTime is UTC, move it to its localtime equivalent.
+#[allow(unused_doc_comments)]
 extern "C" fn to_localtime(p: *mut DateTime, p_ctx_1: *mut Sqlite3Context)
     -> i32 {
     unsafe {
         let mut t: TimeT = 0 as TimeT;
         let mut s_local: Tm = unsafe { core::mem::zeroed() };
         let mut i_year_diff: i32 = 0;
+
+        /// Initialize the contents of sLocal to avoid a compiler warning.
         unsafe {
             memset(&raw mut s_local as *mut (), 0,
                 core::mem::size_of::<Tm>() as u64)
@@ -1083,6 +1227,10 @@ extern "C" fn to_localtime(p: *mut DateTime, p_ctx_1: *mut Sqlite3Context)
         compute_jd(p);
         if unsafe { (*p).i_jd } < 2108667600 as i64 * 100000 as i64 ||
                 unsafe { (*p).i_jd } > 2130141456 as i64 * 100000 as i64 {
+            /// EVIDENCE-OF: R-55269-29598 The localtime_r() C function normally only
+            ///* works for years between 1970 and 2037. For dates outside this range,
+            ///* SQLite attempts to map the year into an equivalent year within this
+            ///* range, do the calculation, then map the year back.
             let mut x: DateTime = unsafe { core::ptr::read(p) };
             compute_ymd_hms(&mut x);
             i_year_diff = 2000 + x.y % 4 - x.y;
@@ -1126,6 +1274,12 @@ extern "C" fn to_localtime(p: *mut DateTime, p_ctx_1: *mut Sqlite3Context)
     }
 }
 
+///* The following table defines various date transformations of the form
+///*
+///*            'NNN days'
+///*
+///* Where NNN is an arbitrary floating-point number and "days" can be one
+///* of several units of time.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -1179,6 +1333,35 @@ static a_xform_type: [AnonS0; 6] =
                 r_xform: 31536000.0,
             }];
 
+///* Process a modifier to a date-time stamp.  The modifiers are
+///* as follows:
+///*
+///*     NNN days
+///*     NNN hours
+///*     NNN minutes
+///*     NNN.NNNN seconds
+///*     NNN months
+///*     NNN years
+///*     +/-YYYY-MM-DD HH:MM:SS.SSS
+///*     ceiling
+///*     floor
+///*     start of month
+///*     start of year
+///*     start of week
+///*     start of day
+///*     weekday N
+///*     unixepoch
+///*     auto
+///*     localtime
+///*     utc
+///*     subsec
+///*     subsecond
+///*
+///* Return 0 on success and 1 if there is any kind of error. If the error
+///* is in a system call (i.e. localtime()), then an error message is written
+///* to context pCtx. If the error is an unrecognized modifier, no error is
+///* written to pCtx.
+#[allow(unused_doc_comments)]
 extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
     mut n: i32, p: *mut DateTime, idx: i32) -> i32 {
     unsafe {
@@ -1198,6 +1381,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         sqlite3_stricmp(z, c"auto".as_ptr() as *mut i8 as *const i8)
                                     } == 0 {
                                 if idx > 1 { return 1; }
+
+                                /// IMP: R-33611-57934
                                 auto_adjust_date(p);
                                 rc = 0;
                             }
@@ -1264,7 +1449,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -1277,9 +1464,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -1481,6 +1673,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -1516,6 +1710,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -1545,6 +1743,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -1593,6 +1794,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -1608,6 +1811,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -1621,6 +1825,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -1716,7 +1921,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -1729,9 +1936,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -1933,6 +2145,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -1968,6 +2182,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -1997,6 +2215,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -2045,6 +2266,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -2060,6 +2283,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2073,6 +2297,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2156,7 +2381,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -2169,9 +2396,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -2373,6 +2605,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -2408,6 +2642,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -2437,6 +2675,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -2485,6 +2726,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -2500,6 +2743,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2513,6 +2757,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2581,7 +2826,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -2594,9 +2841,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -2798,6 +3050,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -2833,6 +3087,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -2862,6 +3120,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -2910,6 +3171,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -2925,6 +3188,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2938,6 +3202,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -2992,7 +3257,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -3005,9 +3272,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -3209,6 +3481,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -3244,6 +3518,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -3273,6 +3551,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -3321,6 +3602,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -3336,6 +3619,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -3349,6 +3633,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -3389,7 +3674,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 c"unixepoch".as_ptr() as *mut i8 as *const i8)
                                         } == 0 && unsafe { (*p).raw_s() } != 0 {
                                 if idx > 1 { return 1; }
-                                r = unsafe { (*p).s } * 1000.0 + 210866760000000.0;
+
+                                /// IMP: R-49255-55373
+                                (r = unsafe { (*p).s } * 1000.0 + 210866760000000.0);
                                 if r >= 0.0 && r < 464269060800000.0 {
                                     clear_ymd_hms_tz(unsafe { &mut *p });
                                     unsafe { (*p).i_jd = (r + 0.5) as Sqlite3Int64 };
@@ -3402,9 +3689,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                         } == 0 && unsafe { sqlite3_not_pure_func(p_ctx_1) } != 0 {
                                 if unsafe { (*p).is_utc() } as i32 == 0 {
                                     let mut i_orig_jd: i64 = 0 as i64;
+                                    /// Original localtime
                                     let mut i_guess: i64 = 0 as i64;
+                                    /// Guess at the corresponding utc time
                                     let mut cnt: i32 = 0;
+                                    /// Safety to prevent infinite loop
                                     let mut i_err: i64 = 0 as i64;
+
+                                    /// Guess is off by this much
                                     compute_jd(p);
                                     i_guess = { i_orig_jd = unsafe { (*p).i_jd }; i_orig_jd };
                                     i_err = 0 as i64;
@@ -3606,6 +3898,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -3641,6 +3935,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -3670,6 +3968,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -3718,6 +4019,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -3733,6 +4036,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -3746,6 +4050,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -3943,6 +4248,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -3978,6 +4285,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -4007,6 +4318,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -4055,6 +4369,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -4070,6 +4386,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4083,6 +4400,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4253,6 +4571,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -4288,6 +4608,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -4317,6 +4641,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -4365,6 +4692,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -4380,6 +4709,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4393,6 +4723,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4507,6 +4838,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -4542,6 +4875,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -4571,6 +4908,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -4619,6 +4959,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -4634,6 +4976,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4647,6 +4990,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4761,6 +5105,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -4796,6 +5142,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -4825,6 +5175,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -4873,6 +5226,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -4888,6 +5243,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -4901,6 +5257,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5015,6 +5372,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -5050,6 +5409,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -5079,6 +5442,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -5127,6 +5493,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -5142,6 +5510,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5155,6 +5524,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5269,6 +5639,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -5304,6 +5676,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -5333,6 +5709,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -5381,6 +5760,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -5396,6 +5777,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5409,6 +5791,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5523,6 +5906,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -5558,6 +5943,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -5587,6 +5976,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -5635,6 +6027,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -5650,6 +6044,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5663,6 +6058,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5777,6 +6173,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -5812,6 +6210,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -5841,6 +6243,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -5889,6 +6294,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -5904,6 +6311,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -5917,6 +6325,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6031,6 +6440,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -6066,6 +6477,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -6095,6 +6510,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -6143,6 +6561,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -6158,6 +6578,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6171,6 +6592,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6285,6 +6707,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -6320,6 +6744,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -6349,6 +6777,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -6397,6 +6828,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -6412,6 +6845,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6425,6 +6859,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6539,6 +6974,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -6574,6 +7011,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -6603,6 +7044,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -6651,6 +7095,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -6666,6 +7112,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6679,6 +7126,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6793,6 +7241,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -6828,6 +7278,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -6857,6 +7311,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -6905,6 +7362,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -6920,6 +7379,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -6933,6 +7393,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -7047,6 +7508,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -7082,6 +7545,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -7111,6 +7578,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -7159,6 +7629,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -7174,6 +7646,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -7187,6 +7660,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -7301,6 +7775,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 }
                                 if m >= 12 { break '__s6; }
                                 if d >= 31 { break '__s6; }
+
+                                /// D range 0..30
                                 compute_ymd_hms(p);
                                 unsafe { (*p).valid_jd = 0 as i8 };
                                 if z0 as i32 == '-' as i32 {
@@ -7336,6 +7812,10 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 } else { break '__s6; }
                             }
                             if unsafe { *z2.offset(n as isize) } as i32 == ':' as i32 {
+                                /// A modifier of the form (+|-)HH:MM:SS.FFF adds (or subtracts) the
+                                ///* specified number of hours, minutes, seconds, and fractional seconds
+                                ///* to the time.  The ".FFF" may be omitted.  The ":SS.FFF" may be
+                                ///* omitted.
                                 let mut tx: DateTime = unsafe { core::mem::zeroed() };
                                 let mut day: Sqlite3Int64 = 0 as Sqlite3Int64;
                                 if (unsafe {
@@ -7365,6 +7845,9 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                 rc = 0;
                                 break '__s6;
                             }
+
+                            /// If control reaches this point, it means the transformation is
+                            ///* one of the forms like "+NNN days".
                             {
                                 let __n = n;
                                 let __p = &mut z;
@@ -7413,6 +7896,8 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                 match i {
                                                     4 => {
                                                         {
+
+                                                            /// Special processing to add months
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
                                                             unsafe { (*p).m_1 += r as i32 };
@@ -7428,6 +7913,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                             break '__s11;
                                                         }
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -7441,6 +7927,7 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
                                                     }
                                                     5 => {
                                                         {
+                                                            /// Special processing to add years
                                                             let mut y: i32 = r as i32;
                                                             { let _ = 0; };
                                                             compute_ymd_hms(p);
@@ -7482,6 +7969,14 @@ extern "C" fn parse_modifier(p_ctx_1: *mut Sqlite3Context, mut z: *const i8,
     }
 }
 
+///* Process time function arguments.  argv[0] is a date-time stamp.
+///* argv[1] and following are modifiers.  Parse them all and write
+///* the resulting time into the DateTime structure p.  Return 0
+///* on success and 1 if there are any errors.
+///*
+///* If there are zero parameters (if even argv[0] is undefined)
+///* then assume a default value of "now" for argv[0].
+#[allow(unused_doc_comments)]
 extern "C" fn is_date(context: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, p: *mut DateTime) -> i32 {
     unsafe {
@@ -7550,6 +8045,9 @@ extern "C" fn is_date(context: *mut Sqlite3Context, argc: i32,
         }
         if argc == 1 && unsafe { (*p).valid_ymd } != 0 &&
                 unsafe { (*p).d } > 28 {
+
+            /// Make sure a YYYY-MM-DD is normalized.
+            ///* Example: 2023-02-31 -> 2023-03-03
             { let _ = 0; };
             unsafe { (*p).valid_ymd = 0 as i8 };
         }
@@ -7557,6 +8055,9 @@ extern "C" fn is_date(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    julianday( TIMESTRING, MOD, MOD, ...)
+///*
+///* Return the julian day number of the date specified in the arguments
 extern "C" fn julianday_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7566,6 +8067,10 @@ extern "C" fn julianday_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    unixepoch( TIMESTRING, MOD, MOD, ...)
+///*
+///* Return the number of seconds (including fractional seconds) since
+///* the unix epoch of 1970-01-01 00:00:00 GMT.
 extern "C" fn unixepoch_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7587,6 +8092,9 @@ extern "C" fn unixepoch_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    date( TIMESTRING, MOD, MOD, ...)
+///*
+///* Return YYYY-MM-DD
 extern "C" fn date_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -7635,6 +8143,9 @@ extern "C" fn date_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    time( TIMESTRING, MOD, MOD, ...)
+///*
+///* Return HH:MM:SS
 extern "C" fn time_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: DateTime = unsafe { core::mem::zeroed() };
@@ -7678,6 +8189,9 @@ extern "C" fn time_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    datetime( TIMESTRING, MOD, MOD, ...)
+///*
+///* Return YYYY-MM-DD HH:MM:SS
 extern "C" fn datetime_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -7751,12 +8265,25 @@ extern "C" fn datetime_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Return the number of days after the most recent Monday.
+///*
+///* In other words, return the day of the week according
+///* to this code:
+///*
+///*   0=Monday, 1=Tuesday, 2=Wednesday, ..., 6=Sunday.
 extern "C" fn days_after_monday(p_date_1: &DateTime) -> i32 {
     { let _ = 0; };
     return (((*p_date_1).i_jd + 43200000 as Sqlite3Int64) /
                     86400000 as Sqlite3Int64) as i32 % 7;
 }
 
+///* Compute the number of days after the most recent January 1.
+///*
+///* In other words, compute the zero-based day number for the
+///* current year:
+///*
+///*   Jan01 = 0,  Jan02 = 1, ..., Jan31 = 30, Feb01 = 31, ...
+///*   Dec31 = 364 or 365.
 extern "C" fn days_after_jan01(p_date_1: &DateTime) -> i32 {
     unsafe {
         let mut jan01: DateTime = *p_date_1;
@@ -7772,12 +8299,50 @@ extern "C" fn days_after_jan01(p_date_1: &DateTime) -> i32 {
     }
 }
 
+///* Return the number of days after the most recent Sunday.
+///*
+///* In other words, return the day of the week according
+///* to this code:
+///*
+///*   0=Sunday, 1=Monday, 2=Tuesday, ..., 6=Saturday
 extern "C" fn days_after_sunday(p_date_1: &DateTime) -> i32 {
     { let _ = 0; };
     return (((*p_date_1).i_jd + 129600000 as Sqlite3Int64) /
                     86400000 as Sqlite3Int64) as i32 % 7;
 }
 
+///*    strftime( FORMAT, TIMESTRING, MOD, MOD, ...)
+///*
+///* Return a string described by FORMAT.  Conversions as follows:
+///*
+///*   %d  day of month  01-31
+///*   %e  day of month  1-31
+///*   %f  ** fractional seconds  SS.SSS
+///*   %F  ISO date.  YYYY-MM-DD
+///*   %G  ISO year corresponding to %V 0000-9999.
+///*   %g  2-digit ISO year corresponding to %V 00-99
+///*   %H  hour 00-24
+///*   %k  hour  0-24  (leading zero converted to space)
+///*   %I  hour 01-12
+///*   %j  day of year 001-366
+///*   %J  ** julian day number
+///*   %l  hour  1-12  (leading zero converted to space)
+///*   %m  month 01-12
+///*   %M  minute 00-59
+///*   %p  "AM" or "PM"
+///*   %P  "am" or "pm"
+///*   %R  time as HH:MM
+///*   %s  seconds since 1970-01-01
+///*   %S  seconds 00-59
+///*   %T  time as HH:MM:SS
+///*   %u  day of week 1-7  Monday==1, Sunday==7
+///*   %w  day of week 0-6  Sunday==0, Monday==1
+///*   %U  week of year 00-53  (First Sunday is start of week 01)
+///*   %V  week of year 01-53  (First week containing Thursday is week 01)
+///*   %W  week of year 00-53  (First Monday is start of week 01)
+///*   %Y  year 0000-9999
+///*   %%  %
+#[allow(unused_doc_comments)]
 extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -7833,6 +8398,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Fractional seconds.  (Non-standard)
                                     let mut s: f64 = x.s;
                                     if s > 59.999 { s = 59.999; }
                                     unsafe {
@@ -7852,8 +8418,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -7891,6 +8459,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -7899,6 +8469,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -7980,6 +8552,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -7989,6 +8562,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -7997,7 +8572,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8011,6 +8589,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8044,6 +8624,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Fractional seconds.  (Non-standard)
                                     let mut s: f64 = x.s;
                                     if s > 59.999 { s = 59.999; }
                                     unsafe {
@@ -8063,8 +8644,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -8102,6 +8685,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -8110,6 +8695,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -8191,6 +8778,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -8200,6 +8788,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8208,7 +8798,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8222,6 +8815,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8246,6 +8841,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             102 => {
                                 {
+                                    /// Fractional seconds.  (Non-standard)
                                     let mut s: f64 = x.s;
                                     if s > 59.999 { s = 59.999; }
                                     unsafe {
@@ -8265,8 +8861,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -8304,6 +8902,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -8312,6 +8912,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -8393,6 +8995,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -8402,6 +9005,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8410,7 +9015,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8424,6 +9032,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8458,8 +9068,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -8497,6 +9109,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -8505,6 +9119,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -8586,6 +9202,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -8595,6 +9212,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8603,7 +9222,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8617,6 +9239,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8643,8 +9267,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -8682,6 +9308,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -8690,6 +9318,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -8771,6 +9401,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -8780,6 +9411,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8788,7 +9421,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8802,6 +9438,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8828,8 +9466,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                 {
                                     let mut y: DateTime = x;
                                     { let _ = 0; };
-                                    y.i_jd +=
-                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
+
+                                    /// Move y so that it is the Thursday in the same week as x
+                                    (y.i_jd +=
+                                        ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64);
                                     y.valid_ymd = 0 as i8;
                                     compute_ymd(&mut y);
                                     if cf as i32 == 'g' as i32 {
@@ -8867,6 +9507,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -8875,6 +9517,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -8956,6 +9600,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -8965,6 +9610,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -8973,7 +9620,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -8987,6 +9637,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9032,6 +9684,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -9040,6 +9694,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9121,6 +9777,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9130,6 +9787,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9138,7 +9797,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9152,6 +9814,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9197,6 +9861,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -9205,6 +9871,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9286,6 +9954,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9295,6 +9964,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9303,7 +9974,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9317,6 +9991,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9353,6 +10029,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -9361,6 +10039,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9442,6 +10122,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9451,6 +10132,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9459,7 +10142,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9473,6 +10159,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9509,6 +10197,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -9517,6 +10207,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9598,6 +10290,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9607,6 +10300,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9615,7 +10310,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9629,6 +10327,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9653,6 +10353,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             106 => {
                                 {
+
+                                    /// Day of year.  Jan01==1, Jan02==2, and so forth
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%03d".as_ptr() as *mut i8 as *const i8,
@@ -9661,6 +10363,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9742,6 +10446,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9751,6 +10456,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9759,7 +10466,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9773,6 +10483,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9797,6 +10509,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             74 => {
                                 {
+
+                                    /// Julian day number.  (Non-standard)
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%.16g".as_ptr() as *mut i8 as *const i8,
@@ -9878,6 +10592,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -9887,6 +10602,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -9895,7 +10612,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -9909,6 +10629,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10006,6 +10728,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10015,6 +10738,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10023,7 +10748,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10037,6 +10765,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10127,6 +10857,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10136,6 +10867,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10144,7 +10877,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10158,6 +10894,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10241,6 +10979,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10250,6 +10989,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10258,7 +10999,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10272,6 +11016,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10355,6 +11101,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10364,6 +11111,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10372,7 +11121,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10386,6 +11138,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10451,6 +11205,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10460,6 +11215,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10468,7 +11225,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10482,6 +11242,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10540,6 +11302,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10549,6 +11312,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10557,7 +11322,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10571,6 +11339,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10610,6 +11380,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10619,6 +11390,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10627,7 +11400,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10641,6 +11417,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10673,6 +11451,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10682,6 +11461,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10690,7 +11471,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10704,6 +11488,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10728,6 +11514,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             117 => {
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10737,6 +11524,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10745,7 +11534,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10759,6 +11551,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10783,6 +11577,7 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             119 => {
                                 {
+                                    /// Day of week.  0 to 6.  Sunday==0, Monday==1
                                     let mut c: i8 =
                                         (days_after_sunday(&x) as i8 as i32 + '0' as i32) as i8;
                                     if c as i32 == '0' as i32 && cf as i32 == 'u' as i32 {
@@ -10792,6 +11587,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10800,7 +11597,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10814,6 +11614,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10838,6 +11640,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             85 => {
                                 {
+
+                                    /// Week num. 00-53. First Sun of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10846,7 +11650,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10860,6 +11667,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10884,7 +11693,10 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             86 => {
                                 {
+                                    /// Week num. 01-53. First week with a Thur is week 01
                                     let mut y: DateTime = x;
+
+                                    /// Adjust y so that is the Thursday in the same week as x
                                     { let _ = 0; };
                                     y.i_jd +=
                                         ((3 - days_after_monday(&x)) * 86400000) as Sqlite3Int64;
@@ -10898,6 +11710,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                                     break '__s14;
                                 }
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10922,6 +11736,8 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
                             }
                             87 => {
                                 {
+
+                                    /// Week num. 00-53. First Mon of the year is week 01
                                     unsafe {
                                         sqlite3_str_appendf(p_res,
                                             c"%02d".as_ptr() as *mut i8 as *const i8,
@@ -10987,6 +11803,21 @@ extern "C" fn strftime_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* timediff(DATE1, DATE2)
+///*
+///* Return the amount of time that must be added to DATE2 in order to
+///* convert it into DATE2.  The time difference format is:
+///*
+///*     +YYYY-MM-DD HH:MM:SS.SSS
+///*
+///* The initial "+" becomes "-" if DATE1 occurs before DATE2.  For
+///* date/time values A and B, the following invariant should hold:
+///*
+///*     datetime(A) == (datetime(B, timediff(A,B))
+///*
+///* Both DATE arguments must be either a julian day number, or an
+///* ISO-8601 string.  The unix timestamps are not supported by this
+///* routine.
 extern "C" fn timediff_func(context: *mut Sqlite3Context, not_used1_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -11093,24 +11924,36 @@ extern "C" fn timediff_func(context: *mut Sqlite3Context, not_used1_1: i32,
     }
 }
 
+///* current_time()
+///*
+///* This function returns the same value as time('now').
 extern "C" fn ctime_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     time_func(context, 0, core::ptr::null_mut());
 }
 
+///* current_timestamp()
+///*
+///* This function returns the same value as datetime('now').
 extern "C" fn ctimestamp_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     datetime_func(context, 0, core::ptr::null_mut());
 }
 
+///* current_date()
+///*
+///* This function returns the same value as date('now').
 extern "C" fn cdate_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
     date_func(context, 0, core::ptr::null_mut());
 }
 
+///* This function registered all of the above C functions as SQL
+///* functions.  This should be the only routine in this file with
+///* external linkage.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_date_time_functions() -> () {
     unsafe {

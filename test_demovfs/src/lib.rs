@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64,
+};
 
 type Int64T = i64;
 
@@ -97,17 +103,26 @@ struct DemoFile {
     i_buffer_ofst: Sqlite3Int64,
 }
 
+///* Write directly to the file passed as the first argument. Even if the
+///* file has a write-buffer (DemoFile.aBuffer), ignore it.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_direct_write(p: &DemoFile, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let mut ofst: OffT = 0 as OffT;
+    /// Return value from lseek()
     let mut n_write: u64 = 0 as u64;
-    ofst = unsafe { lseek((*p).fd, i_ofst_1, 0) };
+
+    /// Return value from write()
+    (ofst = unsafe { lseek((*p).fd, i_ofst_1, 0) });
     if ofst != i_ofst_1 { return 10 | 3 << 8; }
     n_write = unsafe { write((*p).fd, z_buf_1, i_amt_1 as u64) } as u64;
     if n_write != i_amt_1 as u64 { return 10 | 3 << 8; }
     return 0;
 }
 
+///* Flush the contents of the DemoFile.aBuffer buffer to disk. This is a
+///* no-op if this particular file does not have a buffer (i.e. it is not
+///* a journal file) or if the buffer is currently empty.
 extern "C" fn demo_flush_buffer(p: *mut DemoFile) -> i32 {
     let mut rc: i32 = 0;
     if unsafe { (*p).n_buffer } != 0 {
@@ -120,6 +135,7 @@ extern "C" fn demo_flush_buffer(p: *mut DemoFile) -> i32 {
     return rc;
 }
 
+///* Close a file.
 extern "C" fn demo_close(p_file_1: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
@@ -129,13 +145,24 @@ extern "C" fn demo_close(p_file_1: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Read data from a file.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_read(p_file_1: *mut Sqlite3File, z_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
     let mut ofst: OffT = 0 as OffT;
+    /// Return value from lseek()
     let mut n_read: i32 = 0;
+    /// Return value from read()
     let mut rc: i32 = 0;
-    rc = demo_flush_buffer(p);
+
+    /// Return code from demoFlushBuffer()
+    /// Flush any data in the write buffer to disk in case this operation
+    ///* is trying to read data the file-region currently cached in the buffer.
+    ///* It would be possible to detect this case and possibly save an 
+    ///* unnecessary write here, but in practice SQLite will rarely read from
+    ///* a journal file when there is data cached in the write-buffer.
+    (rc = demo_flush_buffer(p));
     if rc != 0 { return rc; }
     ofst = unsafe { lseek(unsafe { (*p).fd }, i_ofst_1, 0) };
     if ofst != i_ofst_1 { return 10 | 1 << 8; }
@@ -156,12 +183,16 @@ extern "C" fn demo_read(p_file_1: *mut Sqlite3File, z_buf_1: *mut (),
     return 10 | 1 << 8;
 }
 
+///* Write data to a crash-file.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_write(p_file_1: *mut Sqlite3File, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
     if !(unsafe { (*p).a_buffer }).is_null() {
         let mut z: *const i8 = z_buf_1 as *mut i8 as *const i8;
+        /// Pointer to remaining data to write
         let mut n: i32 = i_amt_1;
+        /// Number of bytes at z
         let mut i: Sqlite3Int64 = i_ofst_1;
         while n > 0 {
             let mut n_copy: i32 = 0;
@@ -186,7 +217,9 @@ extern "C" fn demo_write(p_file_1: *mut Sqlite3File, z_buf_1: *const (),
                 (*p).i_buffer_ofst =
                     i - unsafe { (*p).n_buffer } as Sqlite3Int64
             };
-            n_copy = 8192 - unsafe { (*p).n_buffer };
+
+            /// Copy as much data as possible into the buffer.
+            (n_copy = 8192 - unsafe { (*p).n_buffer });
             if n_copy > n { n_copy = n; }
             unsafe {
                 memcpy(unsafe {
@@ -210,11 +243,14 @@ extern "C" fn demo_write(p_file_1: *mut Sqlite3File, z_buf_1: *const (),
     return 0;
 }
 
+///* Truncate a file. This is a no-op for this VFS (see header comments at
+///* the top of the file).
 extern "C" fn demo_truncate(p_file_1: *mut Sqlite3File, size: SqliteInt64)
     -> i32 {
     return 0;
 }
 
+///* Sync the contents of the file to the persistent media.
 extern "C" fn demo_sync(p_file_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
     let mut rc: i32 = 0;
@@ -224,12 +260,21 @@ extern "C" fn demo_sync(p_file_1: *mut Sqlite3File, flags: i32) -> i32 {
     return if rc == 0 { 0 } else { 10 | 4 << 8 };
 }
 
+///* Write the size of the file in bytes to *pSize.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_file_size(p_file_1: *mut Sqlite3File,
     p_size_1: *mut SqliteInt64) -> i32 {
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
     let mut rc: i32 = 0;
+    /// Return code from fstat() call
     let mut s_stat: Stat = unsafe { core::mem::zeroed() };
-    rc = demo_flush_buffer(p);
+
+    /// Output of fstat() call
+    /// Flush the contents of the buffer to disk. As with the flush in the
+    ///* demoRead() method, it would be possible to avoid this and save a write
+    ///* here and there. But in practice this comes up so infrequently it is
+    ///* not worth the trouble.
+    (rc = demo_flush_buffer(p));
     if rc != 0 { return rc; }
     rc = unsafe { fstat(unsafe { (*p).fd }, &mut s_stat) };
     if rc != 0 { return 10 | 7 << 8; }
@@ -237,6 +282,10 @@ extern "C" fn demo_file_size(p_file_1: *mut Sqlite3File,
     return 0;
 }
 
+///* Locking functions. The xLock() and xUnlock() methods are both no-ops.
+///* The xCheckReservedLock() always indicates that no other process holds
+///* a reserved lock on the database file. This ensures that if a hot-journal
+///* file is found in the file-system it is rolled back.
 extern "C" fn demo_lock(p_file_1: *mut Sqlite3File, e_lock_1: i32) -> i32 {
     return 0;
 }
@@ -251,11 +300,15 @@ extern "C" fn demo_check_reserved_lock(p_file_1: *mut Sqlite3File,
     return 0;
 }
 
+///* No xFileControl() verbs are implemented by this VFS.
 extern "C" fn demo_file_control(p_file_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     return 12;
 }
 
+///* The xSectorSize() and xDeviceCharacteristics() methods. These two
+///* may return special values allowing SQLite to optimize file-system 
+///* access to some extent. But it is also safe to simply return 0.
 extern "C" fn demo_sector_size(p_file_1: *mut Sqlite3File) -> i32 {
     return 0;
 }
@@ -264,10 +317,27 @@ extern "C" fn demo_device_characteristics(p_file_1: *mut Sqlite3File) -> i32 {
     return 0;
 }
 
+///* Open a file handle.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_file_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
+    /// iVersion
+    /// xClose
+    /// xRead
+    /// xWrite
+    /// xTruncate
+    /// xSync
+    /// xFileSize
+    /// xLock
+    /// xUnlock
+    /// xCheckReservedLock
+    /// xFileControl
+    /// xSectorSize
+    /// xDeviceCharacteristics
     let p: *mut DemoFile = p_file_1 as *mut DemoFile;
+    /// Populate this structure
     let mut oflags: i32 = 0;
+    /// flags to pass to open() call
     let mut a_buf: *mut i8 = core::ptr::null_mut();
     if z_name_1 == core::ptr::null() { return 10; }
     if flags & 2048 != 0 {
@@ -292,15 +362,25 @@ extern "C" fn demo_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     return 0;
 }
 
+///* Delete the file identified by argument zPath. If the dirSync parameter
+///* is non-zero, then ensure the file-system modification to delete the
+///* file has been synced to disk before returning.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_delete(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     dir_sync_1: i32) -> i32 {
     let mut rc: i32 = 0;
-    rc = unsafe { unlink(z_path_1) };
+
+    /// Return code
+    (rc = unsafe { unlink(z_path_1) });
     if rc != 0 && unsafe { *unsafe { __error() } } == 2 { return 0; }
     if rc == 0 && dir_sync_1 != 0 {
         let mut dfd: i32 = 0;
+        /// File descriptor open on directory
         let mut z_slash: *mut i8 = core::ptr::null_mut();
         let mut z_dir: [i8; 513] = [0; 513];
+
+        /// Name of directory containing file zPath
+        /// Figure out the directory name from the path of the file deleted.
         unsafe {
             sqlite3_snprintf(512, &raw mut z_dir[0 as usize] as *mut i8,
                 c"%s".as_ptr() as *mut i8 as *const i8, z_path_1)
@@ -312,6 +392,8 @@ extern "C" fn demo_delete(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                     '/' as i32)
             };
         if !(z_slash).is_null() {
+
+            /// Open a file-descriptor on the directory. Sync. Close.
             unsafe { *z_slash.offset(0 as isize) = 0 as i8 };
             dfd =
                 unsafe {
@@ -326,10 +408,16 @@ extern "C" fn demo_delete(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     return if rc == 0 { 0 } else { 10 | 10 << 8 };
 }
 
+///* Query the file-system to see if the named file exists, is readable or
+///* is both readable and writable.
+#[allow(unused_doc_comments)]
 extern "C" fn demo_access(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     let mut rc: i32 = 0;
+    /// access() return code
     let mut e_access: i32 = 0;
+
+    /// Second argument to access()
     if !(flags == 0 || flags == 2 || flags == 1) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"demoAccess".as_ptr() as *const i8,
@@ -345,6 +433,15 @@ extern "C" fn demo_access(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     return 0;
 }
 
+///* Argument zPath points to a nul-terminated string containing a file path.
+///* If zPath is an absolute path, then it is copied as is into the output 
+///* buffer. Otherwise, if it is a relative path, then the equivalent full
+///* path is written to the output buffer.
+///*
+///* This function assumes that paths are UNIX style. Specifically, that:
+///*
+///*   1. Path components are separated by a '/'. and 
+///*   2. Full paths begin with a '/' character.
 extern "C" fn demo_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_path_1: *const i8, n_path_out_1: i32, z_path_out_1: *mut i8) -> i32 {
     let mut z_dir: [i8; 513] = [0; 513];
@@ -371,6 +468,16 @@ extern "C" fn demo_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     return 0;
 }
 
+///* The following four VFS methods:
+///*
+///*   xDlOpen
+///*   xDlError
+///*   xDlSym
+///*   xDlClose
+///*
+///* are supposed to implement the functionality needed by SQLite to load
+///* extensions compiled as shared objects. This simple VFS does not support
+///* this functionality, so the following functions are no-ops.
 extern "C" fn demo_dl_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8)
     -> *mut () {
     return core::ptr::null_mut();
@@ -401,17 +508,30 @@ extern "C" fn demo_dl_close(p_vfs_1: *mut Sqlite3Vfs, p_handle_1: *mut ())
     return;
 }
 
+///* Parameter zByte points to a buffer nByte bytes in size. Populate this
+///* buffer with pseudo-random data.
 extern "C" fn demo_randomness(p_vfs_1: *mut Sqlite3Vfs, n_byte_1: i32,
     z_byte_1: *mut i8) -> i32 {
     return 0;
 }
 
+///* Sleep for at least nMicro microseconds. Return the (approximate) number 
+///* of microseconds slept for.
 extern "C" fn demo_sleep(p_vfs_1: *mut Sqlite3Vfs, n_micro_1: i32) -> i32 {
     unsafe { sleep((n_micro_1 / 1000000) as u32) };
     unsafe { usleep((n_micro_1 % 1000000) as UsecondsT) };
     return n_micro_1;
 }
 
+///* Set *pTime to the current UTC time expressed as a Julian day. Return
+///* SQLITE_OK if successful, or an error code otherwise.
+///*
+///*   http://en.wikipedia.org/wiki/Julian_day
+///*
+///* This implementation is not very good. The current time is rounded to
+///* an integer number of seconds. Also, assuming time_t is a signed 32-bit 
+///* value, it will stop working some time in the year 2038 AD (the so-called
+///* "year 2038" problem that afflicts systems that store time this way).
 extern "C" fn demo_current_time(p_vfs_1: *mut Sqlite3Vfs, p_time_1: *mut f64)
     -> i32 {
     let t: TimeT = unsafe { time(core::ptr::null_mut()) };
@@ -419,9 +539,34 @@ extern "C" fn demo_current_time(p_vfs_1: *mut Sqlite3Vfs, p_time_1: *mut f64)
     return 0;
 }
 
+///* This function returns a pointer to the VFS implemented in this file.
+///* To make the VFS available to SQLite:
+///*
+///*   sqlite3_vfs_register(sqlite3_demovfs(), 0);
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_demovfs() -> *mut Sqlite3Vfs {
-    unsafe { return &mut demovfs; }
+    unsafe {
+
+        /// iVersion
+        /// szOsFile
+        /// mxPathname
+        /// pNext
+        /// zName
+        /// pAppData
+        /// xOpen
+        /// xDelete
+        /// xAccess
+        /// xFullPathname
+        /// xDlOpen
+        /// xDlError
+        /// xDlSym
+        /// xDlClose
+        /// xRandomness
+        /// xSleep
+        /// xCurrentTime
+        return &mut demovfs;
+    }
 }
 
 static demoio: Sqlite3IoMethods =

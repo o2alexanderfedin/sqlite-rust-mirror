@@ -2,10 +2,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3IoMethods, Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* Main recover handle structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Recover {
@@ -52,6 +59,40 @@ struct RecoverStateW1 {
     i_prev_cell: i32,
 }
 
+///* When recovering rows of data that can be associated with table
+///* definitions recovered from the sqlite_schema table, each table is
+///* represented by an instance of the following object.
+///*
+///* iRoot:
+///*   The root page in the original database. Not necessarily (and usually
+///*   not) the same in the recovered database.
+///*
+///* zTab:
+///*   Name of the table.
+///*
+///* nCol/aCol[]:
+///*   aCol[] is an array of nCol columns. In the order in which they appear 
+///*   in the table.
+///*
+///* bIntkey:
+///*   Set to true for intkey tables, false for WITHOUT ROWID.
+///*
+///* iRowidBind:
+///*   Each column in the aCol[] array has associated with it the index of
+///*   the bind parameter its values will be bound to in the INSERT statement
+///*   used to construct the output database. If the table does has a rowid
+///*   but not an INTEGER PRIMARY KEY column, then iRowidBind contains the
+///*   index of the bind paramater to which the rowid value should be bound.
+///*   Otherwise, it contains -1. If the table does contain an INTEGER PRIMARY 
+///*   KEY column, then the rowid value should be bound to the index associated
+///*   with the column.
+///*
+///* pNext:
+///*   All RecoverTable objects used by the recovery operation are allocated
+///*   and populated as part of creating the recovered database schema in
+///*   the output database, before any non-schema data are recovered. They
+///*   are then stored in a singly-linked list linked by this variable beginning
+///*   at sqlite3_recover.pTblList.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverTable {
@@ -64,6 +105,25 @@ struct RecoverTable {
     p_next: *mut RecoverTable,
 }
 
+///* Each database column is represented by an instance of the following object
+///* stored in the RecoverTable.aCol[] array of the associated table.
+///*
+///* iField:
+///*   The index of the associated field within database records. Or -1 if
+///*   there is no associated field (e.g. for virtual generated columns).
+///*
+///* iBind:
+///*   The bind index of the INSERT statement to bind this columns values
+///*   to. Or 0 if there is no such index (iff (iField<0)).
+///*
+///* bIPK:
+///*   True if this is the INTEGER PRIMARY KEY column.
+///*
+///* zCol:
+///*   Name of column.
+///*
+///* eHidden:
+///*   A RECOVER_EHIDDEN_* constant value (see below for interpretation of each).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RecoverColumn {
@@ -98,11 +158,21 @@ struct RecoverBitmap {
     a_elem: [u32; 0],
 }
 
+///* Like strlen(). But handles NULL pointer arguments.
 extern "C" fn recover_strlen(z_str_1: *const i8) -> i32 {
     if z_str_1 == core::ptr::null() { return 0; }
     return (unsafe { strlen(z_str_1) } & 2147483647 as u64) as i32;
 }
 
+///* This is a worker function that does the heavy lifting for both init
+///* functions:
+///*
+///*     sqlite3_recover_init()
+///*     sqlite3_recover_init_sql()
+///*
+///* All this function does is allocate space for the recover handle and
+///* take copies of the input parameters. All the real work is done within
+///* sqlite3_recover_run().
 #[unsafe(no_mangle)]
 pub extern "C" fn recover_init(db: *mut Sqlite3, mut z_db_1: *const i8,
     z_uri_1: *const i8,
@@ -151,12 +221,43 @@ pub extern "C" fn recover_init(db: *mut Sqlite3, mut z_db_1: *const i8,
     return p_ret;
 }
 
+/// 
+///* These two APIs attempt to create and return a new sqlite3_recover object.
+///* In both cases the first two arguments identify the (possibly
+///* corrupt) database to recover data from. The first argument is an open
+///* database handle and the second the name of a database attached to that
+///* handle (i.e. "main", "temp" or the name of an attached database).
+///*
+///* If sqlite3_recover_init() is used to create the new sqlite3_recover
+///* handle, then data is recovered into a new database, identified by
+///* string parameter zUri. zUri may be an absolute or relative file path,
+///* or may be an SQLite URI. If the identified database file already exists,
+///* it is overwritten.
+///*
+///* If sqlite3_recover_init_sql() is invoked, then any recovered data will
+///* be returned to the user as a series of SQL statements. Executing these
+///* SQL statements results in the same database as would have been created
+///* had sqlite3_recover_init() been used. For each SQL statement in the
+///* output, the callback function passed as the third argument (xSql) is 
+///* invoked once. The first parameter is a passed a copy of the fourth argument
+///* to this function (pCtx) as its first parameter, and a pointer to a
+///* nul-terminated buffer containing the SQL statement formated as UTF-8 as 
+///* the second. If the xSql callback returns any value other than SQLITE_OK,
+///* then processing is immediately abandoned and the value returned used as
+///* the recover handle error code (see below).
+///*
+///* If an out-of-memory error occurs, NULL may be returned instead of
+///* a valid handle. In all other cases, it is the responsibility of the
+///* application to avoid resource leaks by ensuring that
+///* sqlite3_recover_finish() is called on all allocated handles.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_init(db: *mut Sqlite3, z_db_1: *const i8,
     z_uri_1: *const i8) -> *mut Sqlite3Recover {
     return recover_init(db, z_db_1, z_uri_1, None, core::ptr::null_mut());
 }
 
+///* Initialize a recovery handle that returns recovered data in the
+///* form of SQL statements via a callback.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_init_sql(db: *mut Sqlite3,
     z_db_1: *const i8,
@@ -165,6 +266,18 @@ pub extern "C" fn sqlite3_recover_init_sql(db: *mut Sqlite3,
     return recover_init(db, z_db_1, core::ptr::null(), x_sql_1, p_sql_ctx_1);
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). NULL is returned in this case.
+///*
+///* Otherwise, an attempt is made to interpret zFmt as a printf() style
+///* formatting string and the result of using the trailing arguments for
+///* parameter substitution with it written into a buffer obtained from
+///* sqlite3_malloc(). If successful, a pointer to the buffer is returned.
+///* It is the responsibility of the caller to eventually free the buffer
+///* using sqlite3_free().
+///*
+///* Or, if an error occurs, an error code and message is left in the recover
+///* handle and NULL returned.
 unsafe extern "C" fn recover_m_printf(p: &mut Sqlite3Recover,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -181,6 +294,17 @@ unsafe extern "C" fn recover_m_printf(p: &mut Sqlite3Recover,
     return z;
 }
 
+///* Configure an sqlite3_recover object that has just been created using
+///* sqlite3_recover_init() or sqlite3_recover_init_sql(). This function
+///* may only be called before the first call to sqlite3_recover_step()
+///* or sqlite3_recover_run() on the object.
+///*
+///* The second argument passed to this function must be one of the
+///* SQLITE_RECOVER_* symbols defined below. Valid values for the third argument
+///* depend on the specific SQLITE_RECOVER_* symbol in use.
+///*
+///* SQLITE_OK is returned if the configuration operation was successful,
+///* or an SQLite error code otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_config(p: *mut Sqlite3Recover, op: i32,
     p_arg_1: *mut ()) -> i32 {
@@ -250,6 +374,17 @@ pub extern "C" fn sqlite3_recover_config(p: *mut Sqlite3Recover, op: i32,
     return rc;
 }
 
+///* Set the error code and error message for the recover handle passed as
+///* the first argument. The error code is set to the value of parameter
+///* errCode.
+///*
+///* Parameter zFmt must be a printf() style formatting string. The handle 
+///* error message is set to the result of using any trailing arguments for 
+///* parameter substitutions in the formatting string.
+///*
+///* For example:
+///*
+///*   recoverError(p, SQLITE_ERROR, "no such table: %s", zTablename);
 unsafe extern "C" fn recover_error(p: &mut Sqlite3Recover, err_code_1: i32,
     z_fmt_1: *const i8, mut __va0: ...) -> i32 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -263,6 +398,13 @@ unsafe extern "C" fn recover_error(p: &mut Sqlite3Recover, err_code_1: i32,
     return err_code_1;
 }
 
+///* If this recover handle is not in SQL callback mode (i.e. was not created 
+///* using sqlite3_recover_init_sql()) of if an error has already occurred, 
+///* this function is a no-op. Otherwise, issue a callback with SQL statement
+///* zSql as the parameter. 
+///*
+///* If the callback returns non-zero, set the recover handle error code to
+///* the value returned (so that the caller will abandon processing).
 extern "C" fn recover_sql_callback(p: *mut Sqlite3Recover, z_sql_1: *const i8)
     -> () {
     if unsafe { (*p).err_code } == 0 && unsafe { (*p).x_sql.is_some() } {
@@ -286,6 +428,9 @@ extern "C" fn recover_enter_mutex() -> () {
     unsafe { sqlite3_mutex_enter(unsafe { sqlite3_mutex_alloc(9) }) };
 }
 
+///* Set the recover handle error to the error code and message returned by
+///* calling sqlite3_errcode() and sqlite3_errmsg(), respectively, on database
+///* handle db.
 extern "C" fn recover_db_error(p: *mut Sqlite3Recover, db: *mut Sqlite3)
     -> i32 {
     return unsafe {
@@ -295,6 +440,13 @@ extern "C" fn recover_db_error(p: *mut Sqlite3Recover, db: *mut Sqlite3)
         };
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). 
+///*
+///* Otherwise, it attempts to prepare the SQL statement in zSql against
+///* database handle db. If successful, the statement handle is returned.
+///* Or, if an error occurs, NULL is returned and an error left in the
+///* recover handle.
 extern "C" fn recover_prepare(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     z_sql_1: *const i8) -> *mut Sqlite3Stmt {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -309,6 +461,15 @@ extern "C" fn recover_prepare(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     return p_stmt;
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). 
+///*
+///* Otherwise, argument zFmt is used as a printf() style format string,
+///* along with any trailing arguments, to create an SQL statement. This
+///* SQL statement is prepared against database handle db and, if successful,
+///* the statment handle returned. Or, if an error occurs - either during
+///* the printf() formatting or when preparing the resulting SQL - an
+///* error code and message are left in the recover handle.
 unsafe extern "C" fn recover_prepare_printf(p: *mut Sqlite3Recover,
     db: *mut Sqlite3, z_fmt_1: *const i8, mut __va0: ...)
     -> *mut Sqlite3Stmt {
@@ -329,6 +490,10 @@ unsafe extern "C" fn recover_prepare_printf(p: *mut Sqlite3Recover,
     return p_stmt;
 }
 
+///* Finalize SQLite statement handle pStmt. If the call to sqlite3_reset() 
+///* indicates that an error occurred, and there is not already an error
+///* in the recover handle passed as the first argument, set the error
+///* code and error message appropriately.
 extern "C" fn recover_finalize(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
@@ -336,6 +501,13 @@ extern "C" fn recover_finalize(p: *mut Sqlite3Recover,
     if rc != 0 && unsafe { (*p).err_code } == 0 { recover_db_error(p, db); }
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). Zero is returned in this case.
+///*
+///* Otherwise, execute "PRAGMA page_count" against the input database. If
+///* successful, return the integer result. Or, if an error occurs, leave an
+///* error code and error message in the sqlite3_recover handle and return
+///* zero.
 extern "C" fn recover_page_count(p: *mut Sqlite3Recover) -> i64 {
     let mut n_pg: i64 = 0 as i64;
     if unsafe { (*p).err_code } == 0 {
@@ -355,6 +527,13 @@ extern "C" fn recover_page_count(p: *mut Sqlite3Recover) -> i64 {
     return n_pg;
 }
 
+///* Reset SQLite statement handle pStmt. If the call to sqlite3_reset() 
+///* indicates that an error occurred, and there is not already an error
+///* in the recover handle passed as the first argument, set the error
+///* code and error message appropriately.
+///*
+///* This function returns a copy of the statement handle pointer passed
+///* as the second argument.
 extern "C" fn recover_reset(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt) -> *mut Sqlite3Stmt {
     let rc: i32 = unsafe { sqlite3_reset(p_stmt_1) };
@@ -364,6 +543,18 @@ extern "C" fn recover_reset(p: *mut Sqlite3Recover,
     return p_stmt_1;
 }
 
+///* The implementation of a user-defined SQL function invoked by the 
+///* sqlite_dbdata and sqlite_dbptr virtual table modules to access pages
+///* of the database being recovered.
+///*
+///* This function always takes a single integer argument. If the argument
+///* is zero, then the value returned is the number of pages in the db being
+///* recovered. If the argument is greater than zero, it is a page number. 
+///* The value returned in this case is an SQL blob containing the data for 
+///* the identified page of the db being recovered. e.g.
+///*
+///*     SELECT getpage(0);       -- return number of pages in db
+///*     SELECT getpage(4);       -- return page 4 of db as a blob of data
 extern "C" fn recover_get_page(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let p: *mut Sqlite3Recover =
@@ -449,6 +640,8 @@ extern "C" fn recover_get_page(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     }
 }
 
+///* Query bitmap object pMap for the state of the bit associated with page
+///* iPg. Return 1 if it is set, or 0 otherwise.
 extern "C" fn recover_bitmap_query(p_map_1: &RecoverBitmap, i_pg_1: i64)
     -> i32 {
     let mut ret: i32 = 1;
@@ -466,6 +659,16 @@ extern "C" fn recover_bitmap_query(p_map_1: &RecoverBitmap, i_pg_1: i64)
     return ret;
 }
 
+///* Implementation of SQL scalar function "page_is_used". This function
+///* is used as part of the procedure for locating orphan rows for the
+///* lost-and-found table, and it depends on those routines having populated
+///* the sqlite3_recover.laf.pUsed variable.
+///*
+///* The only argument to this function is a page-number. It returns true 
+///* if the page has already been used somehow during data recovery, or false
+///* otherwise.
+///*
+///*     SELECT page_is_used(<pgno>);
 extern "C" fn recover_page_is_used(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let p: *const Sqlite3Recover =
@@ -489,6 +692,12 @@ extern "C" fn recover_page_is_used(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     };
 }
 
+///* Implementation of SQL scalar function "read_i32". The first argument to 
+///* this function must be a blob. The second a non-negative integer. This 
+///* function reads and returns a 32-bit big-endian integer from byte
+///* offset (4*<arg2>) of the blob.
+///*
+///*     SELECT read_i32(<blob>, <idx>)
 extern "C" fn recover_read_i32(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_blob: *const u8 = core::ptr::null();
@@ -520,6 +729,11 @@ extern "C" fn recover_read_i32(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Find a string that is not found anywhere in z[].  Return a pointer
+///* to that string.
+///*
+///* Try to use zA and zB first.  If both of those are already found in z[]
+///* then make up some string and store it in the buffer zBuf.
 extern "C" fn recover_unused_string(z: *const i8, z_a_1: *const i8,
     z_b_1: *const i8, z_buf_1: *mut i8) -> *const i8 {
     let mut i: u32 = 0 as u32;
@@ -542,6 +756,16 @@ extern "C" fn recover_unused_string(z: *const i8, z_a_1: *const i8,
     return z_buf_1 as *const i8;
 }
 
+///* Implementation of scalar SQL function "escape_crlf".  The argument passed to
+///* this function is the output of built-in function quote(). If the first
+///* character of the input is "'", indicating that the value passed to quote()
+///* was a text value, then this function searches the input for "\n" and "\r"
+///* characters and adds a wrapper similar to the following:
+///*
+///*   replace(replace(<input>, '\n', char(10), '\r', char(13));
+///*
+///* Or, if the first character of the input is not "'", then a copy of the input
+///* is returned.
 extern "C" fn recover_escape_crlf(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_text: *const i8 =
@@ -707,6 +931,19 @@ extern "C" fn recover_escape_crlf(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). A copy of the error code is returned in
+///* this case. 
+///*
+///* Otherwise, an attempt is made to open the output database, attach
+///* and create the schema of the temporary database used to store
+///* intermediate data, and to register all required user functions and
+///* virtual table modules with the output handle.
+///*
+///* If no error occurs, SQLITE_OK is returned. Otherwise, an error code
+///* and error message are left in the recover handle and a copy of the
+///* error code returned.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_open_output(p: *mut Sqlite3Recover) -> i32 {
     let a_func: [FuncN4Func; 4] =
         [FuncN4Func {
@@ -731,7 +968,10 @@ extern "C" fn recover_open_output(p: *mut Sqlite3Recover) -> i32 {
                 }];
     let flags: i32 = (64 | 4 | 2) as i32;
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
+    /// New database handle
     let mut ii: i32 = 0;
+
+    /// For iterating through aFunc[]
     if !(unsafe { (*p).db_out } == core::ptr::null_mut()) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"recoverOpenOutput".as_ptr() as *const i8,
@@ -810,11 +1050,15 @@ extern "C" fn recover_vfs_close(p_fd: *mut Sqlite3File) -> i32 {
     }
 }
 
+///* Decode and return an unsigned 16-bit big-endian integer value from 
+///* buffer a[].
 extern "C" fn recover_get_u16(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as u32) << 8) +
             unsafe { *a.offset(1 as isize) } as u32;
 }
 
+///* Decode and return an unsigned 32-bit big-endian integer value from 
+///* buffer a[].
 extern "C" fn recover_get_u32(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as u32) << 24) +
                     ((unsafe { *a.offset(1 as isize) } as u32) << 16) +
@@ -822,6 +1066,8 @@ extern "C" fn recover_get_u32(a: *const u8) -> u32 {
             unsafe { *a.offset(3 as isize) } as u32;
 }
 
+///* Decode an SQLite varint from buffer a[]. Write the decoded value to (*pVal)
+///* and return the number of bytes consumed.
 extern "C" fn recover_get_varint(a: *const u8, p_val_1: &mut i64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut i: i32 = 0;
@@ -850,13 +1096,20 @@ extern "C" fn recover_get_varint(a: *const u8, p_val_1: &mut i64) -> i32 {
     return 9;
 }
 
+///* The second argument points to a buffer n bytes in size. If this buffer
+///* or a prefix thereof appears to contain a well-formed SQLite b-tree page, 
+///* return the page-size in bytes. Otherwise, if the buffer does not 
+///* appear to contain a well-formed b-tree page, return 0.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_is_valid_page(a_tmp_1: *mut u8, a: &[u8]) -> i32 {
     let a_used: *mut u8 = a_tmp_1;
     let mut n_frag: i32 = 0;
     let mut n_actual: i32 = 0;
     let mut i_free: i32 = 0;
     let mut n_cell: i32 = 0;
+    /// Number of cells on page
     let mut i_cell_off: i32 = 0;
+    /// Offset of cell array in page
     let mut i_content: i32 = 0;
     let mut e_type: i32 = 0;
     let mut ii: i32 = 0;
@@ -965,6 +1218,18 @@ extern "C" fn recover_is_valid_page(a_tmp_1: *mut u8, a: &[u8]) -> i32 {
     return (n_actual == n_frag) as i32;
 }
 
+///* Detect the page-size of the database opened by file-handle pFd by 
+///* searching the first part of the file for a well-formed SQLite b-tree 
+///* page. If parameter nReserve is non-zero, then as well as searching for
+///* a b-tree page with zero reserved bytes, this function searches for one
+///* with nReserve reserved bytes at the end of it.
+///*
+///* If successful, set variable p->detected_pgsz to the detected page-size
+///* in bytes and return SQLITE_OK. Or, if no error occurs but no valid page
+///* can be found, return SQLITE_OK but leave p->detected_pgsz set to 0. Or,
+///* if an error occurs (e.g. an IO or OOM error), then an SQLite error code
+///* is returned. The final value of p->detected_pgsz is undefined in this
+///* case.
 extern "C" fn recover_vfs_detect_pagesize(p: &mut Sqlite3Recover,
     p_fd_1: *mut Sqlite3File, mut n_reserve_1: u32, n_sz_1: i64) -> i32 {
     let mut rc: i32 = 0;
@@ -1059,6 +1324,13 @@ extern "C" fn recover_vfs_detect_pagesize(p: &mut Sqlite3Recover,
     return rc;
 }
 
+///* This function is a no-op if the recover handle passed as the first 
+///* argument already contains an error (if p->errCode!=SQLITE_OK). 
+///*
+///* Otherwise, an attempt is made to allocate, zero and return a buffer nByte
+///* bytes in size. If successful, a pointer to the new buffer is returned. Or,
+///* if an OOM error occurs, NULL is returned and the handle error code
+///* (p->errCode) set to SQLITE_NOMEM.
 extern "C" fn recover_malloc(p: &mut Sqlite3Recover, n_byte_1: i64)
     -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
@@ -1078,6 +1350,7 @@ extern "C" fn recover_malloc(p: &mut Sqlite3Recover, n_byte_1: i64)
     return p_ret;
 }
 
+///* Write value v to buffer a[] as a 32-bit big-endian unsigned integer.
 extern "C" fn recover_put_u32(a: *mut u8, v: u32) -> () {
     unsafe { *a.offset(0 as isize) = (v >> 24 & 255 as u32) as u8 };
     unsafe { *a.offset(1 as isize) = (v >> 16 & 255 as u32) as u8 };
@@ -1085,11 +1358,15 @@ extern "C" fn recover_put_u32(a: *mut u8, v: u32) -> () {
     unsafe { *a.offset(3 as isize) = (v >> 0 & 255 as u32) as u8 };
 }
 
+///* Write value v to buffer a[] as a 16-bit big-endian unsigned integer.
 extern "C" fn recover_put_u16(a: *mut u8, v: u32) -> () {
     unsafe { *a.offset(0 as isize) = (v >> 8 & 255 as u32) as u8 };
     unsafe { *a.offset(1 as isize) = (v >> 0 & 255 as u32) as u8 };
 }
 
+///* The xRead() method of the wrapper VFS. This is used to intercept calls
+///* to read page 1 of the input database.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_vfs_read(p_fd: *mut Sqlite3File, a_buf: *mut (),
     n_byte: i32, i_off: Sqlite3Int64) -> i32 {
     unsafe {
@@ -1106,6 +1383,25 @@ extern "C" fn recover_vfs_read(p_fd: *mut Sqlite3File, a_buf: *mut (),
             if n_byte == 16 {
                 unsafe { sqlite3_randomness(16, a_buf) };
             } else if rc == 0 && i_off == 0 as i64 && n_byte >= 108 {
+                /// Ensure that the database has a valid header file. The only fields
+                ///* that really matter to recovery are:
+                ///*
+                ///*   + Database page size (16-bits at offset 16)
+                ///*   + Size of db in pages (32-bits at offset 28)
+                ///*   + Database encoding (32-bits at offset 56)
+                ///*
+                ///* Also preserved are:
+                ///*
+                ///*   + first freelist page (32-bits at offset 32)
+                ///*   + size of freelist (32-bits at offset 36)
+                ///*   + the wal-mode flags (16-bits at offset 18)
+                ///*
+                ///* We also try to preserve the auto-vacuum, incr-value, user-version
+                ///* and application-id fields - all 32 bit quantities at offsets 
+                ///* 52, 60, 64 and 68. All other fields are set to known good values.
+                ///*
+                ///* Byte offset 105 should also contain the page-size as a 16-bit 
+                ///* integer.
                 let a_preserve: [i32; 6] = [32, 36, 52, 60, 64, 68];
                 let mut a_hdr: [u8; 108] =
                     [83 as u8, 81 as u8, 76 as u8, 105 as u8, 116 as u8,
@@ -1246,6 +1542,10 @@ extern "C" fn recover_vfs_read(p_fd: *mut Sqlite3File, a_buf: *mut (),
     }
 }
 
+///* Methods of the wrapper VFS. All methods except for xRead() and xClose()
+///* simply uninstall the sqlite3_io_methods wrapper, invoke the equivalent
+///* method on the lower level VFS, then reinstall the wrapper before returning.
+///* Those that return an integer value use the RECOVER_VFS_WRAPPER macro.
 extern "C" fn recover_vfs_write(p_fd: *mut Sqlite3File, a_buf: *const (),
     n_byte: i32, i_off: Sqlite3Int64) -> i32 {
     unsafe {
@@ -1695,6 +1995,9 @@ static mut recover_methods: Sqlite3IoMethods =
         x_unfetch: Some(recover_vfs_unfetch),
     };
 
+///* Install the VFS wrapper around the file-descriptor open on the input
+///* database for recover handle p. Mutex RECOVER_MUTEX_ID must be held
+///* when this function is called.
 extern "C" fn recover_install_wrapper(p: *mut Sqlite3Recover) -> () {
     unsafe {
         let mut p_fd: *mut Sqlite3File = core::ptr::null_mut();
@@ -1740,6 +2043,11 @@ extern "C" fn recover_install_wrapper(p: *mut Sqlite3Recover) -> () {
     }
 }
 
+///* Run a single SQL statement in zSql.  If zSql contains two or more
+///* SQL statements separated by ';', only the first is run.
+///*
+///* Return the sqlite3_finalizer() or sqlite3_prepare() result code
+///* from running the zSql statement.
 extern "C" fn recover_one_stmt(db: *mut Sqlite3, z_sql_1: *const i8) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut rc: i32 = 0;
@@ -1754,6 +2062,14 @@ extern "C" fn recover_one_stmt(db: *mut Sqlite3, z_sql_1: *const i8) -> i32 {
     return unsafe { sqlite3_finalize(p_stmt) };
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). A copy of p->errCode is returned in this 
+///* case.
+///*
+///* Otherwise, execute a single SQL statment in zSql.  Even if zSql contains
+///* two or more SQL statements separated by ';', only execute the first one.
+///* If successful, return SQLITE_OK.  Or, if an error occurs, leave an error
+///* code and message in the recover handle and return a copy of the error code.
 extern "C" fn recover_exec(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     z_sql_1: *const i8) -> i32 {
     if unsafe { (*p).err_code } == 0 {
@@ -1763,6 +2079,14 @@ extern "C" fn recover_exec(p: *mut Sqlite3Recover, db: *mut Sqlite3,
     return unsafe { (*p).err_code };
 }
 
+///* Transfer the following settings from the input database to the output
+///* database:
+///*
+///*   + page-size,
+///*   + auto-vacuum settings,
+///*   + database encoding,
+///*   + user-version (PRAGMA user_version), and
+///*   + application-id (PRAGMA application_id), and
 extern "C" fn recover_transfer_settings(p: *mut Sqlite3Recover) -> () {
     let a_pragma: [*const i8; 5] =
         [c"encoding".as_ptr() as *const i8,
@@ -1843,6 +2167,9 @@ extern "C" fn recover_transfer_settings(p: *mut Sqlite3Recover) -> () {
     }
 }
 
+///* Attach the auxiliary database 'recovery' to the output database handle.
+///* This temporary database is used during the recovery process and then 
+///* discarded.
 extern "C" fn recover_open_recovery(p: *mut Sqlite3Recover) -> () {
     let z_sql: *mut i8 =
         unsafe {
@@ -1862,12 +2189,26 @@ extern "C" fn recover_open_recovery(p: *mut Sqlite3Recover) -> () {
                 as *mut i8 as *const i8);
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). A copy of the error code is returned in
+///* this case. 
+///*
+///* Otherwise, attempt to populate temporary table "recovery.schema" with the
+///* parts of the database schema that can be extracted from the input database.
+///*
+///* If no error occurs, SQLITE_OK is returned. Otherwise, an error code
+///* and error message are left in the recover handle and a copy of the
+///* error code returned. It is not considered an error if part of all of
+///* the database schema cannot be recovered due to corruption.
 extern "C" fn recover_cache_schema(p: *mut Sqlite3Recover) -> i32 {
     return recover_exec(p, unsafe { (*p).db_out },
             c"WITH RECURSIVE pages(p) AS (  SELECT 1    UNION  SELECT child FROM sqlite_dbptr(\'getpage()\'), pages WHERE pgno=p)INSERT INTO recovery.schema SELECT  max(CASE WHEN field=0 THEN value ELSE NULL END),  max(CASE WHEN field=1 THEN value ELSE NULL END),  max(CASE WHEN field=2 THEN value ELSE NULL END),  max(CASE WHEN field=3 THEN value ELSE NULL END),  max(CASE WHEN field=4 THEN value ELSE NULL END)FROM sqlite_dbdata(\'getpage()\') WHERE pgno IN (  SELECT p FROM pages) GROUP BY pgno, cell".as_ptr()
                     as *mut i8 as *const i8);
 }
 
+///* Uninstall the VFS wrapper that was installed around the file-descriptor open
+///* on the input database for recover handle p. Mutex RECOVER_MUTEX_ID must be
+///* held when this function is called.
 extern "C" fn recover_uninstall_wrapper(p: &Sqlite3Recover) -> () {
     unsafe {
         let mut p_fd: *mut Sqlite3File = core::ptr::null_mut();
@@ -1887,6 +2228,17 @@ extern "C" fn recover_leave_mutex() -> () {
     unsafe { sqlite3_mutex_leave(unsafe { sqlite3_mutex_alloc(9) }) };
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK).
+///*
+///* Otherwise, argument zName must be the name of a table that has just been
+///* created in the output database. This function queries the output db
+///* for the schema of said table, and creates a RecoverTable object to
+///* store the schema in memory. The new RecoverTable object is linked into
+///* the list at sqlite3_recover.pTblList.
+///*
+///* Parameter iRoot must be the root page of table zName in the INPUT 
+///* database.
 extern "C" fn recover_add_table(p: *mut Sqlite3Recover, z_name_1: *const i8,
     i_root_1: i64) -> () {
     let mut p_stmt: *mut Sqlite3Stmt =
@@ -2044,6 +2396,23 @@ extern "C" fn recover_add_table(p: *mut Sqlite3Recover, z_name_1: *const i8,
     }
 }
 
+///* This function is called after recoverCacheSchema() has cached those parts
+///* of the input database schema that could be recovered in temporary table
+///* "recovery.schema". This function creates in the output database copies
+///* of all parts of that schema that must be created before the tables can
+///* be populated. Specifically, this means:
+///*
+///*     * all tables that are not VIRTUAL, and
+///*     * UNIQUE indexes.
+///*
+///* If the recovery handle uses SQL callbacks, then callbacks containing
+///* the associated "CREATE TABLE" and "CREATE INDEX" statements are made.
+///*
+///* Additionally, records are added to the sqlite_schema table of the
+///* output database for any VIRTUAL tables. The CREATE VIRTUAL TABLE
+///* records are written directly to sqlite_schema, not actually executed.
+///* If the handle is in SQL callback mode, then callbacks are invoked 
+///* with equivalent SQL statements.
 extern "C" fn recover_write_schema1(p: *mut Sqlite3Recover) -> i32 {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut p_tblname: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2103,10 +2472,16 @@ extern "C" fn recover_write_schema1(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* Initialize resources required in RECOVER_STATE_WRITING state - during which
+///* tables recovered from the schema of the input database are populated with
+///* recovered data.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let mut p_tbl: *const RecoverTable = core::ptr::null();
     let mut n_byte: i32 = 0;
+
+    /// Figure out the maximum number of columns for any table in the schema
     if !(unsafe { (*p1).n_max } == 0) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"recoverWriteDataInit".as_ptr() as *const i8,
@@ -2127,9 +2502,12 @@ extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
             p_tbl = unsafe { (*p_tbl).p_next };
         }
     }
-    n_byte =
+
+    /// Allocate an array of (sqlite3_value*) in which to accumulate the values
+    ///* that will be written to the output database in a single row.
+    (n_byte =
         (core::mem::size_of::<*mut Sqlite3Value>() as u64 *
-                (unsafe { (*p1).n_max } + 1) as u64) as i32;
+                (unsafe { (*p1).n_max } + 1) as u64) as i32);
     unsafe {
         (*p1).ap_val =
             recover_malloc(unsafe { &mut *p }, n_byte as i64) as
@@ -2138,6 +2516,9 @@ extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
     if unsafe { (*p1).ap_val } == core::ptr::null_mut() {
         return unsafe { (*p).err_code };
     }
+
+    /// Prepare the SELECT to loop through schema tables (pTbls) and the SELECT
+    ///* to loop through cells that appear to belong to a single table (pSel).
     unsafe {
         (*p1).p_tbls =
             recover_prepare(p, unsafe { (*p).db_out },
@@ -2153,6 +2534,9 @@ extern "C" fn recover_write_data_init(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* Search the list of RecoverTable objects at p->pTblList for one that
+///* has root page iRoot in the input database. If such an object is found,
+///* return a pointer to it. Otherwise, return NULL.
 extern "C" fn recover_find_table(p: &Sqlite3Recover, i_root_1: u32)
     -> *mut RecoverTable {
     let mut p_ret: *mut RecoverTable = core::ptr::null_mut();
@@ -2170,6 +2554,39 @@ extern "C" fn recover_find_table(p: &Sqlite3Recover, i_root_1: u32)
     return p_ret;
 }
 
+///* This function is a no-op if recover handle p already contains an error
+///* (if p->errCode!=SQLITE_OK). In this case it returns NULL.
+///*
+///* Otherwise, if the recover handle is configured to create an output
+///* database (was created by sqlite3_recover_init()), then this function
+///* prepares and returns an SQL statement to INSERT a new record into table
+///* pTab, assuming the first nField fields of a record extracted from disk
+///* are valid.
+///*
+///* For example, if table pTab is:
+///*
+///*     CREATE TABLE name(a, b GENERATED ALWAYS AS (a+1) STORED, c, d, e);
+///*
+///* And nField is 4, then the SQL statement prepared and returned is:
+///*
+///*     INSERT INTO (a, c, d) VALUES (?1, ?2, ?3);
+///*
+///* In this case even though 4 values were extracted from the input db,
+///* only 3 are written to the output, as the generated STORED column 
+///* cannot be written.
+///*
+///* If the recover handle is in SQL callback mode, then the SQL statement
+///* prepared is such that evaluating it returns a single row containing
+///* a single text value - itself an SQL statement similar to the above,
+///* except with SQL literals in place of the variables. For example:
+///*
+///*     SELECT 'INSERT INTO (a, c, d) VALUES (' 
+///*          || quote(?1) || ', '
+///*          || quote(?2) || ', '
+///*          || quote(?3) || ')';
+///*
+///* In either case, it is the responsibility of the caller to eventually
+///* free the statement handle using sqlite3_finalize().
 extern "C" fn recover_insert_stmt(p: *mut Sqlite3Recover,
     p_tab_1: &RecoverTable, n_field_1: i32) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2297,6 +2714,9 @@ extern "C" fn recover_insert_stmt(p: *mut Sqlite3Recover,
     return p_ret;
 }
 
+///* Bind the value pVal to parameter iBind of statement pStmt. Leave an
+///* error in the recover handle passed as the first argument if an error
+///* (e.g. an OOM) occurs.
 extern "C" fn recover_bind_value(p: *mut Sqlite3Recover,
     p_stmt_1: *mut Sqlite3Stmt, i_bind_1: i32, p_val_1: *const Sqlite3Value)
     -> () {
@@ -2314,6 +2734,11 @@ extern "C" fn recover_bind_value(p: *mut Sqlite3Recover,
     }
 }
 
+///* Perform one step (sqlite3_recover_step()) of work for the connection 
+///* passed as the only argument, which is guaranteed to be in
+///* RECOVER_STATE_WRITING state - during which tables recovered from the
+///* schema of the input database are populated with recovered data.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_write_data_step(p: *mut Sqlite3Recover) -> i32 {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let p_sel: *mut Sqlite3Stmt = unsafe { (*p1).p_sel };
@@ -2344,6 +2769,10 @@ extern "C" fn recover_write_data_step(p: *mut Sqlite3Recover) -> i32 {
                     c"DELETE FROM sqlite_sequence".as_ptr() as *mut i8 as
                         *const i8);
             }
+
+            /// Bind the root page of this table within the original database to 
+            ///* SELECT statement p1->pSel. The SELECT statement will then iterate
+            ///* through cells that look like they belong to table pTab.
             unsafe { sqlite3_bind_int64(p_sel, 1, i_root) };
             unsafe { (*p1).n_val = 0 };
             unsafe { (*p1).b_have_rowid = 0 };
@@ -2527,6 +2956,8 @@ extern "C" fn recover_write_data_step(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* Clean up resources allocated by recoverWriteDataInit() (stuff in 
+///* sqlite3_recover.w1).
 extern "C" fn recover_write_data_cleanup(p: *mut Sqlite3Recover) -> () {
     let p1: *mut RecoverStateW1 = unsafe { &mut (*p).w1 };
     let mut ii: i32 = 0;
@@ -2555,6 +2986,12 @@ extern "C" fn recover_write_data_cleanup(p: *mut Sqlite3Recover) -> () {
     };
 }
 
+///* This function is a no-op if p->errCode is initially other than SQLITE_OK.
+///* In this case it returns NULL.
+///*
+///* Otherwise, an attempt is made to allocate and return a bitmap object
+///* large enough to store a bit for all page numbers between 1 and nPg,
+///* inclusive. The bitmap is initially zeroed.
 extern "C" fn recover_bitmap_alloc(p: *mut Sqlite3Recover, n_pg_1: i64)
     -> *mut RecoverBitmap {
     let n_elem: i32 = ((n_pg_1 + 1 as i64 + 31 as i64) / 32 as i64) as i32;
@@ -2568,6 +3005,10 @@ extern "C" fn recover_bitmap_alloc(p: *mut Sqlite3Recover, n_pg_1: i64)
     return p_ret;
 }
 
+///* Initialize resources required by sqlite3_recover_step() in
+///* RECOVER_STATE_LOSTANDFOUND1 state - during which the set of pages not
+///* already allocated to a recovered schema element is determined.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_lost_and_found1_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2583,10 +3024,15 @@ extern "C" fn recover_lost_and_found1_init(p: *mut Sqlite3Recover) -> () {
     unsafe {
         (*p_laf).p_used = recover_bitmap_alloc(p, unsafe { (*p_laf).n_pg })
     };
-    p_stmt =
+
+    /// Prepare a statement to iterate through all pages that are part of any tree
+    ///* in the recoverable part of the input database schema to the bitmap. And,
+    ///* if !p->bFreelistCorrupt, add all pages that appear to be part of the
+    ///* freelist.
+    (p_stmt =
         recover_prepare(p, unsafe { (*p).db_out },
             c"WITH trunk(pgno) AS (  SELECT read_i32(getpage(1), 8) AS x WHERE x>0    UNION  SELECT read_i32(getpage(trunk.pgno), 0) AS x FROM trunk WHERE x>0),trunkdata(pgno, data) AS (  SELECT pgno, getpage(pgno) FROM trunk),freelist(data, n, freepgno) AS (  SELECT data, min(16384, read_i32(data, 1)-1), pgno FROM trunkdata    UNION ALL  SELECT data, n-1, read_i32(data, 2+n) FROM freelist WHERE n>=0),roots(r) AS (  SELECT 1 UNION ALL  SELECT rootpage FROM recovery.schema WHERE rootpage>0),used(page) AS (  SELECT r FROM roots    UNION  SELECT child FROM sqlite_dbptr(\'getpage()\'), used     WHERE pgno=page) SELECT page FROM used UNION ALL SELECT freepgno FROM freelist WHERE NOT ?".as_ptr()
-                    as *mut i8 as *const i8);
+                    as *mut i8 as *const i8));
     if !(p_stmt).is_null() {
         unsafe {
             sqlite3_bind_int(p_stmt, 1, unsafe { (*p).b_freelist_corrupt })
@@ -2595,6 +3041,7 @@ extern "C" fn recover_lost_and_found1_init(p: *mut Sqlite3Recover) -> () {
     unsafe { (*p_laf).p_used_pages = p_stmt };
 }
 
+///* Set the bit associated with page iPg in bitvec pMap.
 extern "C" fn recover_bitmap_set(p_map_1: &mut RecoverBitmap, i_pg_1: i64)
     -> () {
     if i_pg_1 <= (*p_map_1).n_pg {
@@ -2607,6 +3054,10 @@ extern "C" fn recover_bitmap_set(p_map_1: &mut RecoverBitmap, i_pg_1: i64)
     }
 }
 
+///* Perform one step (sqlite3_recover_step()) of work for the connection 
+///* passed as the only argument, which is guaranteed to be in
+///* RECOVER_STATE_LOSTANDFOUND1 state - during which the set of pages not
+///* already allocated to a recovered schema element is determined.
 extern "C" fn recover_lost_and_found1_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     let mut rc: i32 = unsafe { (*p).err_code };
@@ -2628,6 +3079,9 @@ extern "C" fn recover_lost_and_found1_step(p: *mut Sqlite3Recover) -> i32 {
     return rc;
 }
 
+///* Initialize resources required by RECOVER_STATE_LOSTANDFOUND2 
+///* state - during which the pages identified in RECOVER_STATE_LOSTANDFOUND1
+///* are sorted into sets that likely belonged to the same database tree.
 extern "C" fn recover_lost_and_found2_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if !(unsafe { (*p).laf.p_all_and_parent } == core::ptr::null_mut()) as i32
@@ -2685,6 +3139,11 @@ extern "C" fn recover_lost_and_found2_init(p: *mut Sqlite3Recover) -> () {
     };
 }
 
+///* Perform one step (sqlite3_recover_step()) of work for the connection 
+///* passed as the only argument, which is guaranteed to be in
+///* RECOVER_STATE_LOSTANDFOUND2 state - during which the pages identified 
+///* in RECOVER_STATE_LOSTANDFOUND1 are sorted into sets that likely belonged 
+///* to the same database tree.
 extern "C" fn recover_lost_and_found2_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if unsafe { (*p).err_code } == 0 {
@@ -2735,6 +3194,13 @@ extern "C" fn recover_lost_and_found2_step(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* This function attempts to create a lost and found table within the 
+///* output db. If successful, it returns a pointer to a buffer containing
+///* the name of the new table. It is the responsibility of the caller to
+///* eventually free this buffer using sqlite3_free().
+///*
+///* If an error occurs, NULL is returned and an error code and error 
+///* message left in the recover handle.
 extern "C" fn recover_lost_and_found_create(p: *mut Sqlite3Recover,
     n_field_1: i32) -> *mut i8 {
     let mut z_tbl: *mut i8 = core::ptr::null_mut();
@@ -2832,6 +3298,9 @@ extern "C" fn recover_lost_and_found_create(p: *mut Sqlite3Recover,
     return z_tbl;
 }
 
+///* Synthesize and prepare an INSERT statement to write to the lost_and_found
+///* table in the output database. The name of the table is zTab, and it has
+///* nField c* fields.
 extern "C" fn recover_lost_and_found_insert(p: *mut Sqlite3Recover,
     z_tab_1: *const i8, n_field_1: i32) -> *mut Sqlite3Stmt {
     let n_total: i32 = n_field_1 + 4;
@@ -2893,12 +3362,20 @@ extern "C" fn recover_lost_and_found_insert(p: *mut Sqlite3Recover,
     return p_ret;
 }
 
+///* Initialize resources required in RECOVER_STATE_LOSTANDFOUND3 
+///* state - during which the lost-and-found table of the output database 
+///* is populated with recovered data that can not be assigned to any 
+///* recovered schema object.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_lost_and_found3_init(p: *mut Sqlite3Recover) -> () {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
     if unsafe { (*p_laf).n_max_field } > 0 {
         let mut z_tab: *mut i8 = core::ptr::null_mut();
-        z_tab =
-            recover_lost_and_found_create(p, unsafe { (*p_laf).n_max_field });
+
+        /// Name of lost_and_found table
+        (z_tab =
+            recover_lost_and_found_create(p,
+                unsafe { (*p_laf).n_max_field }));
         unsafe {
             (*p_laf).p_insert =
                 recover_lost_and_found_insert(p, z_tab as *const i8,
@@ -2929,6 +3406,13 @@ extern "C" fn recover_lost_and_found3_init(p: *mut Sqlite3Recover) -> () {
     }
 }
 
+///* Input database page iPg contains data that will be written to the
+///* lost-and-found table of the output database. This function attempts
+///* to identify the root page of the tree that page iPg belonged to.
+///* If successful, it sets output variable (*piRoot) to the page number
+///* of the root page and returns SQLITE_OK. Otherwise, if an error occurs,
+///* an SQLite error code is returned and the final value of *piRoot 
+///* undefined.
 extern "C" fn recover_lost_and_found_find_root(p: *mut Sqlite3Recover,
     i_pg_1: i64, pi_root_1: &mut i64) -> i32 {
     let p_laf: *mut RecoverStateLAF = unsafe { &mut (*p).laf };
@@ -2955,6 +3439,9 @@ extern "C" fn recover_lost_and_found_find_root(p: *mut Sqlite3Recover,
     return unsafe { (*p).err_code };
 }
 
+///* Recover data from page iPage of the input database and write it to
+///* the lost-and-found table in the output database.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_lost_and_found_one_page(p: *mut Sqlite3Recover,
     i_page_1: i64) -> () {
     let p_laf: *const RecoverStateLAF =
@@ -2979,8 +3466,14 @@ extern "C" fn recover_lost_and_found_one_page(p: *mut Sqlite3Recover,
         let i_field: i32 =
             unsafe { sqlite3_column_int64(p_page_data, 1) } as i32;
         if i_prev_cell != i_cell && n_val >= 0 {
+
+            /// Insert the new row
             unsafe { sqlite3_bind_int64(p_insert, 1, i_root) };
+
+            /// rootpgno
             unsafe { sqlite3_bind_int64(p_insert, 2, i_page_1) };
+
+            /// pgno
             unsafe { sqlite3_bind_int(p_insert, 3, n_val) };
             if b_have_rowid != 0 {
                 unsafe { sqlite3_bind_int64(p_insert, 4, i_rowid) };
@@ -3083,6 +3576,11 @@ extern "C" fn recover_lost_and_found_one_page(p: *mut Sqlite3Recover,
     }
 }
 
+///* Perform one step (sqlite3_recover_step()) of work for the connection 
+///* passed as the only argument, which is guaranteed to be in
+///* RECOVER_STATE_LOSTANDFOUND3 state - during which the lost-and-found 
+///* table of the output database is populated with recovered data that can 
+///* not be assigned to any recovered schema object.
 extern "C" fn recover_lost_and_found3_step(p: *mut Sqlite3Recover) -> i32 {
     let p_laf: *const RecoverStateLAF =
         unsafe { &raw mut (*p).laf } as *const RecoverStateLAF;
@@ -3113,6 +3611,17 @@ extern "C" fn recover_lost_and_found3_step(p: *mut Sqlite3Recover) -> i32 {
     return 0;
 }
 
+///* This function is called after the output database has been populated. It
+///* adds all recovered schema elements that were not created in the output
+///* database by recoverWriteSchema1() - everything except for tables and
+///* UNIQUE indexes. Specifically:
+///*
+///*     * views,
+///*     * triggers,
+///*     * non-UNIQUE indexes.
+///*
+///* If the recover handle is in SQL callback mode, then equivalent callbacks
+///* are issued to create the schema elements.
 extern "C" fn recover_write_schema2(p: *mut Sqlite3Recover) -> i32 {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_select =
@@ -3138,10 +3647,13 @@ extern "C" fn recover_write_schema2(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* Free a bitmap object allocated by recoverBitmapAlloc().
 extern "C" fn recover_bitmap_free(p_map_1: *mut RecoverBitmap) -> () {
     unsafe { sqlite3_free(p_map_1 as *mut ()) };
 }
 
+///* Free all resources allocated as part of sqlite3_recover_step() calls
+///* in one of the RECOVER_STATE_LOSTANDFOUND[123] states.
 extern "C" fn recover_lost_and_found_cleanup(p: &mut Sqlite3Recover) -> () {
     recover_bitmap_free((*p).laf.p_used);
     (*p).laf.p_used = core::ptr::null_mut();
@@ -3165,6 +3677,7 @@ extern "C" fn recover_lost_and_found_cleanup(p: &mut Sqlite3Recover) -> () {
     (*p).laf.ap_val = core::ptr::null_mut();
 }
 
+///* Free all resources allocated as part of sqlite3_recover_step() calls.
 extern "C" fn recover_final_cleanup(p: *mut Sqlite3Recover) -> () {
     let mut p_tab: *mut RecoverTable = core::ptr::null_mut();
     let mut p_next: *mut RecoverTable = core::ptr::null_mut();
@@ -3202,6 +3715,10 @@ extern "C" fn recover_final_cleanup(p: *mut Sqlite3Recover) -> () {
     unsafe { (*p).db_out = core::ptr::null_mut() };
 }
 
+///* This function does the work of a single sqlite3_recover_step() call. It
+///* is guaranteed that the handle is not in an error state when this
+///* function is called.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
     if !(!(p).is_null() && unsafe { (*p).err_code } == 0) as i32 as i64 != 0 {
         unsafe {
@@ -3217,6 +3734,8 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
             0 => {
                 {
                     let mut b_use_wrapper: i32 = 1;
+
+                    /// This is the very first call to sqlite3_recover_step() on this object.
                     recover_sql_callback(p,
                         c"BEGIN".as_ptr() as *mut i8 as *const i8);
                     recover_sql_callback(p,
@@ -3226,12 +3745,17 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                         c"PRAGMA foreign_keys = off".as_ptr() as *mut i8 as
                             *const i8);
                     recover_enter_mutex();
+
+                    /// Open the output database. And register required virtual tables and 
+                    ///* user functions with the new handle.
                     recover_open_output(p);
                     if unsafe { (*p).err_code } == 0 {
                         '__b38: loop {
                             '__c38: loop {
                                 unsafe { (*p).err_code = 0 };
                                 if b_use_wrapper != 0 { recover_install_wrapper(p); }
+
+                                /// Open a transaction on the input database.
                                 unsafe {
                                     sqlite3_file_control(unsafe { (*p).db_in },
                                         unsafe { (*p).z_db } as *const i8, 42,
@@ -3321,6 +3845,10 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3338,7 +3866,11 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
             1 => {
                 {
@@ -3385,6 +3917,10 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3402,7 +3938,11 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
             2 => {
                 {
@@ -3437,6 +3977,10 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3454,7 +3998,11 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
             3 => {
                 {
@@ -3480,6 +4028,10 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3497,7 +4049,11 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
             4 => {
                 {
@@ -3513,6 +4069,10 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3530,13 +4090,21 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
             5 => {
                 {
                     let mut rc: i32 = 0;
                     recover_write_schema2(p);
                     unsafe { (*p).e_state = 6 };
+
+                    /// If no error has occurred, commit the write transaction on the output
+                    ///* database. Regardless of whether or not an error has occurred, make
+                    ///* an attempt to end the read transaction on the input database.
                     recover_exec(p, unsafe { (*p).db_out },
                         c"COMMIT".as_ptr() as *mut i8 as *const i8);
                     rc =
@@ -3554,14 +4122,37 @@ extern "C" fn recover_step(p: *mut Sqlite3Recover) -> () {
                     recover_final_cleanup(p);
                     break '__s37;
                 }
-                { break '__s37; }
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
             }
-            6 => { { break '__s37; } }
+            6 => {
+                {
+
+                    /// no-op
+                    break '__s37;
+                }
+            }
             _ => {}
         }
     }
 }
 
+///* Perform a unit of work towards the recovery operation. This function 
+///* must normally be called multiple times to complete database recovery.
+///*
+///* If no error occurs but the recovery operation is not completed, this
+///* function returns SQLITE_OK. If recovery has been completed successfully
+///* then SQLITE_DONE is returned. If an error has occurred, then an SQLite
+///* error code (e.g. SQLITE_IOERR or SQLITE_NOMEM) is returned. It is not
+///* considered an error if some or all of the data cannot be recovered
+///* due to database corruption.
+///*
+///* Once sqlite3_recover_step() has returned a value other than SQLITE_OK,
+///* all further such calls on the same recover handle are no-ops that return
+///* the same non-SQLITE_OK value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_step(p: *mut Sqlite3Recover) -> i32 {
     if p == core::ptr::null_mut() { return 7; }
@@ -3572,17 +4163,35 @@ pub extern "C" fn sqlite3_recover_step(p: *mut Sqlite3Recover) -> i32 {
     return unsafe { (*p).err_code };
 }
 
+///* If this function is called on an sqlite3_recover handle after
+///* an error occurs, an SQLite error code is returned. Otherwise, SQLITE_OK.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_errcode(p: *const Sqlite3Recover) -> i32 {
     return if !(p).is_null() { unsafe { (*p).err_code } } else { 7 };
 }
 
+/// 
+///* Run the recovery operation to completion. Return SQLITE_OK if successful,
+///* or an SQLite error code otherwise. Calling this function is the same
+///* as executing:
+///*
+///*     while( SQLITE_OK==sqlite3_recover_step(p) );
+///*     return sqlite3_recover_errcode(p);
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_run(p: *mut Sqlite3Recover) -> i32 {
     while 0 == sqlite3_recover_step(p) {}
     return sqlite3_recover_errcode(p as *const Sqlite3Recover);
 }
 
+///* If an error has been encountered during a prior call to
+///* sqlite3_recover_step(), then this function attempts to return a 
+///* pointer to a buffer containing an English language explanation of 
+///* the error. If no error message is available, or if an out-of memory 
+///* error occurs while attempting to allocate a buffer in which to format
+///* the error message, NULL is returned.
+///*
+///* The returned buffer remains valid until the sqlite3_recover handle is
+///* destroyed using sqlite3_recover_finish().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_errmsg(p: *const Sqlite3Recover)
     -> *const i8 {
@@ -3591,6 +4200,12 @@ pub extern "C" fn sqlite3_recover_errmsg(p: *const Sqlite3Recover)
             } else { c"out of memory".as_ptr() as *mut i8 } as *const i8;
 }
 
+/// 
+///* Clean up a recovery object created by a call to sqlite3_recover_init().
+///* The results of using a recovery object with any API after it has been
+///* passed to this function are undefined.
+///*
+///* This function returns the same value as sqlite3_recover_errcode().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_recover_finish(p: *mut Sqlite3Recover) -> i32 {
     let mut rc: i32 = 0;

@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexConstraintUsage, Sqlite3IndexInfo,
+    Sqlite3Int64, Sqlite3Module, Sqlite3Mutex, Sqlite3MutexMethods,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type Uint64T = u64;
 
@@ -484,6 +500,8 @@ impl Parse {
     }
 }
 
+/// 
+///* A fs virtual-table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsVtab {
@@ -493,6 +511,7 @@ struct FsVtab {
     z_tbl: *mut i8,
 }
 
+/// A fs cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsCursor {
@@ -503,6 +522,8 @@ struct FsCursor {
     n_alloc: i32,
 }
 
+///**********************************************************************
+///* Start of fsdir implementation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FsdirVtab {
@@ -519,6 +540,15 @@ struct FsdirCsr {
     p_entry: *mut Dirent,
 }
 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the fsdir virtual table.
+///*
+///* The argv[] array contains the following:
+///*
+///*   argv[0]   -> module name  ("fs")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> other module argument fields.
 extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -548,11 +578,15 @@ extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return 0;
 }
 
+///* xDestroy/xDisconnect implementation.
 extern "C" fn fsdir_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* xBestIndex implementation. The only constraint supported is:
+///*
+///*   (dir = ?)
 extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -595,14 +629,22 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* xOpen implementation.
+///*
+///* Open a new fsdir cursor.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsdirCsr = core::ptr::null_mut();
-    p_cur =
+
+    /// Allocate an extra 256 bytes because it is undefined how big dirent.d_name
+    ///* is and we need enough space.  Linux provides plenty already, but
+    ///* Solaris only provides one byte.
+    (p_cur =
         unsafe {
                 sqlite3_malloc((core::mem::size_of::<FsdirCsr>() as u64 +
                             256 as u64) as i32)
-            } as *mut FsdirCsr;
+            } as *mut FsdirCsr);
     if p_cur == core::ptr::null_mut() { return 7; }
     unsafe {
         memset(p_cur as *mut (), 0, core::mem::size_of::<FsdirCsr>() as u64)
@@ -611,6 +653,7 @@ extern "C" fn fsdir_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a fsdir cursor.
 extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCsr = cur as *mut FsdirCsr;
     if !(unsafe { (*p_cur).p_dir }).is_null() {
@@ -621,6 +664,7 @@ extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Skip the cursor to the next entry.
 extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FsdirCsr = cur as *mut FsdirCsr;
     if !(unsafe { (*p_csr).p_dir }).is_null() {
@@ -641,6 +685,7 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* xFilter method implementation.
 extern "C" fn fsdir_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -674,11 +719,13 @@ extern "C" fn fsdir_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return fsdir_next(p_vtab_cursor_1);
 }
 
+///* xEof method implementation.
 extern "C" fn fsdir_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
     return (unsafe { (*p_csr).p_dir } == core::ptr::null_mut()) as i32;
 }
 
+///* xColumn method implementation.
 extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
@@ -710,6 +757,7 @@ extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* xRowid method implementation.
 extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const FsdirCsr = cur as *mut FsdirCsr as *const FsdirCsr;
@@ -717,6 +765,8 @@ extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///**********************************************************************
+///* Start of fstree implementation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FstreeVtab {
@@ -732,6 +782,15 @@ struct FstreeCsr {
     fd: i32,
 }
 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the fstree virtual table.
+///*
+///* The argv[] array contains the following:
+///*
+///*   argv[0]   -> module name  ("fs")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> other module argument fields.
 extern "C" fn fstree_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -763,11 +822,15 @@ extern "C" fn fstree_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return 0;
 }
 
+///* xDestroy/xDisconnect implementation.
 extern "C" fn fstree_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* xBestIndex implementation. The only constraint supported is:
+///*
+///*   (dir = ?)
 extern "C" fn fstree_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -813,6 +876,9 @@ extern "C" fn fstree_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* xOpen implementation.
+///*
+///* Open a new fstree cursor.
 extern "C" fn fstree_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FstreeCsr = core::ptr::null_mut();
@@ -835,6 +901,7 @@ extern "C" fn fstree_close_fd(p_csr_1: &mut FstreeCsr) -> () {
     }
 }
 
+///* Close a fstree cursor.
 extern "C" fn fstree_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FstreeCsr = cur as *mut FstreeCsr;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_stmt }) };
@@ -843,6 +910,7 @@ extern "C" fn fstree_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Skip the cursor to the next entry.
 extern "C" fn fstree_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut FstreeCsr = cur as *mut FstreeCsr;
     let mut rc: i32 = 0;
@@ -865,6 +933,7 @@ extern "C" fn fstree_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+///* xFilter method implementation.
 extern "C" fn fstree_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -979,15 +1048,20 @@ extern "C" fn fstree_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+///* xEof method implementation.
 extern "C" fn fstree_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const FstreeCsr = cur as *mut FstreeCsr as *const FstreeCsr;
     return (unsafe { (*p_csr).p_stmt } == core::ptr::null_mut()) as i32;
 }
 
+///* xColumn method implementation.
+#[allow(unused_doc_comments)]
 extern "C" fn fstree_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const FstreeCsr = cur as *mut FstreeCsr as *const FstreeCsr;
     if i == 0 {
+
+        /// path
         unsafe {
             sqlite3_result_value(ctx,
                 unsafe {
@@ -1027,12 +1101,22 @@ extern "C" fn fstree_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* xRowid method implementation.
 extern "C" fn fstree_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     unsafe { *p_rowid_1 = 0 as SqliteInt64 };
     return 0;
 }
 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the fs virtual table.
+///*
+///* The argv[] array contains the following:
+///*
+///*   argv[0]   -> module name  ("fs")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> other module argument fields.
 extern "C" fn fs_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1088,11 +1172,14 @@ extern "C" fn fs_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return 0;
 }
 
+/// Note that for this virtual table, the xCreate and xConnect
+///* methods are identical.
 extern "C" fn fs_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Open a new fs cursor.
 extern "C" fn fs_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsCursor = core::ptr::null_mut();
@@ -1104,6 +1191,7 @@ extern "C" fn fs_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a fs cursor.
 extern "C" fn fs_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsCursor = cur as *mut FsCursor;
     unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) };
@@ -1290,6 +1378,8 @@ extern "C" fn fs_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* A virtual table module that provides read-only access to a
+///* Tcl global variable namespace.
 static mut fs_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1377,6 +1467,7 @@ static mut fstree_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Register the echo virtual table module.
 extern "C" fn register_fs_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {

@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -25,6 +31,7 @@ struct DText {
     n_alloc: Sqlite3Int64,
 }
 
+///* Initialize and destroy a DText object
 extern "C" fn init_text(p: *mut DText) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<DText>() as u64) };
 }
@@ -34,6 +41,13 @@ extern "C" fn free_text(p: *mut DText) -> () {
     init_text(p);
 }
 
+/// zIn is either a pointer to a NULL-terminated string in memory obtained
+///* from malloc(), or a NULL pointer. The string pointed to by zAppend is
+///* added to zIn, and the result returned in memory obtained from malloc().
+///* zIn, if it was not NULL, is freed.
+///*
+///* If the third argument, quote, is not '\0', then it is used as a
+///* quote character for zAppend.
 extern "C" fn append_text(p: *mut DText, z_append_1: *const i8, quote: i8)
     -> () {
     let mut len: i32 = 0;
@@ -143,6 +157,12 @@ extern "C" fn append_text(p: *mut DText, z_append_1: *const i8, quote: i8)
     }
 }
 
+///* Attempt to determine if identifier zName needs to be quoted, either
+///* because it contains non-alphanumeric characters, or because it is an
+///* SQLite keyword.  Be conservative in this estimate:  When in doubt assume
+///* that quoting is required.
+///*
+///* Return '"' if quoting is required.  Return 0 if no quoting is required.
 extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
     let mut i: i32 = 0;
     if (unsafe {
@@ -177,6 +197,8 @@ extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
             } else { 0 } as i8;
 }
 
+///* Release memory previously allocated by tableColumnList().
+#[allow(unused_doc_comments)]
 extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
     let mut i: i32 = 0;
     {
@@ -195,9 +217,23 @@ extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
+
+    /// azCol[0] is a static string
     unsafe { sqlite3_free(az_col_1 as *mut ()) };
 }
 
+///* Return a list of pointers to strings which are the names of all
+///* columns in table zTab.   The memory to hold the names is dynamically
+///* allocated and must be released by the caller using a subsequent call
+///* to freeColumnList().
+///*
+///* The azCol[0] entry is usually NULL.  However, if zTab contains a rowid
+///* value that needs to be preserved, then azCol[0] is filled in with the
+///* name of the rowid column.
+///*
+///* The first regular column in the table is azCol[1].  The list is terminated
+///* by an entry with azCol[i]==0.
+#[allow(unused_doc_comments)]
 extern "C" fn table_column_list(p: &mut DState, z_tab_1: *const i8)
     -> *mut *mut i8 {
     unsafe {
@@ -207,7 +243,9 @@ extern "C" fn table_column_list(p: &mut DState, z_tab_1: *const i8)
         let mut n_col: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut n_alloc: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut n_pk: i32 = 0;
+        /// Number of PRIMARY KEY columns seen
         let mut is_ipk: i32 = 0;
+        /// True if one PRIMARY KEY column of type INTEGER
         let mut preserve_rowid: i32 = 0;
         let mut rc: i32 = 0;
         let mut az_new: *mut *mut i8 = core::ptr::null_mut();
@@ -460,10 +498,31 @@ extern "C" fn table_column_list(p: &mut DState, z_tab_1: *const i8)
                 }
             }
         }
+
+        /// Number of PRIMARY KEY columns seen
+        /// True if one PRIMARY KEY column of type INTEGER
+        /// The decision of whether or not a rowid really needs to be preserved
+        ///* is tricky.  We never need to preserve a rowid for a WITHOUT ROWID table
+        ///* or a table with an INTEGER PRIMARY KEY.  We are unable to preserve
+        ///* rowids on tables where the rowid is inaccessible because there are other
+        ///* columns in the table named "rowid", "_rowid_", and "oid".
+        /// If a single PRIMARY KEY column with type INTEGER was seen, then it
+        ///* might be an alise for the ROWID.  But it might also be a WITHOUT ROWID
+        ///* table or a INTEGER PRIMARY KEY DESC column, neither of which are
+        ///* ROWID aliases.  To distinguish these cases, check to see if
+        ///* there is a "pk" entry in "PRAGMA index_list".  There will be
+        ///* no "pk" index if the PRIMARY KEY really is an alias for the ROWID.
+        /// Only preserve the rowid if we can find a name to use for the
+        ///* rowid
+        /// At this point, we know that azRowid[j] is not the name of any
+        ///* ordinary column in the table.  Verify that azRowid[j] is a valid
+        ///* name for the rowid before adding it to azCol[0].  WITHOUT ROWID
+        ///* tables will fail this last check
         unreachable!();
     }
 }
 
+///* Send mprintf-formatted content to the output callback.
 unsafe extern "C" fn output_formatted(p: &DState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -475,6 +534,11 @@ unsafe extern "C" fn output_formatted(p: &DState, z_format_1: *const i8,
     unsafe { sqlite3_free(z as *mut ()) };
 }
 
+///* Find a string that is not found anywhere in z[].  Return a pointer
+///* to that string.
+///*
+///* Try to use zA and zB first.  If both of those are already found in z[]
+///* then make up some string and store it in the buffer zBuf.
 extern "C" fn unused_string(z: *const i8, z_a_1: *const i8, z_b_1: *const i8,
     z_buf_1: *mut i8) -> *const i8 {
     let mut i: u32 = 0 as u32;
@@ -497,6 +561,10 @@ extern "C" fn unused_string(z: *const i8, z_a_1: *const i8, z_b_1: *const i8,
     return z_buf_1 as *const i8;
 }
 
+///* Output the given string as a quoted string using SQL quoting conventions.
+///* Additionallly , escape the "\n" and "\r" characters so that they do not
+///* get corrupted by end-of-line translation facilities in some operating
+///* systems.
 extern "C" fn output_quoted_escaped_string(p: *mut DState, mut z: *const i8)
     -> () {
     let mut i: i32 = 0;
@@ -649,6 +717,11 @@ extern "C" fn output_quoted_escaped_string(p: *mut DState, mut z: *const i8)
     }
 }
 
+///* This is an sqlite3_exec callback routine used for dumping the database.
+///* Each row received by this callback consists of a table name,
+///* the table type ("index" or "table") and SQL to create the table.
+///* This routine should print text sufficient to recreate the table.
+#[allow(unused_doc_comments)]
 extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az_col_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -750,6 +823,9 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
         init_text(&mut s_table);
         append_text(&mut s_table,
             c"INSERT INTO ".as_ptr() as *mut i8 as *const i8, 0 as i8);
+
+        /// Always quote the table name, even if it appears to be pure ascii,
+        ///* in case it is a keyword. Ex:  INSERT INTO "table" ...
         append_text(&mut s_table, z_table, quote_char(z_table));
         if !(unsafe { *az_t_col.offset(0 as isize) }).is_null() {
             append_text(&mut s_table, c"(".as_ptr() as *mut i8 as *const i8,
@@ -780,6 +856,8 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
         }
         append_text(&mut s_table,
             c" VALUES(".as_ptr() as *mut i8 as *const i8, 0 as i8);
+
+        /// Build an appropriate SELECT statement
         init_text(&mut s_select);
         append_text(&mut s_select,
             c"SELECT ".as_ptr() as *mut i8 as *const i8, 0 as i8);
@@ -1260,6 +1338,14 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     return 0;
 }
 
+///* Execute a query statement that will generate SQL output.  Print
+///* the result columns, comma-separated, on a line and then add a
+///* semicolon terminator to the end of that line.
+///*
+///* If the number of columns is 1 and that column contains text "--"
+///* then write the semicolon on a separate line.  That way, if a
+///* "--" comment occurs at the end of the statement, the comment
+///* won't consume the semicolon terminator.
 unsafe extern "C" fn output_sql_from_query(p: *mut DState,
     z_select_1: *const i8, mut __va0: ...) -> () {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1381,6 +1467,11 @@ unsafe extern "C" fn output_sql_from_query(p: *mut DState,
     }
 }
 
+///* Run zQuery.  Use dump_callback() as the callback routine so that
+///* the contents of the query are output as SQL statements.
+///*
+///* If we get a SQLITE_CORRUPT error, rerun the query after appending
+///* "ORDER BY rowid DESC" to the end.
 unsafe extern "C" fn run_schema_dump_query(p: *mut DState,
     z_query_1: *const i8, mut __va0: ...) -> () {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -1411,6 +1502,8 @@ unsafe extern "C" fn run_schema_dump_query(p: *mut DState,
     }
 }
 
+///* Convert an SQLite database into SQL statements that will recreate that
+///* database.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_dump(db: *mut Sqlite3, z_schema_1: *const i8,
     z_table_1: *const i8,

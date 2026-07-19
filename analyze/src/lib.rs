@@ -1,19 +1,173 @@
+//!* 2005-07-08
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* This file contains code associated with the ANALYZE command.
+//!*
+//!* The ANALYZE command gather statistics about the content of tables
+//!* and indices.  These statistics are made available to the query planner
+//!* to help it make better decisions about how to perform queries.
+//!*
+//!* The following system tables are or have been supported:
+//!*
+//!*    CREATE TABLE sqlite_stat1(tbl, idx, stat);
+//!*    CREATE TABLE sqlite_stat2(tbl, idx, sampleno, sample);
+//!*    CREATE TABLE sqlite_stat3(tbl, idx, nEq, nLt, nDLt, sample);
+//!*    CREATE TABLE sqlite_stat4(tbl, idx, nEq, nLt, nDLt, sample);
+//!*
+//!* Additional tables might be added in future releases of SQLite.
+//!* The sqlite_stat2 table is not created or used unless the SQLite version
+//!* is between 3.6.18 and 3.7.8, inclusive, and unless SQLite is compiled
+//!* with SQLITE_ENABLE_STAT2.  The sqlite_stat2 table is deprecated.
+//!* The sqlite_stat2 table is superseded by sqlite_stat3, which is only
+//!* created and used by SQLite versions 3.7.9 through 3.29.0 when
+//!* SQLITE_ENABLE_STAT3 defined.  The functionality of sqlite_stat3
+//!* is a superset of sqlite_stat2 and is also now deprecated.  The
+//!* sqlite_stat4 is an enhanced version of sqlite_stat3 and is only 
+//!* available when compiled with SQLITE_ENABLE_STAT4 and in SQLite
+//!* versions 3.8.1 and later.  STAT4 is the only variant that is still
+//!* supported.
+//!*
+//!* For most applications, sqlite_stat1 provides all the statistics required
+//!* for the query planner to make good choices.
+//!*
+//!* Format of sqlite_stat1:
+//!*
+//!* There is normally one row per index, with the index identified by the
+//!* name in the idx column.  The tbl column is the name of the table to
+//!* which the index belongs.  In each such row, the stat column will be
+//!* a string consisting of a list of integers.  The first integer in this
+//!* list is the number of rows in the index.  (This is the same as the
+//!* number of rows in the table, except for partial indices.)  The second
+//!* integer is the average number of rows in the index that have the same
+//!* value in the first column of the index.  The third integer is the average
+//!* number of rows in the index that have the same value for the first two
+//!* columns.  The N-th integer (for N>1) is the average number of rows in 
+//!* the index which have the same value for the first N-1 columns.  For
+//!* a K-column index, there will be K+1 integers in the stat column.  If
+//!* the index is unique, then the last integer will be 1.
+//!*
+//!* The list of integers in the stat column can optionally be followed
+//!* by the keyword "unordered".  The "unordered" keyword, if it is present,
+//!* must be separated from the last integer by a single space.  If the
+//!* "unordered" keyword is present, then the query planner assumes that
+//!* the index is unordered and will not use the index for a range query.
+//!* 
+//!* If the sqlite_stat1.idx column is NULL, then the sqlite_stat1.stat
+//!* column contains a single integer which is the (estimated) number of
+//!* rows in the table identified by sqlite_stat1.tbl.
+//!*
+//!* Format of sqlite_stat2:
+//!*
+//!* The sqlite_stat2 is only created and is only used if SQLite is compiled
+//!* with SQLITE_ENABLE_STAT2 and if the SQLite version number is between
+//!* 3.6.18 and 3.7.8.  The "stat2" table contains additional information
+//!* about the distribution of keys within an index.  The index is identified by
+//!* the "idx" column and the "tbl" column is the name of the table to which
+//!* the index belongs.  There are usually 10 rows in the sqlite_stat2
+//!* table for each index.
+//!*
+//!* The sqlite_stat2 entries for an index that have sampleno between 0 and 9
+//!* inclusive are samples of the left-most key value in the index taken at
+//!* evenly spaced points along the index.  Let the number of samples be S
+//!* (10 in the standard build) and let C be the number of rows in the index.
+//!* Then the sampled rows are given by:
+//!*
+//!*     rownumber = (i*C*2 + C)/(S*2)
+//!*
+//!* For i between 0 and S-1.  Conceptually, the index space is divided into
+//!* S uniform buckets and the samples are the middle row from each bucket.
+//!*
+//!* The format for sqlite_stat2 is recorded here for legacy reference.  This
+//!* version of SQLite does not support sqlite_stat2.  It neither reads nor
+//!* writes the sqlite_stat2 table.  This version of SQLite only supports
+//!* sqlite_stat3.
+//!*
+//!* Format for sqlite_stat3:
+//!*
+//!* The sqlite_stat3 format is a subset of sqlite_stat4.  Hence, the
+//!* sqlite_stat4 format will be described first.  Further information
+//!* about sqlite_stat3 follows the sqlite_stat4 description.
+//!*
+//!* Format for sqlite_stat4:
+//!*
+//!* As with sqlite_stat2, the sqlite_stat4 table contains histogram data
+//!* to aid the query planner in choosing good indices based on the values
+//!* that indexed columns are compared against in the WHERE clauses of
+//!* queries.
+//!*
+//!* The sqlite_stat4 table contains multiple entries for each index.
+//!* The idx column names the index and the tbl column is the table of the
+//!* index.  If the idx and tbl columns are the same, then the sample is
+//!* of the INTEGER PRIMARY KEY.  The sample column is a blob which is the
+//!* binary encoding of a key from the index.  The nEq column is a
+//!* list of integers.  The first integer is the approximate number
+//!* of entries in the index whose left-most column exactly matches
+//!* the left-most column of the sample.  The second integer in nEq
+//!* is the approximate number of entries in the index where the
+//!* first two columns match the first two columns of the sample.
+//!* And so forth.  nLt is another list of integers that show the approximate
+//!* number of entries that are strictly less than the sample.  The first
+//!* integer in nLt contains the number of entries in the index where the
+//!* left-most column is less than the left-most column of the sample.
+//!* The K-th integer in the nLt entry is the number of index entries 
+//!* where the first K columns are less than the first K columns of the
+//!* sample.  The nDLt column is like nLt except that it contains the 
+//!* number of distinct entries in the index that are less than the
+//!* sample.
+//!*
+//!* There can be an arbitrary number of sqlite_stat4 entries per index.
+//!* The ANALYZE command will typically generate sqlite_stat4 tables
+//!* that contain between 10 and 40 samples which are distributed across
+//!* the key space, though not uniformly, and which include samples with
+//!* large nEq values.
+//!*
+//!* Format for sqlite_stat3 redux:
+//!*
+//!* The sqlite_stat3 table is like sqlite_stat4 except that it only
+//!* looks at the left-most column of the index.  The sqlite_stat3.sample
+//!* column contains the actual value of the left-most column instead
+//!* of a blob encoding of the complete index key as is found in
+//!* sqlite_stat4.sample.  The nEq, nLt, and nDLt entries of sqlite_stat3
+//!* all contain just a single integer which is the same as the first
+//!* integer in the equivalent columns in sqlite_stat4.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo,
+    LogEst, Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread,
+    Schema, Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo,
+    Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, TRowcnt,
+    Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert, VList, VTable,
+    Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,6 +545,18 @@ impl Parse {
     }
 }
 
+///* This routine generates code that opens the sqlite_statN tables.
+///* The sqlite_stat1 table is always relevant.  sqlite_stat2 is now
+///* obsolete.  sqlite_stat3 and sqlite_stat4 are only opened when
+///* appropriate compile-time options are provided.
+///*
+///* If the sqlite_statN tables do not previously exist, it is created.
+///*
+///* Argument zWhere may be a pointer to a buffer containing a table name,
+///* or it may be a NULL pointer. If it is not NULL, then all entries in
+///* the sqlite_statN tables associated with the named table are deleted.
+///* If zWhere==0, then code is generated to delete all stat table entries.
+#[allow(unused_doc_comments)]
 extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
     i_stat_cur_1: i32, z_where_1: *const i8, z_where_type_1: *const i8)
     -> () {
@@ -428,6 +594,11 @@ extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
                                     p_stat
                                 } == core::ptr::null_mut() {
                             if i < n_to_open {
+
+                                /// The sqlite_statN table does not exist. Create it. Note that a 
+                                ///* side-effect of the CREATE TABLE statement is to leave the rootpage 
+                                ///* of the new table in register pParse->regRoot. This is important 
+                                ///* because the OpenWrite opcode below will be needing it.
                                 unsafe {
                                     sqlite3_nested_parse(p_parse_1,
                                         c"CREATE TABLE %Q.%s(%s)".as_ptr() as *mut i8 as *const i8,
@@ -440,7 +611,11 @@ extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
                                 a_create_tbl[i as usize] = 16 as u8;
                             }
                         } else {
-                            a_root[i as usize] = unsafe { (*p_stat).tnum };
+
+                            /// The table already exists. If zWhere is not NULL, delete all entries 
+                            ///* associated with the table zWhere. If zWhere is NULL, delete the
+                            ///* entire contents of the table.
+                            (a_root[i as usize] = unsafe { (*p_stat).tnum });
                             unsafe {
                                 sqlite3_table_lock(p_parse_1, i_db_1, a_root[i as usize],
                                     1 as u8, z_tab)
@@ -453,6 +628,8 @@ extern "C" fn open_stat_table(p_parse_1: *mut Parse, i_db_1: i32,
                                         z_where_type_1, z_where_1)
                                 };
                             } else {
+
+                                /// The sqlite_stat[134] table already exists.  Delete all rows.
                                 unsafe {
                                     sqlite3_vdbe_add_op2(v, 147, a_root[i as usize] as i32,
                                         i_db_1)
@@ -505,23 +682,57 @@ struct StatSample {
     an_d_lt: *mut TRowcnt,
 }
 
+///* Reclaim all memory of a StatAccum structure.
 extern "C" fn stat_accum_destructor(p_old_1: *mut ()) -> () {
     let p: *mut StatAccum = p_old_1 as *mut StatAccum;
     unsafe { sqlite3_db_free(unsafe { (*p).db }, p as *mut ()) };
 }
 
+///* Implementation of the stat_init(N,K,C,L) SQL function. The four parameters
+///* are:
+///*     N:    The number of columns in the index including the rowid/pk (note 1)
+///*     K:    The number of columns in the index excluding the rowid/pk.
+///*     C:    Estimated number of rows in the index
+///*     L:    A limit on the number of rows to scan, or 0 for no-limit 
+///*
+///* Note 1:  In the special case of the covering index that implements a
+///* WITHOUT ROWID table, N is the number of PRIMARY KEY columns, not the
+///* total number of columns in the table.
+///*
+///* For indexes on ordinary rowid tables, N==K+1.  But for indexes on
+///* WITHOUT ROWID tables, N=K+P where P is the number of columns in the
+///* PRIMARY KEY of the table.  The covering index that implements the
+///* original WITHOUT ROWID table as N==K as a special case.
+///*
+///* This routine allocates the StatAccum object in heap memory. The return 
+///* value is a pointer to the StatAccum object.  The datatype of the
+///* return value is BLOB, but it is really just a pointer to the StatAccum
+///* object.
+#[allow(unused_doc_comments)]
 extern "C" fn stat_init(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
         let mut p: *mut StatAccum = core::ptr::null_mut();
         let mut n_col: i32 = 0;
+        /// Number of columns in index being sampled
         let mut n_key_col: i32 = 0;
+        /// Number of key columns
         let mut n_col_up: i32 = 0;
+        /// nCol rounded up for alignment
         let mut n: i64 = 0 as i64;
+        /// Bytes of space to allocate
         let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
+
+        /// Database connection
+        /// Decode the three function arguments
         { let _ = argc; };
-        n_col =
-            unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) };
+
+        /// Database connection
+        /// Decode the three function arguments
+        (n_col =
+            unsafe {
+                sqlite3_value_int(unsafe { *argv.offset(0 as isize) })
+            });
         { let _ = 0; };
         n_col_up =
             if (core::mem::size_of::<TRowcnt>() as u64) < 8 as u64 {
@@ -531,11 +742,17 @@ extern "C" fn stat_init(context: *mut Sqlite3Context, argc: i32,
             unsafe { sqlite3_value_int(unsafe { *argv.offset(1 as isize) }) };
         { let _ = 0; };
         { let _ = 0; };
-        n =
+
+        /// Allocate the space required for the StatAccum object
+        (n =
             (core::mem::size_of::<StatAccum>() as u64 +
                     core::mem::size_of::<TRowcnt>() as u64 * n_col_up as u64) as
-                i64;
-        p = unsafe { sqlite3_db_malloc_zero(db, n as u64) } as *mut StatAccum;
+                i64);
+
+        /// StatAccum.anDLt
+        (p =
+            unsafe { sqlite3_db_malloc_zero(db, n as u64) } as
+                *mut StatAccum);
         if p == core::ptr::null_mut() {
             unsafe { sqlite3_result_error_nomem(context) };
             return;
@@ -561,6 +778,11 @@ extern "C" fn stat_init(context: *mut Sqlite3Context, argc: i32,
             (*p).current.an_d_lt =
                 unsafe { &raw mut *p.offset(1 as isize) } as *mut TRowcnt
         };
+
+        /// Return a pointer to the allocated object to the caller.  Note that
+        ///* only the pointer (the 2nd parameter) matters.  The size of the object
+        ///* (given by the 3rd parameter) is never used and can be any positive
+        ///* value.
         unsafe {
             sqlite3_result_blob(context, p as *const (),
                 core::mem::size_of::<StatAccum>() as i32,
@@ -583,10 +805,29 @@ static mut stat_init_funcdef: FuncDef =
         u: FuncDefU0 { p_hash: core::ptr::null_mut() },
     };
 
+///* Implementation of the stat_push SQL function:  stat_push(P,C,R)
+///* Arguments:
+///*
+///*    P     Pointer to the StatAccum object created by stat_init()
+///*    C     Index of left-most column to differ from previous row
+///*    R     Rowid for the current row.  Might be a key record for
+///*          WITHOUT ROWID tables.
+///*
+///* The purpose of this routine is to collect statistical data and/or
+///* samples from the index being analyzed into the StatAccum object.
+///* The stat_get() SQL function will be used afterwards to
+///* retrieve the information gathered.
+///*
+///* This SQL function usually returns NULL, but might return an integer
+///* if it wants the byte-code to do special processing.
+///*
+///* The R parameter is only used for STAT4
+#[allow(unused_doc_comments)]
 extern "C" fn stat_push(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
         let mut i: i32 = 0;
+        /// The three function arguments
         let p: *mut StatAccum =
             unsafe { sqlite3_value_blob(unsafe { *argv.offset(0 as isize) }) }
                 as *mut StatAccum;
@@ -658,6 +899,24 @@ static mut stat_push_funcdef: FuncDef =
         u: FuncDefU0 { p_hash: core::ptr::null_mut() },
     };
 
+///* Implementation of the stat_get(P,J) SQL function.  This routine is
+///* used to query statistical information that has been gathered into
+///* the StatAccum object by prior calls to stat_push().  The P parameter
+///* has type BLOB but it is really just a pointer to the StatAccum object.
+///* The content to returned is determined by the parameter J
+///* which is one of the STAT_GET_xxxx values defined above.
+///*
+///* The stat_get(P,J) function is not available to generic SQL.  It is
+///* inserted as part of a manually constructed bytecode program.  (See
+///* the callStatGet() routine below.)  It is guaranteed that the P
+///* parameter will always be a pointer to a StatAccum object, never a
+///* NULL.
+///*
+///* If STAT4 is not enabled, then J is always
+///* STAT_GET_STAT1 and is hence omitted and this routine becomes
+///* a one-parameter function, stat_get(P), that always returns the
+///* stat1 table entry information.
+#[allow(unused_doc_comments)]
 extern "C" fn stat_get(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -666,8 +925,36 @@ extern "C" fn stat_get(context: *mut Sqlite3Context, argc: i32,
                     as *mut StatAccum as *const StatAccum;
         { let _ = 0; };
         {
+            /// Return the value to store in the "stat" column of the sqlite_stat1
+            ///* table for this index.
+            ///*
+            ///* The value is a string composed of a list of integers describing 
+            ///* the index. The first integer in the list is the total number of 
+            ///* entries in the index. There is one additional integer in the list 
+            ///* for each indexed column. This additional integer is an estimate of
+            ///* the number of rows matched by a equality query on the index using
+            ///* a key with the corresponding number of fields. In other words,
+            ///* if the index is on columns (a,b) and the sqlite_stat1 value is 
+            ///* "100 10 2", then SQLite estimates that:
+            ///*
+            ///*   * the index contains 100 rows,
+            ///*   * "WHERE a=?" matches 10 rows, and
+            ///*   * "WHERE a=? AND b=?" matches 2 rows.
+            ///*
+            ///* If D is the count of distinct values and K is the total number of 
+            ///* rows, then each estimate is usually computed as:
+            ///*
+            ///*        I = (K+D-1)/D
+            ///*
+            ///* In other words, I is K/D rounded up to the next whole integer.
+            ///* However, if I is between 1.0 and 1.1 (in other words if I is
+            ///* close to 1.0 but just a little larger) then do not round up but
+            ///* instead keep the I value at 1.0.
             let mut s_stat: Sqlite3Str = unsafe { core::mem::zeroed() };
+            /// Text of the constructed "stat" line
             let mut i: i32 = 0;
+
+            /// Loop counter
             unsafe {
                 sqlite3_str_accum_init(&raw mut s_stat as *mut StrAccum,
                     core::ptr::null_mut(), core::ptr::null_mut(), 0,
@@ -708,6 +995,8 @@ extern "C" fn stat_get(context: *mut Sqlite3Context, argc: i32,
             }
             unsafe { sqlite3_result_str(context, &mut s_stat, 1) };
         }
+
+        /// SQLITE_ENABLE_STAT4
         { let _ = argc; };
     }
 }
@@ -738,39 +1027,62 @@ extern "C" fn call_stat_get(p_parse_1: *mut Parse, reg_stat_1: i32,
     }
 }
 
+///* Generate code to do an analysis of all indices associated with
+///* a single table.
+#[allow(unused_doc_comments)]
 extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_only_idx_1: *mut Index, i_stat_cur_1: i32, mut i_mem_1: i32,
     mut i_tab_1: i32) -> () {
     unsafe {
         unsafe {
             let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+            /// Database handle
             let mut p_idx: *mut Index = core::ptr::null_mut();
+            /// An index to being analyzed
             let mut i_idx_cur: i32 = 0;
+            /// Cursor open on index being analyzed
             let mut i_tab_cur: i32 = 0;
+            /// Table cursor
             let mut v: *mut Vdbe = core::ptr::null_mut();
+            /// The virtual machine being built up
             let mut i: i32 = 0;
+            /// Loop counter
             let mut j_zero_rows: i32 = -1;
+            /// Jump from here if number of rows is zero
             let mut i_db: i32 = 0;
+            /// Index of database containing pTab
             let mut need_table_cnt: u8 = 1 as u8;
+            /// True to count the table
             let reg_new_rowid: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Rowid for the inserted record
             let reg_stat: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Register to hold StatAccum object
             let reg_chng: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Index of changed index field
             let reg_rowid: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Rowid argument passed to stat_push()
             let reg_temp: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Temporary use register
             let reg_temp2: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Second temporary use register
             let reg_tabname: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Register containing table name
             let reg_idxname: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Register containing index name
             let reg_stat1: i32 =
                 { let __p = &mut i_mem_1; let __t = *__p; *__p += 1; __t };
+            /// Value for the stat column of sqlite_stat1
             let reg_prev: i32 = i_mem_1;
+
+            /// MUST BE LAST (see below)
             unsafe { sqlite3_touch_register(p_parse_1, i_mem_1) };
             { let _ = 0; };
             v = unsafe { sqlite3_get_vdbe(p_parse_1) };
@@ -779,6 +1091,8 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                 return;
             }
             if !(unsafe { (*p_tab_1).e_tab_type } as i32 == 0) as i32 != 0 {
+
+                /// Do not gather statistics on views or virtual tables
                 return;
             }
             if unsafe {
@@ -786,6 +1100,8 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                 *const i8, unsafe { (*p_tab_1).z_name } as *const i8,
                             '\\' as i32 as u32)
                     } == 0 {
+
+                /// Do not gather statistics on system tables
                 return;
             }
             { let _ = 0; };
@@ -805,6 +1121,11 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                     } != 0 {
                 return;
             }
+
+            /// Establish a read-lock on the table at the shared-cache level. 
+            ///* Open a read-only cursor on the table. Also allocate a cursor number
+            ///* to use for scanning indexes (iIdxCur). No index cursor is opened at
+            ///* this time though.
             unsafe {
                 sqlite3_table_lock(p_parse_1, i_db,
                     unsafe { (*p_tab_1).tnum }, 0 as u8,
@@ -833,9 +1154,13 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                     if !(!(p_idx).is_null()) { break '__b4; }
                     '__c4: loop {
                         let mut n_col: i32 = 0;
+                        /// Number of columns in pIdx. "N"
                         let mut addr_goto_end: i32 = 0;
+                        /// Address of "OP_Rewind iIdxCur"
                         let mut addr_next_row: i32 = 0;
+                        /// Address of "next_row:"
                         let mut z_idx_name: *const i8 = core::ptr::null();
+                        /// Name of the index
                         let mut n_col_test: i32 = 0;
                         if !(p_only_idx_1).is_null() && p_only_idx_1 != p_idx {
                             break '__c4;
@@ -858,23 +1183,84 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                     (unsafe { (*p_idx).n_key_col }) as i32 - 1
                                 } else { n_col - 1 };
                         }
+
+                        /// Populate the register containing the index name.
                         unsafe {
                             sqlite3_vdbe_load_string(v, reg_idxname, z_idx_name)
                         };
+
+                        ///* Pseudo-code for loop that calls stat_push():
+                        ///*
+                        ///*   regChng = 0
+                        ///*   Rewind csr
+                        ///*   if eof(csr){
+                        ///*      stat_init() with count = 0;
+                        ///*      goto end_of_scan;
+                        ///*   }
+                        ///*   count()
+                        ///*   stat_init()
+                        ///*   goto chng_addr_0;
+                        ///*
+                        ///*  next_row:
+                        ///*   regChng = 0
+                        ///*   if( idx(0) != regPrev(0) ) goto chng_addr_0
+                        ///*   regChng = 1
+                        ///*   if( idx(1) != regPrev(1) ) goto chng_addr_1
+                        ///*   ...
+                        ///*   regChng = N
+                        ///*   goto chng_addr_N
+                        ///*
+                        ///*  chng_addr_0:
+                        ///*   regPrev(0) = idx(0)
+                        ///*  chng_addr_1:
+                        ///*   regPrev(1) = idx(1)
+                        ///*  ...
+                        ///*
+                        ///*  endDistinctTest:
+                        ///*   regRowid = idx(rowid)
+                        ///*   stat_push(P, regChng, regRowid)
+                        ///*   Next csr
+                        ///*   if !eof(csr) goto next_row;
+                        ///*
+                        ///*  end_of_scan:
+                        /// Make sure there are enough memory cells allocated to accommodate 
+                        ///* the regPrev array and a trailing rowid (the rowid slot is required
+                        ///* when building a record to insert into the sample column of 
+                        ///* the sqlite_stat4 table.
                         unsafe {
                             sqlite3_touch_register(p_parse_1, reg_prev + n_col_test)
                         };
+
+                        /// Open a read-only cursor on the index being analyzed.
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 114, i_idx_cur,
                                 unsafe { (*p_idx).tnum } as i32, i_db)
                         };
                         unsafe { sqlite3_vdbe_set_p4_key_info(p_parse_1, p_idx) };
+
+                        /// Implementation of the following:
+                        ///*
+                        ///*   regChng = 0
+                        ///*   Rewind csr
+                        ///*   if eof(csr){
+                        ///*      stat_init() with count = 0;
+                        ///*      goto end_of_scan;
+                        ///*   }
+                        ///*   count()
+                        ///*   stat_init()
+                        ///*   goto chng_addr_0;
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
                                 unsafe { (*db).n_analysis_limit }, reg_temp2)
                         };
+
+                        /// Arguments to stat_init(): 
+                        ///*    (1) the number of columns in the index including the rowid
+                        ///*        (or for a WITHOUT ROWID table, the number of PK columns),
+                        ///*    (2) the number of columns in the key without the rowid/pk
+                        ///*    (3) estimated number of rows in the index.
                         unsafe { sqlite3_vdbe_add_op2(v, 73, n_col, reg_stat + 1) };
                         { let _ = 0; };
                         unsafe {
@@ -898,17 +1284,32 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                             let end_distinct_test: i32 =
                                 unsafe { sqlite3_vdbe_make_label(p_parse_1) };
                             let mut a_goto_chng: *mut i32 = core::ptr::null_mut();
-                            a_goto_chng =
+
+                            /// Array of jump instruction addresses
+                            (a_goto_chng =
                                 unsafe {
                                         sqlite3_db_malloc_raw_nn(db,
                                             core::mem::size_of::<i32>() as u64 * n_col_test as u64)
-                                    } as *mut i32;
+                                    } as *mut i32);
                             if a_goto_chng == core::ptr::null_mut() { break '__c4; }
+
+                            ///*  next_row:
+                            ///*   regChng = 0
+                            ///*   if( idx(0) != regPrev(0) ) goto chng_addr_0
+                            ///*   regChng = 1
+                            ///*   if( idx(1) != regPrev(1) ) goto chng_addr_1
+                            ///*   ...
+                            ///*   regChng = N
+                            ///*   goto endDistinctTest
                             unsafe { sqlite3_vdbe_add_op0(v, 9) };
                             addr_next_row = unsafe { sqlite3_vdbe_current_addr(v) };
                             if n_col_test == 1 &&
                                         unsafe { (*p_idx).n_key_col } as i32 == 1 &&
                                     unsafe { (*p_idx).on_error } as i32 != 0 {
+
+                                /// For a single-column UNIQUE index, once we have found a non-NULL
+                                ///* row, we know that all the rest will be distinct, so skip 
+                                ///* subsequent distinctness tests.
                                 unsafe {
                                     sqlite3_vdbe_add_op2(v, 52, reg_prev, end_distinct_test)
                                 };
@@ -944,6 +1345,12 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                 sqlite3_vdbe_add_op2(v, 73, n_col_test, reg_chng)
                             };
                             unsafe { sqlite3_vdbe_goto(v, end_distinct_test) };
+
+                            ///*  chng_addr_0:
+                            ///*   regPrev(0) = idx(0)
+                            ///*  chng_addr_1:
+                            ///*   regPrev(1) = idx(1)
+                            ///*  ...
                             unsafe { sqlite3_vdbe_jump_here(v, addr_next_row - 1) };
                             {
                                 i = 0;
@@ -965,6 +1372,12 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                             unsafe { sqlite3_vdbe_resolve_label(v, end_distinct_test) };
                             unsafe { sqlite3_db_free(db, a_goto_chng as *mut ()) };
                         }
+
+                        ///*  chng_addr_N:
+                        ///*   regRowid = idx(rowid)            // STAT4 only
+                        ///*   stat_push(P, regChng, regRowid)  // 3rd parameter STAT4 only
+                        ///*   Next csr
+                        ///*   if !eof(csr) goto next_row;
                         { let _ = 0; };
                         {
                             unsafe {
@@ -994,6 +1407,9 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                             }
                         }
                         if !(unsafe { (*p_idx).p_part_idx_where }).is_null() {
+
+                            /// Partial indexes might get a zero-entry in sqlite_stat1.  But
+                            ///* an empty table is omitted from sqlite_stat1.
                             unsafe { sqlite3_vdbe_jump_here(v, addr_goto_end) };
                             addr_goto_end = 0;
                         }
@@ -1043,11 +1459,15 @@ extern "C" fn analyze_one_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     }
 }
 
+///* Generate code that will cause the most recent index analysis to
+///* be loaded into internal hash tables where is can be used.
 extern "C" fn load_analysis(p_parse_1: *mut Parse, i_db_1: i32) -> () {
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
     if !(v).is_null() { unsafe { sqlite3_vdbe_add_op1(v, 152, i_db_1) }; }
 }
 
+///* Generate code that will do an analysis of an entire database
+#[allow(unused_doc_comments)]
 extern "C" fn analyze_database(p_parse_1: *mut Parse, i_db_1: i32) -> () {
     unsafe {
         let db: *const Sqlite3 = unsafe { (*p_parse_1).db } as *const Sqlite3;
@@ -1055,6 +1475,7 @@ extern "C" fn analyze_database(p_parse_1: *mut Parse, i_db_1: i32) -> () {
             unsafe {
                 (*unsafe { (*db).a_db.offset(i_db_1 as isize) }).p_schema
             };
+        /// Schema of database iDb
         let mut k: *mut HashElem = core::ptr::null_mut();
         let mut i_stat_cur: i32 = 0;
         let mut i_mem: i32 = 0;
@@ -1085,6 +1506,9 @@ extern "C" fn analyze_database(p_parse_1: *mut Parse, i_db_1: i32) -> () {
     }
 }
 
+///* Generate code that will do an analysis of a single table in
+///* a database.  If pOnlyIdx is not NULL then it is a single index
+///* in pTab that should be analyzed.
 extern "C" fn analyze_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_only_idx_1: *mut Index) -> () {
     unsafe {
@@ -1115,7 +1539,18 @@ extern "C" fn analyze_table(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     }
 }
 
+///* Generate code for the ANALYZE command.  The parser calls this routine
+///* when it recognizes an ANALYZE command.
+///*
+///*        ANALYZE                            -- 1
+///*        ANALYZE  <database>                -- 2
+///*        ANALYZE  ?<database>.?<tablename>  -- 3
+///*
+///* Form 1 causes all indices in all attached databases to be analyzed.
+///* Form 2 analyzes all indices the single database named.
+///* Form 3 analyzes all indices associated with the named table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
     p_name2: *mut Token) -> () {
     unsafe {
@@ -1128,6 +1563,9 @@ pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
         let mut p_idx: *mut Index = core::ptr::null_mut();
         let mut p_table_name: *mut Token = core::ptr::null_mut();
         let mut v: *mut Vdbe = core::ptr::null_mut();
+
+        /// Read the database schema. If an error occurs, leave an error message
+        ///* and code in pParse and return NULL.
         { let _ = 0; };
         if 0 != unsafe { sqlite3_read_schema(p_parse) } { return; }
         { let _ = 0; };
@@ -1138,6 +1576,8 @@ pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
                     if !(i < unsafe { (*db).n_db }) { break '__b8; }
                     '__c8: loop {
                         if i == 1 { break '__c8; }
+
+                        /// Do not analyze the TEMP database
                         analyze_database(p_parse, i);
                         break '__c8;
                     }
@@ -1147,13 +1587,17 @@ pub extern "C" fn sqlite3_analyze(p_parse: *mut Parse, p_name1: *mut Token,
         } else if unsafe { (*p_name2).n } == 0 as u32 &&
                 { i_db = unsafe { sqlite3_find_db(db, p_name1) }; i_db } >= 0
             {
+
+            /// Analyze the schema named as the argument
             analyze_database(p_parse, i_db);
         } else {
-            i_db =
+
+            /// Form 3: Analyze the table or index named as an argument
+            (i_db =
                 unsafe {
                     sqlite3_two_part_name(p_parse, p_name1, p_name2,
                         &mut p_table_name)
-                };
+                });
             if i_db >= 0 {
                 z_db =
                     if unsafe { (*p_name2).n } != 0 {
@@ -1203,6 +1647,9 @@ struct AnalysisInfo {
     z_database: *const i8,
 }
 
+///* The first argument points to a nul-terminated string containing a
+///* list of space separated integers. Read the first nOut of these into
+///* the array aOut[].
 extern "C" fn decode_int_array(z_int_array_1: *mut i8, n_out_1: i32,
     a_out_1: *const TRowcnt, a_log_1: *mut LogEst, p_index_1: &mut Index)
     -> () {
@@ -1295,6 +1742,15 @@ extern "C" fn decode_int_array(z_int_array_1: *mut i8, n_out_1: i32,
     }
 }
 
+///* This callback is invoked once for each index when reading the
+///* sqlite_stat1 table.  
+///*
+///*     argv[0] = name of the table
+///*     argv[1] = name of the index (might be NULL)
+///*     argv[2] = results of analysis - on integer for each column
+///*
+///* Entries for which argv[1]==NULL simply record the number of rows in
+///* the table.
 extern "C" fn analysis_loader(p_data_1: *mut (), argc: i32,
     argv: *mut *mut i8, not_used_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1365,7 +1821,26 @@ extern "C" fn analysis_loader(p_data_1: *mut (), argc: i32,
     }
 }
 
+///* Load the content of the sqlite_stat1 and sqlite_stat4 tables. The
+///* contents of sqlite_stat1 are used to populate the Index.aiRowEst[]
+///* arrays. The contents of sqlite_stat4 are used to populate the
+///* Index.aSample[] arrays.
+///*
+///* If the sqlite_stat1 table is not present in the database, SQLITE_ERROR
+///* is returned. In this case, even if SQLITE_ENABLE_STAT4 was defined 
+///* during compilation and the sqlite_stat4 table is present, no data is 
+///* read from it.
+///*
+///* If SQLITE_ENABLE_STAT4 was defined during compilation and the 
+///* sqlite_stat4 table is not present in the database, SQLITE_ERROR is
+///* returned. However, in this case, data is read from the sqlite_stat1
+///* table (if it is present) before returning.
+///*
+///* If an OOM error occurs, this function always sets db->mallocFailed.
+///* This means if the caller does not care about other errors, the return
+///* code may be ignored.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
     unsafe {
         let mut s_info: AnalysisInfo = unsafe { core::mem::zeroed() };
@@ -1379,6 +1854,8 @@ pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
         let mut p_stat1: *const Table = core::ptr::null();
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Clear any prior statistics
         { let _ = 0; };
         {
             i = unsafe { (*unsafe { &mut (*p_schema).tbl_hash }).first };
@@ -1404,7 +1881,9 @@ pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
                 i = unsafe { (*i).next };
             }
         }
-        s_info.db = db;
+
+        /// Load new statistics out of the sqlite_stat1 table
+        (s_info.db = db);
         s_info.z_database =
             unsafe {
                     (*unsafe { (*db).a_db.offset(i_db as isize) }).z_db_s_name
@@ -1436,6 +1915,8 @@ pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
                 unsafe { sqlite3_db_free(db, z_sql as *mut ()) };
             }
         }
+
+        /// Set appropriate defaults on all indexes not in the sqlite_stat1 table
         { let _ = 0; };
         {
             i = unsafe { (*unsafe { &mut (*p_schema).idx_hash }).first };
@@ -1457,6 +1938,8 @@ pub extern "C" fn sqlite3_analysis_load(db: *mut Sqlite3, i_db: i32) -> i32 {
     }
 }
 
+///* If the Index.aSample variable is not NULL, delete the aSample[] array
+///* and its contents.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_index_samples(db: *mut Sqlite3,
     p_idx: *mut Index) -> () {

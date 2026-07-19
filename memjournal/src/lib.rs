@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+///* This structure is a subclass of sqlite3_file. Each open memory-journal
+///* is an instance of this class.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemJournal {
@@ -407,6 +424,10 @@ struct MemJournal {
     z_journal: *const i8,
 }
 
+///* The rollback journal is composed of a linked list of these structures.
+///*
+///* The zChunk array is always at least 8 bytes in size - usually much more.
+///* Its actual size is stored in the MemJournal.nChunkSize variable.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FileChunk {
@@ -414,6 +435,8 @@ struct FileChunk {
     z_chunk: [u8; 8],
 }
 
+///* An instance of this object serves as a cursor into the rollback journal.
+///* The cursor can be either for reading or writing.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FilePoint {
@@ -421,6 +444,7 @@ struct FilePoint {
     p_chunk: *mut FileChunk,
 }
 
+///* Free the list of FileChunk structures headed at MemJournal.pFirst.
 extern "C" fn memjrnl_free_chunks(p_first_1: *mut FileChunk) -> () {
     let mut p_iter: *mut FileChunk = core::ptr::null_mut();
     let mut p_next: *mut FileChunk = core::ptr::null_mut();
@@ -438,6 +462,7 @@ extern "C" fn memjrnl_free_chunks(p_first_1: *mut FileChunk) -> () {
     }
 }
 
+///* Close the file.
 extern "C" fn memjrnl_close(p_jfd_1: *mut Sqlite3File) -> i32 {
     let p: *const MemJournal =
         p_jfd_1 as *mut MemJournal as *const MemJournal;
@@ -445,6 +470,8 @@ extern "C" fn memjrnl_close(p_jfd_1: *mut Sqlite3File) -> i32 {
     return 0;
 }
 
+///* Read data from the in-memory journal file.  This is the implementation
+///* of the sqlite3_vfs.xRead method.
 extern "C" fn memjrnl_read(p_jfd_1: *mut Sqlite3File, z_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut MemJournal = p_jfd_1 as *mut MemJournal;
@@ -516,6 +543,8 @@ extern "C" fn memjrnl_read(p_jfd_1: *mut Sqlite3File, z_buf_1: *mut (),
     return 0;
 }
 
+///* Flush the contents of memory to a real file on disk.
+#[allow(unused_doc_comments)]
 extern "C" fn memjrnl_create_file(p: *mut MemJournal) -> i32 {
     let mut rc: i32 = 0;
     let p_real: *mut Sqlite3File = p as *mut Sqlite3File;
@@ -553,12 +582,25 @@ extern "C" fn memjrnl_create_file(p: *mut MemJournal) -> i32 {
                 p_iter = unsafe { (*p_iter).p_next };
             }
         }
-        if rc == 0 { memjrnl_free_chunks(copy.p_first); }
+        if rc == 0 {
+
+            /// No error has occurred. Free the in-memory buffers.
+            memjrnl_free_chunks(copy.p_first);
+        }
     }
-    if rc != 0 { unsafe { sqlite3_os_close(p_real) }; unsafe { *p = copy }; }
+    if rc != 0 {
+
+        /// If an error occurred while creating or writing to the file, restore
+        ///* the original before returning. This way, SQLite uses the in-memory
+        ///* journal data to roll back changes made to the internal page-cache
+        ///* before this function was called.
+        unsafe { sqlite3_os_close(p_real) };
+        unsafe { *p = copy };
+    }
     return rc;
 }
 
+/// Forward reference
 extern "C" fn memjrnl_truncate(p_jfd: *mut Sqlite3File, size: SqliteInt64)
     -> i32 {
     let p: *mut MemJournal = p_jfd as *mut MemJournal;
@@ -594,6 +636,8 @@ extern "C" fn memjrnl_truncate(p_jfd: *mut Sqlite3File, size: SqliteInt64)
     return 0;
 }
 
+///* Write data to the file.
+#[allow(unused_doc_comments)]
 extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: SqliteInt64) -> i32 {
     let p: *mut MemJournal = p_jfd_1 as *mut MemJournal;
@@ -611,6 +655,12 @@ extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
         }
         return rc;
     } else {
+
+        /// An in-memory journal file should only ever be appended to. Random
+        ///* access writes are not required. The only exception to this is when
+        ///* the in-memory journal is being used by a connection using the
+        ///* atomic-write optimization. In this case the first 28 bytes of the
+        ///* journal file may be written as part of committing the transaction.
         { let _ = 0; };
         if i_ofst_1 > 0 as i64 &&
                 i_ofst_1 != unsafe { (*p).endpoint.i_offset } {
@@ -636,6 +686,7 @@ extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
                     } else { (unsafe { (*p).n_chunk_size }) - i_chunk_offset };
                 { let _ = 0; };
                 if i_chunk_offset == 0 {
+                    /// New chunk is required to extend the file.
                     let p_new: *mut FileChunk =
                         unsafe {
                                 sqlite3_malloc((core::mem::size_of::<FileChunk>() as u64 +
@@ -673,11 +724,16 @@ extern "C" fn memjrnl_write(p_jfd_1: *mut Sqlite3File, z_buf_1: *const (),
     return 0;
 }
 
+///* Sync the file.
+///*
+///* If the real file has been created, call its xSync method. Otherwise, 
+///* syncing an in-memory journal is a no-op.
 extern "C" fn memjrnl_sync(p_jfd_1: *mut Sqlite3File, flags: i32) -> i32 {
     { { let _ = p_jfd_1; }; { let _ = flags; } };
     return 0;
 }
 
+///* Query the size of the file in bytes.
 extern "C" fn memjrnl_file_size(p_jfd_1: *mut Sqlite3File,
     p_size_1: *mut SqliteInt64) -> i32 {
     let p: *const MemJournal =
@@ -686,6 +742,7 @@ extern "C" fn memjrnl_file_size(p_jfd_1: *mut Sqlite3File,
     return 0;
 }
 
+///* Table of methods for MemJournal sqlite3_file object.
 static mem_journal_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -709,12 +766,29 @@ static mem_journal_methods: Sqlite3IoMethods =
         x_unfetch: None,
     };
 
+/// 
+///* Open a journal file. 
+///*
+///* The behaviour of the journal file depends on the value of parameter 
+///* nSpill. If nSpill is 0, then the journal file is always create and 
+///* accessed using the underlying VFS. If nSpill is less than zero, then
+///* all content is always stored in main-memory. Finally, if nSpill is a
+///* positive value, then the journal file is initially created in-memory
+///* but may be flushed to disk later on. In this case the journal file is
+///* flushed to disk either when it grows larger than nSpill bytes in size,
+///* or when sqlite3JournalCreate() is called.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_journal_open(p_vfs: *mut Sqlite3Vfs,
     z_name: *const i8, p_jfd: *mut Sqlite3File, flags: i32, n_spill: i32)
     -> i32 {
     let p: *mut MemJournal = p_jfd as *mut MemJournal;
     { let _ = 0; };
+
+    /// Zero the file-handle object. If nSpill was passed zero, initialize
+    ///* it using the sqlite3OsOpen() function of the underlying VFS. In this
+    ///* case none of the code in this module is executed as a result of calls
+    ///* made on the journal file-handle.
     unsafe {
         memset(p as *mut (), 0, core::mem::size_of::<MemJournal>() as u64)
     };
@@ -745,6 +819,9 @@ pub extern "C" fn sqlite3_journal_open(p_vfs: *mut Sqlite3Vfs,
     return 0;
 }
 
+/// 
+///* Return the number of bytes required to store a JournalFile that uses vfs
+///* pVfs to create the underlying on-disk files.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_size(p_vfs: &Sqlite3Vfs) -> i32 {
     return if (*p_vfs).sz_os_file > core::mem::size_of::<MemJournal>() as i32
@@ -753,6 +830,9 @@ pub extern "C" fn sqlite3_journal_size(p_vfs: &Sqlite3Vfs) -> i32 {
         } else { core::mem::size_of::<MemJournal>() as i32 };
 }
 
+///* The file-handle passed as the only argument is open on a journal file.
+///* Return true if this "journal file" is currently stored in heap memory,
+///* or false otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_is_in_memory(p: &Sqlite3File) -> i32 {
     return ((*p).p_methods ==
@@ -760,6 +840,7 @@ pub extern "C" fn sqlite3_journal_is_in_memory(p: &Sqlite3File) -> i32 {
             i32;
 }
 
+///* Open an in-memory journal file.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_journal_open(p_jfd: *mut Sqlite3File) -> () {
     sqlite3_journal_open(core::ptr::null_mut(), core::ptr::null(), p_jfd, 0,

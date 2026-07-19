@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -69,6 +75,9 @@ extern "C" fn usage(argv0: *const i8) -> () {
     unsafe { exit(1) };
 }
 
+///* The test schema is derived from the Fossil repository for SQLite itself.
+///* The schema covers the repository, the local checkout database, and
+///* the global configuration database.
 static z_test_schema: [i8; 7703] =
     [67 as i8, 82 as i8, 69 as i8, 65 as i8, 84 as i8, 69 as i8, 32 as i8,
             84 as i8, 65 as i8, 66 as i8, 76 as i8, 69 as i8, 32 as i8,
@@ -1355,6 +1364,8 @@ static z_test_schema: [i8; 7703] =
             120 as i8, 44 as i8, 115 as i8, 116 as i8, 97 as i8, 116 as i8,
             41 as i8, 59 as i8, 10 as i8, 0 as i8];
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -1368,6 +1379,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;

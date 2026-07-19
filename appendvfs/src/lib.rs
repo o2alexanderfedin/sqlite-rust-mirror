@@ -1,14 +1,54 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Forward declaration of objects used by this utility
 type ApndVfs = Sqlite3Vfs;
 
+/// An open appendvfs file
+///*
+///* An instance of this structure describes the appended database file.
+///* A separate sqlite3_file object is always appended. The appended
+///* sqlite3_file object (which can be accessed using ORIGFILE()) describes
+///* the entire file, including the prefix, the database, and the
+///* append-mark.
+///*
+///* The structure of an AppendVFS database is like this:
+///*
+///*   +-------------+---------+----------+-------------+
+///*   | prefix-file | padding | database | append-mark |
+///*   +-------------+---------+----------+-------------+
+///*                           ^          ^
+///*                           |          |
+///*                         iPgOne      iMark
+///*
+///*
+///* "prefix file" -  file onto which the database has been appended.
+///* "padding"     -  zero or more bytes inserted so that "database"
+///*                  starts on an APND_ROUNDUP boundary
+///* "database"    -  The SQLite database file
+///* "append-mark" -  The 25-byte "Start-Of-SQLite3-NNNNNNNN" that indicates
+///*                  the offset from the start of prefix-file to the start
+///*                  of "database".
+///*
+///* The size of the database is iMark - iPgOne.
+///*
+///* The NNNNNNNN in the "Start-Of-SQLite3-NNNNNNNN" suffix is the value
+///* of iPgOne stored as a big-ending 64-bit integer.
+///*
+///* iMark will be the size of the underlying file minus 25 (APND_MARKSIZE).
+///* Or, iMark is -1 to indicate that it has not yet been written.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ApndFile {
@@ -17,6 +57,7 @@ struct ApndFile {
     i_mark: Sqlite3Int64,
 }
 
+///* Methods for ApndFile
 extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -28,6 +69,7 @@ extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Read data from an apnd-file.
 extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -41,6 +83,9 @@ extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
         };
 }
 
+///* Add the append-mark onto what should become the end of the file.
+/// If and only if this succeeds, internal ApndFile.iMark is updated.
+/// Parameter iWriteEnd is the appendvfs-relative offset of the new mark.
 extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     mut i_write_end_1: SqliteInt64) -> i32 {
     let mut i_pg_one: SqliteInt64 = unsafe { (*paf).i_pg_one };
@@ -81,6 +126,7 @@ extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     return rc;
 }
 
+///* Write data to an apnd-file.
 extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -102,6 +148,8 @@ extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
         };
 }
 
+///* Truncate an apnd-file.
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -109,6 +157,8 @@ extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
             *mut Sqlite3File;
     if 0 != apnd_write_mark(paf, p_file, size) { return 10; }
+
+    /// Truncate underlying file just past append mark
     return unsafe {
             (unsafe {
                     (*unsafe { (*p_file).p_methods }).x_truncate.unwrap()
@@ -117,6 +167,7 @@ extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
         };
 }
 
+///* Sync an apnd-file.
 extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -128,6 +179,8 @@ extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
         };
 }
 
+///* Return the current file-size of an apnd-file.
+///* If the append mark is not yet there, the file-size is 0.
 extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -140,6 +193,7 @@ extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     return 0;
 }
 
+///* Lock an apnd-file.
 extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -151,6 +205,7 @@ extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Unlock an apnd-file.
 extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -162,6 +217,7 @@ extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Check if another file-handle holds a RESERVED lock on an apnd-file.
 extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -176,6 +232,7 @@ extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* File control method. For custom operations on an apnd-file.
 extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -207,6 +264,7 @@ extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for an apnd-file.
 extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -218,6 +276,7 @@ extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Return the device characteristic flags supported by an apnd-file.
 extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     p_file =
@@ -232,6 +291,7 @@ extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
         };
 }
 
+/// Create a shared memory file mapping
 extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
     b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -244,6 +304,7 @@ extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
         };
 }
 
+/// Perform locking on a shared-memory segment
 extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
     flags: i32) -> i32 {
     p_file =
@@ -256,6 +317,7 @@ extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
         };
 }
 
+/// Memory barrier operation on shared memory
 extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -267,6 +329,7 @@ extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     };
 }
 
+/// Unmap a shared memory segment
 extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -279,6 +342,7 @@ extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
         };
 }
 
+/// Fetch a page of a memory-mapped file
 extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -296,6 +360,7 @@ extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
         };
 }
 
+/// Release a memory-mapped page
 extern "C" fn apnd_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -332,6 +397,13 @@ static apnd_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(apnd_unfetch),
     };
 
+///* Try to read the append-mark off the end of a file.  Return the
+///* start of the appended database if the append-mark is present.
+///* If there is no valid append-mark, return -1;
+///*
+///* An append-mark is only valid if the NNNNNNNN start-of-database offset
+///* indicates that the appended database contains at least one page.  The
+///* start-of-database value must be a multiple of 512.
 extern "C" fn apnd_read_mark(sz: Sqlite3Int64, p_file_1: *mut Sqlite3File)
     -> Sqlite3Int64 {
     let mut rc: i32 = 0;
@@ -382,20 +454,27 @@ static apvfs_sqlite_hdr: [i8; 16] =
             102 as i8, 111 as i8, 114 as i8, 109 as i8, 97 as i8, 116 as i8,
             32 as i8, 51 as i8, 0 as i8];
 
+///* Check to see if the file is an appendvfs SQLite database file.
+///* Return true iff it is such. Parameter sz is the file's size.
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut z_hdr: [i8; 16] = [0; 16];
     let i_mark: Sqlite3Int64 = apnd_read_mark(sz, p_file_1);
     if i_mark >= 0 as i64 {
-        rc =
+
+        /// If file has the correct end-marker, the expected odd size, and the
+        ///* SQLite DB type marker where the end-marker puts it, then it
+        ///* is an appendvfs database.
+        (rc =
             unsafe {
                 (unsafe {
                         (*unsafe { (*p_file_1).p_methods }).x_read.unwrap()
                     })(p_file_1,
                     &raw mut z_hdr[0 as usize] as *mut i8 as *mut (),
                     core::mem::size_of::<[i8; 16]>() as i32, i_mark)
-            };
+            });
         if 0 == rc &&
                         unsafe {
                                 memcmp(&raw mut z_hdr[0 as usize] as *mut i8 as *const (),
@@ -409,6 +488,8 @@ extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     return 0;
 }
 
+///* Check to see if the file is an ordinary SQLite database file.
+///* Return true iff so. Parameter sz is the file's size.
 extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut z_hdr: [i8; 16] = [0; 16];
@@ -431,6 +512,8 @@ extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
     } else { return 1; }
 }
 
+///* Methods for ApndVfs
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let p_apnd_file: *mut ApndFile = p_file as *mut ApndFile;
@@ -442,6 +525,10 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     let mut rc: i32 = 0;
     let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
     if flags & 256 == 0 {
+
+        /// The appendvfs is not to be used for transient or temporary databases.
+        ///* Just use the base VFS open to initialize the given file object and
+        ///* open the underlying file. (Appendvfs is then unused for this file.)
         return unsafe {
                 (unsafe {
                         (*p_base_vfs).x_open.unwrap()
@@ -454,12 +541,14 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     };
     unsafe { (*p_file).p_methods = &apnd_io_methods };
     unsafe { (*p_apnd_file).i_mark = -1 as Sqlite3Int64 };
-    rc =
+
+    /// Append mark not yet written
+    (rc =
         unsafe {
             (unsafe {
                     (*p_base_vfs).x_open.unwrap()
                 })(p_base_vfs, z_name, p_base_file, flags, p_out_flags)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -480,6 +569,9 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         return rc;
     }
     if apnd_is_ordinary_database_file(sz, p_base_file) != 0 {
+
+        /// The file being opened appears to be just an ordinary DB. Copy
+        ///* the base dispatch-table so this instance mimics the base VFS.
         unsafe {
             memmove(p_apnd_file as *mut (), p_base_file as *const (),
                 unsafe { (*p_base_vfs).sz_os_file } as u64)
@@ -489,6 +581,8 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     unsafe { (*p_apnd_file).i_pg_one = apnd_read_mark(sz, p_file) };
     if unsafe { (*p_apnd_file).i_pg_one } >= 0 as i64 {
         unsafe { (*p_apnd_file).i_mark = sz - (17 + 8) as Sqlite3Int64 };
+
+        /// Append mark found
         return 0;
     }
     if flags & 4 == 0 {
@@ -500,6 +594,11 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         rc = 14;
         unsafe { (*p_file).p_methods = core::ptr::null() };
     } else {
+
+        /// Round newly added appendvfs location to #define'd page boundary. 
+        ///* Note that nothing has yet been written to the underlying file.
+        ///* The append mark will be written along with first content write.
+        ///* Until then, paf->iMark value indicates it is not yet written.
         unsafe {
             (*p_apnd_file).i_pg_one =
                 sz + (4096 - 1) as Sqlite3Int64 &
@@ -509,6 +608,10 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     return rc;
 }
 
+///* Delete an apnd file.
+///* For an appendvfs, this could mean delete the appendvfs portion,
+///* leaving the appendee as it was before it gained an appendvfs.
+///* For now, this code deletes the underlying file too.
 extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     return unsafe {
@@ -520,6 +623,7 @@ extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
         };
 }
 
+///* All other VFS methods are pass-thrus.
 extern "C" fn apnd_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     return unsafe {
@@ -691,6 +795,9 @@ static mut apnd_vfs: Sqlite3Vfs =
         x_next_system_call: Some(apnd_next_system_call),
     };
 
+/// 
+///* This routine is called when the extension is loaded.
+///* Register the new VFS.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_appendvfs_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {

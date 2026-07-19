@@ -1,14 +1,25 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// Each opcode is a "state" in the NFA
 type ReStateNumber = u16;
 
+/// Because this is an NFA and not a DFA, multiple states can be active at
+///* once.  An instance of the following object records all active states in
+///* the NFA.  The implementation is optimized for the common case where the
+///* number of actives states is small.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReStateSet {
@@ -39,6 +50,7 @@ struct ReCompiled {
     mx_alloc: u32,
 }
 
+/// Add a state to the given state set if it is not already there
 extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
     let mut i: u32 = 0 as u32;
     {
@@ -65,6 +77,10 @@ extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
     };
 }
 
+/// Extract the next unicode character from *pzIn and return it.  Advance
+///* *pzIn to the first byte past the end of the character returned.  To
+///* be clear:  this routine converts utf8 to unicode.  This routine is 
+///* optimized for the common case where the next character is a single byte.
 extern "C" fn re_next_char(p: *mut ReInput) -> u32 {
     let mut c: u32 = 0 as u32;
     if unsafe { (*p).i } >= unsafe { (*p).mx } { return 0 as u32; }
@@ -155,6 +171,7 @@ extern "C" fn re_next_char_nocase(p: *mut ReInput) -> u32 {
     return c;
 }
 
+/// Return true if c is a perl "word" character:  [A-Za-z0-9_]
 extern "C" fn re_word_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32 ||
                         c >= 'a' as i32 && c <= 'z' as i32 ||
@@ -162,16 +179,21 @@ extern "C" fn re_word_char(c: i32) -> i32 {
             i32;
 }
 
+/// Return true if c is a "digit" character:  [0-9]
 extern "C" fn re_digit_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32) as i32;
 }
 
+/// Return true if c is a perl "space" character:  [ \t\r\n\v\f]
 extern "C" fn re_space_char(c: i32) -> i32 {
     return (c == ' ' as i32 || c == '\t' as i32 || c == '\n' as i32 ||
                         c == '\r' as i32 || c == '\u{b}' as i32 ||
                 c == '\u{c}' as i32) as i32;
 }
 
+/// Run a compiled regular expression on the zero-terminated input
+///* string zIn[].  Return true on a match and false if there is no match.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     n_in_1: i32) -> i32 {
     let mut a_state_set: [ReStateSet; 2] = unsafe { core::mem::zeroed() };
@@ -185,8 +207,10 @@ extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     let mut c_prev: i32 = 0;
     let mut rc: i32 = 0;
     let mut in_: ReInput = unsafe { core::mem::zeroed() };
+    /// Look for the initial prefix match, if there is one.
     let mut x: u8 = 0 as u8;
     let mut x__1: i32 = 0;
+    /// fall-through
     let mut j: i32 = 0;
     let mut n: i32 = 0;
     let mut hit: i32 = 0;
@@ -598,9 +622,13 @@ extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
             }
         }
     }
+
+    /// Look for the initial prefix match, if there is one.
+    /// fall-through
     unreachable!();
 }
 
+/// Resize the opcode and argument arrays for an RE under construction.
 extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     let mut a_op: *mut i8 = core::ptr::null_mut();
     let mut a_arg: *mut i32 = core::ptr::null_mut();
@@ -633,6 +661,8 @@ extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     return 0;
 }
 
+/// Insert a new opcode and argument into an RE under construction.  The
+///* insertion point is just prior to existing opcode iBefore.
 extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     arg: i32) -> i32 {
     let mut i: i32 = 0;
@@ -670,10 +700,13 @@ extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     return i_before_1;
 }
 
+/// Append a new opcode and argument to the end of the RE under construction.
 extern "C" fn re_append(p: *mut ReCompiled, op: i32, arg: i32) -> i32 {
     return re_insert(p, unsafe { (*p).n_state } as i32, op, arg);
 }
 
+/// Make a copy of N opcodes starting at iStart onto the end of the RE
+///* under construction.
 extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     if unsafe { (*p).n_state } + n_1 >= unsafe { (*p).n_alloc } &&
             re_resize(unsafe { &mut *p },
@@ -705,6 +738,9 @@ extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     unsafe { (*p).n_state += n_1 };
 }
 
+/// Return true if c is a hexadecimal digit character:  [0-9a-fA-F]
+///* If c is a hex digit, also set *pV = (*pV)*16 + valueof(c).  If
+///* c is not a hex digit *pV is unchanged.
 extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     if c >= '0' as i32 && c <= '9' as i32 {
         c -= '0' as i32;
@@ -717,6 +753,8 @@ extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     return 1;
 }
 
+/// A backslash character has been seen, read the next character and
+///* return its interpretation.
 extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     let mut i: i32 = 0;
     let mut v: i32 = 0;
@@ -768,12 +806,16 @@ extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     return c as u32;
 }
 
+/// Peek at the next byte of input
 extern "C" fn re_peek(p: &ReCompiled) -> u8 {
     return if (*p).s_in.i < (*p).s_in.mx {
                 (unsafe { *(*p).s_in.z.offset((*p).s_in.i as isize) }) as i32
             } else { 0 } as u8;
 }
 
+/// Compile RE text into a sequence of opcodes.  Continue up to the
+///* first unmatched ")" character, then return.  If an error is found,
+///* return a pointer to the error message string.
 extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     let mut z_err: *const i8 = core::ptr::null();
     let mut i_start: i32 = 0;
@@ -802,6 +844,7 @@ extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     return core::ptr::null();
 }
 
+/// Forward declaration
 extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     let mut i_prev: i32 = -1;
     let mut i_start: i32 = 0;
@@ -3234,6 +3277,9 @@ extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     return core::ptr::null();
 }
 
+/// Free and reclaim all the memory used by a previously compiled
+///* regular expression.  Applications should invoke this routine once
+///* for every call to re_compile() to avoid memory leaks.
 extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
     if !(p_re_1).is_null() {
         unsafe { sqlite3_free(unsafe { (*p_re_1).a_op } as *mut ()) };
@@ -3242,10 +3288,17 @@ extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
     }
 }
 
+///* Version of re_free() that accepts a pointer of type (void*). Required
+///* to satisfy sanitizers when the re_free() function is called via a
+///* function pointer.
 extern "C" fn re_free_voidptr(p: *mut ()) -> () {
     sqlite3re_free(p as *mut ReCompiled);
 }
 
+///* Compile a textual regular expression in zIn[] into a compiled regular
+///* expression suitable for us by re_match() and return a pointer to the
+///* compiled regular expression in *ppRe.  Return NULL on success or an
+///* error message if something goes wrong.
 extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     mut z_in_1: *const i8, mx_re_1: i32, no_case_1: i32) -> *const i8 {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
@@ -3375,22 +3428,41 @@ extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     return unsafe { (*p_re).z_err };
 }
 
+///* The value of LIMIT_MAX_PATTERN_LENGTH.
 extern "C" fn re_maxlen(context: *mut Sqlite3Context) -> i32 {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     return unsafe { sqlite3_limit(db, 8, -1) };
 }
 
+///* Maximum NFA size given a maximum pattern length.
 extern "C" fn re_maxnfa(mxlen: i32) -> i32 { return 75 + mxlen / 2; }
 
+///* Implementation of the regexp() SQL function.  This function implements
+///* the build-in REGEXP operator.  The first argument to the function is the
+///* pattern and the second argument is the string.  So, the SQL statements:
+///*
+///*       A REGEXP B
+///*
+///* is implemented as regexp(B,A).
+#[allow(unused_doc_comments)]
 extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
+    /// Compiled regular expression
     let mut z_pattern: *const i8 = core::ptr::null();
+    /// The regular expression
     let mut z_str: *const u8 = core::ptr::null();
+    /// String being searched
     let mut z_err: *const i8 = core::ptr::null();
+    /// Compile error message
     let mut set_aux: i32 = 0;
+
+    /// True to invoke sqlite3_set_auxdata()
     { let _ = argc; };
-    p_re = unsafe { sqlite3_get_auxdata(context, 0) } as *mut ReCompiled;
+
+    /// True to invoke sqlite3_set_auxdata()
+    /// Unused
+    (p_re = unsafe { sqlite3_get_auxdata(context, 0) } as *mut ReCompiled);
     if p_re == core::ptr::null_mut() {
         let mx_len: i32 = re_maxlen(context);
         let mut n_pattern: i32 = 0;
@@ -3440,26 +3512,32 @@ extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_regexp_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"regexp".as_ptr() as *mut i8 as *const i8, 2,
                 1 | 2097152 | 2048, core::ptr::null_mut(), Some(re_sql_func),
                 None, None)
-        };
+        });
     if rc == 0 {
-        rc =
+
+        /// The regexpi(PATTERN,STRING) function is a case-insensitive version
+        ///* of regexp(PATTERN,STRING).
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"regexpi".as_ptr() as *mut i8 as *const i8, 2,
                     1 | 2097152 | 2048, db as *mut (), Some(re_sql_func), None,
                     None)
-            };
+            });
     }
     return rc;
 }

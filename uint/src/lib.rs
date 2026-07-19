@@ -1,12 +1,20 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Compare text in lexicographic order, except strings of digits
+///* compare in numeric order.
 extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -75,10 +83,13 @@ extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_uint_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
+
+    /// Unused parameter
     return unsafe {
             sqlite3_create_collation(db,
                 c"uint".as_ptr() as *mut i8 as *const i8, 1,

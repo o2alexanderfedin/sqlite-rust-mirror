@@ -1,12 +1,20 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// The vtshim_aux argument is the auxiliary parameter that is passed
+///* into sqlite3_create_module_v2().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimAux {
@@ -20,6 +28,7 @@ struct VtshimAux {
     s_self: Sqlite3Module,
 }
 
+/// A vtshim virtual table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimVtab {
@@ -31,6 +40,7 @@ struct VtshimVtab {
     p_next: *mut VtshimVtab,
 }
 
+/// A vtshim cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtshimCursor {
@@ -40,6 +50,7 @@ struct VtshimCursor {
     p_next: *mut VtshimCursor,
 }
 
+/// Methods for the vtshim module
 extern "C" fn vtshim_create(db: *mut Sqlite3, pp_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -860,6 +871,7 @@ extern "C" fn vtshim_rollback_to(p_base_1: *mut Sqlite3Vtab, n: i32) -> i32 {
     return rc;
 }
 
+/// The destructor function for a disposable module
 extern "C" fn vtshim_aux_destructor(p_x_aux_1: *mut ()) -> () {
     let p_aux: *mut VtshimAux = p_x_aux_1 as *mut VtshimAux;
     if !(unsafe { (*p_aux).p_all_vtab } == core::ptr::null_mut()) as i32 as

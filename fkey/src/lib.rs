@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SColMap, SQLiteThread,
+    Schema, Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo,
+    Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token,
+    Trigger, TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker,
+    WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,16 @@ impl Parse {
     }
 }
 
+///* The second argument points to an FKey object representing a foreign key
+///* for which pTab is the child table. An UPDATE statement against pTab
+///* is currently being processed. For each column of the table that is 
+///* actually updated, the corresponding element in the aChange[] array
+///* is zero or greater (if a column is unmodified the corresponding element
+///* is set to -1). If the rowid column is modified by the UPDATE statement
+///* the bChngRowid argument is non-zero.
+///*
+///* This function returns true if any of the columns that are part of the
+///* child key for FK constraint *p are modified.
 extern "C" fn fk_child_is_modified(p_tab_1: &Table, p: &FKey,
     a_change_1: *const i32, b_chng_rowid_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -421,19 +446,64 @@ extern "C" fn fk_child_is_modified(p_tab_1: &Table, p: &FKey,
     return 0;
 }
 
+///* A foreign key constraint requires that the key columns in the parent
+///* table are collectively subject to a UNIQUE or PRIMARY KEY constraint.
+///* Given that pParent is the parent table for foreign key constraint pFKey, 
+///* search the schema for a unique index on the parent key columns. 
+///*
+///* If successful, zero is returned. If the parent key is an INTEGER PRIMARY 
+///* KEY column, then output variable *ppIdx is set to NULL. Otherwise, *ppIdx 
+///* is set to point to the unique index. 
+///* 
+///* If the parent key consists of a single column (the foreign key constraint
+///* is not a composite foreign key), output variable *paiCol is set to NULL.
+///* Otherwise, it is set to point to an allocated array of size N, where
+///* N is the number of columns in the parent key. The first element of the
+///* array is the index of the child table column that is mapped by the FK
+///* constraint to the parent table column stored in the left-most column
+///* of index *ppIdx. The second element of the array is the index of the
+///* child table column that corresponds to the second left-most column of
+///* *ppIdx, and so on.
+///*
+///* If the required index cannot be found, either because:
+///*
+///*   1) The named parent key columns do not exist, or
+///*
+///*   2) The named parent key columns do exist, but are not subject to a
+///*      UNIQUE or PRIMARY KEY constraint, or
+///*
+///*   3) No parent key columns were provided explicitly as part of the
+///*      foreign key definition, and the parent table does not have a
+///*      PRIMARY KEY, or
+///*
+///*   4) No parent key columns were provided explicitly as part of the
+///*      foreign key definition, and the PRIMARY KEY of the parent table 
+///*      consists of a different number of columns to the child key in 
+///*      the child table.
+///*
+///* then non-zero is returned, and a "foreign key mismatch" error loaded
+///* into pParse. If an OOM error occurs, non-zero is returned and the
+///* pParse->db->mallocFailed flag is set.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
     p_parent: &Table, p_f_key: &FKey, pp_idx: &mut *mut Index,
     pai_col: *mut *mut i32) -> i32 {
     unsafe {
         let mut p_idx: *mut Index = core::ptr::null_mut();
+        /// Value to return via *ppIdx
         let mut ai_col: *mut i32 = core::ptr::null_mut();
+        /// Value to return via *paiCol
         let n_col: i32 = (*p_f_key).n_col;
+        /// Number of columns in parent key
         let z_key: *const i8 =
             unsafe {
                     (*((*p_f_key).a_col.as_ptr() as
                                     *mut SColMap).offset(0 as isize)).z_col
                 } as *const i8;
+
+        /// Name of left-most parent key column
+        /// The caller is responsible for zeroing output parameters.
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -493,6 +563,10 @@ pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
                                 break '__b1;
                             }
                         } else {
+                            /// If zKey is non-NULL, then this foreign key was declared to
+                            ///* map to an explicit list of columns in table pParent. Check if this
+                            ///* index matches those columns. Also, check that the index uses
+                            ///* the default collation sequences for each column.
                             let mut i: i32 = 0;
                             let mut j: i32 = 0;
                             {
@@ -504,15 +578,22 @@ pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
                                             unsafe {
                                                 *unsafe { (*p_idx).ai_column.offset(i as isize) }
                                             };
+                                        /// Index of column in parent tbl
                                         let mut z_dflt_coll: *const i8 = core::ptr::null();
+                                        /// Def. collation for column
                                         let mut z_idx_col: *const i8 = core::ptr::null();
                                         if (i_col as i32) < 0 { break '__b3; }
-                                        z_dflt_coll =
+
+                                        /// No foreign keys against expression indexes
+                                        /// If the index uses a collation sequence that is different from
+                                        ///* the default collation sequence for the column, this index is
+                                        ///* unusable. Bail out early in this case.
+                                        (z_dflt_coll =
                                             unsafe {
                                                 sqlite3_column_coll(unsafe {
                                                         &mut *(*p_parent).a_col.offset(i_col as isize)
                                                     })
-                                            };
+                                            });
                                         if (z_dflt_coll).is_null() as i32 != 0 {
                                             z_dflt_coll = sqlite3_str_binary.as_ptr() as *const i8;
                                         }
@@ -587,13 +668,41 @@ pub extern "C" fn sqlite3_fk_locate_index(p_parse: *mut Parse,
     }
 }
 
+///* This function is called when a row is inserted into or deleted from the 
+///* child table of foreign key constraint pFKey. If an SQL UPDATE is executed 
+///* on the child table of pFKey, this function is invoked twice for each row
+///* affected - once to "delete" the old row, and then again to "insert" the
+///* new row.
+///*
+///* Each time it is called, this function generates VDBE code to locate the
+///* row in the parent table that corresponds to the row being inserted into 
+///* or deleted from the child table. If the parent row can be found, no 
+///* special action is taken. Otherwise, if the parent row can *not* be
+///* found in the parent table:
+///*
+///*   Operation | FK type   | Action taken
+///*   --------------------------------------------------------------------------
+///*   INSERT      immediate   Increment the "immediate constraint counter".
+///*
+///*   DELETE      immediate   Decrement the "immediate constraint counter".
+///*
+///*   INSERT      deferred    Increment the "deferred constraint counter".
+///*
+///*   DELETE      deferred    Decrement the "deferred constraint counter".
+///*
+///* These operations are identified in the comment at the top of this file 
+///* (fkey.c) as "I.1" and "D.1".
+#[allow(unused_doc_comments)]
 extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
     p_tab_1: *mut Table, p_idx_1: *mut Index, p_f_key_1: &FKey,
     ai_col_1: *const i32, reg_data_1: i32, n_incr_1: i32, is_ignore_1: i32)
     -> () {
     let mut i: i32 = 0;
+    /// Iterator variable
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
+    /// Vdbe to add code to
     let i_cur: i32 = unsafe { (*p_parse_1).n_tab } - 1;
+    /// Cursor number to use
     let i_ok: i32 = unsafe { sqlite3_vdbe_make_label(p_parse_1) };
     if n_incr_1 < 0 {
         unsafe {
@@ -618,8 +727,17 @@ extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
     }
     if is_ignore_1 == 0 {
         if p_idx_1 == core::ptr::null_mut() {
+            /// If pIdx is NULL, then the parent key is the INTEGER PRIMARY KEY
+            ///* column of the parent table (table pTab).
             let mut i_must_be_int: i32 = 0;
+            /// Address of MustBeInt instruction
             let reg_temp: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+            /// Invoke MustBeInt to coerce the child key value to an integer (i.e. 
+            ///* apply the affinity of the parent key). If this fails, then there
+            ///* is no matching parent key. Before using MustBeInt, make a copy of
+            ///* the value. Otherwise, the value inserted into the child key column
+            ///* will have INTEGER affinity applied to it, which may not be correct.
             unsafe {
                 sqlite3_vdbe_add_op2(v, 83,
                     unsafe {
@@ -700,7 +818,9 @@ extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
                             if unsafe {
                                             *unsafe { (*p_idx_1).ai_column.offset(i as isize) }
                                         } as i32 == unsafe { (*p_tab_1).i_p_key } as i32 {
-                                i_parent = reg_data_1;
+
+                                /// The parent key is a composite key that includes the IPK column
+                                (i_parent = reg_data_1);
                             }
                             unsafe {
                                 sqlite3_vdbe_add_op3(v, 53, i_child, i_jump, i_parent)
@@ -734,6 +854,11 @@ extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
                                     524288 as u64 == 0) as i32 != 0 &&
                 (unsafe { (*p_parse_1).p_toplevel }).is_null() as i32 != 0 &&
             (unsafe { (*p_parse_1).is_multi_write } == 0) as i32 != 0 {
+
+        /// Special case: If this is an INSERT statement that will insert exactly
+        ///* one row into the table, raise a constraint immediately instead of
+        ///* incrementing a counter. This is necessary as the VM code is being
+        ///* generated for will not open a statement transaction.
         { let _ = 0; };
         unsafe {
             sqlite3_halt_constraint(p_parse_1, 19 | 3 << 8, 2,
@@ -752,6 +877,9 @@ extern "C" fn fk_lookup_parent(p_parse_1: *mut Parse, i_db_1: i32,
     unsafe { sqlite3_vdbe_add_op1(v, 124, i_cur) };
 }
 
+///* Return true if the parser passed as the first argument is being
+///* used to code a trigger that is really a "SET NULL" action belonging
+///* to trigger pFKey.
 extern "C" fn is_set_null_action(p_parse_1: *mut Parse, p_f_key_1: &FKey)
     -> i32 {
     let p_top: *const Parse =
@@ -772,6 +900,18 @@ extern "C" fn is_set_null_action(p_parse_1: *mut Parse, p_f_key_1: &FKey)
     return 0;
 }
 
+///* This function returns a linked list of FKey objects (connected by
+///* FKey.pNextTo) holding all children of table pTab.  For example,
+///* given the following schema:
+///*
+///*   CREATE TABLE t1(a PRIMARY KEY);
+///*   CREATE TABLE t2(b REFERENCES t1(a);
+///*
+///* Calling this function with table "t1" as an argument returns a pointer
+///* to the FKey structure representing the foreign key constraint on table
+///* "t2". Calling this function with "t2" as the argument would return a
+///* NULL pointer (as there are no FK constraints for which t2 is the parent
+///* table).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_references(p_tab: &Table) -> *mut FKey {
     unsafe {
@@ -783,6 +923,16 @@ pub extern "C" fn sqlite3_fk_references(p_tab: &Table) -> *mut FKey {
     }
 }
 
+///* The second argument points to an FKey object representing a foreign key
+///* for which pTab is the parent table. An UPDATE statement against pTab
+///* is currently being processed. For each column of the table that is 
+///* actually updated, the corresponding element in the aChange[] array
+///* is zero or greater (if a column is unmodified the corresponding element
+///* is set to -1). If the rowid column is modified by the UPDATE statement
+///* the bChngRowid argument is non-zero.
+///*
+///* This function returns true if any of the columns that are part of the
+///* parent key for FK constraint *p are modified.
 extern "C" fn fk_parent_is_modified(p_tab_1: &Table, p: &FKey,
     a_change_1: *const i32, b_chng_rowid_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -832,6 +982,12 @@ extern "C" fn fk_parent_is_modified(p_tab_1: &Table, p: &FKey,
     return 0;
 }
 
+///* Return an Expr object that refers to a memory register corresponding
+///* to column iCol of table pTab.
+///*
+///* regBase is the first of an array of register that contains the data
+///* for pTab.  regBase itself holds the rowid.  regBase+1 holds the first
+///* column.  regBase+2 holds the second column, and so forth.
 extern "C" fn expr_table_register(p_parse_1: *const Parse,
     p_tab_1: *mut Table, reg_base_1: i32, i_col_1: i16) -> *mut Expr {
     let mut p_expr: *mut Expr = core::ptr::null_mut();
@@ -872,6 +1028,8 @@ extern "C" fn expr_table_register(p_parse_1: *const Parse,
     return p_expr;
 }
 
+///* Return an Expr object that refers to column iCol of table pTab which
+///* has cursor iCur.
 extern "C" fn expr_table_column(db: *mut Sqlite3, p_tab_1: *mut Table,
     i_cursor_1: i32, i_col_1: i16) -> *mut Expr {
     unsafe {
@@ -887,16 +1045,49 @@ extern "C" fn expr_table_column(db: *mut Sqlite3, p_tab_1: *mut Table,
     }
 }
 
+///* This function is called to generate code executed when a row is deleted
+///* from the parent table of foreign key constraint pFKey and, if pFKey is 
+///* deferred, when a row is inserted into the same table. When generating
+///* code for an SQL UPDATE operation, this function may be called twice -
+///* once to "delete" the old row and once to "insert" the new row.
+///*
+///* Parameter nIncr is passed -1 when inserting a row (as this may decrease
+///* the number of FK violations in the db) or +1 when deleting one (as this
+///* may increase the number of FK constraint problems).
+///*
+///* The code generated by this function scans through the rows in the child
+///* table that correspond to the parent table row being deleted or inserted.
+///* For each child row found, one of the following actions is taken:
+///*
+///*   Operation | FK type   | Action taken
+///*   --------------------------------------------------------------------------
+///*   DELETE      immediate   Increment the "immediate constraint counter".
+///*
+///*   INSERT      immediate   Decrement the "immediate constraint counter".
+///*
+///*   DELETE      deferred    Increment the "deferred constraint counter".
+///*
+///*   INSERT      deferred    Decrement the "deferred constraint counter".
+///*
+///* These operations are identified in the comment at the top of this file 
+///* (fkey.c) as "I.2" and "D.2".
+#[allow(unused_doc_comments)]
 extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     p_tab_1: *mut Table, p_idx_1: *const Index, p_f_key_1: &FKey,
     ai_col_1: *const i32, reg_data_1: i32, n_incr_1: i32) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// Database handle
         let mut i: i32 = 0;
+        /// Iterator variable
         let mut p_where: *mut Expr = core::ptr::null_mut();
+        /// WHERE clause to scan with
         let mut s_name_context: NameContext = unsafe { core::mem::zeroed() };
+        /// Context used to resolve WHERE clause
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// Context used by sqlite3WhereXXX()
         let mut i_fk_if_zero: i32 = 0;
+        /// Address of OP_FkIfZero
         let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
         { let _ = 0; };
         { let _ = 0; };
@@ -915,16 +1106,22 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
                 if !(i < (*p_f_key_1).n_col) { break '__b10; }
                 '__c10: loop {
                     let mut p_left: *mut Expr = core::ptr::null_mut();
+                    /// Value from parent table row
                     let mut p_right: *mut Expr = core::ptr::null_mut();
+                    /// Column ref to child table
                     let mut p_eq: *mut Expr = core::ptr::null_mut();
+                    /// Expression (pLeft = pRight)
                     let mut i_col: i16 = 0 as i16;
+                    /// Index of column in child table
                     let mut z_col: *const i8 = core::ptr::null();
-                    i_col =
+
+                    /// Name of column in child table
+                    (i_col =
                         if !(p_idx_1).is_null() {
                                 (unsafe {
                                         *unsafe { (*p_idx_1).ai_column.offset(i as isize) }
                                     }) as i32
-                            } else { -1 } as i16;
+                            } else { -1 } as i16);
                     p_left =
                         expr_table_register(p_parse_1 as *const Parse, p_tab_1,
                             reg_data_1, i_col);
@@ -956,7 +1153,9 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
         }
         if p_tab_1 == (*p_f_key_1).p_from && n_incr_1 > 0 {
             let mut p_ne: *mut Expr = core::ptr::null_mut();
+            /// Expression (pLeft != pRight)
             let mut p_left_1: *mut Expr = core::ptr::null_mut();
+            /// Value from parent table row
             let mut p_right_1: *mut Expr = core::ptr::null_mut();
             if unsafe { (*p_tab_1).tab_flags } & 128 as u32 == 0 as u32 {
                 p_left_1 =
@@ -1018,6 +1217,8 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
             }
             p_where = unsafe { sqlite3_expr_and(p_parse_1, p_where, p_ne) };
         }
+
+        /// Resolve the references in the WHERE clause.
         unsafe {
             memset(&raw mut s_name_context as *mut (), 0,
                 core::mem::size_of::<NameContext>() as u64)
@@ -1040,6 +1241,8 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
                 unsafe { sqlite3_where_end(p_w_info) };
             }
         }
+
+        /// Clean up the WHERE clause constructed above.
         unsafe { sqlite3_expr_delete(db, p_where) };
         if i_fk_if_zero != 0 {
             unsafe { sqlite3_vdbe_jump_here_or_pop_inst(v, i_fk_if_zero) };
@@ -1047,16 +1250,41 @@ extern "C" fn fk_scan_children(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     }
 }
 
+///* This function is called when inserting, deleting or updating a row of
+///* table pTab to generate VDBE code to perform foreign key constraint 
+///* processing for the operation.
+///*
+///* For a DELETE operation, parameter regOld is passed the index of the
+///* first register in an array of (pTab->nCol+1) registers containing the
+///* rowid of the row being deleted, followed by each of the column values
+///* of the row being deleted, from left to right. Parameter regNew is passed
+///* zero in this case.
+///*
+///* For an INSERT operation, regOld is passed zero and regNew is passed the
+///* first register of an array of (pTab->nCol+1) registers containing the new
+///* row data.
+///*
+///* For an UPDATE operation, this function is called twice. Once before
+///* the original record is deleted from the table using the calling convention
+///* described for DELETE. Then again after the original record is deleted
+///* but before the new record is inserted using the INSERT convention.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
     reg_old: i32, reg_new: i32, a_change: *mut i32, b_chng_rowid: i32) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+        /// Database handle
         let mut p_f_key: *mut FKey = core::ptr::null_mut();
+        /// Used to iterate through FKs
         let mut i_db: i32 = 0;
+        /// Index of database containing pTab
         let mut z_db: *const i8 = core::ptr::null();
+        /// Name of database containing pTab
         let is_ignore_errors: i32 =
             unsafe { (*p_parse).disable_triggers() } as i32;
+
+        /// Exactly one of regOld and regNew should be non-zero.
         { let _ = 0; };
         if unsafe { (*db).flags } & 16384 as u64 == 0 as u64 { return; }
         if !(unsafe { (*p_tab).e_tab_type } as i32 == 0) as i32 != 0 {
@@ -1077,7 +1305,9 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                 if !(!(p_f_key).is_null()) { break '__b12; }
                 '__c12: loop {
                     let mut p_to: *mut Table = core::ptr::null_mut();
+                    /// Parent table of foreign key pFKey
                     let mut p_idx: *mut Index = core::ptr::null_mut();
+                    /// Index on key columns in pTo
                     let mut ai_free: *mut i32 = core::ptr::null_mut();
                     let mut ai_col: *mut i32 = core::ptr::null_mut();
                     let mut i_col: i32 = 0;
@@ -1115,6 +1345,12 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                             return;
                         }
                         if p_to == core::ptr::null_mut() {
+                            /// If isIgnoreErrors is true, then a table is being dropped. In this
+                            ///* case SQLite runs a "DELETE FROM xxx" on the table being dropped
+                            ///* before actually dropping it in order to check FK constraints.
+                            ///* If the parent table of an FK constraint on the current table is
+                            ///* missing, behave as if it is empty. i.e. decrement the relevant
+                            ///* FK counter for each row of the current table with non-NULL keys.
                             let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
                             let i_jump: i32 =
                                 unsafe { sqlite3_vdbe_current_addr(v) } +
@@ -1196,6 +1432,10 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         }
                     }
+
+                    /// Take a shared-cache advisory read-lock on the parent table. Allocate 
+                    ///* a cursor to use to search the unique index on the parent key columns 
+                    ///* in the parent table.
                     unsafe {
                         sqlite3_table_lock(p_parse, i_db, unsafe { (*p_to).tnum },
                             0 as u8, unsafe { (*p_to).z_name } as *const i8)
@@ -1207,6 +1447,10 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                         __t
                     };
                     if reg_old != 0 {
+
+                        /// A row is being removed from the child table. Search for the parent.
+                        ///* If the parent does not exist, removing the child row resolves an 
+                        ///* outstanding foreign key constraint violation.
                         fk_lookup_parent(p_parse, i_db, p_to, p_idx,
                             unsafe { &*p_f_key }, ai_col as *const i32, reg_old, -1,
                             b_ignore);
@@ -1214,6 +1458,15 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                     if reg_new != 0 &&
                             (is_set_null_action(p_parse, unsafe { &*p_f_key }) == 0) as
                                     i32 != 0 {
+
+                        /// A row is being added to the child table. If a parent row cannot
+                        ///* be found, adding the child row has violated the FK constraint. 
+                        ///*
+                        ///* If this operation is being performed as part of a trigger program
+                        ///* that is actually a "SET NULL" action belonging to this very 
+                        ///* foreign key, then omit this scan altogether. As all child key
+                        ///* values are guaranteed to be NULL, it is not possible for adding
+                        ///* this row to cause an FK violation.
                         fk_lookup_parent(p_parse, i_db, p_to, p_idx,
                             unsafe { &*p_f_key }, ai_col as *const i32, reg_new, 1,
                             b_ignore);
@@ -1230,6 +1483,7 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                 if !(!(p_f_key).is_null()) { break '__b15; }
                 '__c15: loop {
                     let mut p_idx_1: *mut Index = core::ptr::null_mut();
+                    /// Foreign key index for pFKey
                     let mut p_src: *mut SrcList = core::ptr::null_mut();
                     let mut ai_col_1: *mut i32 = core::ptr::null_mut();
                     if !(a_change).is_null() &&
@@ -1243,6 +1497,9 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                                 (unsafe { (*p_parse).p_toplevel }).is_null() as i32 != 0 &&
                             (unsafe { (*p_parse).is_multi_write } == 0) as i32 != 0 {
                         { let _ = 0; };
+
+                        /// Inserting a single row into a parent table cannot cause (or fix)
+                        ///* an immediate foreign key violation. So do nothing in this case.
                         break '__c15;
                     }
                     if sqlite3_fk_locate_index(p_parse, unsafe { &*p_tab },
@@ -1254,11 +1511,14 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
                         break '__c15;
                     }
                     { let _ = 0; };
-                    p_src =
+
+                    /// Create a SrcList structure containing the child table.  We need the
+                    ///* child table as a SrcList for sqlite3WhereBegin()
+                    (p_src =
                         unsafe {
                             sqlite3_src_list_append(p_parse, core::ptr::null_mut(),
                                 core::ptr::null_mut(), core::ptr::null_mut())
-                        };
+                        });
                     if !(p_src).is_null() {
                         let p_item: *mut SrcItem =
                             unsafe { (*p_src).a.as_ptr() } as *mut SrcItem;
@@ -1317,7 +1577,23 @@ pub extern "C" fn sqlite3_fk_check(p_parse: *mut Parse, p_tab: *mut Table,
     }
 }
 
+///* This function is called to generate code that runs when table pTab is
+///* being dropped from the database. The SrcList passed as the second argument
+///* to this function contains a single entry guaranteed to resolve to
+///* table pTab.
+///*
+///* Normally, no code is required. However, if either
+///*
+///*   (a) The table is the parent table of a FK constraint, or
+///*   (b) The table is the child table of a deferred FK constraint and it is
+///*       determined at runtime that there are outstanding deferred FK 
+///*       constraint violations in the database,
+///*
+///* then the equivalent of "DELETE FROM <tbl>" is executed before dropping
+///* the table from the database. Triggers are disabled while running this
+///* DELETE, but foreign key actions are not.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fk_drop_table(p_parse: *mut Parse,
     p_name: *mut SrcList, p_tab: *mut Table) -> () {
     unsafe {
@@ -1327,9 +1603,16 @@ pub extern "C" fn sqlite3_fk_drop_table(p_parse: *mut Parse,
             let mut i_skip: i32 = 0;
             let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
             { let _ = 0; };
+
+            /// VDBE has already been allocated
             { let _ = 0; };
             if sqlite3_fk_references(unsafe { &*p_tab }) ==
                     core::ptr::null_mut() {
+                /// Search for a deferred foreign key constraint for which this table
+                ///* is the child table. If one cannot be found, return without 
+                ///* generating any VDBE code. If one can be found, then jump over
+                ///* the entire DELETE if there are no outstanding deferred constraints
+                ///* when this statement is run.
                 let mut p: *const FKey = core::ptr::null();
                 {
                     p = unsafe { (*p_tab).u.tab.p_f_key };
@@ -1375,6 +1658,12 @@ pub extern "C" fn sqlite3_fk_drop_table(p_parse: *mut Parse,
     }
 }
 
+///* The second argument is a Trigger structure allocated by the 
+///* fkActionTrigger() routine. This function deletes the Trigger structure
+///* and all of its sub-components.
+///*
+///* The Trigger structure or any of its sub-components may be allocated from
+///* the lookaside buffer belonging to database handle dbMem.
 extern "C" fn fk_trigger_delete(db_mem_1: *mut Sqlite3, p: *mut Trigger)
     -> () {
     unsafe {
@@ -1400,14 +1689,47 @@ extern "C" fn fk_trigger_delete(db_mem_1: *mut Sqlite3, p: *mut Trigger)
     }
 }
 
+///* This function is called when an UPDATE or DELETE operation is being 
+///* compiled on table pTab, which is the parent table of foreign-key pFKey.
+///* If the current operation is an UPDATE, then the pChanges parameter is
+///* passed a pointer to the list of columns being modified. If it is a
+///* DELETE, pChanges is passed a NULL pointer.
+///*
+///* It returns a pointer to a Trigger structure containing a trigger
+///* equivalent to the ON UPDATE or ON DELETE action specified by pFKey.
+///* If the action is "NO ACTION" then a NULL pointer is returned (these actions
+///* require no special handling by the triggers sub-system, code for them is
+///* created by fkScanChildren()).
+///*
+///* For example, if pFKey is the foreign key and pTab is table "p" in 
+///* the following schema:
+///*
+///*   CREATE TABLE p(pk PRIMARY KEY);
+///*   CREATE TABLE c(ck REFERENCES p ON DELETE CASCADE);
+///*
+///* then the returned trigger structure is equivalent to:
+///*
+///*   CREATE TRIGGER ... DELETE ON p BEGIN
+///*     DELETE FROM c WHERE ck = old.pk;
+///*   END;
+///*
+///* The returned pointer is cached as part of the foreign key object. It
+///* is eventually freed along with the rest of the foreign key object by 
+///* sqlite3FkDelete().
+#[allow(unused_doc_comments)]
 extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p_f_key_1: *mut FKey, p_changes_1: *const ExprList) -> *mut Trigger {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// Database handle
         let mut action: i32 = 0;
+        /// One of OE_None, OE_Cascade etc.
         let mut p_trigger: *mut Trigger = core::ptr::null_mut();
+        /// Trigger definition to return
         let i_action: i32 = (p_changes_1 != core::ptr::null_mut()) as i32;
-        action = unsafe { (*p_f_key_1).a_action[i_action as usize] } as i32;
+
+        /// 1 for UPDATE, 0 for DELETE
+        (action = unsafe { (*p_f_key_1).a_action[i_action as usize] } as i32);
         if unsafe { (*db).flags } & (8 as u64) << 32 != 0 { action = 0; }
         if action == 7 && unsafe { (*db).flags } & 524288 as u64 != 0 {
             return core::ptr::null_mut();
@@ -1415,14 +1737,23 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
         p_trigger = unsafe { (*p_f_key_1).ap_trigger[i_action as usize] };
         if action != 0 && (p_trigger).is_null() as i32 != 0 {
             let mut z_from: *const i8 = core::ptr::null();
+            /// Name of child table
             let mut n_from: i32 = 0;
+            /// Length in bytes of zFrom
             let mut p_idx: *mut Index = core::ptr::null_mut();
+            /// Parent key index for this FK
             let mut ai_col: *mut i32 = core::ptr::null_mut();
+            /// child table cols -> parent key cols
             let mut p_step: *mut TriggerStep = core::ptr::null_mut();
+            /// First (only) step of trigger program
             let mut p_where: *mut Expr = core::ptr::null_mut();
+            /// WHERE clause of trigger step
             let mut p_list: *mut ExprList = core::ptr::null_mut();
+            /// Changes list if ON UPDATE CASCADE
             let mut p_select: *mut Select = core::ptr::null_mut();
+            /// If RESTRICT, "SELECT RAISE(...)"
             let mut i: i32 = 0;
+            /// Iterator variable
             let mut p_when: *mut Expr = core::ptr::null_mut();
             if sqlite3_fk_locate_index(p_parse_1, unsafe { &*p_tab_1 },
                         unsafe { &*p_f_key_1 }, &mut p_idx, &mut ai_col) != 0 {
@@ -1436,13 +1767,20 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                     '__c17: loop {
                         let mut t_old: Token =
                             Token { z: c"old".as_ptr() as *const i8, n: 3 as u32 };
+                        /// Literal "old" token
                         let mut t_new: Token =
                             Token { z: c"new".as_ptr() as *const i8, n: 3 as u32 };
+                        /// Literal "new" token
                         let mut t_from_col: Token = unsafe { core::mem::zeroed() };
+                        /// Name of column in child table
                         let mut t_to_col: Token = unsafe { core::mem::zeroed() };
+                        /// Name of column in parent table
                         let mut i_from_col: i32 = 0;
+                        /// Idx of column in child table
                         let mut p_eq: *mut Expr = core::ptr::null_mut();
-                        i_from_col =
+
+                        /// tFromCol = OLD.tToCol
+                        (i_from_col =
                             if !(ai_col).is_null() {
                                 unsafe { *ai_col.offset(i as isize) }
                             } else {
@@ -1450,7 +1788,7 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                     (*(unsafe { (*p_f_key_1).a_col.as_ptr() } as
                                                     *mut SColMap).offset(0 as isize)).i_from
                                 }
-                            };
+                            });
                         { let _ = 0; };
                         { let _ = 0; };
                         { let _ = 0; };
@@ -1476,7 +1814,12 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                             }).z_cn_name
                                 })
                         };
-                        p_eq =
+
+                        /// Create the expression "OLD.zToCol = zFromCol". It is important
+                        ///* that the "OLD.zToCol" term is on the LHS of the = operator, so
+                        ///* that the affinity and collation sequence associated with the
+                        ///* parent table are used for the comparison.
+                        (p_eq =
                             unsafe {
                                 sqlite3_p_expr(p_parse_1, 54,
                                     unsafe {
@@ -1494,7 +1837,7 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                                         sqlite3_expr_alloc(db, 60,
                                             &raw mut t_from_col as *const Token, 0)
                                     })
-                            };
+                            });
                         p_where =
                             unsafe { sqlite3_expr_and(p_parse_1, p_where, p_eq) };
                         if !(p_changes_1).is_null() {
@@ -1645,6 +1988,8 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                     };
                 p_where = core::ptr::null_mut();
             }
+
+            /// Disable lookaside memory allocation
             {
                 let __p = unsafe { &mut (*db).lookaside.b_disable };
                 let __t = *__p;
@@ -1717,6 +2062,8 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
                     };
                 }
             }
+
+            /// Re-enable the lookaside buffer, if it was disabled earlier.
             {
                 let __p = unsafe { &mut (*db).lookaside.b_disable };
                 let __t = *__p;
@@ -1769,6 +2116,8 @@ extern "C" fn fk_action_trigger(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     }
 }
 
+///* This function is called when deleting or updating a row to implement
+///* any required CASCADE, SET NULL or SET DEFAULT actions.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_actions(p_parse: *mut Parse, p_tab: *mut Table,
     p_changes: *mut ExprList, reg_old: i32, a_change: *mut i32,
@@ -1802,19 +2151,49 @@ pub extern "C" fn sqlite3_fk_actions(p_parse: *mut Parse, p_tab: *mut Table,
     }
 }
 
+///* This function is called before generating code to update or delete a 
+///* row contained in table pTab. If the operation is a DELETE, then
+///* parameter aChange is passed a NULL value. For an UPDATE, aChange points
+///* to an array of size N, where N is the number of columns in table pTab.
+///* If the i'th column is not modified by the UPDATE, then the corresponding 
+///* entry in the aChange[] array is set to -1. If the column is modified,
+///* the value is 0 or greater. Parameter chngRowid is set to true if the
+///* UPDATE statement modifies the rowid fields of the table.
+///*
+///* If any foreign key processing will be required, this function returns
+///* non-zero. If there is no foreign key related processing, this function 
+///* returns zero.
+///*
+///* For an UPDATE, this function returns 2 if:
+///*
+///*   * There are any FKs for which pTab is the child and the parent table
+///*     and any FK processing at all is required (even of a different FK), or
+///*
+///*   * the UPDATE modifies one or more parent keys for which the action is
+///*     not "NO ACTION" (i.e. is CASCADE, SET DEFAULT or SET NULL).
+///*
+///* Or, assuming some other foreign key processing is required, 1.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fk_required(p_parse: &Parse, p_tab: *mut Table,
     a_change: *mut i32, chng_rowid: i32) -> i32 {
     unsafe {
         let mut e_ret: i32 = 1;
+        /// Value to return if bHaveFK is true
         let mut b_have_fk: i32 = 0;
         if unsafe { (*(*p_parse).db).flags } & 16384 as u64 != 0 &&
                 unsafe { (*p_tab).e_tab_type } as i32 == 0 {
             if (a_change).is_null() as i32 != 0 {
-                b_have_fk =
+
+                /// A DELETE operation. Foreign key processing is required if the 
+                ///* table in question is either the child or parent table for any 
+                ///* foreign key constraint.
+                (b_have_fk =
                     (!(sqlite3_fk_references(unsafe { &*p_tab })).is_null() ||
-                            !(unsafe { (*p_tab).u.tab.p_f_key }).is_null()) as i32;
+                            !(unsafe { (*p_tab).u.tab.p_f_key }).is_null()) as i32);
             } else {
+                /// This is an UPDATE. Foreign key processing is only required if the
+                ///* operation modifies one or more child or parent key columns.
                 let mut p: *mut FKey = core::ptr::null_mut();
                 {
                     p = unsafe { (*p_tab).u.tab.p_f_key };
@@ -1862,6 +2241,8 @@ pub extern "C" fn sqlite3_fk_required(p_parse: &Parse, p_tab: *mut Table,
     }
 }
 
+///* This function is called before generating code to update or delete a 
+///* row contained in table pTab.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_oldmask(p_parse: *mut Parse, p_tab: *mut Table)
     -> u32 {
@@ -1946,6 +2327,9 @@ pub extern "C" fn sqlite3_fk_oldmask(p_parse: *mut Parse, p_tab: *mut Table)
     }
 }
 
+///* Clear the apTrigger[] cache of CASCADE triggers for all foreign keys
+///* in a particular database.  This needs to happen when the schema
+///* changes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fk_clear_trigger_cache(db: *mut Sqlite3, i_db: i32)
     -> () {
@@ -1997,11 +2381,18 @@ pub extern "C" fn sqlite3_fk_clear_trigger_cache(db: *mut Sqlite3, i_db: i32)
     }
 }
 
+///* Free all memory associated with foreign key definitions attached to
+///* table pTab. Remove the deleted foreign keys from the Schema.fkeyHash
+///* hash table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fk_delete(db: *mut Sqlite3, p_tab: &Table) -> () {
     unsafe {
         let mut p_f_key: *mut FKey = core::ptr::null_mut();
+        /// Iterator variable
         let mut p_next: *mut FKey = core::ptr::null_mut();
+
+        /// Copy of pFKey->pNextFrom
         { let _ = 0; };
         { let _ = 0; };
         {
@@ -2035,7 +2426,12 @@ pub extern "C" fn sqlite3_fk_delete(db: *mut Sqlite3, p_tab: &Table) -> () {
                             };
                         }
                     }
+
+                    /// EV: R-30323-21917 Each foreign key constraint in SQLite is
+                    ///* classified as either immediate or deferred.
                     { let _ = 0; };
+
+                    /// Delete any triggers created to implement actions for this FK.
                     fk_trigger_delete(db,
                         unsafe { (*p_f_key).ap_trigger[0 as usize] });
                     fk_trigger_delete(db,

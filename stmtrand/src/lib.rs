@@ -1,10 +1,41 @@
+//!* 2024-05-24
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* An SQL function that return pseudo-random non-negative integers.
+//!*
+//!*      SELECT stmtrand(123);
+//!*
+//!* A special feature of this function is that the same sequence of random
+//!* integers is returned for each invocation of the statement.  This makes
+//!* the results repeatable, and hence useful for testing.  The argument is
+//!* an integer which is the seed for the random number sequence.  The seed
+//!* is used by the first invocation of this function only and is ignored
+//!* for all subsequent calls within the same statement.
+//!*
+//!* Resetting a statement (sqlite3_reset()) also resets the random number
+//!* sequence.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+/// State of the pseudo-random number generator
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stmtrand {
@@ -12,6 +43,9 @@ struct Stmtrand {
     y: u32,
 }
 
+///* Function:     stmtrand(SEED)
+///*
+///* Return a pseudo-random number.
 extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Stmtrand = core::ptr::null_mut();
@@ -61,17 +95,20 @@ extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_stmtrand_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"stmtrand".as_ptr() as *mut i8 as *const i8, 1, 1,
                 core::ptr::null_mut(), Some(stmtrand_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

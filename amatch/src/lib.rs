@@ -1,12 +1,20 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// 
+///* A amatch virtual-table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchVtab {
@@ -27,6 +35,8 @@ struct AmatchVtab {
     n_cursor: i32,
 }
 
+///* Each transformation rule is stored as an instance of this object.
+///* All rules are kept on a linked list sorted by rCost.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchRule {
@@ -39,12 +49,20 @@ struct AmatchRule {
     z_to: [i8; 4],
 }
 
+///* Various types.
+///*
+///* amatch_cost is the "cost" of an edit operation.
+///*
+///* amatch_len is the length of a matching string.  
+///*
+///* amatch_langid is an ruleset identifier.
 type AmatchCost = i32;
 
 type AmatchLangid = i32;
 
 type AmatchLen = i8;
 
+/// A amatch cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchCursor {
@@ -64,6 +82,7 @@ struct AmatchCursor {
     p_word: *mut AmatchAvl,
 }
 
+///* A match or partial match
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchWord {
@@ -77,6 +96,12 @@ struct AmatchWord {
     z_word: [i8; 4],
 }
 
+///**************************************************************************
+///* AVL Tree implementation
+////
+////*
+///* Objects that want to be members of the AVL tree should embedded an
+///* instance of this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AmatchAvl {
@@ -89,6 +114,9 @@ struct AmatchAvl {
     imbalance: i32,
 }
 
+/// Recompute the amatch_avl.height and amatch_avl.imbalance fields for p.
+///* Assume that the children of p have correct heights.
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_avl_recompute_height(p: &mut AmatchAvl) -> () {
     let h_before: i32 =
         if !((*p).p_before).is_null() {
@@ -99,9 +127,17 @@ extern "C" fn amatch_avl_recompute_height(p: &mut AmatchAvl) -> () {
             unsafe { (*(*p).p_after).height }
         } else { 0 };
     (*p).imbalance = h_before - h_after;
-    (*p).height = if h_before > h_after { h_before } else { h_after } + 1;
+
+    /// -: pAfter higher.  +: pBefore higher
+    ((*p).height = if h_before > h_after { h_before } else { h_after } + 1);
 }
 
+///*     P                B
+///*    / \              / \
+///*   B   Z    ==>     X   P
+///*  / \                  / \
+///* X   Y                Y   Z
+///*
 extern "C" fn amatch_avl_rotate_before(p_p_1: *mut AmatchAvl)
     -> *mut AmatchAvl {
     let p_b: *mut AmatchAvl = unsafe { (*p_p_1).p_before };
@@ -116,6 +152,12 @@ extern "C" fn amatch_avl_rotate_before(p_p_1: *mut AmatchAvl)
     return p_b;
 }
 
+///*     P                A
+///*    / \              / \
+///*   X   A    ==>     P   Z
+///*      / \          / \
+///*     Y   Z        X   Y
+///*
 extern "C" fn amatch_avl_rotate_after(p_p_1: *mut AmatchAvl)
     -> *mut AmatchAvl {
     let p_a: *mut AmatchAvl = unsafe { (*p_p_1).p_after };
@@ -130,6 +172,8 @@ extern "C" fn amatch_avl_rotate_after(p_p_1: *mut AmatchAvl)
     return p_a;
 }
 
+///* Return a pointer to the pBefore or pAfter pointer in the parent
+///* of p that points to p.  Or if p is the root node, return pp.
 extern "C" fn amatch_avl_from_ptr(p: *mut AmatchAvl, pp: *mut *mut AmatchAvl)
     -> *mut *mut AmatchAvl {
     let p_up: *mut AmatchAvl = unsafe { (*p).p_up };
@@ -140,6 +184,8 @@ extern "C" fn amatch_avl_from_ptr(p: *mut AmatchAvl, pp: *mut *mut AmatchAvl)
     return unsafe { &mut (*p_up).p_before };
 }
 
+///* Rebalance all nodes starting with p and working up to the root.
+///* Return the new root.
 extern "C" fn amatch_avl_balance(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     let mut p_top: *mut AmatchAvl = p;
     let mut pp: *mut *mut AmatchAvl = core::ptr::null_mut();
@@ -174,6 +220,8 @@ extern "C" fn amatch_avl_balance(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     return p_top;
 }
 
+/// Search the tree rooted at p for an entry with zKey.  Return a pointer
+///* to the entry or return NULL.
 extern "C" fn amatch_avl_search(mut p: *mut AmatchAvl, z_key_1: *const i8)
     -> *mut AmatchAvl {
     let mut c: i32 = 0;
@@ -193,6 +241,7 @@ extern "C" fn amatch_avl_search(mut p: *mut AmatchAvl, z_key_1: *const i8)
     return p;
 }
 
+/// Find the first node (the one with the smallest key).
 extern "C" fn amatch_avl_first(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     if !(p).is_null() {
         while !(unsafe { (*p).p_before }).is_null() {
@@ -202,6 +251,10 @@ extern "C" fn amatch_avl_first(mut p: *mut AmatchAvl) -> *mut AmatchAvl {
     return p;
 }
 
+/// Insert a new node pNew.  Return NULL on success.  If the key is not
+///* unique, then do not perform the insert but instead leave pNew unchanged
+///* and return a pointer to an existing node with the same key.
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_avl_insert(pp_head_1: &mut *mut AmatchAvl,
     p_new_1: *mut AmatchAvl) -> *mut AmatchAvl {
     let mut c: i32 = 0;
@@ -240,14 +293,22 @@ extern "C" fn amatch_avl_insert(pp_head_1: &mut *mut AmatchAvl,
     unsafe { (*p_new_1).height = 1 };
     unsafe { (*p_new_1).imbalance = 0 };
     *pp_head_1 = amatch_avl_balance(p);
+
+    /// assert( amatchAvlIntegrity(*ppHead) ); */
+    ///  /* assert( amatchAvlIntegrity2(*ppHead) );
     return core::ptr::null_mut();
 }
 
+/// Remove node pOld from the tree.  pOld must be an element of the tree or
+///* the AVL tree will become corrupt.
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_avl_remove(pp_head_1: *mut *mut AmatchAvl,
     p_old_1: *mut AmatchAvl) -> () {
     let mut pp_parent: *mut *mut AmatchAvl = core::ptr::null_mut();
     let mut p_balance: *mut AmatchAvl = core::ptr::null_mut();
-    pp_parent = amatch_avl_from_ptr(p_old_1, pp_head_1);
+
+    /// assert( amatchAvlSearch(*ppHead, pOld->zKey)==pOld );
+    (pp_parent = amatch_avl_from_ptr(p_old_1, pp_head_1));
     if unsafe { (*p_old_1).p_before } == core::ptr::null_mut() &&
             unsafe { (*p_old_1).p_after } == core::ptr::null_mut() {
         unsafe { *pp_parent = core::ptr::null_mut() };
@@ -305,6 +366,9 @@ extern "C" fn amatch_avl_remove(pp_head_1: *mut *mut AmatchAvl,
     unsafe { (*p_old_1).p_after = core::ptr::null_mut() };
 }
 
+///* The two input rule lists are both sorted in order of increasing
+///* cost.  Merge them together into a single list, sorted by cost, and
+///* return a pointer to the head of that list.
 extern "C" fn amatch_merge_rules(mut p_a_1: *mut AmatchRule,
     mut p_b_1: *mut AmatchRule) -> *mut AmatchRule {
     let mut head: AmatchRule = unsafe { core::mem::zeroed() };
@@ -327,6 +391,14 @@ extern "C" fn amatch_merge_rules(mut p_a_1: *mut AmatchRule,
     return head.p_next;
 }
 
+///* Statement pStmt currently points to a row in the amatch data table. This
+///* function allocates and populates a amatch_rule structure according to
+///* the content of the row.
+///*
+///* If successful, *ppRule is set to point to the new object and SQLITE_OK
+///* is returned. Otherwise, *ppRule is zeroed, *pzErr may be set to point
+///* to an error message and an SQLite error code returned.
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_load_one_rule(p: &mut AmatchVtab,
     p_stmt_1: *mut Sqlite3Stmt, pp_rule_1: &mut *mut AmatchRule,
     pz_err_1: &mut *mut i8) -> i32 {
@@ -337,8 +409,11 @@ extern "C" fn amatch_load_one_rule(p: &mut AmatchVtab,
         unsafe { sqlite3_column_text(p_stmt_1, 2) } as *const i8;
     let r_cost: AmatchCost = unsafe { sqlite3_column_int(p_stmt_1, 3) };
     let mut rc: i32 = 0;
+    /// Return code
     let mut n_from: i32 = 0;
+    /// Size of string zFrom, in bytes
     let mut n_to: i32 = 0;
+    /// Size of string zTo, in bytes
     let mut p_rule: *mut AmatchRule = core::ptr::null_mut();
     if z_from == core::ptr::null() {
         z_from = c"".as_ptr() as *mut i8 as *const i8;
@@ -422,6 +497,7 @@ extern "C" fn amatch_load_one_rule(p: &mut AmatchVtab,
     return rc;
 }
 
+///* Free all the content in the edit-cost-table
 extern "C" fn amatch_free_rules(p: &mut AmatchVtab) -> () {
     while !((*p).p_rule).is_null() {
         let p_rule: *mut AmatchRule = (*p).p_rule;
@@ -431,10 +507,14 @@ extern "C" fn amatch_free_rules(p: &mut AmatchVtab) -> () {
     (*p).p_rule = core::ptr::null_mut();
 }
 
+///* Load the content of the amatch data table into memory.
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut z_sql: *mut i8 = core::ptr::null_mut();
+    /// SELECT used to read from rules table
     let mut p_head: *mut AmatchRule = core::ptr::null_mut();
     z_sql =
         unsafe {
@@ -445,6 +525,7 @@ extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
         rc = 7;
     } else {
         let mut rc2: i32 = 0;
+        /// finalize() return code
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
         rc =
             unsafe {
@@ -546,6 +627,9 @@ extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
             (*p).p_rule = amatch_merge_rules(unsafe { (*p).p_rule }, p_x)
         };
     } else {
+
+        /// An error has occurred. Setting p->pRule to point to the head of the
+        ///* allocated list ensures that the list will be cleaned up in this case.
         if !(unsafe { (*p).p_rule } == core::ptr::null_mut()) as i32 as i64 !=
                 0 {
             unsafe {
@@ -559,10 +643,25 @@ extern "C" fn amatch_load_rules(db: *mut Sqlite3, p: *mut AmatchVtab,
     return rc;
 }
 
+///* This function converts an SQL quoted string into an unquoted string
+///* and returns a pointer to a buffer allocated using sqlite3_malloc() 
+///* containing the result. The caller should eventually free this buffer
+///* using sqlite3_free.
+///*
+///* Examples:
+///*
+///*     "abc"   becomes   abc
+///*     'xyz'   becomes   xyz
+///*     [pqr]   becomes   pqr
+///*     `mno`   becomes   mno
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_dequote(z_in_1: *const i8) -> *mut i8 {
     let mut n_in: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of input string, in bytes
     let mut z_out: *mut i8 = core::ptr::null_mut();
-    n_in = unsafe { strlen(z_in_1) } as Sqlite3Int64;
+
+    /// Output (dequoted) string
+    (n_in = unsafe { strlen(z_in_1) } as Sqlite3Int64);
     z_out =
         unsafe {
                 sqlite3_malloc64((n_in + 1 as Sqlite3Int64) as Sqlite3Uint64)
@@ -577,6 +676,7 @@ extern "C" fn amatch_dequote(z_in_1: *const i8) -> *mut i8 {
             };
         } else {
             let mut i_out: i32 = 0;
+            /// Index of next byte to write to output
             let mut i_in: i32 = 0;
             if q as i32 == '[' as i32 { q = ']' as i32 as i8; }
             {
@@ -614,6 +714,7 @@ extern "C" fn amatch_dequote(z_in_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* Deallocate the pVCheck prepared statement.
 extern "C" fn amatch_v_check_clear(p: &mut AmatchVtab) -> () {
     if !((*p).p_v_check).is_null() {
         unsafe { sqlite3_finalize((*p).p_v_check) };
@@ -621,6 +722,7 @@ extern "C" fn amatch_v_check_clear(p: &mut AmatchVtab) -> () {
     }
 }
 
+///* Deallocate an amatch_vtab object
 extern "C" fn amatch_free(p: *mut AmatchVtab) -> () {
     if !(p).is_null() {
         amatch_free_rules(unsafe { &mut *p });
@@ -639,6 +741,7 @@ extern "C" fn amatch_free(p: *mut AmatchVtab) -> () {
     }
 }
 
+///* xDisconnect/xDestroy method for the amatch module.
 extern "C" fn amatch_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut AmatchVtab = p_vtab_1 as *mut AmatchVtab;
     if !(unsafe { (*p).n_cursor } == 0) as i32 as i64 != 0 {
@@ -652,6 +755,12 @@ extern "C" fn amatch_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Check to see if the argument is of the form:
+///*
+///*       KEY = VALUE
+///*
+///* If it is, return a pointer to the first character of VALUE.
+///* If not, return NULL.  Spaces around the = are ignored.
 extern "C" fn amatch_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     -> *const i8 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -688,11 +797,20 @@ extern "C" fn amatch_value_of_key(z_key_1: *const i8, z_str_1: *const i8)
     return unsafe { z_str_1.offset(i as isize) };
 }
 
+///* xConnect/xCreate method for the amatch module. Arguments are:
+///*
+///*   argv[0]    -> module name  ("approximate_match")
+///*   argv[1]    -> database name
+///*   argv[2]    -> table name
+///*   argv[3...] -> arguments
+#[allow(unused_doc_comments)]
 extern "C" fn amatch_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_new: *mut AmatchVtab = core::ptr::null_mut();
+    /// New virtual table
     let mut z_module: *const i8 = core::ptr::null();
     let mut z_db: *const i8 = core::ptr::null();
     let mut z_val: *const i8 = core::ptr::null();
@@ -975,9 +1093,13 @@ extern "C" fn amatch_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             }
         }
     }
+
+    /// Return code
+    /// New virtual table
     unreachable!();
 }
 
+///* Open a new amatch cursor.
 extern "C" fn amatch_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut AmatchVtab = p_v_tab_1 as *mut AmatchVtab;
@@ -1003,6 +1125,8 @@ extern "C" fn amatch_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Free up all the memory allocated by a cursor.  Set it rLimit to 0
+///* to indicate that it is at EOF.
 extern "C" fn amatch_clear_cursor(p_cur_1: &mut AmatchCursor) -> () {
     let mut p_word: *mut AmatchWord = core::ptr::null_mut();
     let mut p_next_word: *mut AmatchWord = core::ptr::null_mut();
@@ -1032,6 +1156,7 @@ extern "C" fn amatch_clear_cursor(p_cur_1: &mut AmatchCursor) -> () {
     (*p_cur_1).n_word = 0;
 }
 
+///* Close a amatch cursor.
 extern "C" fn amatch_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut AmatchCursor = cur as *mut AmatchCursor;
     amatch_clear_cursor(unsafe { &mut *p_cur });
@@ -1045,6 +1170,7 @@ extern "C" fn amatch_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Render a 24-bit unsigned integer as a 4-byte base-64 number.
 extern "C" fn amatch_encode_int(x: i32, z: *mut i8) -> () {
     unsafe { *z.offset(0 as isize) = a_1[(x >> 18 & 63) as usize] as i8 };
     unsafe { *z.offset(1 as isize) = a_1[(x >> 12 & 63) as usize] as i8 };
@@ -1052,6 +1178,7 @@ extern "C" fn amatch_encode_int(x: i32, z: *mut i8) -> () {
     unsafe { *z.offset(3 as isize) = a_1[(x & 63) as usize] as i8 };
 }
 
+///* Write the zCost[] field for a amatch_word object
 extern "C" fn amatch_write_cost(p_word_1: &mut AmatchWord) -> () {
     amatch_encode_int((*p_word_1).r_cost,
         &raw mut (*p_word_1).z_cost[0 as usize] as *mut i8);
@@ -1063,6 +1190,8 @@ extern "C" fn amatch_write_cost(p_word_1: &mut AmatchWord) -> () {
     (*p_word_1).z_cost[8 as usize] = 0 as i8;
 }
 
+/// Circumvent compiler warnings about the use of strcpy() by supplying
+///* our own implementation.
 extern "C" fn amatch_strcpy(mut dest: *mut i8, mut src: *const i8) -> () {
     while {
                     let __v =
@@ -1098,6 +1227,13 @@ extern "C" fn amatch_strcat(mut dest: *mut i8, src: *const i8) -> () {
     amatch_strcpy(dest, src);
 }
 
+///* Add a new amatch_word object to the queue.
+///*
+///* If a prior amatch_word object with the same zWord, and nMatch
+///* already exists, update its rCost (if the new rCost is less) but
+///* otherwise leave it unchanged.  Do not add a duplicate.
+///*
+///* Do nothing if the cost exceeds threshold.
 extern "C" fn amatch_add_word(p_cur_1: &mut AmatchCursor,
     r_cost_1: AmatchCost, n_match_1: i32, z_word_base_1: *const i8,
     z_word_tail_1: *const i8) -> () {
@@ -1223,6 +1359,7 @@ extern "C" fn amatch_add_word(p_cur_1: &mut AmatchCursor,
     { let _ = p_other; };
 }
 
+///* Advance a cursor to its next row of output
 extern "C" fn amatch_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut AmatchCursor = cur as *mut AmatchCursor;
     let mut p_word: *mut AmatchWord = core::ptr::null_mut();
@@ -1497,6 +1634,9 @@ extern "C" fn amatch_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Called to "rewind" a cursor back to the beginning so that
+///* it starts its output over again.  Always called at least once
+///* prior to any amatchColumn, amatchRowid, or amatchEof call.
 extern "C" fn amatch_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1555,6 +1695,8 @@ extern "C" fn amatch_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return rc;
 }
 
+///* Only the word and distance columns have values.  All other columns
+///* return NULL
 extern "C" fn amatch_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const AmatchCursor =
@@ -1647,6 +1789,7 @@ extern "C" fn amatch_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* The rowid.
 extern "C" fn amatch_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const AmatchCursor =
@@ -1655,12 +1798,33 @@ extern "C" fn amatch_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* EOF indicator
 extern "C" fn amatch_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const AmatchCursor =
         cur as *mut AmatchCursor as *const AmatchCursor;
     return (unsafe { (*p_cur).p_current } == core::ptr::null_mut()) as i32;
 }
 
+///* Search for terms of these forms:
+///*
+///*   (A)    word MATCH $str
+///*   (B1)   distance < $value
+///*   (B2)   distance <= $value
+///*   (C)    language == $language
+///*
+///* The distance< and distance<= are both treated as distance<=.
+///* The query plan number is a bit vector:
+///*
+///*   bit 1:   Term of the form (A) found
+///*   bit 2:   Term like (B1) or (B2) found
+///*   bit 3:   Term like (C) found
+///*
+///* If bit-1 is set, $str is always in filter.argv[0].  If bit-2 is set
+///* then $value is in filter.argv[0] if bit-1 is clear and is in 
+///* filter.argv[1] if bit-1 is set.  If bit-3 is set, then $ruleid is
+///* in filter.argv[0] if bit-1 and bit-2 are both zero, is in
+///* filter.argv[1] if exactly one of bit-1 and bit-2 are set, and is in
+///* filter.argv[2] if both bit-1 and bit-2 are set.
 extern "C" fn amatch_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -1769,6 +1933,10 @@ extern "C" fn amatch_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* The xUpdate() method.  
+///*
+///* This implementation disallows DELETE and UPDATE.  The only thing
+///* allowed is INSERT into the "command" column.
 extern "C" fn amatch_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p: *const AmatchVtab =
@@ -1828,6 +1996,7 @@ extern "C" fn amatch_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     return 0;
 }
 
+///* A virtual table module that implements the "approximate_match".
 static mut amatch_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1858,19 +2027,24 @@ static mut amatch_module: Sqlite3Module =
     };
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_amatch_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         { let _ = p_api_1; };
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Not used
+        (rc =
             unsafe {
                 sqlite3_create_module(db,
                     c"approximate_match".as_ptr() as *mut i8 as *const i8,
                     &raw mut amatch_module as *const Sqlite3Module,
                     core::ptr::null_mut())
-            };
+            });
+
+        /// SQLITE_OMIT_VIRTUALTABLE
         return rc;
     }
 }

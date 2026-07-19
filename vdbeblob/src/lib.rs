@@ -1,21 +1,52 @@
+//!* 2007 May 1
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This file contains code used to implement incremental BLOB I/O.
+//!* Valid sqlite3_blob* handles point to Incrblob structures.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SColMap, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
@@ -490,12 +521,33 @@ struct Incrblob {
     p_tab: *mut Table,
 }
 
+///* This function is used by both blob_open() and blob_reopen(). It seeks
+///* the b-tree cursor associated with blob handle p to point to row iRow.
+///* If successful, SQLITE_OK is returned and subsequent calls to
+///* sqlite3_blob_read() or sqlite3_blob_write() access the specified row.
+///*
+///* If an error occurs, or if the specified row does not exist or does not
+///* contain a value of type TEXT or BLOB in the column nominated when the
+///* blob handle was opened, then an error code is returned and *pzErr may
+///* be set to point to a buffer containing an error message. It is the
+///* responsibility of the caller to free the error message buffer using
+///* sqlite3DbFree().
+///*
+///* If an error does occur, then the b-tree cursor is closed. All subsequent
+///* calls to sqlite3_blob_read(), blob_write() or blob_reopen() will 
+///* immediately return SQLITE_ABORT.
+#[allow(unused_doc_comments)]
 extern "C" fn blob_seek_to_row(p: &mut Incrblob, i_row_1: Sqlite3Int64,
     pz_err_1: &mut *mut i8) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Error code
         let mut z_err: *mut i8 = core::ptr::null_mut();
+        /// Error message
         let v: *mut Vdbe = (*p).p_stmt as *mut Vdbe;
+
+        /// Set the value of register r[1] in the SQL statement to integer iRow. 
+        ///* This is done directly as a performance optimization
         unsafe {
             sqlite3_vdbe_mem_set_int64(unsafe {
                     &mut *unsafe { (*v).a_mem.offset(1 as isize) }
@@ -579,24 +631,122 @@ extern "C" fn blob_seek_to_row(p: &mut Incrblob, i_row_1: Sqlite3Int64,
     }
 }
 
+///* CAPI3REF: Open A BLOB For Incremental I/O
+///* METHOD: sqlite3
+///* CONSTRUCTOR: sqlite3_blob
+///*
+///* ^(This interfaces opens a [BLOB handle | handle] to the BLOB located
+///* in row iRow, column zColumn, table zTable in database zDb;
+///* in other words, the same BLOB that would be selected by:
+///*
+///* <pre>
+///*     SELECT zColumn FROM zDb.zTable WHERE [rowid] = iRow;
+///* </pre>)^
+///*
+///* ^(Parameter zDb is not the filename that contains the database, but
+///* rather the symbolic name of the database. For attached databases, this is
+///* the name that appears after the AS keyword in the [ATTACH] statement.
+///* For the main database file, the database name is "main". For TEMP
+///* tables, the database name is "temp".)^
+///*
+///* ^If the flags parameter is non-zero, then the BLOB is opened for read
+///* and write access. ^If the flags parameter is zero, the BLOB is opened for
+///* read-only access.
+///*
+///* ^(On success, [SQLITE_OK] is returned and the new [BLOB handle] is stored
+///* in *ppBlob. Otherwise an [error code] is returned and, unless the error
+///* code is SQLITE_MISUSE, *ppBlob is set to NULL.)^ ^This means that, provided
+///* the API is not misused, it is always safe to call [sqlite3_blob_close()]
+///* on *ppBlob after this function returns.
+///*
+///* This function fails with SQLITE_ERROR if any of the following are true:
+///* <ul>
+///*   <li> ^(Database zDb does not exist)^,
+///*   <li> ^(Table zTable does not exist within database zDb)^,
+///*   <li> ^(Table zTable is a WITHOUT ROWID table)^,
+///*   <li> ^(Column zColumn does not exist)^,
+///*   <li> ^(Row iRow is not present in the table)^,
+///*   <li> ^(The specified column of row iRow contains a value that is not
+///*         a TEXT or BLOB value)^,
+///*   <li> ^(Column zColumn is part of an index, PRIMARY KEY or UNIQUE
+///*         constraint and the blob is being opened for read/write access)^,
+///*   <li> ^([foreign key constraints | Foreign key constraints] are enabled,
+///*         column zColumn is part of a [child key] definition and the blob is
+///*         being opened for read/write access)^.
+///* </ul>
+///*
+///* ^Unless it returns SQLITE_MISUSE, this function sets the
+///* [database connection] error code and message accessible via
+///* [sqlite3_errcode()] and [sqlite3_errmsg()] and related functions.
+///*
+///* A BLOB referenced by sqlite3_blob_open() may be read using the
+///* [sqlite3_blob_read()] interface and modified by using
+///* [sqlite3_blob_write()].  The [BLOB handle] can be moved to a
+///* different row of the same table using the [sqlite3_blob_reopen()]
+///* interface.  However, the column, table, or database of a [BLOB handle]
+///* cannot be changed after the [BLOB handle] is opened.
+///*
+///* ^(If the row that a BLOB handle points to is modified by an
+///* [UPDATE], [DELETE], or by [ON CONFLICT] side-effects
+///* then the BLOB handle is marked as "expired".
+///* This is true if any column of the row is changed, even a column
+///* other than the one the BLOB handle is open on.)^
+///* ^Calls to [sqlite3_blob_read()] and [sqlite3_blob_write()] for
+///* an expired BLOB handle fail with a return code of [SQLITE_ABORT].
+///* ^(Changes written into a BLOB prior to the BLOB expiring are not
+///* rolled back by the expiration of the BLOB.  Such changes will eventually
+///* commit if the transaction continues to completion.)^
+///*
+///* ^Use the [sqlite3_blob_bytes()] interface to determine the size of
+///* the opened blob.  ^The size of a blob may not be changed by this
+///* interface.  Use the [UPDATE] SQL command to change the size of a
+///* blob.
+///*
+///* ^The [sqlite3_bind_zeroblob()] and [sqlite3_result_zeroblob()] interfaces
+///* and the built-in [zeroblob] SQL function may be used to create a
+///* zero-filled blob to read or write using the incremental-blob interface.
+///*
+///* To avoid a resource leak, every open [BLOB handle] should eventually
+///* be released by a call to [sqlite3_blob_close()].
+///*
+///* See also: [sqlite3_blob_close()],
+///* [sqlite3_blob_reopen()], [sqlite3_blob_read()],
+///* [sqlite3_blob_bytes()], [sqlite3_blob_write()].
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_blob_open(db: *mut Sqlite3, z_db_1: *const i8,
     z_table_1: *const i8, z_column_1: *const i8, i_row_1: SqliteInt64,
     mut wr_flag_1: i32, pp_blob_1: &mut *mut Sqlite3Blob) -> i32 {
     unsafe {
         let mut n_attempt: i32 = 0;
         let mut i_col: i32 = 0;
+        /// Index of zColumn in row-record
         let mut rc: i32 = 0;
         let mut z_err: *mut i8 = core::ptr::null_mut();
         let mut p_tab: *mut Table = core::ptr::null_mut();
         let mut p_blob: *mut Incrblob = core::ptr::null_mut();
         let mut i_db: i32 = 0;
         let mut s_parse: Parse = unsafe { core::mem::zeroed() };
+        /// wrFlag = (wrFlag ? 1 : 0);
+        /// Now search pTab for the exact column.
+        /// If the value is being opened for writing, check that the
+        ///* column is not indexed, and that it is not part of a foreign key.
         let mut z_fault: *const i8 = core::ptr::null();
         let mut p_idx: *const Index = core::ptr::null();
+        /// Check that the column is not part of an FK child key definition. It
+        ///* is not necessary to check if it is part of a parent key, as parent
+        ///* key columns must be indexed. The check below will pick up this 
+        ///* case.
         let mut p_f_key: *const FKey = core::ptr::null();
         let mut j: i32 = 0;
         let mut j__1: i32 = 0;
+        /// 0: Acquire a read or write lock
+        /// 1: Open a cursor */
+        ///        /* blobSeekToRow() will initialize r[1] to the desired rowid
+        /// 2: Seek the cursor to rowid=r[1]
+        /// 3
+        /// 4
+        /// 5
         let mut v: *mut Vdbe = core::ptr::null_mut();
         let mut a_op: *mut VdbeOp = core::ptr::null_mut();
         let mut __state: i32 = 0;
@@ -1105,11 +1255,75 @@ pub extern "C" fn sqlite3_blob_open(db: *mut Sqlite3, z_db_1: *const i8,
                 }
             }
         }
+
+        /// Index of zColumn in row-record
+        /// wrFlag = (wrFlag ? 1 : 0);
+        /// Now search pTab for the exact column.
+        /// If the value is being opened for writing, check that the
+        ///* column is not indexed, and that it is not part of a foreign key.
+        /// Check that the column is not part of an FK child key definition. It
+        ///* is not necessary to check if it is part of a parent key, as parent
+        ///* key columns must be indexed. The check below will pick up this 
+        ///* case.
+        /// FIXME: Be smarter about indexes that use expressions
+        /// This VDBE program seeks a btree cursor to the identified 
+        ///* db/table/row entry. The reason for using a vdbe program instead
+        ///* of writing code to use the b-tree layer directly is that the
+        ///* vdbe program will take advantage of the various transaction,
+        ///* locking and error handling infrastructure built into the vdbe.
+        ///*
+        ///* After seeking the cursor, the vdbe executes an OP_ResultRow.
+        ///* Code external to the Vdbe then "borrows" the b-tree cursor and
+        ///* uses it to implement the blob_read(), blob_write() and 
+        ///* blob_bytes() functions.
+        ///*
+        ///* The sqlite3_blob_close() function finalizes the vdbe program,
+        ///* which closes the b-tree cursor and (possibly) commits the 
+        ///* transaction.
+        /// 0: Acquire a read or write lock
+        /// 1: Open a cursor */
+        ///        /* blobSeekToRow() will initialize r[1] to the desired rowid
+        /// 2: Seek the cursor to rowid=r[1]
+        /// 3
+        /// 4
+        /// 5
+        /// Make sure a mutex is held on the table to be accessed
+        /// Configure the OP_TableLock instruction
+        /// Remove either the OP_OpenWrite or OpenRead. Set the P2 
+        ///* parameter of the other to pTab->tnum.
+        /// Configure the number of columns. Configure the cursor to
+        ///* think that the table has one more column than it really
+        ///* does. An OP_Column to retrieve this imaginary column will
+        ///* always return an SQL NULL. This is useful because it means
+        ///* we can invoke OP_Column to fill in the vdbe cursors type 
+        ///* and offset cache without causing any IO.
         unreachable!();
     }
 }
 
+///* CAPI3REF: Move a BLOB Handle to a New Row
+///* METHOD: sqlite3_blob
+///*
+///* ^This function is used to move an existing [BLOB handle] so that it points
+///* to a different row of the same database table. ^The new row is identified
+///* by the rowid value passed as the second argument. Only the row can be
+///* changed. ^The database, table and column on which the blob handle is open
+///* remain the same. Moving an existing [BLOB handle] to a new row is
+///* faster than closing the existing handle and opening a new one.
+///*
+///* ^(The new row must meet the same criteria as for [sqlite3_blob_open()] -
+///* it must exist and there must be either a blob or text value stored in
+///* the nominated column.)^ ^If the new row is not present in the table, or if
+///* it does not contain a blob or text value, or if another error occurs, an
+///* SQLite error code is returned and the blob handle is considered aborted.
+///* ^All subsequent calls to [sqlite3_blob_read()], [sqlite3_blob_write()] or
+///* [sqlite3_blob_reopen()] on an aborted blob handle immediately return
+///* SQLITE_ABORT. ^Calling [sqlite3_blob_bytes()] on an aborted blob handle
+///* always returns zero.
+///*
+///* ^This function sets the database handle error code and message.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_blob_reopen(p_blob: *mut Sqlite3Blob,
     i_row: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -1121,7 +1335,10 @@ pub extern "C" fn sqlite3_blob_reopen(p_blob: *mut Sqlite3Blob,
     db = unsafe { (*p).db };
     unsafe { sqlite3_mutex_enter(unsafe { (*db).mutex }) };
     if unsafe { (*p).p_stmt } == core::ptr::null_mut() {
-        rc = 4;
+
+        /// If there is no statement handle, then the blob-handle has
+        ///* already been invalidated. Return SQLITE_ABORT in this case.
+        (rc = 4);
     } else {
         let mut z_err: *mut i8 = core::ptr::null_mut();
         unsafe { (*(unsafe { (*p).p_stmt } as *mut Vdbe)).rc = 0 };
@@ -1143,6 +1360,25 @@ pub extern "C" fn sqlite3_blob_reopen(p_blob: *mut Sqlite3Blob,
     return rc;
 }
 
+///* CAPI3REF: Close A BLOB Handle
+///* DESTRUCTOR: sqlite3_blob
+///*
+///* ^This function closes an open [BLOB handle]. ^(The BLOB handle is closed
+///* unconditionally.  Even if this routine returns an error code, the
+///* handle is still closed.)^
+///*
+///* ^If the blob handle being closed was opened for read-write access, and if
+///* the database is in auto-commit mode and there are no other open read-write
+///* blob handles or active write statements, the current transaction is
+///* committed. ^If an error occurs while committing the transaction, an error
+///* code is returned and the transaction rolled back.
+///*
+///* Calling this function with an argument that is not a NULL pointer or an
+///* open blob handle results in undefined behavior. ^Calling this routine
+///* with a null pointer (such as would be returned by a failed call to
+///* [sqlite3_blob_open()]) is a harmless no-op. ^Otherwise, if this function
+///* is passed a valid open blob handle, the values returned by the
+///* sqlite3_errcode() and sqlite3_errmsg() functions are set before returning.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_close(p_blob: *mut Sqlite3Blob) -> i32 {
     let p: *mut Incrblob = p_blob as *mut Incrblob;
@@ -1159,6 +1395,18 @@ pub extern "C" fn sqlite3_blob_close(p_blob: *mut Sqlite3Blob) -> i32 {
     return rc;
 }
 
+///* CAPI3REF: Return The Size Of An Open BLOB
+///* METHOD: sqlite3_blob
+///*
+///* ^Returns the size in bytes of the BLOB accessible via the
+///* successfully opened [BLOB handle] in its only argument.  ^The
+///* incremental blob I/O routines can only read or overwrite existing
+///* blob content; they cannot change the size of a blob.
+///*
+///* This routine only works on a [BLOB handle] which has been created
+///* by a prior successful call to [sqlite3_blob_open()] and which has not
+///* been closed by [sqlite3_blob_close()].  Passing any other pointer in
+///* to this routine results in undefined and probably undesirable behavior.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_bytes(p_blob: *mut Sqlite3Blob) -> i32 {
     let p: *const Incrblob = p_blob as *mut Incrblob as *const Incrblob;
@@ -1167,6 +1415,8 @@ pub extern "C" fn sqlite3_blob_bytes(p_blob: *mut Sqlite3Blob) -> i32 {
         } else { 0 };
 }
 
+///* Perform a read or write operation on a blob
+#[allow(unused_doc_comments)]
 extern "C" fn blob_read_write(p_blob_1: *mut Sqlite3Blob, z: &mut [u8],
     i_offset_1: i32,
     x_call_1:
@@ -1185,10 +1435,18 @@ extern "C" fn blob_read_write(p_blob_1: *mut Sqlite3Blob, z: &mut [u8],
     if (z.len() as i32) < 0 || i_offset_1 < 0 ||
             i_offset_1 as Sqlite3Int64 + z.len() as i32 as Sqlite3Int64 >
                 unsafe { (*p).n_byte } as i64 {
-        rc = 1;
+
+        /// Request is out of range. Return a transient error.
+        (rc = 1);
     } else if v == core::ptr::null_mut() {
-        rc = 4;
+
+        /// If there is no statement handle, then the blob-handle has
+        ///* already been invalidated. Return SQLITE_ABORT in this case.
+        (rc = 4);
     } else {
+
+        /// Call either BtreeData() or BtreePutData(). If SQLITE_ABORT is
+        ///* returned, clean-up the statement handle.
         { let _ = 0; };
         unsafe { sqlite3_btree_enter_cursor(unsafe { (*p).p_csr }) };
         rc =
@@ -1209,6 +1467,31 @@ extern "C" fn blob_read_write(p_blob_1: *mut Sqlite3Blob, z: &mut [u8],
     return rc;
 }
 
+///* CAPI3REF: Read Data From A BLOB Incrementally
+///* METHOD: sqlite3_blob
+///*
+///* ^(This function is used to read data from an open [BLOB handle] into a
+///* caller-supplied buffer. N bytes of data are copied into buffer Z
+///* from the open BLOB, starting at offset iOffset.)^
+///*
+///* ^If offset iOffset is less than N bytes from the end of the BLOB,
+///* [SQLITE_ERROR] is returned and no data is read.  ^If N or iOffset is
+///* less than zero, [SQLITE_ERROR] is returned and no data is read.
+///* ^The size of the blob (and hence the maximum value of N+iOffset)
+///* can be determined using the [sqlite3_blob_bytes()] interface.
+///*
+///* ^An attempt to read from an expired [BLOB handle] fails with an
+///* error code of [SQLITE_ABORT].
+///*
+///* ^(On success, sqlite3_blob_read() returns SQLITE_OK.
+///* Otherwise, an [error code] or an [extended error code] is returned.)^
+///*
+///* This routine only works on a [BLOB handle] which has been created
+///* by a prior successful call to [sqlite3_blob_open()] and which has not
+///* been closed by [sqlite3_blob_close()].  Passing any other pointer in
+///* to this routine results in undefined and probably undesirable behavior.
+///*
+///* See also: [sqlite3_blob_write()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_read(p_blob: *mut Sqlite3Blob, z: *mut (),
     n: i32, i_offset: i32) -> i32 {
@@ -1221,6 +1504,44 @@ pub extern "C" fn sqlite3_blob_read(p_blob: *mut Sqlite3Blob, z: *mut (),
             }, i_offset, Some(sqlite3_btree_payload_checked));
 }
 
+///* CAPI3REF: Write Data Into A BLOB Incrementally
+///* METHOD: sqlite3_blob
+///*
+///* ^(This function is used to write data into an open [BLOB handle] from a
+///* caller-supplied buffer. N bytes of data are copied from the buffer Z
+///* into the open BLOB, starting at offset iOffset.)^
+///*
+///* ^(On success, sqlite3_blob_write() returns SQLITE_OK.
+///* Otherwise, an  [error code] or an [extended error code] is returned.)^
+///* ^Unless SQLITE_MISUSE is returned, this function sets the
+///* [database connection] error code and message accessible via
+///* [sqlite3_errcode()] and [sqlite3_errmsg()] and related functions.
+///*
+///* ^If the [BLOB handle] passed as the first argument was not opened for
+///* writing (the flags parameter to [sqlite3_blob_open()] was zero),
+///* this function returns [SQLITE_READONLY].
+///*
+///* This function may only modify the contents of the BLOB; it is
+///* not possible to increase the size of a BLOB using this API.
+///* ^If offset iOffset is less than N bytes from the end of the BLOB,
+///* [SQLITE_ERROR] is returned and no data is written. The size of the
+///* BLOB (and hence the maximum value of N+iOffset) can be determined
+///* using the [sqlite3_blob_bytes()] interface. ^If N or iOffset are less
+///* than zero [SQLITE_ERROR] is returned and no data is written.
+///*
+///* ^An attempt to write to an expired [BLOB handle] fails with an
+///* error code of [SQLITE_ABORT].  ^Writes to the BLOB that occurred
+///* before the [BLOB handle] expired are not rolled back by the
+///* expiration of the handle, though of course those changes might
+///* have been overwritten by the statement that expired the BLOB handle
+///* or by other independent statements.
+///*
+///* This routine only works on a [BLOB handle] which has been created
+///* by a prior successful call to [sqlite3_blob_open()] and which has not
+///* been closed by [sqlite3_blob_close()].  Passing any other pointer in
+///* to this routine results in undefined and probably undesirable behavior.
+///*
+///* See also: [sqlite3_blob_read()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_blob_write(p_blob: *mut Sqlite3Blob, z: *const (),
     n: i32, i_offset: i32) -> i32 {

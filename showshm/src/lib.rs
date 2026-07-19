@@ -8,13 +8,19 @@ type OffT = DarwinOffT;
 
 type DarwinSsizeT = i64;
 
+/// The open SHM file
 static mut fd: i32 = -1;
 
+/// Report an out-of-memory error and die.
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
 
+///* Read content from the file.
+///*
+///* Space to hold the content is obtained from malloc() and needs to be
+///* freed by the caller.
 extern "C" fn get_content(ofst: i32, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -26,6 +32,7 @@ extern "C" fn get_content(ofst: i32, n_byte_1: i32) -> *mut u8 {
     }
 }
 
+/// Print a line of decode output showing a 4-byte integer.
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     flg: u32, z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -136,6 +143,8 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     };
 }
 
+///* Print an instance of the WalIndexHdr object.  ix is either 0 or 1
+///* to select which header to print.
 extern "C" fn print_index_hdr(a_data_1: *mut u8, ix: i32) -> () {
     let mut i: i32 = 0;
     if !(ix == 0 || ix == 1) as i32 as i64 != 0 {
@@ -170,6 +179,7 @@ extern "C" fn print_index_hdr(a_data_1: *mut u8, ix: i32) -> () {
         c"Cksum over all prior fields".as_ptr() as *mut i8 as *const i8);
 }
 
+///* Print the WalCkptInfo object
 extern "C" fn print_ckpt_info(a_data_1: *mut u8) -> () {
     let i: i32 = 96 as i32;
     let mut j: i32 = 0;

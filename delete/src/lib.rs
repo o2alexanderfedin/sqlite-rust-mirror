@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,18 @@ impl Parse {
     }
 }
 
+///* While a SrcList can in general represent multiple tables and subqueries
+///* (as in the FROM clause of a SELECT statement) in this case it contains
+///* the name of a single table, as one might find in an INSERT, DELETE,
+///* or UPDATE statement.  Look up that table in the symbol table and
+///* return a pointer.  Set an error message and return NULL if the table
+///* name is not found or if any other error occurs.
+///*
+///* The following fields are initialized appropriate in pSrc:
+///*
+///*    pSrc->a[0].spTab        Pointer to the Table object
+///*    pSrc->a[0].u2.pIBIndex  Pointer to the INDEXED BY index, if there is one
+///*
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_lookup(p_parse: *mut Parse,
     p_src: &mut SrcList) -> *mut Table {
@@ -423,6 +450,24 @@ pub extern "C" fn sqlite3_src_list_lookup(p_parse: *mut Parse,
     return p_tab;
 }
 
+/// Return true if table pTab is read-only.
+///*
+///* A table is read-only if any of the following are true:
+///*
+///*   1) It is a virtual table and no implementation of the xUpdate method
+///*      has been provided
+///*
+///*   2) A trigger is currently being coded and the table is a virtual table
+///*      that is SQLITE_VTAB_DIRECTONLY or if PRAGMA trusted_schema=OFF and
+///*      the table is not SQLITE_VTAB_INNOCUOUS.
+///*
+///*   3) It is a system table (i.e. sqlite_schema), this call is not
+///*      part of a nested parse and writable_schema pragma has not
+///*      been specified
+///*
+///*   4) The table is a shadow table, the database connection is in
+///*      defensive mode, and the current sqlite3_prepare()
+///*      is for a top-level SQL statement.
 extern "C" fn vtab_is_read_only(p_parse_1: *mut Parse, p_tab_1: *mut Table)
     -> i32 {
     unsafe {
@@ -472,6 +517,11 @@ extern "C" fn tab_is_read_only(p_parse_1: *mut Parse, p_tab_1: *mut Table)
     return unsafe { sqlite3_read_only_shadow_tables(db) };
 }
 
+///* Check to make sure the given table is writable.
+///*
+///* If pTab is not writable  ->  generate an error message and return 1.
+///* If pTab is writable but other errors have occurred -> return 1.
+///* If pTab is writable and no prior errors -> return 0;
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_read_only(p_parse: *mut Parse, p_tab: *mut Table,
     p_trigger: *mut Trigger) -> i32 {
@@ -497,6 +547,8 @@ pub extern "C" fn sqlite3_is_read_only(p_parse: *mut Parse, p_tab: *mut Table,
     return 0;
 }
 
+/// Generate byte-code that will report the number of rows modified
+///* by a DELETE, INSERT, or UPDATE statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_code_change_count(v: *mut Vdbe, reg_counter: i32,
     z_col_name: *const i8) -> () {
@@ -506,6 +558,9 @@ pub extern "C" fn sqlite3_code_change_count(v: *mut Vdbe, reg_counter: i32,
     unsafe { sqlite3_vdbe_set_col_name(v, 0, 0, z_col_name, None) };
 }
 
+///* Evaluate a view and store its result in an ephemeral table.  The
+///* pWhere argument is an optional WHERE clause that restricts the
+///* set of rows in the view that are to be added to the ephemeral table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_materialize_view(p_parse: *mut Parse,
     p_view: &Table, mut p_where: *mut Expr, p_order_by: *mut ExprList,
@@ -558,7 +613,37 @@ pub extern "C" fn sqlite3_materialize_view(p_parse: *mut Parse,
     }
 }
 
+///* Generate code that will assemble an index key and stores it in register
+///* regOut.  The key with be for index pIdx which is an index on pTab.
+///* iCur is the index of a cursor open on the pTab table and pointing to
+///* the entry that needs indexing.  If pTab is a WITHOUT ROWID table, then
+///* iCur must be the cursor of the PRIMARY KEY index.
+///*
+///* Return a register number which is the first in a block of
+///* registers that holds the elements of the index key.  The
+///* block of registers has already been deallocated by the time
+///* this routine returns.
+///*
+///* If *piPartIdxLabel is not NULL, fill it in with a label and jump
+///* to that label if pIdx is a partial index that should be skipped.
+///* The label should be resolved using sqlite3ResolvePartIdxLabel().
+///* A partial index should be skipped if its WHERE clause evaluates
+///* to false or null.  If pIdx is not a partial index, *piPartIdxLabel
+///* will be set to zero which is an empty label that is ignored by
+///* sqlite3ResolvePartIdxLabel().
+///*
+///* The pPrior and regPrior parameters are used to implement a cache to
+///* avoid unnecessary register loads.  If pPrior is not NULL, then it is
+///* a pointer to a different index for which an index key has just been
+///* computed into register regPrior.  If the current pIdx index is generating
+///* its key into the same sequence of registers and if pPrior and pIdx share
+///* a column in common, then the register corresponding to that column already
+///* holds the correct value and the loading of that register is skipped.
+///* This optimization is helpful when doing a DELETE or an INTEGRITY_CHECK
+///* on a table with multiple indices, and especially with the ROWID or
+///* PRIMARY KEY columns of the index.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_generate_index_key(p_parse: *mut Parse,
     p_idx: *mut Index, i_data_cur: i32, reg_out: i32, prefix_only: i32,
     pi_part_idx_label: *mut i32, mut p_prior: *mut Index, reg_prior: i32)
@@ -607,6 +692,8 @@ pub extern "C" fn sqlite3_generate_index_key(p_parse: *mut Parse,
                         unsafe {
                                     *unsafe { (*p_prior).ai_column.offset(j as isize) }
                                 } as i32 != -2 {
+
+                    /// This column was already computed by the previous index
                     break '__c0;
                 }
                 unsafe {
@@ -616,6 +703,13 @@ pub extern "C" fn sqlite3_generate_index_key(p_parse: *mut Parse,
                 if unsafe {
                                 *unsafe { (*p_idx).ai_column.offset(j as isize) }
                             } as i32 >= 0 {
+
+                    /// If the column affinity is REAL but the number is an integer, then it
+                    ///* might be stored in the table as an integer (using a compact
+                    ///* representation) then converted to REAL by an OP_RealAffinity opcode.
+                    ///* But we are getting ready to store this value back into an index, where
+                    ///* it should be converted by to INTEGER again.  So omit the
+                    ///* OP_RealAffinity opcode if it is present
                     unsafe { sqlite3_vdbe_delete_prior_opcode(v, 89 as u8) };
                 }
                 break '__c0;
@@ -630,6 +724,9 @@ pub extern "C" fn sqlite3_generate_index_key(p_parse: *mut Parse,
     return reg_base;
 }
 
+///* If a prior call to sqlite3GenerateIndexKey() generated a jump-over label
+///* because it was a partial index, then this routine should be called to
+///* resolve that label.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_part_idx_label(p_parse: &Parse,
     i_label: i32) -> () {
@@ -638,18 +735,43 @@ pub extern "C" fn sqlite3_resolve_part_idx_label(p_parse: &Parse,
     }
 }
 
+///* This routine generates VDBE code that causes the deletion of all
+///* index entries associated with a single row of a single table, pTab
+///*
+///* Preconditions:
+///*
+///*   1.  A read/write cursor "iDataCur" must be open on the canonical storage
+///*       btree for the table pTab.  (This will be either the table itself
+///*       for rowid tables or to the primary key index for WITHOUT ROWID
+///*       tables.)
+///*
+///*   2.  Read/write cursors for all indices of pTab must be open as
+///*       cursor number iIdxCur+i for the i-th index.  (The pTab->pIndex
+///*       index is the 0-th index.)
+///*
+///*   3.  The "iDataCur" cursor must be already be positioned on the row
+///*       that is to be deleted.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_generate_row_index_delete(p_parse: *mut Parse,
     p_tab: *mut Table, i_data_cur: i32, i_idx_cur: i32, a_reg_idx: *mut i32,
     i_idx_no_seek: i32) -> () {
     let mut i: i32 = 0;
+    /// Index loop counter
     let mut r1: i32 = -1;
+    /// Register holding an index key
     let mut i_part_idx_label: i32 = 0;
+    /// Jump destination for skipping partial index entries
     let mut p_idx: *mut Index = core::ptr::null_mut();
+    /// Current index
     let mut p_prior: *mut Index = core::ptr::null_mut();
+    /// Prior index
     let mut v: *mut Vdbe = core::ptr::null_mut();
+    /// The prepared statement under construction
     let mut p_pk: *mut Index = core::ptr::null_mut();
-    v = unsafe { (*p_parse).p_vdbe };
+
+    /// PRIMARY KEY index, or NULL for rowid tables
+    (v = unsafe { (*p_parse).p_vdbe });
     p_pk =
         if unsafe { (*p_tab).tab_flags } & 128 as u32 == 0 as u32 {
             core::ptr::null_mut()
@@ -699,17 +821,67 @@ pub extern "C" fn sqlite3_generate_row_index_delete(p_parse: *mut Parse,
     }
 }
 
+///* This routine generates VDBE code that causes a single row of a
+///* single table to be deleted.  Both the original table entry and
+///* all indices are removed.
+///*
+///* Preconditions:
+///*
+///*   1.  iDataCur is an open cursor on the btree that is the canonical data
+///*       store for the table.  (This will be either the table itself,
+///*       in the case of a rowid table, or the PRIMARY KEY index in the case
+///*       of a WITHOUT ROWID table.)
+///*
+///*   2.  Read/write cursors for all indices of pTab must be open as
+///*       cursor number iIdxCur+i for the i-th index.
+///*
+///*   3.  The primary key for the row to be deleted must be stored in a
+///*       sequence of nPk memory cells starting at iPk.  If nPk==0 that means
+///*       that a search record formed from OP_MakeRecord is contained in the
+///*       single memory location iPk.
+///*
+///* eMode:
+///*   Parameter eMode may be passed either ONEPASS_OFF (0), ONEPASS_SINGLE, or
+///*   ONEPASS_MULTI.  If eMode is not ONEPASS_OFF, then the cursor
+///*   iDataCur already points to the row to delete. If eMode is ONEPASS_OFF
+///*   then this function must seek iDataCur to the entry identified by iPk
+///*   and nPk before reading from it.
+///*
+///*   If eMode is ONEPASS_MULTI, then this call is being made as part
+///*   of a ONEPASS delete that affects multiple rows. In this case, if
+///*   iIdxNoSeek is a valid cursor number (>=0) and is not the same as
+///*   iDataCur, then its position should be preserved following the delete
+///*   operation. Or, if iIdxNoSeek is not a valid cursor number, the
+///*   position of iDataCur should be preserved instead.
+///*
+///* iIdxNoSeek:
+///*   If iIdxNoSeek is a valid cursor number (>=0) not equal to iDataCur,
+///*   then it identifies an index cursor (from within array of cursors
+///*   starting at iIdxCur) that already points to the index entry to be deleted.
+///*   Except, this optimization is disabled if there are BEFORE triggers since
+///*   the trigger body might have moved the cursor.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
     p_tab: *mut Table, p_trigger: *mut Trigger, i_data_cur: i32,
     i_idx_cur: i32, i_pk: i32, n_pk: i16, count: u8, onconf: u8, e_mode: u8,
     mut i_idx_no_seek: i32) -> () {
     let v: *mut Vdbe = unsafe { (*p_parse).p_vdbe };
+    /// Vdbe
     let mut i_old: i32 = 0;
+    /// First register in OLD.* array
     let mut i_label: i32 = 0;
+    /// Label resolved to end of generated code
     let mut op_seek: u8 = 0 as u8;
+
+    /// Seek opcode
+    /// Vdbe is guaranteed to have been allocated by this stage.
     { let _ = 0; };
-    i_label = unsafe { sqlite3_vdbe_make_label(p_parse) };
+
+    /// Seek cursor iCur to the row to delete. If this row no longer exists
+    ///* (this can happen if a trigger program has already deleted it), do
+    ///* not attempt to delete it or fire any DELETE triggers.
+    (i_label = unsafe { sqlite3_vdbe_make_label(p_parse) });
     op_seek =
         if unsafe { (*p_tab).tab_flags } & 128 as u32 == 0 as u32 {
                 31
@@ -725,16 +897,25 @@ pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
                         0)
                 } != 0 || !(p_trigger).is_null() {
         let mut mask: u32 = 0 as u32;
+        /// Mask of OLD.* columns in use
         let mut i_col: i32 = 0;
+        /// Iterator used while populating OLD.*
         let mut addr_start: i32 = 0;
-        mask =
+
+        /// Start of BEFORE trigger programs
+        /// TODO: Could use temporary registers here. Also could attempt to
+        ///* avoid copying the contents of the rowid register.
+        (mask =
             unsafe {
                 sqlite3_trigger_colmask(p_parse, p_trigger,
                     core::ptr::null_mut(), 0, 1 | 2, p_tab, onconf as i32)
-            };
+            });
         mask |= unsafe { sqlite3_fk_oldmask(p_parse, p_tab) };
         i_old = unsafe { (*p_parse).n_mem } + 1;
         unsafe { (*p_parse).n_mem += 1 + unsafe { (*p_tab).n_col } as i32 };
+
+        /// Populate the OLD.* pseudo-table register array. These values will be
+        ///* used by any BEFORE and AFTER triggers that exist.
         unsafe { sqlite3_vdbe_add_op2(v, 82, i_pk, i_old) };
         {
             i_col = 0;
@@ -759,7 +940,9 @@ pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
                 { let __p = &mut i_col; let __t = *__p; *__p += 1; __t };
             }
         }
-        addr_start = unsafe { sqlite3_vdbe_current_addr(v) };
+
+        /// Invoke BEFORE DELETE trigger programs.
+        (addr_start = unsafe { sqlite3_vdbe_current_addr(v) });
         unsafe {
             sqlite3_code_row_trigger(p_parse, p_trigger, 129,
                 core::ptr::null_mut(), 1, p_tab, i_old, onconf as i32,
@@ -772,6 +955,10 @@ pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
             };
             i_idx_no_seek = -1;
         }
+
+        /// Do FK processing. This call checks that any FK constraints that
+        ///* refer to this table (i.e. constraints attached to other tables)
+        ///* are not violated by deleting this row.
         unsafe {
             sqlite3_fk_check(p_parse, p_tab, i_old, 0, core::ptr::null_mut(),
                 0)
@@ -804,6 +991,10 @@ pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
         if e_mode as i32 == 2 { p5 |= 2 as u8; }
         unsafe { sqlite3_vdbe_change_p5(v, p5 as u16) };
     }
+
+    /// Do any ON CASCADE, SET NULL or SET DEFAULT operations required to
+    ///* handle rows (possibly in other tables) that refer via a foreign key
+    ///* to the row just deleted.
     unsafe {
         sqlite3_fk_actions(p_parse, p_tab, core::ptr::null_mut(), i_old,
             core::ptr::null_mut(), 0)
@@ -815,47 +1006,144 @@ pub extern "C" fn sqlite3_generate_row_delete(p_parse: *mut Parse,
                 i_label)
         };
     }
+
+    /// Jump here if the row had already been deleted before any BEFORE
+    ///* trigger programs were invoked. Or if a trigger program throws a
+    ///* RAISE(IGNORE) exception.
     unsafe { sqlite3_vdbe_resolve_label(v, i_label) };
 }
 
+///* Generate code for a DELETE FROM statement.
+///*
+///*     DELETE FROM table_wxyz WHERE a<5 AND b NOT NULL;
+///*                 \________/       \________________/
+///*                  pTabList              pWhere
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_delete_from(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_where: *mut Expr,
     mut p_order_by: *mut ExprList, mut p_limit: *mut Expr) -> () {
     unsafe {
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The virtual database engine
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// The table from which records will be deleted
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// Information about the WHERE clause
         let mut p_idx: *const Index = core::ptr::null();
+        /// For looping over indices of the table
         let mut i_tab_cur: i32 = 0;
+        /// Cursor number for the table
         let mut i_data_cur: i32 = 0;
+        /// VDBE cursor for the canonical data source
         let mut i_idx_cur: i32 = 0;
+        /// Cursor number of the first index
         let mut n_idx: i32 = 0;
+        /// Number of indices
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Main database structure
         let mut s_context: AuthContext = unsafe { core::mem::zeroed() };
+        /// Authorization context
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context to resolve expressions in
         let mut i_db: i32 = 0;
+        /// Database number
         let mut mem_cnt: i32 = 0;
+        /// Memory cell used for change counting
         let mut rcauth: i32 = 0;
+        /// Value returned by authorization callback
         let mut e_one_pass: i32 = 0;
+        /// ONEPASS_OFF or _SINGLE or _MULTI
         let mut ai_cur_one_pass: [i32; 2] = [0; 2];
+        /// The write cursors opened by WHERE_ONEPASS
         let mut a_to_open: *mut u8 = core::ptr::null_mut();
+        /// Open cursor iTabCur+j if aToOpen[j] is true
         let mut p_pk: *mut Index = core::ptr::null_mut();
+        /// The PRIMARY KEY index on the table
         let mut i_pk: i32 = 0;
+        /// First of nPk registers holding PRIMARY KEY value
         let mut n_pk: i16 = 0 as i16;
+        /// Number of columns in the PRIMARY KEY
         let mut i_key: i32 = 0;
+        /// Memory cell holding key of row to be deleted
         let mut n_key: i16 = 0 as i16;
+        /// Number of memory cells in the row key
         let mut i_eph_cur: i32 = 0;
+        /// Ephemeral table holding all primary key values
         let mut i_row_set: i32 = 0;
+        /// Register for rowset of rows to delete
         let mut addr_bypass: i32 = 0;
+        /// Address of jump over the delete logic
         let mut addr_loop: i32 = 0;
+        /// Top of the delete loop
         let mut addr_eph_open: i32 = 0;
+        /// Instruction to open the Ephemeral table
         let mut b_complex: i32 = 0;
+        /// True if there are triggers or FKs or
+        ///* subqueries in the WHERE clause
         let mut is_view: i32 = 0;
+        /// True if attempting to delete from a view
         let mut p_trigger: *mut Trigger = core::ptr::null_mut();
+        /// List of table triggers, if required
+        /// Locate the table which we want to delete.  This table has to be
+        ///* put in an SrcList structure because some of the subroutines we
+        ///* will be calling are designed to work with multiple tables and expect
+        ///* an SrcList* parameter instead of just a Table* parameter.
+        /// Figure out if we have any triggers and if the table being
+        ///* deleted from is a view
+        /// If pTab is really a view, make sure it has been initialized.
+        /// Assign cursor numbers to the table and all its indices.
+        /// Start the view context
+        /// Begin generating code.
+        /// If we are trying to delete from a view, realize that view into
+        ///* an ephemeral table.
+        /// Resolve the column names in the WHERE clause.
+        /// Initialize the counter of the number of rows deleted, if
+        ///* we are counting rows.
+        /// Special case: A DELETE without a WHERE clause deletes everything.
+        ///* It is easier just to erase the whole table. Prior to version 3.6.5,
+        ///* this optimization caused the row change count (the value returned by
+        ///* API function sqlite3_count_changes) to be set incorrectly.
+        ///*
+        ///* The "rcauth==SQLITE_OK" terms is the
+        ///* IMPLEMENTATION-OF: R-17228-37124 If the action code is SQLITE_DELETE and
+        ///* the callback returns SQLITE_IGNORE then the DELETE operation proceeds but
+        ///* the truncate optimization is disabled and all rows are deleted
+        ///* individually.
+        /// SQLITE_OMIT_TRUNCATE_OPTIMIZATION
         let mut wcf: u16 = 0 as u16;
+        /// For a rowid table, initialize the RowSet to an empty set
+        /// For a WITHOUT ROWID table, create an ephemeral table used to
+        ///* hold all primary keys for rows to be deleted.
+        /// Construct a query to find the rowid or primary key for every row
+        ///* to be deleted, based on the WHERE clause. Set variable eOnePass
+        ///* to indicate the strategy used to implement this delete:
+        ///*
+        ///*  ONEPASS_OFF:    Two-pass approach - use a FIFO for rowids/PK values.
+        ///*  ONEPASS_SINGLE: One-pass approach - at most one row deleted.
+        ///*  ONEPASS_MULTI:  One-pass approach - any number of rows may be deleted.
+        /// Keep track of the number of rows to be deleted
+        /// Extract the rowid or primary key for the current row
+        /// For ONEPASS, no need to store the rowid/primary-key. There is only
+        ///* one, so just keep it in its register(s) and fall through to the
+        ///* delete code.
+        /// OP_Found will use an unpacked key
+        /// Add the PK key for this row to the temporary table
+        /// Zero tells OP_Found to use a composite key
+        /// Add the rowid of the row to be deleted to the RowSet
+        /// OP_DeferredSeek always uses a single rowid
+        /// Unless this is a view, open cursors for the table we are
+        ///* deleting from and all its indices. If this is a view, then the
+        ///* only effect this statement has is to fire the INSTEAD OF
+        ///* triggers.
         let mut i_addr_once: i32 = 0;
+        /// Set up a loop over the rowids/primary-keys that were found in the
+        ///* where-clause loop above.
+        /// OP_Found will use an unpacked key
+        /// OP_Found will use a composite key
+        /// Delete the row
         let mut p_v_tab: *const i8 = core::ptr::null();
         let mut count: i32 = 0;
         let mut __state: i32 = 0;

@@ -2,12 +2,20 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* The following table gives the character class for non-initial ASCII
+///* characters.
 static mid_class: [u8; 128] =
     [12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8,
             12 as u8, 12 as u8, 11 as u8, 12 as u8, 12 as u8, 11 as u8,
@@ -30,6 +38,10 @@ static mid_class: [u8; 128] =
             4 as u8, 1 as u8, 2 as u8, 2 as u8, 3 as u8, 1 as u8, 3 as u8,
             12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8];
 
+/// 
+///* This tables gives the character class for ASCII characters that form the
+///* initial character of a word.  The only difference from midClass is with
+///* the letters H, W, and Y.
 static init_class: [u8; 128] =
     [12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8,
             12 as u8, 12 as u8, 11 as u8, 12 as u8, 12 as u8, 11 as u8,
@@ -52,11 +64,28 @@ static init_class: [u8; 128] =
             4 as u8, 1 as u8, 2 as u8, 2 as u8, 3 as u8, 9 as u8, 3 as u8,
             12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8];
 
+///* Mapping from the character class number (0-13) to a symbol for each
+///* character class.  Note that initClass[] can be used to map the class
+///* symbol back into the class number.
 static class_name: [u8; 14] =
     [46 as u8, 65 as u8, 66 as u8, 67 as u8, 68 as u8, 72 as u8, 76 as u8,
             82 as u8, 77 as u8, 89 as u8, 57 as u8, 32 as u8, 63 as u8,
             0 as u8];
 
+///* Generate a "phonetic hash" from a string of ASCII characters
+///* in zIn[0..nIn-1].
+///*
+///*   * Map characters by character class as defined above.
+///*   * Omit double-letters
+///*   * Omit vowels beside R and L
+///*   * Omit T when followed by CH
+///*   * Omit W when followed by R
+///*   * Omit D when followed by J or G
+///*   * Omit K in KN or G in GN at the beginning of a word
+///*
+///* Space to hold the result is obtained from sqlite3_malloc()
+///*
+///* Return NULL if memory allocation fails.
 extern "C" fn phonetic_hash(mut z_in_1: *const u8, mut n_in_1: i32)
     -> *mut u8 {
     let z_out: *mut u8 =
@@ -175,6 +204,8 @@ extern "C" fn phonetic_hash(mut z_in_1: *const u8, mut n_in_1: i32)
     return z_out;
 }
 
+///* This is an SQL function wrapper around phoneticHash().  See
+///* the description of phoneticHash() for additional information.
 extern "C" fn phonetic_hash_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_in: *const u8 = core::ptr::null();
@@ -196,66 +227,138 @@ extern "C" fn phonetic_hash_sql_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Return the character class number for a character given its
+///* context.
 extern "C" fn character_class(c_prev_1: i8, c: i8) -> i8 {
     return if c_prev_1 as i32 == 0 {
                 init_class[(c as i32 & 127) as usize] as i32
             } else { mid_class[(c as i32 & 127) as usize] as i32 } as i8;
 }
 
+///* Return the cost of inserting or deleting character c immediately
+///* following character cPrev.  If cPrev==0, that means c is the first
+///* character of the word.
+#[allow(unused_doc_comments)]
 extern "C" fn insert_or_delete_cost(c_prev_1: i8, c: i8, c_next_1: i8)
     -> i32 {
     let class_c: i8 = character_class(c_prev_1, c);
     let mut class_cprev: i8 = 0 as i8;
-    if class_c as i32 == 0 { return 1; }
-    if c_prev_1 as i32 == c as i32 { return 10; }
+    if class_c as i32 == 0 {
+
+        /// Insert or delete "silent" characters such as H or W
+        return 1;
+    }
+    if c_prev_1 as i32 == c as i32 {
+
+        /// Repeated characters, or miss a repeat
+        return 10;
+    }
     if class_c as i32 == 1 &&
             (c_prev_1 as i32 == 'r' as i32 || c_next_1 as i32 == 'r' as i32) {
         return 20;
     }
     class_cprev = character_class(c_prev_1, c_prev_1);
     if class_c as i32 == class_cprev as i32 {
-        if class_c as i32 == 1 { return 15; } else { return 50; }
+        if class_c as i32 == 1 {
+
+            /// Remove or add a new vowel to a vowel cluster
+            return 15;
+        } else {
+
+            /// Remove or add a consonant not in the same class
+            return 50;
+        }
     }
+
+    /// any other character insertion or deletion
     return 100;
 }
 
+///* Return the cost of substituting cTo in place of cFrom assuming
+///* the previous character is cPrev.  If cPrev==0 then cTo is the first
+///* character of the word.
+#[allow(unused_doc_comments)]
 extern "C" fn substitute_cost(c_prev_1: i8, c_from_1: i8, c_to_1: i8) -> i32 {
     let mut class_from: i8 = 0 as i8;
     let mut class_to: i8 = 0 as i8;
-    if c_from_1 as i32 == c_to_1 as i32 { return 0; }
+    if c_from_1 as i32 == c_to_1 as i32 {
+
+        /// Exact match
+        return 0;
+    }
     if c_from_1 as i32 == c_to_1 as i32 ^ 32 &&
             (c_to_1 as i32 >= 'A' as i32 && c_to_1 as i32 <= 'Z' as i32 ||
                 c_to_1 as i32 >= 'a' as i32 && c_to_1 as i32 <= 'z' as i32) {
+
+        /// differ only in case
         return 0;
     }
     class_from = character_class(c_prev_1, c_from_1);
     class_to = character_class(c_prev_1, c_to_1);
-    if class_from as i32 == class_to as i32 { return 40; }
+    if class_from as i32 == class_to as i32 {
+
+        /// Same character class
+        return 40;
+    }
     if class_from as i32 >= 2 && class_from as i32 <= 9 &&
                 class_to as i32 >= 2 && class_to as i32 <= 9 {
+
+        /// Convert from one consonant to another, but in a different class
         return 75;
     }
+
+    /// Any other subsitution
     return 100;
 }
 
+///* Given two strings zA and zB which are pure ASCII, return the cost
+///* of transforming zA into zB.  If zA ends with '*' assume that it is
+///* a prefix of zB and give only minimal penalty for extra characters
+///* on the end of zB.
+///*
+///* Smaller numbers mean a closer match.
+///*
+///* Negative values indicate an error:
+///*    -1  One of the inputs is NULL
+///*    -2  Non-ASCII characters on input
+///*    -3  Unable to allocate memory
+///*    -4  Inputs too large
+///*
+///* If pnMatch is not NULL, then *pnMatch is set to the number of bytes
+///* of zB that matched the pattern in zA. If zA does not end with a '*',
+///* then this value is always the number of bytes in zB (i.e. strlen(zB)).
+///* If zA does end in a '*', then it is the number of bytes in the prefix
+///* of zB that was deemed to match zA.
+#[allow(unused_doc_comments)]
 extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
     pn_match_1: *mut i32) -> i32 {
     let mut n_a: u32 = 0 as u32;
     let mut n_b: u32 = 0 as u32;
+    /// Number of characters in zA[] and zB[]
     let mut x_a: u32 = 0 as u32;
     let mut x_b: u32 = 0 as u32;
+    /// Loop counters for zA[] and zB[]
     let mut c_a: i8 = 0 as i8;
     let mut c_b: i8 = 0 as i8;
+    /// Current character of zA and zB
     let mut c_aprev: i8 = 0 as i8;
     let mut c_bprev: i8 = 0 as i8;
+    /// Previous character of zA and zB
     let mut c_anext: i8 = 0 as i8;
     let mut c_bnext: i8 = 0 as i8;
+    /// Next character in zA and zB
     let mut d: i32 = 0;
+    /// North-west cost value
     let mut dc: i32 = 0;
+    /// North-west character value
     let mut res: i32 = 0;
+    /// Final result
     let mut m: *mut i32 = core::ptr::null_mut();
+    /// The cost matrix
     let mut cx: *mut i8 = core::ptr::null_mut();
+    /// Corresponding character values
     let mut to_free: *mut i32 = core::ptr::null_mut();
+    /// Malloced space
     let mut n_match: i32 = 0;
     let mut m_stack: [i32; 75] = [0; 75];
     if z_a_1 == core::ptr::null() || z_b_1 == core::ptr::null() { return -1; }
@@ -373,6 +476,8 @@ extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
         if m == core::ptr::null_mut() { return -3; }
     }
     cx = unsafe { &raw mut *m.add((n_b + 1 as u32) as usize) } as *mut i8;
+
+    /// Compute the Wagner edit distance
     unsafe { *m.offset(0 as isize) = 0 };
     unsafe { *cx.offset(0 as isize) = dc as i8 };
     c_bprev = dc as i8;
@@ -425,27 +530,37 @@ extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
                             c_b =
                                 unsafe { *z_b_1.add((x_b - 1 as u32) as usize) } as i8;
                             c_bnext = unsafe { *z_b_1.add(x_b as usize) } as i8;
-                            ins_cost =
+
+                            /// Cost to insert cB
+                            (ins_cost =
                                 insert_or_delete_cost(unsafe {
                                         *cx.add((x_b - 1 as u32) as usize)
-                                    }, c_b, c_bnext);
+                                    }, c_b, c_bnext));
                             if last_a != 0 { ins_cost /= 4; }
-                            del_cost =
+
+                            /// Cost to delete cA
+                            (del_cost =
                                 insert_or_delete_cost(unsafe { *cx.add(x_b as usize) }, c_a,
-                                    c_bnext);
-                            sub_cost =
+                                    c_bnext));
+
+                            /// Cost to substitute cA->cB
+                            (sub_cost =
                                 substitute_cost(unsafe {
                                         *cx.add((x_b - 1 as u32) as usize)
-                                    }, c_a, c_b);
-                            total_cost =
-                                ins_cost + unsafe { *m.add((x_b - 1 as u32) as usize) };
+                                    }, c_a, c_b));
+
+                            /// Best cost
+                            (total_cost =
+                                ins_cost + unsafe { *m.add((x_b - 1 as u32) as usize) });
                             ncx = c_b as i32;
                             if del_cost + unsafe { *m.add(x_b as usize) } < total_cost {
                                 total_cost = del_cost + unsafe { *m.add(x_b as usize) };
                                 ncx = c_a as i32;
                             }
                             if sub_cost + d < total_cost { total_cost = sub_cost + d; }
-                            d = unsafe { *m.add(x_b as usize) };
+
+                            /// Update the matrix
+                            (d = unsafe { *m.add(x_b as usize) });
                             dc = unsafe { *cx.add(x_b as usize) } as i32;
                             unsafe { *m.add(x_b as usize) = total_cost };
                             unsafe { *cx.add(x_b as usize) = ncx as i8 };
@@ -479,11 +594,23 @@ extern "C" fn editdist1(mut z_a_1: *const i8, mut z_b_1: *const i8,
                 { let __p = &mut x_b; let __t = *__p; *__p += 1; __t };
             }
         }
-    } else { res = unsafe { *m.add(n_b as usize) }; { let _ = 0; }; }
+    } else {
+        res = unsafe { *m.add(n_b as usize) };
+
+        /// In the current implementation, pnMatch is always NULL if zA does
+        ///* not end in "*"
+        { let _ = 0; };
+    }
     unsafe { sqlite3_free(to_free as *mut ()) };
     return res;
 }
 
+///* Function:    editdist(A,B)
+///*
+///* Return the cost of transforming string A into string B.  Both strings
+///* must be pure ASCII text.  If A ends with '*' then it is assumed to be
+///* a prefix of B and extra characters on the end of B have minimal additional
+///* cost.
 extern "C" fn editdist_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let res: i32 =
@@ -513,6 +640,7 @@ extern "C" fn editdist_sql_func(context: *mut Sqlite3Context, argc: i32,
     } else { unsafe { sqlite3_result_int(context, res) }; }
 }
 
+///* An entry in the edit cost table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Cost {
@@ -523,6 +651,7 @@ struct EditDist3Cost {
     a: [i8; 4],
 }
 
+///* Complete configuration
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Config {
@@ -530,6 +659,7 @@ struct EditDist3Config {
     a: *mut EditDist3Lang,
 }
 
+///* Edit costs for a particular language ID
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3Lang {
@@ -546,6 +676,7 @@ struct EditDist3Point {
     _opaque: [u8; 0],
 }
 
+///* Extra information about each character in the FROM string.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3From {
@@ -556,6 +687,11 @@ struct EditDist3From {
     ap_del: *mut *mut EditDist3Cost,
 }
 
+///* A precompiled FROM string.
+///
+///* In the common case we expect the FROM string to be reused multiple times.
+///* In other words, the common case will be to measure the edit distance
+///* from a single origin string to multiple target strings.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3FromString {
@@ -565,6 +701,7 @@ struct EditDist3FromString {
     a: *mut EditDist3From,
 }
 
+///* Extra information about each character in the TO string.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3To {
@@ -573,6 +710,7 @@ struct EditDist3To {
     ap_ins: *mut *mut EditDist3Cost,
 }
 
+///* A precompiled FROM string
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EditDist3ToString {
@@ -581,6 +719,7 @@ struct EditDist3ToString {
     a: *mut EditDist3To,
 }
 
+///* The default EditDist3Lang object, with default costs.
 static mut edit_dist3_lang: EditDist3Lang =
     EditDist3Lang {
         i_lang: 0,
@@ -590,6 +729,8 @@ static mut edit_dist3_lang: EditDist3Lang =
         p_cost: core::ptr::null_mut(),
     };
 
+///* Clear or delete an instance of the object that records all edit-distance
+///* weights.
 extern "C" fn edit_dist3_config_clear(p: *mut EditDist3Config) -> () {
     let mut i: i32 = 0;
     if p == core::ptr::null_mut() { return; }
@@ -625,6 +766,9 @@ extern "C" fn edit_dist3_config_delete(p_in_1: *mut ()) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
 
+/// Compare the FROM values of two EditDist3Cost objects, for sorting.
+///* Return negative, zero, or positive if the A is less than, equal to,
+///* or greater than B.
 extern "C" fn edit_dist3_cost_compare(p_a_1: &EditDist3Cost,
     p_b_1: &EditDist3Cost) -> i32 {
     let mut n: i32 = (*p_a_1).n_from as i32;
@@ -640,6 +784,8 @@ extern "C" fn edit_dist3_cost_compare(p_a_1: &EditDist3Cost,
     return rc;
 }
 
+///* Merge together two sorted lists of EditDist3Cost objects, in order
+///* of increasing FROM.
 extern "C" fn edit_dist3_cost_merge(mut p_a_1: *mut EditDist3Cost,
     mut p_b_1: *mut EditDist3Cost) -> *mut EditDist3Cost {
     let mut p_head: *mut EditDist3Cost = core::ptr::null_mut();
@@ -660,6 +806,7 @@ extern "C" fn edit_dist3_cost_merge(mut p_a_1: *mut EditDist3Cost,
     return p_head;
 }
 
+///* Sort a list of EditDist3Cost objects into order of increasing FROM
 extern "C" fn edit_dist3_cost_sort(mut p_list_1: *mut EditDist3Cost)
     -> *mut EditDist3Cost {
     let mut ap: [*mut EditDist3Cost; 60] = [core::ptr::null_mut(); 60];
@@ -704,6 +851,7 @@ extern "C" fn edit_dist3_cost_sort(mut p_list_1: *mut EditDist3Cost)
     return p;
 }
 
+///* Load all edit-distance weights from a table.
 extern "C" fn edit_dist3_config_load(p: *mut EditDist3Config,
     db: *mut Sqlite3, z_table_1: *const i8) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -835,6 +983,8 @@ extern "C" fn edit_dist3_config_load(p: *mut EditDist3Config,
     return rc;
 }
 
+///* Return the length (in bytes) of a utf-8 character.  Or return a maximum
+///* of N.
 extern "C" fn utf8_len(c: u8, n_1: i32) -> i32 {
     let mut len: i32 = 1;
     if c as i32 > 127 {
@@ -846,6 +996,8 @@ extern "C" fn utf8_len(c: u8, n_1: i32) -> i32 {
     return len;
 }
 
+///* Return TRUE (non-zero) if the To side of the given cost matches
+///* the given string.
 extern "C" fn match_to(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     { let _ = 0; };
     if (*p).a[(*p).n_from as usize] as i32 !=
@@ -864,6 +1016,8 @@ extern "C" fn match_to(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     return 1;
 }
 
+///* Return TRUE (non-zero) if the From side of the given cost matches
+///* the given string.
 extern "C" fn match_from(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     { let _ = 0; };
     if (*p).n_from != 0 {
@@ -881,6 +1035,8 @@ extern "C" fn match_from(p: &EditDist3Cost, z: *const i8, n: i32) -> i32 {
     return 1;
 }
 
+///* Return TRUE (non-zero) of the next FROM character and the next TO
+///* character are the same.
 extern "C" fn match_from_to(p_str_1: &EditDist3FromString, n1: i32,
     z2: *const i8, n2: i32) -> i32 {
     let b1: i32 = unsafe { (*(*p_str_1).a.offset(n1 as isize)).n_byte };
@@ -899,6 +1055,7 @@ extern "C" fn match_from_to(p_str_1: &EditDist3FromString, n1: i32,
     return 1;
 }
 
+///* Delete an EditDist3FromString objecct
 extern "C" fn edit_dist3_from_string_delete(p: *mut EditDist3FromString)
     -> () {
     let mut i: i32 = 0;
@@ -927,6 +1084,7 @@ extern "C" fn edit_dist3_from_string_delete(p: *mut EditDist3FromString)
     }
 }
 
+///* Create a EditDist3FromString object.
 extern "C" fn edit_dist3_from_string_new(p_lang_1: &EditDist3Lang,
     z: *const i8, mut n: i32) -> *mut EditDist3FromString {
     let mut p_str: *mut EditDist3FromString = core::ptr::null_mut();
@@ -1052,6 +1210,8 @@ extern "C" fn edit_dist3_from_string_new(p_lang_1: &EditDist3Lang,
     return p_str;
 }
 
+///* Update entry m[i] such that it is the minimum of its current value
+///* and m[j]+iCost.
 extern "C" fn update_cost(m: *mut u32, i: i32, j: i32, i_cost_1: i32) -> () {
     let mut b: u32 = 0 as u32;
     { let _ = 0; };
@@ -1062,6 +1222,17 @@ extern "C" fn update_cost(m: *mut u32, i: i32, j: i32, i_cost_1: i32) -> () {
     }
 }
 
+/// Compute the edit distance between two strings.
+///*
+///* If an error occurs, return a negative number which is the error code.
+///*
+///* If pnMatch is not NULL, then *pnMatch is set to the number of characters
+///* (not bytes) in z2 that matched the search pattern in *pFrom. If pFrom does
+///* not contain the pattern for a prefix-search, then this is always the number
+///* of characters in z2. If pFrom does contain a prefix search pattern, then
+///* it is the number of characters in the prefix of z2 that was deemed to 
+///* match pFrom.
+#[allow(unused_doc_comments)]
 extern "C" fn edit_dist3_core(p_from_1: &EditDist3FromString, z2: *const i8,
     n2: i32, p_lang_1: &EditDist3Lang, pn_match_1: *mut i32) -> i32 {
     let mut k: i32 = 0;
@@ -1079,13 +1250,28 @@ extern "C" fn edit_dist3_core(p_from_1: &EditDist3FromString, z2: *const i8,
     let mut res: i32 = 0;
     let mut n_byte: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut stack_space: [u32; 256] = [0; 256];
+    /// allocate the Wagner matrix and the aTo[] array for the TO string
+    /// Out of memory
+    /// Fill in the a1[] matrix for all characters of the TO string
     let mut ap_new: *mut *mut EditDist3Cost = core::ptr::null_mut();
+    /// Out of memory
+    /// Prepare to compute the minimum edit distance
+    /// First fill in the top-row of the matrix with FROM deletion costs
+    /// Fill in all subsequent rows, top-to-bottom, left-to-right
     let mut rx: i32 = 0;
+    /// Starting index for current row
     let mut rxp: i32 = 0;
+    /// Starting index for previous row
     let mut cx: i32 = 0;
+    /// Index of current cell
     let mut cxp: i32 = 0;
+    /// Index of cell immediately to the left
     let mut cxd: i32 = 0;
+    /// Index of cell to the left and one row above
     let mut cxu: i32 = 0;
+    /// Index of cell immediately above
+    /// Enable for debugging
+    /// Free memory allocations and return the result
     let mut b: i32 = 0;
     let mut n_extra: i32 = 0;
     let mut __state: i32 = 0;
@@ -1503,9 +1689,26 @@ extern "C" fn edit_dist3_core(p_from_1: &EditDist3FromString, z2: *const i8,
             }
         }
     }
+
+    /// allocate the Wagner matrix and the aTo[] array for the TO string
+    /// Out of memory
+    /// Fill in the a1[] matrix for all characters of the TO string
+    /// Out of memory
+    /// Prepare to compute the minimum edit distance
+    /// First fill in the top-row of the matrix with FROM deletion costs
+    /// Fill in all subsequent rows, top-to-bottom, left-to-right
+    /// Starting index for current row
+    /// Starting index for previous row
+    /// Index of current cell
+    /// Index of cell immediately to the left
+    /// Index of cell to the left and one row above
+    /// Index of cell immediately above
+    /// Enable for debugging
+    /// Free memory allocations and return the result
     unreachable!();
 }
 
+///* Get an appropriate EditDist3Lang object.
 extern "C" fn edit_dist3_find_lang(p_config_1: &EditDist3Config,
     i_lang_1: i32) -> *const EditDist3Lang {
     unsafe {
@@ -1530,6 +1733,13 @@ extern "C" fn edit_dist3_find_lang(p_config_1: &EditDist3Config,
     }
 }
 
+///* Function:    editdist3(A,B,iLang)
+///*              editdist3(tablename)
+///*
+///* Return the cost of transforming string A into string B using edit
+///* weights for iLang.
+///*
+///* The second form loads edit weights into memory from a table.
 extern "C" fn edit_dist3_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_config: *mut EditDist3Config =
@@ -1584,6 +1794,7 @@ extern "C" fn edit_dist3_sql_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Register the editDist3 function with SQLite
 extern "C" fn edit_dist3_install(db: *mut Sqlite3) -> i32 {
     let mut rc: i32 = 0;
     let p_config: *mut EditDist3Config =
@@ -1624,6 +1835,8 @@ extern "C" fn edit_dist3_install(db: *mut Sqlite3) -> i32 {
     return rc;
 }
 
+///* This lookup table is used to help decode the first byte of
+///* a multi-byte UTF8 character.
 static sqlite3_utf8_trans1: [u8; 64] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -1636,6 +1849,7 @@ static sqlite3_utf8_trans1: [u8; 64] =
             5 as u8, 6 as u8, 7 as u8, 0 as u8, 1 as u8, 2 as u8, 3 as u8,
             0 as u8, 1 as u8, 0 as u8, 0 as u8];
 
+///* Return the value of the first UTF-8 character in the string.
 extern "C" fn utf8_read(z: &[u8], p_size_1: &mut i32) -> i32 {
     let mut c: i32 = 0;
     let mut i: i32 = 0;
@@ -1659,6 +1873,8 @@ extern "C" fn utf8_read(z: &[u8], p_size_1: &mut i32) -> i32 {
     return c;
 }
 
+///* Return the number of characters in the utf-8 string in the nIn byte
+///* buffer pointed to by zIn.
 extern "C" fn utf8_charlen(z_in_1: &[i8]) -> i32 {
     let mut i: i32 = 0;
     let mut n_char: i32 = 0;
@@ -1697,6 +1913,7 @@ struct Transliteration {
     c_to3: u8,
 }
 
+///* Table of translations from unicode characters into ASCII.
 static translit: [Transliteration; 389] =
     [Transliteration {
                 c_from: 160 as u16,
@@ -4431,6 +4648,14 @@ extern "C" fn spellfix_find_translit(c: i32, px_top_1: &mut i32)
     return &raw const translit[0 as usize] as *const Transliteration;
 }
 
+///* Convert the input string from UTF-8 into pure ASCII by converting
+///* all non-ASCII characters to some combination of characters in the
+///* ASCII subset.
+///*
+///* The returned string might contain more characters than the input.
+///*
+///* Space to hold the returned string comes from sqlite3_malloc() and
+///* should be freed by the caller.
 extern "C" fn transliterate(mut z_in_1: *const u8, mut n_in_1: i32)
     -> *mut u8 {
     let z_out: *mut u8 =
@@ -4541,6 +4766,10 @@ extern "C" fn transliterate(mut z_in_1: *const u8, mut n_in_1: i32)
     return z_out;
 }
 
+///* Return the number of characters in the shortest prefix of the input
+///* string that transliterates to an ASCII string nTrans bytes or longer.
+///* Or, if the transliteration of the input string is less than nTrans
+///* bytes in size, return the number of characters in the input string.
 extern "C" fn translen_to_charlen(z_in_1: &[i8], n_trans_1: i32) -> i32 {
     let mut i: i32 = 0;
     let mut c: i32 = 0;
@@ -4602,6 +4831,10 @@ extern "C" fn translen_to_charlen(z_in_1: &[i8], n_trans_1: i32) -> i32 {
     return n_char;
 }
 
+///*    spellfix1_translit(X)
+///*
+///* Convert a string that contains non-ASCII Roman characters into 
+///* pure ASCII.
 extern "C" fn transliterate_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_in: *const u8 =
@@ -4619,6 +4852,20 @@ extern "C" fn transliterate_sql_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*    spellfix1_scriptcode(X)
+///*
+///* Try to determine the dominant script used by the word X and return
+///* its ISO 15924 numeric code.
+///*
+///* The current implementation only understands the following scripts:
+///*
+///*    215  (Latin)
+///*    220  (Cyrillic)
+///*    200  (Greek)
+///*
+///* This routine will return 998 if the input X contains characters from
+///* two or more of the above scripts or 999 if X contains no characters
+///* from any of the above scripts.
 extern "C" fn script_code_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_in: *const u8 =
@@ -4672,6 +4919,7 @@ extern "C" fn script_code_sql_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int(context, res) };
 }
 
+/// Fuzzy-search virtual table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Spellfix1Vtab {
@@ -4683,6 +4931,7 @@ struct Spellfix1Vtab {
     p_config3: *mut EditDist3Config,
 }
 
+/// Fuzzy-search cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Spellfix1Cursor {
@@ -4713,6 +4962,11 @@ struct Spellfix1Row {
     z_hash: [i8; 32],
 }
 
+///* Construct one or more SQL statements from the format string given
+///* and then evaluate those statements. The success code is written
+///* into *pRc.
+///*
+///* If *pRc is initially non-zero then this routine is a no-op.
 unsafe extern "C" fn spellfix1_db_exec(p_rc_1: &mut i32, db: *mut Sqlite3,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -4733,6 +4987,7 @@ unsafe extern "C" fn spellfix1_db_exec(p_rc_1: &mut i32, db: *mut Sqlite3,
     }
 }
 
+///* xDisconnect/xDestroy method for the fuzzy-search module.
 extern "C" fn spellfix1_uninit(is_destroy_1: i32, p_v_tab_1: *mut Sqlite3Vtab)
     -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -4763,6 +5018,8 @@ extern "C" fn spellfix1_destroy(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     return spellfix1_uninit(1, p_v_tab_1);
 }
 
+///* Make a copy of a string.  Remove leading and trailing whitespace
+///* and dequote it.
 extern "C" fn spellfix1_dequote(mut z_in_1: *const i8) -> *mut i8 {
     let mut z_out: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -4826,10 +5083,18 @@ extern "C" fn spellfix1_dequote(mut z_in_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* xConnect/xCreate method for the spellfix1 module. Arguments are:
+///*
+///*   argv[0]   -> module name  ("spellfix1")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[3].. -> optional arguments (i.e. "edit_cost_table" parameter)
+#[allow(unused_doc_comments)]
 extern "C" fn spellfix1_init(is_create_1: i32, db: *mut Sqlite3,
     p_aux_1: *mut (), argc: i32, argv: *const *const i8,
     pp_v_tab_1: &mut *mut Sqlite3Vtab, pz_err_1: &mut *mut i8) -> i32 {
     let mut p_new: *mut Spellfix1Vtab = core::ptr::null_mut();
+    /// const char *zModule = argv[0]; // not used
     let z_db_name: *const i8 = unsafe { *argv.offset(1 as isize) };
     let z_table_name: *const i8 = unsafe { *argv.offset(2 as isize) };
     let mut n_db_name: i32 = 0;
@@ -4931,6 +5196,7 @@ extern "C" fn spellfix1_init(is_create_1: i32, db: *mut Sqlite3,
     return rc;
 }
 
+///* The xConnect and xCreate methods
 extern "C" fn spellfix1_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_v_tab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -4945,6 +5211,7 @@ extern "C" fn spellfix1_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             unsafe { &mut *pp_v_tab_1 }, unsafe { &mut *pz_err_1 });
 }
 
+///* Clear all of the content from a cursor.
 extern "C" fn spellfix1_reset_cursor(p_cur_1: &mut Spellfix1Cursor) -> () {
     let mut i: i32 = 0;
     {
@@ -4971,6 +5238,7 @@ extern "C" fn spellfix1_reset_cursor(p_cur_1: &mut Spellfix1Cursor) -> () {
     }
 }
 
+///* Resize the cursor to hold up to N rows of content
 extern "C" fn spellfix1_resize_cursor(p_cur_1: *mut Spellfix1Cursor, n_1: i32)
     -> () {
     let mut a_new: *mut Spellfix1Row = core::ptr::null_mut();
@@ -4991,6 +5259,7 @@ extern "C" fn spellfix1_resize_cursor(p_cur_1: *mut Spellfix1Cursor, n_1: i32)
     }
 }
 
+///* Close a fuzzy-search cursor.
 extern "C" fn spellfix1_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
     spellfix1_reset_cursor(unsafe { &mut *p_cur });
@@ -5000,6 +5269,12 @@ extern "C" fn spellfix1_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///*
+///* The plan number is a bitmask of the SPELLFIX_IDXNUM_* values defined
+///* above.
+///*
+///* filter.argv[*] values contains $str, $langid, $top, $scope and $rowid
+///* if specified and in that order.
 extern "C" fn spellfix1_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -5183,6 +5458,7 @@ extern "C" fn spellfix1_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Open a new fuzzy-search cursor.
 extern "C" fn spellfix1_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -5202,6 +5478,8 @@ extern "C" fn spellfix1_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Adjust a distance measurement by the words rank in order to show
+///* preference to common words.
 extern "C" fn spellfix1_score(i_distance_1: i32, mut i_rank_1: i32) -> i32 {
     let mut i_log2: i32 = 0;
     {
@@ -5218,12 +5496,16 @@ extern "C" fn spellfix1_score(i_distance_1: i32, mut i_rank_1: i32) -> i32 {
     return i_distance_1 + 32 - i_log2;
 }
 
+///* Compare two spellfix1_row objects for sorting purposes in qsort() such
+///* that they sort in order of increasing distance.
 extern "C" fn spellfix1_row_compare(a_1: *const (), b_1: *const ()) -> i32 {
     let a: *const Spellfix1Row = a_1 as *const Spellfix1Row;
     let b: *const Spellfix1Row = b_1 as *const Spellfix1Row;
     return unsafe { (*a).i_score } - unsafe { (*b).i_score } as i32;
 }
 
+///* A structure used to pass information from spellfix1FilterForMatch()
+///* into spellfix1RunQuery().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MatchQuery {
@@ -5243,6 +5525,9 @@ struct MatchQuery {
     az_prior: [[i8; 32]; 1],
 }
 
+///* Run a query looking for the best matches against zPattern using
+///* zHash as the character class seed hash.
+#[allow(unused_doc_comments)]
 extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
     n_query_1: i32) -> () {
     let mut z_k1: *const i8 = core::ptr::null();
@@ -5265,9 +5550,11 @@ extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
     if unsafe { (*p_cur).a } == core::ptr::null_mut() || (*p).rc != 0 {
         return;
     }
-    z_class =
+
+    /// Prior memory allocation failure
+    (z_class =
         phonetic_hash(z_query_1 as *mut u8 as *const u8, n_query_1) as
-            *mut i8;
+            *mut i8);
     if z_class == core::ptr::null_mut() { (*p).rc = 7; return; }
     n_class = unsafe { strlen(z_class as *const i8) } as i32;
     if n_class > 32 - 2 {
@@ -5335,6 +5622,13 @@ extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
             *__p += 1;
             __t
         };
+
+        /// If there is a "distance < $dist" or "distance <= $dist" constraint,
+        ///* check if this row meets it. If not, jump back up to the top of the
+        ///* loop to process the next row. Otherwise, if the row does match the
+        ///* distance constraint, check if the pCur->a[] array is already full.
+        ///* If it is and no explicit "top = ?" constraint was present in the
+        ///* query, grow the array to ensure there is room for the new entry.
         { let _ = 0; };
         if (*p).i_max_dist >= 0 {
             if i_dist > (*p).i_max_dist { continue; }
@@ -5429,23 +5723,49 @@ extern "C" fn spellfix1_run_query(p: &mut MatchQuery, z_query_1: *const i8,
     if rc != 0 { (*p).rc = rc; }
 }
 
+///* This version of the xFilter method work if the MATCH term is present
+///* and we are doing a scan.
+#[allow(unused_doc_comments)]
 extern "C" fn spellfix1_filter_for_match(p_cur_1: *mut Spellfix1Cursor,
     argc: i32, argv: *const *mut Sqlite3Value) -> i32 {
+    /// RHS of the MATCH operator
     let mut p_match_str3: *mut EditDist3FromString = core::ptr::null_mut();
+    /// zMatchThis as an editdist string
+    /// Transliteration of zMatchThis
+    /// Length of zPattern
+    /// Max number of rows of output
+    /// Use this many characters of zClass
+    /// Language code
+    /// SQL of shadow table query
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Shadow table query
+    /// Result code
+    /// Next available filter parameter
+    /// The virtual table that owns pCur
     let mut x: MatchQuery = unsafe { core::mem::zeroed() };
     '__b42: loop {
         '__c42: loop {
             let idx_num: i32 = unsafe { (*p_cur_1).idx_num };
             let mut z_match_this: *const u8 = core::ptr::null();
+            /// RHS of the MATCH operator
+            /// zMatchThis as an editdist string
             let mut z_pattern: *mut i8 = core::ptr::null_mut();
+            /// Transliteration of zMatchThis
             let mut n_pattern: i32 = 0;
+            /// Length of zPattern
             let mut i_limit: i32 = 20;
+            /// Max number of rows of output
             let i_scope: i32 = 3;
+            /// Use this many characters of zClass
             let mut i_lang: i32 = 0;
+            /// Language code
             let mut z_sql: *mut i8 = core::ptr::null_mut();
+            /// SQL of shadow table query
+            /// Shadow table query
             let mut rc: i32 = 0;
+            /// Result code
             let mut idx: i32 = 1;
+            /// Next available filter parameter
             let p: *mut Spellfix1Vtab = unsafe { (*p_cur_1).p_v_tab };
             if unsafe { (*p).z_cost_table } != core::ptr::null_mut() &&
                     unsafe { (*p).p_config3 } == core::ptr::null_mut() {
@@ -5474,7 +5794,9 @@ extern "C" fn spellfix1_filter_for_match(p_cur_1: *mut Spellfix1Cursor,
                     core::mem::size_of::<MatchQuery>() as u64)
             };
             x.i_scope = 3;
-            x.i_max_dist = -1;
+
+            /// Default scope if none specified by "WHERE scope=N"
+            (x.i_max_dist = -1);
             if idx_num & 2 != 0 {
                 i_lang =
                     unsafe {
@@ -5618,11 +5940,29 @@ extern "C" fn spellfix1_filter_for_match(p_cur_1: *mut Spellfix1Cursor,
         }
         if !(false) { break '__b42; }
     }
+
+    /// RHS of the MATCH operator
+    /// zMatchThis as an editdist string
+    /// Transliteration of zMatchThis
+    /// Length of zPattern
+    /// Max number of rows of output
+    /// Use this many characters of zClass
+    /// Language code
+    /// SQL of shadow table query
+    /// Shadow table query
+    /// Result code
+    /// Next available filter parameter
+    /// The virtual table that owns pCur
+    /// For passing info to RunQuery()
+    /// Load the cost table if we have not already done so
+    /// Default scope if none specified by "WHERE scope=N"
+    /// Maximum allowed edit distance
     unsafe { sqlite3_finalize(p_stmt) };
     edit_dist3_from_string_delete(p_match_str3);
     return x.rc;
 }
 
+///* This version of xFilter handles a full-table scan case
 extern "C" fn spellfix1_filter_for_full_scan(p_cur_1: *mut Spellfix1Cursor,
     argc: i32, argv: *const *mut Sqlite3Value) -> i32 {
     let mut rc: i32 = 0;
@@ -5669,6 +6009,9 @@ extern "C" fn spellfix1_filter_for_full_scan(p_cur_1: *mut Spellfix1Cursor,
     return rc;
 }
 
+///* Called to "rewind" a cursor back to the beginning so that
+///* it starts its output over again.  Always called at least once
+///* prior to any spellfix1Column, spellfix1Rowid, or spellfix1Eof call.
 extern "C" fn spellfix1_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
@@ -5686,6 +6029,7 @@ extern "C" fn spellfix1_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+///* Advance a cursor to its next row of output
 extern "C" fn spellfix1_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Spellfix1Cursor = cur as *mut Spellfix1Cursor;
     let mut rc: i32 = 0;
@@ -5708,12 +6052,14 @@ extern "C" fn spellfix1_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+///* Return TRUE if we are at the end-of-file
 extern "C" fn spellfix1_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const Spellfix1Cursor =
         cur as *mut Spellfix1Cursor as *const Spellfix1Cursor;
     return (unsafe { (*p_cur).i_row } >= unsafe { (*p_cur).n_row }) as i32;
 }
 
+///* Return columns from the current row.
 extern "C" fn spellfix1_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const Spellfix1Cursor =
@@ -6494,6 +6840,7 @@ extern "C" fn spellfix1_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* The rowid.
 extern "C" fn spellfix1_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const Spellfix1Cursor =
@@ -6518,8 +6865,13 @@ extern "C" fn spellfix1_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* This function is called by the xUpdate() method. It returns a string
+///* containing the conflict mode that xUpdate() should use for the current
+///* operation. One of: "ROLLBACK", "IGNORE", "ABORT" or "REPLACE".
+#[allow(unused_doc_comments)]
 extern "C" fn spellfix1_get_conflict(db: *mut Sqlite3) -> *const i8 {
     unsafe {
+        /// Note: Instead of "FAIL" - "ABORT".
         let e_conflict: i32 = unsafe { sqlite3_vtab_on_conflict(db) };
         { let _ = 0; };
         { let _ = 0; };
@@ -6531,6 +6883,8 @@ extern "C" fn spellfix1_get_conflict(db: *mut Sqlite3) -> *const i8 {
     }
 }
 
+///* The xUpdate() method.
+#[allow(unused_doc_comments)]
 extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let mut rc: i32 = 0;
@@ -6539,7 +6893,9 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
     let db: *mut Sqlite3 = unsafe { (*p).db };
     if argc == 1 {
-        rowid =
+
+        /// A delete operation on the rowid given by argv[0]
+        (rowid =
             {
                 unsafe {
                     *p_rowid_1 =
@@ -6548,7 +6904,7 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
                         }
                 };
                 unsafe { *p_rowid_1 }
-            };
+            });
         unsafe {
             spellfix1_db_exec(&mut rc, db,
                 c"DELETE FROM \"%w\".\"%w_vocab\"  WHERE id=%lld".as_ptr() as
@@ -6588,6 +6944,9 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
         let mut c: i8 = 0 as i8;
         let z_conflict: *const i8 = spellfix1_get_conflict(db);
         if z_word == core::ptr::null() {
+            /// Inserts of the form:  INSERT INTO table(command) VALUES('xyzzy');
+            ///* cause zWord to be NULL, so we look at the "command" column to see
+            ///* what special actions to take
             let z_cmd: *const i8 =
                 unsafe {
                         sqlite3_value_text(unsafe {
@@ -6607,6 +6966,8 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
             if unsafe {
                         strcmp(z_cmd, c"reset".as_ptr() as *mut i8 as *const i8)
                     } == 0 {
+
+                /// Reset the  edit cost table (if there is one).
                 edit_dist3_config_delete(unsafe { (*p).p_config3 } as
                         *mut ());
                 unsafe { (*p).p_config3 = core::ptr::null_mut() };
@@ -6737,6 +7098,7 @@ extern "C" fn spellfix1_update(p_v_tab_1: *mut Sqlite3Vtab, argc: i32,
     return rc;
 }
 
+///* Rename the spellfix1 table.
 extern "C" fn spellfix1_rename(p_v_tab_1: *mut Sqlite3Vtab,
     z_new_1: *const i8) -> i32 {
     let p: *mut Spellfix1Vtab = p_v_tab_1 as *mut Spellfix1Vtab;
@@ -6760,6 +7122,7 @@ extern "C" fn spellfix1_rename(p_v_tab_1: *mut Sqlite3Vtab,
     return rc;
 }
 
+///* A virtual table module that provides fuzzy search.
 static mut spellfix1_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -6789,6 +7152,7 @@ static mut spellfix1_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Register the various functions and the virtual table.
 extern "C" fn spellfix1_register(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 = 0;

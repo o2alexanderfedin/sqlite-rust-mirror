@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+///* Free a list of Upsert objects
 extern "C" fn upsert_delete(db: *mut Sqlite3, mut p: *mut Upsert) -> () {
     '__b0: loop {
         '__c0: loop {
@@ -424,6 +440,7 @@ pub extern "C" fn sqlite3_upsert_delete(db: *mut Sqlite3, p: *mut Upsert)
     if !(p).is_null() { upsert_delete(db, p); }
 }
 
+///* Create a new Upsert object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_new(db: *mut Sqlite3,
     p_target: *mut ExprList, p_target_where: *mut Expr, p_set: *mut ExprList,
@@ -454,6 +471,7 @@ pub extern "C" fn sqlite3_upsert_new(db: *mut Sqlite3,
     return p_new;
 }
 
+///* Duplicate an Upsert object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_dup(db: *mut Sqlite3, p: *mut Upsert)
     -> *mut Upsert {
@@ -477,6 +495,10 @@ pub extern "C" fn sqlite3_upsert_dup(db: *mut Sqlite3, p: *mut Upsert)
             }, sqlite3_upsert_dup(db, unsafe { (*p).p_next_upsert }));
 }
 
+///* Given the list of ON CONFLICT clauses described by pUpsert, and
+///* a particular index pIdx, return a pointer to the particular ON CONFLICT
+///* clause that applies to the index.  Or, if the index is not subject to
+///* any ON CONFLICT clause, return NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_of_index(mut p_upsert: *mut Upsert,
     p_idx: *mut Index) -> *mut Upsert {
@@ -489,24 +511,44 @@ pub extern "C" fn sqlite3_upsert_of_index(mut p_upsert: *mut Upsert,
     return p_upsert;
 }
 
+///* Analyze the ON CONFLICT clause described by pUpsert.  Resolve all
+///* symbols in the conflict-target.
+///*
+///* Return SQLITE_OK if everything works, or an error code is something
+///* is wrong.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, mut p_upsert: *mut Upsert, p_all: *mut Upsert)
     -> i32 {
     unsafe {
         let mut p_tab: *const Table = core::ptr::null();
+        /// That table into which we are inserting
         let mut rc: i32 = 0;
+        /// Result code
         let mut i_cursor: i32 = 0;
+        /// Cursor used by pTab
         let mut p_idx: *mut Index = core::ptr::null_mut();
+        /// One of the indexes of pTab
         let mut p_target: *const ExprList = core::ptr::null();
+        /// The conflict-target clause
         let mut p_term: *const Expr = core::ptr::null();
+        /// One term of the conflict-target clause
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Context for resolving symbolic names
         let mut s_col: [Expr; 2] = unsafe { core::mem::zeroed() };
+        /// Index column converted into an Expr
         let mut n_clause: i32 = 0;
+
+        /// Counter of ON CONFLICT clauses
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Resolve all symbolic names in the conflict-target clause, which
+        ///* includes both the list of columns and the optional partial-index
+        ///* WHERE clause.
         unsafe {
             memset(&raw mut s_nc as *mut (), 0,
                 core::mem::size_of::<NameContext>() as u64)
@@ -532,11 +574,13 @@ pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
                                 unsafe { (*p_upsert).p_upsert_target_where })
                         };
                     if rc != 0 { return rc; }
-                    p_tab =
+
+                    /// Check to see if the conflict target matches the rowid.
+                    (p_tab =
                         unsafe {
                             (*(unsafe { (*p_tab_list).a.as_ptr() } as
                                             *mut SrcItem).offset(0 as isize)).p_s_tab
-                        };
+                        });
                     p_target = unsafe { (*p_upsert).p_upsert_target };
                     i_cursor =
                         unsafe {
@@ -556,9 +600,17 @@ pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
                                                         }).op
                                         } as i32 == 168 &&
                             unsafe { (*p_term).i_column } as i32 == -1 {
+
+                        /// The conflict-target is the rowid of the primary table
                         { let _ = 0; };
                         break '__c2;
                     }
+
+                    /// Initialize sCol[0..1] to be an expression parse tree for a
+                    ///* single column of an index.  The sCol[0] node will be the TK_COLLATE
+                    ///* operator and sCol[1] will be the TK_COLUMN operator.  Code below
+                    ///* will populate the specific collation and column number values
+                    ///* prior to comparing against the conflict-target expression.
                     unsafe {
                         memset(&raw mut s_col[0 as usize] as *mut Expr as *mut (),
                             0, core::mem::size_of::<[Expr; 2]>() as u64)
@@ -652,15 +704,30 @@ pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
                                                     { let __p = &mut jj; let __t = *__p; *__p += 1; __t };
                                                 }
                                             }
-                                            if jj >= nn { break '__b4; }
+                                            if jj >= nn {
+
+                                                /// The target contains no match for column jj of the index
+                                                break '__b4;
+                                            }
                                             break '__c4;
                                         }
                                         { let __p = &mut ii; let __t = *__p; *__p += 1; __t };
                                     }
                                 }
-                                if ii < nn { break '__c3; }
+                                if ii < nn {
+
+                                    /// Column ii of the index did not match any term of the conflict target.
+                                    ///* Continue the search with the next index.
+                                    break '__c3;
+                                }
                                 unsafe { (*p_upsert).p_upsert_idx = p_idx };
                                 if sqlite3_upsert_of_index(p_all, p_idx) != p_upsert {
+
+                                    /// Really this should be an error.  The isDup ON CONFLICT clause will
+                                    ///* never fire.  But this problem was not discovered until three years
+                                    ///* after multi-CONFLICT upsert was added, and so we silently ignore
+                                    ///* the problem to prevent breaking applications that might actually
+                                    ///* have redundant ON CONFLICT clauses.
                                     unsafe { (*p_upsert).is_dup = 1 as u8 };
                                 }
                                 break '__b3;
@@ -703,13 +770,22 @@ pub extern "C" fn sqlite3_upsert_analyze_target(p_parse: *mut Parse,
     }
 }
 
+///* Generate bytecode that does an UPDATE as part of an upsert.
+///*
+///* If pIdx is NULL, then the UNIQUE constraint that failed was the IPK.
+///* In this case parameter iCur is a cursor open on the table b-tree that
+///* currently points to the conflicting table row. Otherwise, if pIdx
+///* is not NULL, then pIdx is the constraint that failed and iCur is a
+///* cursor points to the conflicting row.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_upsert_do_update(p_parse: *mut Parse,
     mut p_upsert: *mut Upsert, p_tab: *mut Table, p_idx: *mut Index,
     i_cur: i32) -> () {
     let v: *mut Vdbe = unsafe { (*p_parse).p_vdbe };
     let db: *mut Sqlite3 = unsafe { (*p_parse).db };
     let mut p_src: *mut SrcList = core::ptr::null_mut();
+    /// FROM clause for the UPDATE
     let mut i_data_cur: i32 = 0;
     let mut i: i32 = 0;
     let p_top: *mut Upsert = p_upsert;
@@ -760,11 +836,14 @@ pub extern "C" fn sqlite3_upsert_do_update(p_parse: *mut Parse,
             unsafe { sqlite3_vdbe_jump_here(v, i) };
         }
     }
-    p_src =
+
+    /// pUpsert does not own pTop->pUpsertSrc - the outer INSERT statement does.
+    ///* So we have to make a copy before passing it down into sqlite3Update()
+    (p_src =
         unsafe {
             sqlite3_src_list_dup(db,
                 unsafe { (*p_top).p_upsert_src } as *const SrcList, 0)
-        };
+        });
     {
         i = 0;
         '__b7: loop {
@@ -797,6 +876,9 @@ pub extern "C" fn sqlite3_upsert_do_update(p_parse: *mut Parse,
     };
 }
 
+///* Return true if pUpsert is the last ON CONFLICT clause with a
+///* conflict target, or if pUpsert is followed by another ON CONFLICT
+///* clause that targets the INTEGER PRIMARY KEY.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_upsert_next_is_ipk(p_upsert: *mut Upsert) -> i32 {
     let mut p_next: *const Upsert = core::ptr::null();

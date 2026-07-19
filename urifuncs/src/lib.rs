@@ -1,10 +1,45 @@
+//!* 2020-01-11
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* This SQLite extension implements various SQL functions used to access
+//!* the following SQLite C-language APIs:
+//!*
+//!*         sqlite3_uri_parameter()
+//!*         sqlite3_uri_boolean()
+//!*         sqlite3_uri_int64()
+//!*         sqlite3_uri_key()
+//!*         sqlite3_filename_database()
+//!*         sqlite3_filename_journal()
+//!*         sqlite3_filename_wal()
+//!*         sqlite3_db_filename()
+//!*
+//!* These SQL functions are for testing and demonstration purposes only.
+//!*
+//!*
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* SQL function:    sqlite3_db_filename(SCHEMA) 
+///*
+///* Return the filename corresponding to SCHEMA.
 extern "C" fn func_db_filename(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -22,6 +57,9 @@ extern "C" fn func_db_filename(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* SQL function:    sqlite3_uri_parameter(SCHEMA,NAME) 
+///*
+///* Return the value of the NAME query parameter to the database for SCHEMA
 extern "C" fn func_uri_parameter(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -43,6 +81,10 @@ extern "C" fn func_uri_parameter(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* SQL function:    sqlite3_uri_boolean(SCHEMA,NAME,DEFAULT) 
+///*
+///* Return the boolean value of the NAME query parameter to
+///* the database for SCHEMA
 extern "C" fn func_uri_boolean(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -59,6 +101,9 @@ extern "C" fn func_uri_boolean(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int(context, i_res) };
 }
 
+///* SQL function:    sqlite3_uri_key(SCHEMA,N)
+///*
+///* Return the name of the Nth query parameter
 extern "C" fn func_uri_key(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -79,6 +124,10 @@ extern "C" fn func_uri_key(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* SQL function:    sqlite3_uri_int64(SCHEMA,NAME,DEFAULT) 
+///*
+///* Return the int64 value of the NAME query parameter to
+///* the database for SCHEMA
 extern "C" fn func_uri_int64(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -96,6 +145,9 @@ extern "C" fn func_uri_int64(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int64(context, i_res) };
 }
 
+///* SQL function:    sqlite3_filename_database(SCHEMA)
+///*
+///* Return the database filename for SCHEMA
 extern "C" fn func_filename_database(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -117,6 +169,9 @@ extern "C" fn func_filename_database(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* SQL function:    sqlite3_filename_journal(SCHEMA)
+///*
+///* Return the rollback journal filename for SCHEMA
 extern "C" fn func_filename_journal(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =
@@ -138,6 +193,9 @@ extern "C" fn func_filename_journal(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* SQL function:    sqlite3_filename_wal(SCHEMA)
+///*
+///* Return the WAL filename for SCHEMA
 extern "C" fn func_filename_wal(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_schema: *const i8 =

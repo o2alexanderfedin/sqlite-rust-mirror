@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -18,6 +24,7 @@ struct MD5Context {
     in_: [u8; 64],
 }
 
+///Note: this code is harmless on little-endian machines.
 extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
     let mut t: u32 = 0 as u32;
     '__b0: loop {
@@ -39,6 +46,9 @@ extern "C" fn byte_reverse(mut buf: *mut u8, mut longs: u32) -> () {
     }
 }
 
+///The core of the MD5 algorithm, this alters an existing MD5 hash to
+///reflect the addition of 16 longwords of new data.  MD5Update blocks
+///the data and converts bytes into longwords for this routine.
 extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     let mut a: u32 = 0 as u32;
     let mut b: u32 = 0 as u32;
@@ -648,6 +658,8 @@ extern "C" fn md5_transform(buf: *mut u32, in__1: *const u32) -> () {
     unsafe { *buf.offset(3 as isize) += d };
 }
 
+///Start MD5 accumulation.  Set bit count to 0 and buffer to mysterious
+///initialization constants.
 extern "C" fn md5_init_1(ctx: &mut MD5Context) -> () {
     (*ctx).is_init = 1;
     (*ctx).buf[0 as usize] = 1732584193 as u32;
@@ -658,10 +670,15 @@ extern "C" fn md5_init_1(ctx: &mut MD5Context) -> () {
     (*ctx).bits[1 as usize] = 0 as u32;
 }
 
+///Update context to reflect the concatenation of another buffer full
+///of bytes.
+#[allow(unused_doc_comments)]
 extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
     mut len: u32) -> () {
     let mut t: u32 = 0 as u32;
-    t = (*ctx).bits[0 as usize];
+
+    /// Update bitcount
+    (t = (*ctx).bits[0 as usize]);
     if {
                 (*ctx).bits[0 as usize] = t + ((len as u32) << 3);
                 (*ctx).bits[0 as usize]
@@ -673,7 +690,9 @@ extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
             __t
         };
     }
-    (*ctx).bits[1 as usize] += len >> 29;
+
+    /// Carry from low to high
+    ((*ctx).bits[1 as usize] += len >> 29);
     t = t >> 3 & 63 as u32;
     if t != 0 {
         let p: *mut u8 =
@@ -711,20 +730,30 @@ extern "C" fn md5_update(ctx: &mut MD5Context, mut buf: *const u8,
         };
         len -= 64 as u32;
     }
+
+    /// Handle any remaining bytes of data.
     unsafe {
         memcpy(&raw mut (*ctx).in_[0 as usize] as *mut u8 as *mut (),
             buf as *const (), len as u64)
     };
 }
 
+///Final wrapup - pad to 64-byte boundary with the bit pattern
+///1 0* (64-bit count of bits processed, MSB-first)
+#[allow(unused_doc_comments)]
 extern "C" fn md5_final(digest: *mut u8, ctx: &mut MD5Context) -> () {
     let mut count: u32 = 0 as u32;
     let mut p: *mut u8 = core::ptr::null_mut();
-    count = (*ctx).bits[0 as usize] >> 3 & 63 as u32;
-    p =
+
+    /// Compute number of bytes mod 64
+    (count = (*ctx).bits[0 as usize] >> 3 & 63 as u32);
+
+    /// Set the first char of padding to 0x80.  This is safe since there is
+    ///           always at least one byte free
+    (p =
         unsafe {
             (&raw mut (*ctx).in_[0 as usize] as *mut u8).add(count as usize)
-        };
+        });
     unsafe {
         *{
                     let __p = &mut p;
@@ -733,18 +762,30 @@ extern "C" fn md5_final(digest: *mut u8, ctx: &mut MD5Context) -> () {
                     __t
                 } = 128 as u8
     };
-    count = (64 - 1) as u32 - count;
+
+    /// Bytes of padding needed to make 64 bytes
+    (count = (64 - 1) as u32 - count);
     if count < 8 as u32 {
+
+        /// Two lots of padding:  Pad the first block to 64 bytes
         unsafe { memset(p as *mut (), 0, count as u64) };
         byte_reverse(&raw mut (*ctx).in_[0 as usize] as *mut u8, 16 as u32);
         md5_transform(&raw mut (*ctx).buf[0 as usize] as *mut u32,
             &raw mut (*ctx).in_[0 as usize] as *mut u32 as *const u32);
+
+        /// Now fill the next block with 56 bytes
         unsafe {
             memset(&raw mut (*ctx).in_[0 as usize] as *mut u8 as *mut (), 0,
                 56 as u64)
         };
-    } else { unsafe { memset(p as *mut (), 0, (count - 8 as u32) as u64) }; }
+    } else {
+
+        /// Pad block to 56 bytes
+        unsafe { memset(p as *mut (), 0, (count - 8 as u32) as u64) };
+    }
     byte_reverse(&raw mut (*ctx).in_[0 as usize] as *mut u8, 14 as u32);
+
+    /// Append length in bits and transform
     unsafe {
         memcpy(unsafe {
                     (&raw mut (*ctx).in_[0 as usize] as
@@ -763,6 +804,7 @@ extern "C" fn md5_final(digest: *mut u8, ctx: &mut MD5Context) -> () {
     };
 }
 
+///* Convert a 128-bit MD5 digest into a 32-digit base-16 number.
 extern "C" fn md5_digest_to_base16(digest: *mut u8, z_buf_1: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -796,6 +838,9 @@ extern "C" fn md5_digest_to_base16(digest: *mut u8, z_buf_1: *mut i8) -> () {
     unsafe { *z_buf_1.offset(j as isize) = 0 as i8 };
 }
 
+///* Convert a 128-bit MD5 digest into sequences of eight 5-digit integers
+///* each representing 16 bits of the digest and separated from each
+///* other by a "-" character.
 extern "C" fn md5_digest_to_base10x8(digest: *mut u8, z_digest_1: *mut i8)
     -> () {
     let mut i: i32 = 0;
@@ -833,6 +878,8 @@ extern "C" fn md5_digest_to_base10x8(digest: *mut u8, z_digest_1: *mut i8)
     unsafe { *z_digest_1.offset(j as isize) = 0 as i8 };
 }
 
+///* A TCL command for md5.  The argument is the text to be hashed.  The
+///* Result is the hash in base64.
 extern "C" fn md5_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     argv: *mut *const i8) -> i32 {
     let mut ctx: MD5Context = unsafe { core::mem::zeroed() };
@@ -871,6 +918,8 @@ extern "C" fn md5_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     return 0;
 }
 
+///* A TCL command to take the md5 hash of a file.  The argument is the
+///* name of the file.
 extern "C" fn md5file_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     argv: *mut *const i8) -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -945,6 +994,8 @@ extern "C" fn md5file_cmd(cd: *mut (), interp: *mut TclInterp, argc: i32,
     return 0;
 }
 
+///* Register the four new TCL commands for generating MD5 checksums
+///* with the TCL interpreter.
 #[unsafe(no_mangle)]
 pub extern "C" fn md5_init(interp: *mut TclInterp) -> i32 {
     unsafe {
@@ -1000,6 +1051,8 @@ pub extern "C" fn md5_init(interp: *mut TclInterp) -> i32 {
     return 0;
 }
 
+///* During testing, the special md5sum() aggregate function is available.
+///* inside SQLite.  The following routines implement that function.
 extern "C" fn md5step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut MD5Context = core::ptr::null_mut();
@@ -1059,6 +1112,7 @@ extern "C" fn md5finalize(context: *mut Sqlite3Context) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn md5_register(db: *mut Sqlite3, pz_err_msg_1: *const *mut i8,
     p_thunk_1: *const Sqlite3ApiRoutines) -> i32 {
     let rc: i32 =
@@ -1071,6 +1125,8 @@ pub extern "C" fn md5_register(db: *mut Sqlite3, pz_err_msg_1: *const *mut i8,
         sqlite3_overload_function(db,
             c"md5sum".as_ptr() as *mut i8 as *const i8, -1)
     };
+
+    /// To exercise this API
     return rc;
 }
 

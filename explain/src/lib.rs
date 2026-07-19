@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -24,17 +30,40 @@ struct ExplainCursor {
     rc: i32,
 }
 
+///* The explainConnect() method is invoked to create a new
+///* explain_vtab that describes the explain virtual table.
+///*
+///* Think of this routine as the constructor for explain_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the explain_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against explain will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn explain_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut ExplainVtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
-    rc =
+
+    /// Column numbers
+    /// Instruction address
+    /// Opcode
+    /// Operand 1
+    /// Operand 2
+    /// Operand 3
+    /// Operand 4
+    /// Operand 5
+    /// Comment
+    /// SQL that is being explained
+    (rc =
         unsafe {
             sqlite3_declare_vtab(db,
                 c"CREATE TABLE x(addr,opcode,p1,p2,p3,p4,p5,comment,sql HIDDEN)".as_ptr()
                         as *mut i8 as *const i8)
-        };
+        });
     if rc == 0 {
         p_new =
             unsafe {
@@ -52,11 +81,13 @@ extern "C" fn explain_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* This method is the destructor for explain_cursor objects.
 extern "C" fn explain_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new explain_cursor object.
 extern "C" fn explain_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut ExplainCursor = core::ptr::null_mut();
@@ -75,6 +106,7 @@ extern "C" fn explain_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a explain_cursor.
 extern "C" fn explain_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut ExplainCursor = cur as *mut ExplainCursor;
     unsafe { sqlite3_finalize(unsafe { (*p_cur).p_explain }) };
@@ -83,6 +115,7 @@ extern "C" fn explain_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Advance a explain_cursor to its next row of output.
 extern "C" fn explain_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut ExplainCursor = cur as *mut ExplainCursor;
     unsafe {
@@ -94,6 +127,8 @@ extern "C" fn explain_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the explain_cursor
+///* is currently pointing.
 extern "C" fn explain_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const ExplainCursor =
@@ -119,6 +154,8 @@ extern "C" fn explain_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn explain_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const ExplainCursor =
@@ -130,12 +167,20 @@ extern "C" fn explain_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn explain_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const ExplainCursor =
         cur as *mut ExplainCursor as *const ExplainCursor;
     return (unsafe { (*p_cur).rc } != 100) as i32;
 }
 
+///* This method is called to "rewind" the explain_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to explainColumn() or explainRowid() or 
+///* explainEof().
+///*
+///* The argv[0] is the SQL statement that is to be explained.
 extern "C" fn explain_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -197,11 +242,20 @@ extern "C" fn explain_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return rc;
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the explain virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+#[allow(unused_doc_comments)]
 extern "C" fn explain_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop counter
     let mut idx: i32 = -1;
+    /// Index of a usable == constraint against SQL
     let mut unusable: i32 = 0;
+
+    /// True if there are unusable constraints on SQL
     unsafe { (*p_idx_info_1).estimated_rows = 500 as Sqlite3Int64 };
     {
         i = 0;
@@ -224,6 +278,8 @@ extern "C" fn explain_best_index(tab: *mut Sqlite3Vtab,
         }
     }
     if idx >= 0 {
+
+        /// There exists a usable == constraint against the SQL column
         unsafe { (*p_idx_info_1).estimated_cost = 10.0 };
         unsafe { (*p_idx_info_1).idx_num = 1 };
         unsafe {
@@ -236,10 +292,17 @@ extern "C" fn explain_best_index(tab: *mut Sqlite3Vtab,
                             (*p_idx_info_1).a_constraint_usage.offset(idx as isize)
                         }).omit = 1 as u8
         };
-    } else if unusable != 0 { return 19; }
+    } else if unusable != 0 {
+
+        /// There are unusable constraints against the SQL column.  Do not allow
+        ///* this plan to continue forward.
+        return 19;
+    }
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* explain virtual table.
 static mut explain_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

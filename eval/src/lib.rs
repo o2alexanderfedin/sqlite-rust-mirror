@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Structure used to accumulate the output
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EvalResult {
@@ -17,6 +24,8 @@ struct EvalResult {
     n_used: Sqlite3Int64,
 }
 
+///* Callback from sqlite_exec() for the eval() function.
+#[allow(unused_doc_comments)]
 extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     colnames: *mut *mut i8) -> i32 {
     let p: *mut EvalResult = p_ctx_1 as *mut EvalResult;
@@ -42,13 +51,17 @@ extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
                                             sz as u64 + unsafe { (*p).sz_sep } as u64 + 1 as u64) as
                                 Sqlite3Int64
                     };
-                    z_new =
+
+                    /// Using sqlite3_realloc64() would be better, but it is a recent
+                    ///* addition and will cause a segfault if loaded by an older version
+                    ///* of SQLite.
+                    (z_new =
                         if unsafe { (*p).n_alloc } <= 2147483647 as i64 {
                                 unsafe {
                                     sqlite3_realloc64(unsafe { (*p).z } as *mut (),
                                         unsafe { (*p).n_alloc } as Sqlite3Uint64)
                                 }
-                            } else { core::ptr::null_mut() } as *mut i8;
+                            } else { core::ptr::null_mut() } as *mut i8);
                     if z_new == core::ptr::null_mut() {
                         unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
                         unsafe {
@@ -88,6 +101,10 @@ extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     return 0;
 }
 
+///* Implementation of the eval(X) and eval(X,Y) SQL functions.
+///*
+///* Evaluate the SQL text in X.  Return the results, using string
+///* Y as the separator.  If Y is omitted, use a single space character.
 extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const i8 = core::ptr::null();
@@ -132,17 +149,20 @@ extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_eval_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"eval".as_ptr() as *mut i8 as *const i8, 1, 1 | 524288,
                 core::ptr::null_mut(), Some(sql_eval_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

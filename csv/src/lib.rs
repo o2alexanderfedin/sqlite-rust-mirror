@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -24,6 +30,7 @@ struct CsvReader {
     z_err: [i8; 200],
 }
 
+/// Initialize a CsvReader object
 extern "C" fn csv_reader_init(p: &mut CsvReader) -> () {
     (*p).in_ = core::ptr::null_mut();
     (*p).z = core::ptr::null_mut();
@@ -36,6 +43,7 @@ extern "C" fn csv_reader_init(p: &mut CsvReader) -> () {
     (*p).z_err[0 as usize] = 0 as i8;
 }
 
+/// Close and reset a CsvReader object
 extern "C" fn csv_reader_reset(p: *mut CsvReader) -> () {
     if !(unsafe { (*p).in_ }).is_null() {
         unsafe { fclose(unsafe { (*p).in_ }) };
@@ -45,6 +53,7 @@ extern "C" fn csv_reader_reset(p: *mut CsvReader) -> () {
     csv_reader_init(unsafe { &mut *p });
 }
 
+/// Report an error on a CsvReader
 unsafe extern "C" fn csv_errmsg(p: &mut CsvReader, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -56,6 +65,8 @@ unsafe extern "C" fn csv_errmsg(p: &mut CsvReader, z_format_1: *const i8,
     ();
 }
 
+/// Open the file associated with a CsvReader
+///* Return the number of errors.
 extern "C" fn csv_reader_open(p: *mut CsvReader, z_filename_1: *const i8,
     z_data_1: *const i8) -> i32 {
     if !(z_filename_1).is_null() {
@@ -101,6 +112,9 @@ extern "C" fn csv_reader_open(p: *mut CsvReader, z_filename_1: *const i8,
     return 0;
 }
 
+/// The input buffer has overflowed.  Refill the input buffer, then
+///* return the next character
+#[allow(unused_doc_comments)]
 extern "C" fn csv_getc_refill(p: &mut CsvReader) -> i32 {
     let mut got: u64 = 0 as u64;
     if !((*p).i_in >= (*p).n_in) as i32 as i64 != 0 {
@@ -110,6 +124,8 @@ extern "C" fn csv_getc_refill(p: &mut CsvReader) -> i32 {
                 c"p->iIn>=p->nIn".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// Only called on an empty input buffer
     if !((*p).in_ != core::ptr::null_mut()) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"csv_getc_refill".as_ptr() as *const i8,
@@ -117,16 +133,19 @@ extern "C" fn csv_getc_refill(p: &mut CsvReader) -> i32 {
                 c"p->in!=0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
-    got =
+
+    /// Only called if reading froma file
+    (got =
         unsafe {
             fread((*p).z_in as *mut (), 1 as u64, 1024 as u64, (*p).in_)
-        };
+        });
     if got == 0 as u64 { return -1; }
     (*p).n_in = got;
     (*p).i_in = 1 as u64;
     return unsafe { *(*p).z_in.offset(0 as isize) } as i32;
 }
 
+/// Return the next character of input.  Return EOF at end of input.
 extern "C" fn csv_getc(p: *mut CsvReader) -> i32 {
     if unsafe { (*p).i_in } >= unsafe { (*p).n_in } {
         if unsafe { (*p).in_ } != core::ptr::null_mut() {
@@ -145,6 +164,8 @@ extern "C" fn csv_getc(p: *mut CsvReader) -> i32 {
             } as i32;
 }
 
+/// Increase the size of p->z and append character c to the end. 
+///* Return 0 on success and non-zero if there is an OOM error
 extern "C" fn csv_resize_and_append(p: *mut CsvReader, c: i8) -> i32 {
     let mut z_new: *mut i8 = core::ptr::null_mut();
     let n_new: i64 = unsafe { (*p).n_alloc } * 2 as i64 + 100 as i64;
@@ -176,6 +197,8 @@ extern "C" fn csv_resize_and_append(p: *mut CsvReader, c: i8) -> i32 {
     }
 }
 
+/// Append a single character to the CsvReader.z[] array.
+///* Return 0 on success and non-zero if there is an OOM error
 extern "C" fn csv_append(p: *mut CsvReader, c: i8) -> i32 {
     if unsafe { (*p).n } >= unsafe { (*p).n_alloc } - 1 as i64 {
         return csv_resize_and_append(p, c);
@@ -193,6 +216,18 @@ extern "C" fn csv_append(p: *mut CsvReader, c: i8) -> i32 {
     return 0;
 }
 
+/// Read a single field of CSV text.  Compatible with rfc4180 and extended
+///* with the option of having a separator other than ",".
+///*
+///*   +  Input comes from p->in.
+///*   +  Store results in p->z of length p->n.  Space to hold p->z comes
+///*      from sqlite3_malloc64().
+///*   +  Keep track of the line number in p->nLine.
+///*   +  Store the character that terminates the field in p->cTerm.  Store
+///*      EOF on end-of-file.
+///*
+///* Return 0 at EOF or on OOM.  On EOF, the p->cTerm character will have
+///* been set to EOF.
 extern "C" fn csv_read_one_field(p: *mut CsvReader) -> *mut i8 {
     let mut c: i32 = 0;
     unsafe { (*p).n = 0 as i64 };
@@ -322,6 +357,7 @@ extern "C" fn csv_read_one_field(p: *mut CsvReader) -> *mut i8 {
     return unsafe { (*p).z };
 }
 
+/// An instance of the CSV virtual table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CsvTable {
@@ -333,6 +369,8 @@ struct CsvTable {
     tst_flags: u32,
 }
 
+/// Skip leading whitespace.  Return a pointer to the first non-whitespace
+///* character, or to the zero terminator if the string has only whitespace
 extern "C" fn csv_skip_whitespace(mut z: *const i8) -> *const i8 {
     while unsafe { isspace(unsafe { *z.offset(0 as isize) } as u8 as i32) } !=
             0 {
@@ -346,6 +384,9 @@ extern "C" fn csv_skip_whitespace(mut z: *const i8) -> *const i8 {
     return z;
 }
 
+/// Check to see if the string is of the form:  "TAG = VALUE" with optional
+///* whitespace before and around tokens.  If it is, return a pointer to the
+///* first character of VALUE.  If it is not, return NULL.
 extern "C" fn csv_parameter(z_tag_1: *const i8, n_tag_1: i32,
     mut z: *const i8) -> *const i8 {
     z = csv_skip_whitespace(z);
@@ -359,6 +400,7 @@ extern "C" fn csv_parameter(z_tag_1: *const i8, n_tag_1: i32,
     return csv_skip_whitespace(unsafe { z.offset(1 as isize) });
 }
 
+/// Remove trailing whitespace from the end of string z[]
 extern "C" fn csv_trim_whitespace(z: *mut i8) -> () {
     let mut n: u64 = unsafe { strlen(z as *const i8) };
     while n > 0 as u64 &&
@@ -369,6 +411,7 @@ extern "C" fn csv_trim_whitespace(z: *mut i8) -> () {
     unsafe { *z.add(n as usize) = 0 as i8 };
 }
 
+/// Dequote the string
 extern "C" fn csv_dequote(z: *mut i8) -> () {
     let mut j: i32 = 0;
     let c_quote: i8 = unsafe { *z.offset(0 as isize) };
@@ -409,6 +452,11 @@ extern "C" fn csv_dequote(z: *mut i8) -> () {
     unsafe { *z.offset(j as isize) = 0 as i8 };
 }
 
+/// Decode a parameter that requires a dequoted string.
+///*
+///* Return 1 if the parameter is seen, or 0 if not.  1 is returned
+///* even if there is an error.  If an error occurs, then an error message
+///* is left in p->zErr.  If there are no errors, p->zErr[0]==0.
 extern "C" fn csv_string_parameter(p: *mut CsvReader, z_param_1: *const i8,
     z_arg_1: *const i8, pz_val_1: &mut *mut i8) -> i32 {
     let mut z_value: *const i8 = core::ptr::null();
@@ -441,6 +489,7 @@ extern "C" fn csv_string_parameter(p: *mut CsvReader, z_param_1: *const i8,
     return 1;
 }
 
+///* This method is the destructor fo a CsvTable object.
 extern "C" fn csvtab_disconnect(p_vtab: *mut Sqlite3Vtab) -> i32 {
     let p: *mut CsvTable = p_vtab as *mut CsvTable;
     unsafe { sqlite3_free(unsafe { (*p).z_filename } as *mut ()) };
@@ -449,6 +498,8 @@ extern "C" fn csvtab_disconnect(p_vtab: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+/// Return 0 if the argument is false and 1 if it is true.  Return -1 if
+///* we cannot really tell.
 extern "C" fn csv_boolean(z: *const i8) -> i32 {
     if unsafe { sqlite3_stricmp(c"yes".as_ptr() as *mut i8 as *const i8, z) }
                         == 0 ||
@@ -478,6 +529,10 @@ extern "C" fn csv_boolean(z: *const i8) -> i32 {
     return -1;
 }
 
+/// Check to see if the string is of the form:  "TAG = BOOLEAN" or just "TAG".
+///* If it is, set *pValue to be the value of the boolean ("true" if there is
+///* not "= BOOLEAN" component) and return non-zero.  If the input string
+///* does not begin with TAG, return zero.
 extern "C" fn csv_boolean_parameter(z_tag_1: *const i8, n_tag_1: i32,
     mut z: *const i8, p_value_1: &mut i32) -> i32 {
     let mut b: i32 = 0;
@@ -495,19 +550,43 @@ extern "C" fn csv_boolean_parameter(z_tag_1: *const i8, n_tag_1: i32,
     return 0;
 }
 
+///* Parameters:
+///*    filename=FILENAME          Name of file containing CSV content
+///*    data=TEXT                  Direct CSV content.
+///*    schema=SCHEMA              Alternative CSV schema.
+///*    header=YES|NO              First row of CSV defines the names of
+///*                               columns if "yes".  Default "no".
+///*    columns=N                  Assume the CSV file contains N columns.
+///*
+///* Only available if compiled with SQLITE_TEST:
+///*    
+///*    testflags=N                Bitmask of test flags.  Optional
+///*
+///* If schema= is omitted, then the columns are named "c0", "c1", "c2",
+///* and so forth.  If columns=N is omitted, then the file is opened and
+///* the number of columns in the first row is counted to determine the
+///* column count.  If header=YES, then the first row is skipped.
+#[allow(unused_doc_comments)]
 extern "C" fn csvtab_connect(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab: *mut *mut Sqlite3Vtab,
     pz_err: *mut *mut i8) -> i32 {
     unsafe {
         let mut p_new: *mut CsvTable = core::ptr::null_mut();
+        /// The CsvTable object to construct
         let mut b_header: i32 = 0;
+        /// header= flags.  -1 means not seen yet
         let mut rc: i32 = 0;
+        /// Result code from this routine
         let mut i: u64 = 0 as u64;
         let mut j: u64 = 0 as u64;
+        /// Loop counters
         let mut b: i32 = 0;
+        /// Value of a boolean parameter
         let mut n_col: i32 = 0;
+        /// Value of the columns= parameter
         let mut s_rdr: CsvReader = unsafe { core::mem::zeroed() };
         let mut az_p_value: [*mut i8; 3] = [core::ptr::null_mut(); 3];
+        /// Parameter values
         let mut z: *const i8 = core::ptr::null();
         let mut z_value: *const i8 = core::ptr::null();
         let mut p_str: *mut Sqlite3Str = core::ptr::null_mut();
@@ -1012,22 +1091,46 @@ extern "C" fn csvtab_connect(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
                 }
             }
         }
+
+        /// The CsvTable object to construct
+        /// header= flags.  -1 means not seen yet
+        /// Result code from this routine
+        /// Loop counters
+        /// Value of a boolean parameter
+        /// Value of the columns= parameter
+        /// A CSV file reader used to store an error
+        ///* message and/or to count the number of columns
+        /// Parameter values
+        /// Rationale for DIRECTONLY:
+        ///* An attacker who controls a database schema could use this vtab
+        ///* to exfiltrate sensitive data from other files in the filesystem.
+        ///* And, recommended practice is to put all CSV virtual tables in the
+        ///* TEMP namespace, so they should still be usable from within TEMP
+        ///* views, so there shouldn't be a serious loss of functionality by
+        ///* prohibiting the use of this vtab from persistent triggers and views.
         unreachable!();
     }
 }
 
+/// Forward references to the various virtual table methods implemented
+///* in this file.
 extern "C" fn csvtab_create(db: *mut Sqlite3, p_aux: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab: *mut *mut Sqlite3Vtab,
     pz_err: *mut *mut i8) -> i32 {
     return csvtab_connect(db, p_aux, argc, argv, pp_vtab, pz_err);
 }
 
+///* Only a forward full table scan is supported.  xBestIndex is mostly
+///* a no-op.  If CSVTEST_FIDX is set, then the presence of equality
+///* constraints lowers the estimated cost, which is fiction, but is useful
+///* for testing certain kinds of virtual table behavior.
 extern "C" fn csvtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info: *mut Sqlite3IndexInfo) -> i32 {
     unsafe { (*p_idx_info).estimated_cost = 1000000 as f64 };
     return 0;
 }
 
+/// A cursor for the CSV virtual table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CsvCursor {
@@ -1038,6 +1141,7 @@ struct CsvCursor {
     i_rowid: Sqlite3Int64,
 }
 
+/// Transfer error message text from a reader into a CsvTable
 extern "C" fn csv_xfer_error(p_tab_1: &mut CsvTable, p_rdr_1: &mut CsvReader)
     -> () {
     unsafe { sqlite3_free((*p_tab_1).base.z_err_msg as *mut ()) };
@@ -1048,6 +1152,7 @@ extern "C" fn csv_xfer_error(p_tab_1: &mut CsvTable, p_rdr_1: &mut CsvReader)
         };
 }
 
+///* Constructor for a new CsvTable cursor object.
 extern "C" fn csvtab_open(p: *mut Sqlite3Vtab,
     pp_cursor: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut CsvTable = p as *mut CsvTable;
@@ -1092,6 +1197,7 @@ extern "C" fn csvtab_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset the current row content held by a CsvCursor.
 extern "C" fn csvtab_cursor_row_reset(p_cur_1: &mut CsvCursor) -> () {
     let p_tab: *const CsvTable =
         (*p_cur_1).base.p_vtab as *mut CsvTable as *const CsvTable;
@@ -1118,6 +1224,7 @@ extern "C" fn csvtab_cursor_row_reset(p_cur_1: &mut CsvCursor) -> () {
     }
 }
 
+///* Destructor for a CsvCursor.
 extern "C" fn csvtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CsvCursor = cur as *mut CsvCursor;
     csvtab_cursor_row_reset(unsafe { &mut *p_cur });
@@ -1126,6 +1233,8 @@ extern "C" fn csvtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Advance a CsvCursor to its next row of input.
+///* Set the EOF marker if we reach the end of input.
 extern "C" fn csvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CsvCursor = cur as *mut CsvCursor;
     let p_tab: *mut CsvTable = unsafe { (*cur).p_vtab } as *mut CsvTable;
@@ -1202,6 +1311,8 @@ extern "C" fn csvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Only a full table scan is supported.  So xFilter simply rewinds to
+///* the beginning.
 extern "C" fn csvtab_filter(p_vtab_cursor: *mut Sqlite3VtabCursor,
     idx_num: i32, idx_str: *const i8, argc: i32, argv: *mut *mut Sqlite3Value)
     -> i32 {
@@ -1248,11 +1359,15 @@ extern "C" fn csvtab_filter(p_vtab_cursor: *mut Sqlite3VtabCursor,
     return csvtab_next(p_vtab_cursor);
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn csvtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
     return (unsafe { (*p_cur).i_rowid } < 0 as i64) as i32;
 }
 
+///* Return values of columns for the row at which the CsvCursor
+///* is currently pointing.
 extern "C" fn csvtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
@@ -1275,6 +1390,7 @@ extern "C" fn csvtab_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.
 extern "C" fn csvtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid: *mut Sqlite3Int64) -> i32 {
     let p_cur: *const CsvCursor = cur as *mut CsvCursor as *const CsvCursor;
@@ -1311,6 +1427,10 @@ static mut csv_module: Sqlite3Module =
         x_integrity: None,
     };
 
+/// 
+///* This routine is called when the extension is loaded.  The new
+///* CSV virtual table module is registered with the calling database
+///* connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_csv_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {

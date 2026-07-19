@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -394,6 +409,11 @@ impl Parse {
     }
 }
 
+///* Before a virtual table xCreate() or xConnect() method is invoked, the
+///* sqlite3.pVtabCtx member variable is set to point to an instance of
+///* this struct allocated on the stack. It is used by the implementation of
+///* the sqlite3_declare_vtab() and sqlite3_vtab_config() APIs, both of which
+///* are invoked only from within xCreate and xConnect methods.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VtabCtx {
@@ -403,17 +423,26 @@ struct VtabCtx {
     b_declared: i32,
 }
 
+///* Erase the eponymous virtual table instance associated with
+///* virtual table module pMod, if it exists.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_eponymous_table_clear(db: *mut Sqlite3,
     p_mod_1: &mut Module) -> () {
     let p_tab: *mut Table = (*p_mod_1).p_epo_tab;
     if p_tab != core::ptr::null_mut() {
+
+        /// Mark the table as Ephemeral prior to deleting it, so that the
+        ///* sqlite3DeleteTable() routine will know that it is not stored in
+        ///* the schema.
         unsafe { (*p_tab).tab_flags |= 16384 as u32 };
         unsafe { sqlite3_delete_table(db, p_tab) };
         (*p_mod_1).p_epo_tab = core::ptr::null_mut();
     }
 }
 
+///* Decrement the reference count on a Module object.  Destroy the
+///* module when the reference count reaches zero.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_module_unref(db: *mut Sqlite3,
     p_mod_1: *mut Module) -> () {
@@ -437,6 +466,12 @@ pub extern "C" fn sqlite3_vtab_module_unref(db: *mut Sqlite3,
     }
 }
 
+///* Construct and install a Module object for a virtual table.  When this
+///* routine is called, it is guaranteed that all appropriate locks are held
+///* and the module is not already part of the connection.
+///*
+///* If there already exists a module with zName, replace it with the new one.
+///* If pModule==0, then delete the module zName if it exists.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_create_module(db: *mut Sqlite3,
     z_name_1: *const i8, p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
@@ -490,6 +525,9 @@ pub extern "C" fn sqlite3_vtab_create_module(db: *mut Sqlite3,
     return p_mod;
 }
 
+///* The actual function that does the work of creating a new module.
+///* This function implements the sqlite3_create_module() and
+///* sqlite3_create_module_v2() interfaces.
 extern "C" fn create_module(db: *mut Sqlite3, z_name_1: *const i8,
     p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
     x_destroy_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
@@ -508,12 +546,43 @@ extern "C" fn create_module(db: *mut Sqlite3, z_name_1: *const i8,
     return rc;
 }
 
+///* CAPI3REF: Register A Virtual Table Implementation
+///* METHOD: sqlite3
+///*
+///* ^These routines are used to register a new [virtual table module] name.
+///* ^Module names must be registered before
+///* creating a new [virtual table] using the module and before using a
+///* preexisting [virtual table] for the module.
+///*
+///* ^The module name is registered on the [database connection] specified
+///* by the first parameter.  ^The name of the module is given by the
+///* second parameter.  ^The third parameter is a pointer to
+///* the implementation of the [virtual table module].   ^The fourth
+///* parameter is an arbitrary client data pointer that is passed through
+///* into the [xCreate] and [xConnect] methods of the virtual table module
+///* when a new virtual table is being created or reinitialized.
+///*
+///* ^The sqlite3_create_module_v2() interface has a fifth parameter which
+///* is a pointer to a destructor for the pClientData.  ^SQLite will
+///* invoke the destructor function (if it is not NULL) when SQLite
+///* no longer needs the pClientData pointer.  ^The destructor will also
+///* be invoked if the call to sqlite3_create_module_v2() fails.
+///* ^The sqlite3_create_module()
+///* interface is equivalent to sqlite3_create_module_v2() with a NULL
+///* destructor.
+///*
+///* ^If the third parameter (the pointer to the sqlite3_module object) is
+///* NULL then no new module is created and any existing modules with the
+///* same name are dropped.
+///*
+///* See also: [sqlite3_drop_modules()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_module(db: *mut Sqlite3, z_name_1: *const i8,
     p_module_1: *const Sqlite3Module, p_aux_1: *mut ()) -> i32 {
     return create_module(db, z_name_1, p_module_1, p_aux_1, None);
 }
 
+///* External API function used to create a new virtual-table module.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_module_v2(db: *mut Sqlite3,
     z_name_1: *const i8, p_module_1: *const Sqlite3Module, p_aux_1: *mut (),
@@ -521,6 +590,16 @@ pub extern "C" fn sqlite3_create_module_v2(db: *mut Sqlite3,
     return create_module(db, z_name_1, p_module_1, p_aux_1, x_destroy_1);
 }
 
+///* CAPI3REF: Remove Unnecessary Virtual Table Implementations
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_drop_modules(D,L) interface removes all virtual
+///* table modules from database connection D except those named on list L.
+///* The L parameter must be either NULL or a pointer to an array of pointers
+///* to strings where the array is terminated by a single NULL pointer.
+///* ^If the L parameter is NULL, then all virtual table modules are removed.
+///*
+///* See also: [sqlite3_create_module()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_drop_modules(db: *mut Sqlite3,
     az_names_1: *const *const i8) -> i32 {
@@ -568,7 +647,14 @@ pub extern "C" fn sqlite3_drop_modules(db: *mut Sqlite3,
     return 0;
 }
 
+///* CAPI3REF: Declare The Schema Of A Virtual Table
+///*
+///* ^The [xCreate] and [xConnect] methods of a
+///* [virtual table module] call this interface
+///* to declare the format (the names and datatypes of the columns) of
+///* the virtual tables they implement.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
     z_create_table_1: *const i8) -> i32 {
     unsafe {
@@ -579,7 +665,11 @@ pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
         let mut init_busy: i32 = 0;
         let mut i: i32 = 0;
         let mut z: *const u8 = core::ptr::null();
-        z = z_create_table_1 as *const u8;
+
+        /// Verify that the first two keywords in the CREATE TABLE statement
+        ///* really are "CREATE" and "TABLE".  If this is not the case, then
+        ///* sqlite3_declare_vtab() is being misused.
+        (z = z_create_table_1 as *const u8);
         {
             i = 0;
             '__b2: loop {
@@ -626,6 +716,10 @@ pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
         unsafe { sqlite3_parse_object_init(&mut s_parse, db) };
         s_parse.e_parse_mode = 1 as u8;
         s_parse.set_disable_triggers(1 as Bft as u32);
+
+        /// We should never be able to reach this point while loading the
+        ///* schema.  Nevertheless, defend against that (turn off db->init.busy)
+        ///* in case a bug arises.
         { let _ = 0; };
         init_busy = unsafe { (*db).init.busy } as i32;
         unsafe { (*db).init.busy = 0 as u8 };
@@ -672,7 +766,10 @@ pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
                         unsafe {
                                     (*unsafe { sqlite3_primary_key_index(p_new) }).n_key_col
                                 } as i32 != 1 {
-                    rc = 1;
+
+                    /// WITHOUT ROWID virtual tables must either be read-only (xUpdate==0)
+                    ///* or else must have a single-column PRIMARY KEY
+                    (rc = 1);
                 }
                 p_idx = unsafe { (*p_new).p_index };
                 if !(p_idx).is_null() {
@@ -708,6 +805,22 @@ pub extern "C" fn sqlite3_declare_vtab(db: *mut Sqlite3,
     }
 }
 
+///* CAPI3REF: Virtual Table Interface Configuration
+///*
+///* This function may be called by either the [xConnect] or [xCreate] method
+///* of a [virtual table] implementation to configure
+///* various facets of the virtual table interface.
+///*
+///* If this interface is invoked outside the context of an xConnect or
+///* xCreate virtual table method then the behavior is undefined.
+///*
+///* In the call sqlite3_vtab_config(D,C,...) the D parameter is the
+///* [database connection] in which the virtual table is being created and
+///* which is passed in as the first argument to the [xConnect] or [xCreate]
+///* method that is invoking sqlite3_vtab_config().  The C parameter is one
+///* of the [virtual table configuration options].  The presence and meaning
+///* of parameters after C depend on which [virtual table configuration option]
+///* is used.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_vtab_config(db: *mut Sqlite3, op: i32,
     mut __va0: ...) -> i32 {
@@ -814,6 +927,14 @@ pub unsafe extern "C" fn sqlite3_vtab_config(db: *mut Sqlite3, op: i32,
     return rc;
 }
 
+///* CAPI3REF: Determine The Virtual Table Conflict Policy
+///*
+///* This function may only be called from within a call to the [xUpdate] method
+///* of a [virtual table] implementation for an INSERT or UPDATE operation. ^The
+///* value returned is one of [SQLITE_ROLLBACK], [SQLITE_IGNORE], [SQLITE_FAIL],
+///* [SQLITE_ABORT], or [SQLITE_REPLACE], according to the [ON CONFLICT] mode
+///* of the SQL statement that triggered the call to the [xUpdate] method of the
+///* [virtual table].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_on_conflict(db: &Sqlite3) -> i32 {
     { let _ = 0; };
@@ -822,6 +943,12 @@ pub extern "C" fn sqlite3_vtab_on_conflict(db: &Sqlite3) -> i32 {
     return a_map[((*db).vtab_on_conflict as i32 - 1) as usize] as i32;
 }
 
+///* Table p is a virtual table. This function moves all elements in the
+///* p->u.vtab.p list to the sqlite3.pDisconnect lists of their associated
+///* database connections to be disconnected at the next opportunity.
+///* Except, if argument db is not NULL, then the entry associated with
+///* connection db is left in the p->u.vtab.p list.
+#[allow(unused_doc_comments)]
 extern "C" fn vtab_disconnect_all(db: *mut Sqlite3, p: &mut Table)
     -> *mut VTable {
     unsafe {
@@ -830,6 +957,12 @@ extern "C" fn vtab_disconnect_all(db: *mut Sqlite3, p: &mut Table)
         { let _ = 0; };
         p_v_table = (*p).u.vtab.p;
         (*p).u.vtab.p = core::ptr::null_mut();
+
+        /// Assert that the mutex (if any) associated with the BtShared database
+        ///* that contains table p is held by the caller. See header comments
+        ///* above function sqlite3VtabUnlockList() for an explanation of why
+        ///* this makes it safe to access the sqlite3.pDisconnect list of any
+        ///* database connection that may have an entry in the p->u.vtab.p list.
         { let _ = 0; };
         while !(p_v_table).is_null() {
             let db2: *mut Sqlite3 = unsafe { (*p_v_table).db };
@@ -852,6 +985,18 @@ extern "C" fn vtab_disconnect_all(db: *mut Sqlite3, p: &mut Table)
     }
 }
 
+///* Clear any and all virtual-table information from the Table record.
+///* This routine is called, for example, just before deleting the Table
+///* record.
+///*
+///* Since it is a virtual-table, the Table structure contains a pointer
+///* to the head of a linked list of VTable structures. Each VTable
+///* structure is associated with a single sqlite3* user of the schema.
+///* The reference count of the VTable structure associated with database
+///* connection db is decremented immediately (which may lead to the
+///* structure being xDisconnected and free). Any other VTable structures
+///* in the list are moved to the sqlite3.pDisconnect list of the associated
+///* database connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_clear(db: *mut Sqlite3, p: *mut Table) -> () {
     unsafe {
@@ -886,6 +1031,8 @@ pub extern "C" fn sqlite3_vtab_clear(db: *mut Sqlite3, p: *mut Table) -> () {
     }
 }
 
+///* Decrement the ref-count on a virtual table object. When the ref-count
+///* reaches zero, call the xDisconnect() method to delete the object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_unlock(p_v_tab_1: *mut VTable) -> () {
     unsafe {
@@ -915,6 +1062,12 @@ pub extern "C" fn sqlite3_vtab_unlock(p_v_tab_1: *mut VTable) -> () {
     }
 }
 
+///* Table *p is a virtual table. This function removes the VTable object
+///* for table *p associated with database connection db from the linked
+///* list in p->pVTab. It also decrements the VTable ref count. This is
+///* used when closing database connection db to free all of its VTable
+///* objects without disturbing the rest of the Schema object (which may
+///* be being used by other shared-cache connections).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_disconnect(db: *mut Sqlite3, p: &mut Table)
     -> () {
@@ -942,6 +1095,11 @@ pub extern "C" fn sqlite3_vtab_disconnect(db: *mut Sqlite3, p: &mut Table)
     }
 }
 
+///* Invoke the xSync method of all virtual tables in the sqlite3.aVTrans
+///* array. Return the error code for the first error that occurs, or
+///* SQLITE_OK if all xSync operations are successful.
+///*
+///* If an error message is available, leave it in p->zErrMsg.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_sync(db: &mut Sqlite3, p: *mut Vdbe) -> i32 {
     unsafe {
@@ -979,6 +1137,12 @@ pub extern "C" fn sqlite3_vtab_sync(db: &mut Sqlite3, p: *mut Vdbe) -> i32 {
     }
 }
 
+///* This function invokes either the xRollback or xCommit method
+///* of each of the virtual tables in the sqlite3.aVTrans array. The method
+///* called is identified by the second argument, "offset", which is
+///* the offset of the method to call in the sqlite3_module structure.
+///*
+///* The array is cleared after invoking the callbacks.
 extern "C" fn call_finaliser(db: *mut Sqlite3, offset: i32) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -1024,6 +1188,8 @@ extern "C" fn call_finaliser(db: *mut Sqlite3, offset: i32) -> () {
     }
 }
 
+///* Invoke the xRollback method of all virtual tables in the
+///* sqlite3.aVTrans array. Then clear the array itself.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_rollback(db: *mut Sqlite3) -> i32 {
     call_finaliser(db,
@@ -1031,17 +1197,43 @@ pub extern "C" fn sqlite3_vtab_rollback(db: *mut Sqlite3) -> i32 {
     return 0;
 }
 
+///* Invoke the xCommit method of all virtual tables in the
+///* sqlite3.aVTrans array. Then clear the array itself.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_commit(db: *mut Sqlite3) -> i32 {
     call_finaliser(db, core::mem::offset_of!(Sqlite3Module, x_commit) as i32);
     return 0;
 }
 
+///* Lock the virtual table so that it cannot be disconnected.
+///* Locks nest.  Every lock should have a corresponding unlock.
+///* If an unlock is omitted, resources leaks will occur.
+///*
+///* If a disconnect is attempted while a virtual table is locked,
+///* the disconnect is deferred until all locks have been removed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_lock(p_v_tab_1: &mut VTable) -> () {
     { let __p = &mut (*p_v_tab_1).n_ref; let __t = *__p; *__p += 1; __t };
 }
 
+///* Disconnect all the virtual table objects in the sqlite3.pDisconnect list.
+///*
+///* This function may only be called when the mutexes associated with all
+///* shared b-tree databases opened using connection db are held by the
+///* caller. This is done to protect the sqlite3.pDisconnect list. The
+///* sqlite3.pDisconnect list is accessed only as follows:
+///*
+///*   1) By this function. In this case, all BtShared mutexes and the mutex
+///*      associated with the database handle itself must be held.
+///*
+///*   2) By function vtabDisconnectAll(), when it adds a VTable entry to
+///*      the sqlite3.pDisconnect list. In this case either the BtShared mutex
+///*      associated with the database the virtual table is stored in is held
+///*      or, if the virtual table is stored in a non-sharable database, then
+///*      the database handle mutex is held.
+///*
+///* As a result, a sqlite3.pDisconnect cannot be accessed simultaneously
+///* by multiple threads. It is thread-safe.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_unlock_list(db: &mut Sqlite3) -> () {
     let mut p: *mut VTable = (*db).p_disconnect;
@@ -1061,6 +1253,19 @@ pub extern "C" fn sqlite3_vtab_unlock_list(db: &mut Sqlite3) -> () {
     }
 }
 
+///* Invoke either the xSavepoint, xRollbackTo or xRelease method of all
+///* virtual tables that currently have an open transaction. Pass iSavepoint
+///* as the second argument to the virtual table method invoked.
+///*
+///* If op is SAVEPOINT_BEGIN, the xSavepoint method is invoked. If it is
+///* SAVEPOINT_ROLLBACK, the xRollbackTo method. Otherwise, if op is
+///* SAVEPOINT_RELEASE, then the xRelease method of each virtual table with
+///* an open transaction is invoked.
+///*
+///* If any virtual table method returns an error code other than SQLITE_OK,
+///* processing is abandoned and the error returned to the caller of this
+///* function immediately. If all calls to virtual table methods are successful,
+///* SQLITE_OK is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_savepoint(db: &mut Sqlite3, op: i32,
     i_savepoint_1: i32) -> i32 {
@@ -1119,6 +1324,9 @@ pub extern "C" fn sqlite3_vtab_savepoint(db: &mut Sqlite3, op: i32,
     }
 }
 
+///* pTab is a pointer to a Table structure representing a virtual-table.
+///* Return a pointer to the VTable object used by connection db to access
+///* this virtual-table, if one has been created, or NULL otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_v_table(db: *mut Sqlite3, p_tab_1: &Table)
     -> *mut VTable {
@@ -1139,6 +1347,10 @@ pub extern "C" fn sqlite3_get_v_table(db: *mut Sqlite3, p_tab_1: &Table)
     }
 }
 
+///* Add a new module argument to pTable->u.vtab.azArg[].
+///* The string is not copied - the pointer is stored.  The
+///* string will be freed automatically when the table is
+///* deleted.
 extern "C" fn add_module_argument(p_parse_1: *mut Parse,
     p_table_1: &mut Table, z_arg_1: *mut i8) -> () {
     unsafe {
@@ -1182,6 +1394,10 @@ extern "C" fn add_module_argument(p_parse_1: *mut Parse,
     }
 }
 
+///* Invoke a virtual table constructor (either xCreate or xConnect). The
+///* pointer to the function to invoke is passed as the fourth parameter
+///* to this procedure.
+#[allow(unused_doc_comments)]
 extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
     p_mod_1: *mut Module,
     x_construct_1:
@@ -1247,6 +1463,8 @@ extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
                     (*unsafe { (*db).a_db.offset(i_db as isize) }).z_db_s_name
                 }
         };
+
+        /// Invoke the virtual table constructor
         { let _ = 0; };
         { let _ = 0; };
         s_ctx.p_tab = p_tab_1;
@@ -1289,6 +1507,9 @@ extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
             }
             unsafe { sqlite3_db_free(db, p_v_table as *mut ()) };
         } else if !(unsafe { (*p_v_table).p_vtab }).is_null() {
+
+            /// Justification of ALWAYS():  A correct vtab constructor must allocate
+            ///* the sqlite3_vtab object if successful.
             unsafe {
                 memset(unsafe { (*p_v_table).p_vtab } as *mut (), 0,
                     core::mem::size_of::<Sqlite3Vtab>() as u64)
@@ -1315,6 +1536,12 @@ extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
             } else {
                 let mut i_col: i32 = 0;
                 let mut ooo_hidden: u16 = 0 as u16;
+
+                /// If everything went according to plan, link the new VTable structure
+                ///* into the linked list headed by pTab->u.vtab.p. Then loop through the
+                ///* columns of the table to see if any of them contain the token "hidden".
+                ///* If so, set the Column COLFLAG_HIDDEN flag and remove the token from
+                ///* the type string.
                 unsafe {
                     (*p_v_table).p_next = unsafe { (*p_tab_1).u.vtab.p }
                 };
@@ -1410,6 +1637,19 @@ extern "C" fn vtab_call_constructor(db: *mut Sqlite3, p_tab_1: *mut Table,
     }
 }
 
+///* Check to see if virtual table module pMod can be have an eponymous
+///* virtual table instance.  If it can, create one if one does not already
+///* exist. Return non-zero if either the eponymous virtual table instance
+///* exists when this routine returns or if an attempt to create it failed
+///* and an error message was left in pParse.
+///*
+///* An eponymous virtual table instance is one that is named after its
+///* module, and more importantly, does not require a CREATE VIRTUAL TABLE
+///* statement in order to come into existence.  Eponymous virtual table
+///* instances always exist.  They cannot be DROP-ed.
+///*
+///* Any virtual table module for which xConnect and xCreate are the same
+///* method can have an eponymous virtual table instance.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_eponymous_table_init(p_parse_1: *mut Parse,
     p_mod_1: *mut Module) -> i32 {
@@ -1496,6 +1736,10 @@ pub extern "C" fn sqlite3_vtab_eponymous_table_init(p_parse_1: *mut Parse,
     }
 }
 
+///* Make sure virtual table pTab is contained in the pParse->apVirtualLock[]
+///* array so that an OP_VBegin will get generated for it.  Add pTab to the
+///* array if it is missing.  If pTab is already in the array, this routine
+///* is a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_make_writable(p_parse_1: *mut Parse,
     p_tab_1: *mut Table) -> () {
@@ -1546,13 +1790,20 @@ pub extern "C" fn sqlite3_vtab_make_writable(p_parse_1: *mut Parse,
     } else { unsafe { sqlite3_oom_fault(unsafe { (*p_toplevel).db }) }; }
 }
 
+///* The parser calls this routine when it first sees a CREATE VIRTUAL TABLE
+///* statement.  The module name has been parsed, but the optional list
+///* of parameters that follow the module name are still pending.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_begin_parse(p_parse_1: *mut Parse,
     p_name1_1: *mut Token, p_name2_1: *mut Token,
     p_module_name_1: *const Token, if_not_exists_1: i32) -> () {
     unsafe {
         let mut p_table: *mut Table = core::ptr::null_mut();
+        /// The new virtual table
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+
+        /// Database connection
         unsafe {
             sqlite3_start_table(p_parse_1, p_name1_1, p_name2_1, 0, 0, 1,
                 if_not_exists_1)
@@ -1592,6 +1843,8 @@ pub extern "C" fn sqlite3_vtab_begin_parse(p_parse_1: *mut Parse,
                     sqlite3_schema_to_index(db, unsafe { (*p_table).p_schema })
                 };
             { let _ = 0; };
+
+            /// The database the table is being created in
             unsafe {
                 sqlite3_auth_check(p_parse_1, 29,
                     unsafe { (*p_table).z_name } as *const i8,
@@ -1608,6 +1861,9 @@ pub extern "C" fn sqlite3_vtab_begin_parse(p_parse_1: *mut Parse,
     }
 }
 
+///* This routine takes the module argument that has been accumulating
+///* in pParse->zArg[] and appends it to the list of arguments on the
+///* virtual table currently under construction in pParse->pTable.
 extern "C" fn add_argument_to_vtab(p_parse_1: *mut Parse) -> () {
     unsafe {
         if !(unsafe { (*p_parse_1).s_arg.z }).is_null() &&
@@ -1622,11 +1878,15 @@ extern "C" fn add_argument_to_vtab(p_parse_1: *mut Parse) -> () {
     }
 }
 
+///* The parser calls this routine after the CREATE VIRTUAL TABLE statement
+///* has been completely parsed.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
     p_end_1: *const Token) -> () {
     unsafe {
         let p_tab: *mut Table = unsafe { (*p_parse_1).p_new_table };
+        /// The table being constructed
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
         if p_tab == core::ptr::null_mut() { return; }
         { let _ = 0; };
@@ -1658,10 +1918,18 @@ pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
                         c"CREATE VIRTUAL TABLE %T".as_ptr() as *mut i8 as *const i8,
                         unsafe { &raw mut (*p_parse_1).s_name_token } as *mut Token)
                 };
-            i_db =
+
+            /// A slot for the record has already been allocated in the
+            ///* schema table.  We just need to update that slot with all
+            ///* the information we've collected.
+            ///*
+            ///* The VM register number pParse->u1.cr.regRowid holds the rowid of an
+            ///* entry in the sqlite_schema table that was created for this vtab
+            ///* by sqlite3StartTable().
+            (i_db =
                 unsafe {
                     sqlite3_schema_to_index(db, unsafe { (*p_tab).p_schema })
-                };
+                });
             { let _ = 0; };
             unsafe {
                 sqlite3_nested_parse(p_parse_1,
@@ -1697,6 +1965,8 @@ pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
             };
             unsafe { sqlite3_vdbe_add_op2(v, 173, i_db, i_reg) };
         } else {
+            /// If we are rereading the sqlite_schema table create the in-memory
+            ///* record of the table.
             let mut p_old: *const Table = core::ptr::null();
             let p_schema: *mut Schema = unsafe { (*p_tab).p_schema };
             let z_name: *const i8 = unsafe { (*p_tab).z_name } as *const i8;
@@ -1710,6 +1980,8 @@ pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
             if !(p_old).is_null() {
                 unsafe { sqlite3_oom_fault(db) };
                 { let _ = 0; };
+
+                /// Malloc must have failed inside HashInsert()
                 return;
             }
             unsafe { (*p_parse_1).p_new_table = core::ptr::null_mut() };
@@ -1717,6 +1989,8 @@ pub extern "C" fn sqlite3_vtab_finish_parse(p_parse_1: *mut Parse,
     }
 }
 
+///* The parser calls this routine when it sees the first token
+///* of an argument to the module name in a CREATE VIRTUAL TABLE statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_arg_init(p_parse_1: *mut Parse) -> () {
     unsafe {
@@ -1726,6 +2000,8 @@ pub extern "C" fn sqlite3_vtab_arg_init(p_parse_1: *mut Parse) -> () {
     }
 }
 
+///* The parser calls this routine for each token after the first token
+///* in an argument to the module name in a CREATE VIRTUAL TABLE statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_arg_extend(p_parse_1: &mut Parse, p: &Token)
     -> () {
@@ -1749,6 +2025,8 @@ pub extern "C" fn sqlite3_vtab_arg_extend(p_parse_1: &mut Parse, p: &Token)
     }
 }
 
+///* Grow the db->aVTrans[] array so that there is room for at least one
+///* more v-table. Return SQLITE_NOMEM if a malloc fails, or SQLITE_OK otherwise.
 extern "C" fn grow_v_trans(db: *mut Sqlite3) -> i32 {
     let array_incr: i32 = 5 as i32;
     if unsafe { (*db).n_v_trans } % array_incr as i32 == 0 {
@@ -1776,7 +2054,12 @@ extern "C" fn grow_v_trans(db: *mut Sqlite3) -> i32 {
     return 0;
 }
 
+///* Add the virtual table pVTab to the array sqlite3.aVTrans[]. Space should
+///* have already been reserved using growVTrans().
+#[allow(unused_doc_comments)]
 extern "C" fn add_to_v_trans(db: &mut Sqlite3, p_v_tab_1: *mut VTable) -> () {
+
+    /// Add pVtab to the end of sqlite3.aVTrans
     unsafe {
         *(*db).a_v_trans.offset({
                             let __p = &mut (*db).n_v_trans;
@@ -1788,7 +2071,14 @@ extern "C" fn add_to_v_trans(db: &mut Sqlite3, p_v_tab_1: *mut VTable) -> () {
     sqlite3_vtab_lock(unsafe { &mut *p_v_tab_1 });
 }
 
+///* This function is invoked by the vdbe to call the xCreate method
+///* of the virtual table named zTab in database iDb.
+///*
+///* If an error occurs, *pzErr is set to point to an English language
+///* description of the error and an SQLITE_XXX error code is returned.
+///* In this case the caller must call sqlite3DbFree(db, ) on *pzErr.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_call_create(db: *mut Sqlite3, i_db_1: i32,
     z_tab_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1804,9 +2094,11 @@ pub extern "C" fn sqlite3_vtab_call_create(db: *mut Sqlite3, i_db_1: i32,
                         } as *const i8)
             };
         { let _ = 0; };
-        z_mod =
+
+        /// Locate the required virtual table module
+        (z_mod =
             unsafe { *unsafe { (*p_tab).u.vtab.az_arg.offset(0 as isize) } }
-                as *const i8;
+                as *const i8);
         p_mod =
             unsafe {
                     sqlite3_hash_find(unsafe { &raw mut (*db).a_module } as
@@ -1846,7 +2138,13 @@ pub extern "C" fn sqlite3_vtab_call_create(db: *mut Sqlite3, i_db_1: i32,
     }
 }
 
+///* This function is invoked by the parser to call the xConnect() method
+///* of the virtual table pTab. If an error occurs, an error code is returned
+///* and an error left in pParse.
+///*
+///* This call is a no-op if table pTab is not a virtual table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_call_connect(p_parse_1: *mut Parse,
     p_tab_1: *mut Table) -> i32 {
     unsafe {
@@ -1859,9 +2157,11 @@ pub extern "C" fn sqlite3_vtab_call_connect(p_parse_1: *mut Parse,
         if !(sqlite3_get_v_table(db, unsafe { &*p_tab_1 })).is_null() {
             return 0;
         }
-        z_mod =
+
+        /// Locate the required virtual table module
+        (z_mod =
             unsafe { *unsafe { (*p_tab_1).u.vtab.az_arg.offset(0 as isize) } }
-                as *const i8;
+                as *const i8);
         p_mod =
             unsafe {
                     sqlite3_hash_find(unsafe { &raw mut (*db).a_module } as
@@ -1899,6 +2199,11 @@ pub extern "C" fn sqlite3_vtab_call_connect(p_parse_1: *mut Parse,
     }
 }
 
+///* This function is invoked by the vdbe to call the xDestroy method
+///* of the virtual table named zTab in database iDb. This occurs
+///* when a DROP TABLE is mentioned.
+///*
+///* This call is a no-op if zTab is not a virtual table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_call_destroy(db: *mut Sqlite3, i_db_1: i32,
     z_tab_1: *const i8) -> i32 {
@@ -1964,7 +2269,14 @@ pub extern "C" fn sqlite3_vtab_call_destroy(db: *mut Sqlite3, i_db_1: i32,
     }
 }
 
+///* If the virtual table pVtab supports the transaction interface
+///* (xBegin/xRollback/xCommit and optionally xSync) and a transaction is
+///* not currently open, invoke the xBegin method now.
+///*
+///* If the xBegin call is successful, place the sqlite3_vtab pointer
+///* in the sqlite3.aVTrans array.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_begin(db: *mut Sqlite3, p_v_tab_1: *mut VTable)
     -> i32 {
     unsafe {
@@ -1992,7 +2304,10 @@ pub extern "C" fn sqlite3_vtab_begin(db: *mut Sqlite3, p_v_tab_1: *mut VTable)
                     { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                 }
             }
-            rc = grow_v_trans(db);
+
+            /// Invoke the xBegin method. If successful, add the vtab to the
+            ///* sqlite3.aVTrans[] array.
+            (rc = grow_v_trans(db));
             if rc == 0 {
                 rc =
                     unsafe {
@@ -2021,7 +2336,19 @@ pub extern "C" fn sqlite3_vtab_begin(db: *mut Sqlite3, p_v_tab_1: *mut VTable)
     }
 }
 
+///* The first parameter (pDef) is a function implementation.  The
+///* second parameter (pExpr) is the first argument to this function.
+///* If pExpr is a column in a virtual table, then let the virtual
+///* table implementation have an opportunity to overload the function.
+///*
+///* This routine is used to allow virtual table implementations to
+///* overload MATCH, LIKE, GLOB, and REGEXP operators.
+///*
+///* Return either the pDef argument (indicating no change) or a
+///* new FuncDef structure that is marked as ephemeral using the
+///* SQLITE_FUNC_EPHEM flag.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_overload_function(db: *mut Sqlite3,
     p_def_1: *mut FuncDef, n_arg_1: i32, p_expr_1: *const Expr)
     -> *mut FuncDef {
@@ -2056,21 +2383,31 @@ pub extern "C" fn sqlite3_vtab_overload_function(db: *mut Sqlite3,
         if !unsafe { (*p_mod).x_find_function.is_some() } as i32 != 0 {
             return p_def_1;
         }
-        rc =
+
+        /// Call the xFindFunction method on the virtual table implementation
+        ///* to see if the implementation wants to overload this function.
+        ///*
+        ///* Though undocumented, we have historically always invoked xFindFunction
+        ///* with an all lower-case function name.  Continue in this tradition to
+        ///* avoid any chance of an incompatibility.
+        (rc =
             unsafe {
                 (unsafe {
                         (*p_mod).x_find_function.unwrap()
                     })(p_vtab, n_arg_1, unsafe { (*p_def_1).z_name },
                     &mut x_s_func, &mut p_arg)
-            };
+            });
         if rc == 0 { return p_def_1; }
-        p_new =
+
+        /// Create a new ephemeral function definition for the overloaded
+        ///* function
+        (p_new =
             unsafe {
                     sqlite3_db_malloc_zero(db,
                         core::mem::size_of::<FuncDef>() as u64 +
                                 unsafe { sqlite3_strlen30(unsafe { (*p_def_1).z_name }) } as
                                     u64 + 1 as u64)
-                } as *mut FuncDef;
+                } as *mut FuncDef);
         if p_new == core::ptr::null_mut() { return p_def_1; }
         unsafe { *p_new = unsafe { core::ptr::read(p_def_1) } };
         unsafe {

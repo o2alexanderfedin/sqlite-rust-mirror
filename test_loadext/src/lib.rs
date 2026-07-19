@@ -1,13 +1,31 @@
+//!* 2006 June 14
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* Test extension for testing the sqlite3_load_extension() function.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
 
+///* The half() SQL function returns half of its input value.
 extern "C" fn half_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -25,6 +43,7 @@ extern "C" fn half_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL functions to call the sqlite3_status function and return results.
 extern "C" fn status_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {

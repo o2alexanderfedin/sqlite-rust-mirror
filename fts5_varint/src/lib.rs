@@ -1,15 +1,68 @@
+//!* 2015 May 30
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* Routines for varint serialization and deserialization.
+//!* This is a copy of the sqlite3GetVarint32() routine from the SQLite core.
+//!* Except, this version does handle the single byte case that the core
+//!* version depends on being handled before its function is called.
+//! The 1-byte case. Overwhelmingly the most common.
+//! a: p0 (unmasked)
+//! Values between 0 and 127
+//! The 2-byte case
+//! b: p1 (unmasked)
+//! Values between 128 and 16383
+//! The 3-byte case
+//! a: p0<<14 | p2 (unmasked)
+//! Values between 16384 and 2097151
+//! A 32-bit varint is used to store size information in btrees.
+//!* Objects are rarely larger than 2MiB limit of a 3-byte varint.
+//!* A 3-byte varint is sufficient, for example, to record the size
+//!* of a 1048569-byte BLOB or string.
+//!*
+//!* We only unroll the first 1-, 2-, and 3- byte cases.  The very
+//!* rare larger cases can be handled by the slower 64-bit varint
+//!* routine.
+//!* Bitmasks used by sqlite3GetVarint().  These precomputed constants
+//!* are defined here rather than simply putting the constant expressions
+//!* inline in order to work around bugs in the RVT compiler.
+//!*
+//!* SLOT_2_0     A mask for  (0x7f<<14) | 0x7f
+//!*
+//!* SLOT_4_2_0   A mask for  (0x7f<<28) | SLOT_2_0
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Storage, Fts5Table, Fts5Termset, Fts5Token,
+    Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+///* Read a 64-bit variable-length integer from memory starting at p[0].
+///* Return the number of bytes read.  The value is stored in *v.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     -> u8 {
     let mut a: u32 = 0 as u32;
@@ -31,6 +84,8 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
         *v = a as u64;
         return 2 as u8;
     }
+
+    /// Verify that constants are precomputed correctly
     if !(2080895 == 127 << 14 | 127) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"sqlite3Fts5GetVarint".as_ptr() as *const i8,
@@ -64,7 +119,9 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
         *v = a as u64;
         return 3 as u8;
     }
-    a &= 2080895 as u32;
+
+    /// CSE1 from below
+    (a &= 2080895 as u32);
     {
         let __p = &mut p;
         let __t = *__p;
@@ -75,13 +132,24 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
         b &= 2080895 as u32;
-        a = a << 7;
+
+        /// moved CSE1 up */
+        ///    /* a &= (0x7f<<14)|(0x7f);
+        (a = a << 7);
         a |= b;
         *v = a as u64;
         return 4 as u8;
     }
-    b &= 2080895 as u32;
+
+    /// a: p0<<14 | p2 (masked) */
+    ///  /* b: p1<<14 | p3 (unmasked) */
+    ///  /* 1:save off p0<<21 | p1<<14 | p2<<7 | p3 (masked) */
+    ///  /* moved CSE1 up */
+    ///  /* a &= (0x7f<<14)|(0x7f);
+    (b &= 2080895 as u32);
     s = a;
+
+    /// s: p0<<14 | p2 (masked)
     {
         let __p = &mut p;
         let __t = *__p;
@@ -91,14 +159,22 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     a = a << 14;
     a |= unsafe { *p } as u32;
     if (a & 128 as u32 == 0) as i32 != 0 {
-        b = b << 7;
+
+        /// we can skip these cause they were (effectively) done above in calc'ing s */
+        ///    /* a &= (0x7f<<28)|(0x7f<<14)|(0x7f); */
+        ///    /* b &= (0x7f<<14)|(0x7f);
+        (b = b << 7);
         a |= b;
         s = s >> 18;
         *v = (s as u64) << 32 | a as u64;
         return 5 as u8;
     }
-    s = s << 7;
+
+    /// 2:save off p0<<21 | p1<<14 | p2<<7 | p3 (masked)
+    (s = s << 7);
     s |= b;
+
+    /// s: p0<<21 | p1<<14 | p2<<7 | p3 (masked)
     {
         let __p = &mut p;
         let __t = *__p;
@@ -108,7 +184,10 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     b = b << 14;
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
-        a &= 2080895 as u32;
+
+        /// we can skip this cause it was (effectively) done above in calc'ing s */
+        ///    /* b &= (0x7f<<28)|(0x7f<<14)|(0x7f);
+        (a &= 2080895 as u32);
         a = a << 7;
         a |= b;
         s = s >> 18;
@@ -132,7 +211,9 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
         *v = (s as u64) << 32 | a as u64;
         return 7 as u8;
     }
-    a &= 2080895 as u32;
+
+    /// CSE2 from below
+    (a &= 2080895 as u32);
     {
         let __p = &mut p;
         let __t = *__p;
@@ -143,7 +224,10 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
         b &= 4028612735u32;
-        a = a << 7;
+
+        /// moved CSE2 up */
+        ///    /* a &= (0x7f<<14)|(0x7f);
+        (a = a << 7);
         a |= b;
         s = s >> 4;
         *v = (s as u64) << 32 | a as u64;
@@ -157,7 +241,11 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     };
     a = a << 15;
     a |= unsafe { *p } as u32;
-    b &= 2080895 as u32;
+
+    /// a: p4<<29 | p6<<15 | p8 (unmasked)
+    /// moved CSE2 up */
+    ///  /* a &= (0x7f<<29)|(0x7f<<15)|(0xff);
+    (b &= 2080895 as u32);
     b = b << 8;
     a |= b;
     s = s << 4;
@@ -169,13 +257,25 @@ pub extern "C" fn sqlite3_fts5_get_varint(mut p: *const u8, v: &mut u64)
     return 9 as u8;
 }
 
+///***********************************************************************
+///* Interface to code in fts5_varint.c.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_get_varint32(mut p: *const u8, v: &mut u32)
     -> i32 {
     let mut a: u32 = 0 as u32;
     let mut b: u32 = 0 as u32;
-    a = unsafe { *p } as u32;
-    if (a & 128 as u32 == 0) as i32 != 0 { *v = a; return 1; }
+
+    /// The 1-byte case. Overwhelmingly the most common.
+    (a = unsafe { *p } as u32);
+    if (a & 128 as u32 == 0) as i32 != 0 {
+
+        /// Values between 0 and 127
+        (*v = a);
+        return 1;
+    }
+
+    /// The 2-byte case
     {
         let __p = &mut p;
         let __t = *__p;
@@ -184,11 +284,15 @@ pub extern "C" fn sqlite3_fts5_get_varint32(mut p: *const u8, v: &mut u32)
     };
     b = unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
-        a &= 127 as u32;
+
+        /// Values between 128 and 16383
+        (a &= 127 as u32);
         a = a << 7;
         *v = a | b;
         return 2;
     }
+
+    /// The 3-byte case
     {
         let __p = &mut p;
         let __t = *__p;
@@ -198,7 +302,9 @@ pub extern "C" fn sqlite3_fts5_get_varint32(mut p: *const u8, v: &mut u32)
     a = a << 14;
     a |= unsafe { *p } as u32;
     if (a & 128 as u32 == 0) as i32 != 0 {
-        a &= (127 << 14 | 127) as u32;
+
+        /// Values between 16384 and 2097151
+        (a &= (127 << 14 | 127) as u32);
         b &= 127 as u32;
         b = b << 7;
         *v = a | b;
@@ -240,6 +346,14 @@ pub extern "C" fn sqlite3_fts5_get_varint_len(i_val: u32) -> i32 {
     return 5;
 }
 
+///* Write a 64-bit variable-length integer to memory starting at p[0].
+///* The length of data write will be between 1 and 9 bytes.  The number
+///* of bytes written is returned.
+///*
+///* A variable-length integer consists of the lower 7 bits of each byte
+///* for all bytes that have the 8th bit set and one byte with the 8th
+///* bit clear.  Except, if we get to the 9th byte, it stores the full
+///* 8 bits and is the last byte.
 extern "C" fn fts5_put_varint64(p: *mut u8, mut v: u64) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;

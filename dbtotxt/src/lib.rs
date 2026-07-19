@@ -1,5 +1,6 @@
 type DarwinSizeT = u64;
 
+/// Return true if the line is all zeros
 extern "C" fn all_zero(a_line_1: *const u8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -16,27 +17,46 @@ extern "C" fn all_zero(a_line_1: *const u8) -> i32 {
     return (i == 16) as i32;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut pgsz: i32 = 0;
+        /// page size
         let mut for_cli: i32 = 0;
+        /// whether to prepend with .open
         let mut b_sql: i32 = 0;
+        /// Expect and SQL prefix
         let mut sz_file: i64 = 0 as i64;
+        /// Size of the input file in bytes
         let mut in_: *mut FILE = core::ptr::null_mut();
+        /// Input file
         let mut n_sql: i32 = 0;
+        /// Number of bytes of script
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut n_err: i32 = 0;
+        /// Number of errors
         let mut z_input_file: *const i8 = core::ptr::null();
+        /// Name of the input file
         let mut z_base_name: *const i8 = core::ptr::null();
+        /// Base name of the file
         let mut last_page: i32 = 0;
+        /// Last page number shown
         let mut i_page: i32 = 0;
+        /// Current page number
         let mut b_raw: i32 = 0;
+        /// Not actually a database
         let mut a_data: *mut u8 = core::ptr::null_mut();
+        /// All data
         let mut a_line: *mut u8 = core::ptr::null_mut();
+        /// A single line of the file
         let mut a_hdr: *const u8 = core::ptr::null();
+        /// File header
         let mut b_show: [u8; 256] = [0; 256];
+
+        /// Characters ok to display
         unsafe {
             memset(&raw mut b_show[0 as usize] as *mut u8 as *mut (),
                 '.' as i32, core::mem::size_of::<[u8; 256]>() as u64)

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3MutexMethods,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -37,6 +52,8 @@ type DarwinPthreadMutexattrT = OpaquePthreadMutexattrT;
 
 type PthreadMutexattrT = DarwinPthreadMutexattrT;
 
+///* Each SQLite mutex is an instance of the following structure.
+///*
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Mutex {
@@ -419,10 +436,58 @@ impl Parse {
     }
 }
 
+///* Initialize and deinitialize the mutex subsystem.
 extern "C" fn pthread_mutex_init_1() -> i32 { return 0; }
 
 extern "C" fn pthread_mutex_end() -> i32 { return 0; }
 
+///* The sqlite3_mutex_alloc() routine allocates a new
+///* mutex and returns a pointer to it.  If it returns NULL
+///* that means that a mutex could not be allocated.  SQLite
+///* will unwind its stack and return an error.  The argument
+///* to sqlite3_mutex_alloc() is one of these integer constants:
+///*
+///* <ul>
+///* <li>  SQLITE_MUTEX_FAST
+///* <li>  SQLITE_MUTEX_RECURSIVE
+///* <li>  SQLITE_MUTEX_STATIC_MAIN
+///* <li>  SQLITE_MUTEX_STATIC_MEM
+///* <li>  SQLITE_MUTEX_STATIC_OPEN
+///* <li>  SQLITE_MUTEX_STATIC_PRNG
+///* <li>  SQLITE_MUTEX_STATIC_LRU
+///* <li>  SQLITE_MUTEX_STATIC_PMEM
+///* <li>  SQLITE_MUTEX_STATIC_APP1
+///* <li>  SQLITE_MUTEX_STATIC_APP2
+///* <li>  SQLITE_MUTEX_STATIC_APP3
+///* <li>  SQLITE_MUTEX_STATIC_VFS1
+///* <li>  SQLITE_MUTEX_STATIC_VFS2
+///* <li>  SQLITE_MUTEX_STATIC_VFS3
+///* </ul>
+///*
+///* The first two constants cause sqlite3_mutex_alloc() to create
+///* a new mutex.  The new mutex is recursive when SQLITE_MUTEX_RECURSIVE
+///* is used but not necessarily so when SQLITE_MUTEX_FAST is used.
+///* The mutex implementation does not need to make a distinction
+///* between SQLITE_MUTEX_RECURSIVE and SQLITE_MUTEX_FAST if it does
+///* not want to.  But SQLite will only request a recursive mutex in
+///* cases where it really needs one.  If a faster non-recursive mutex
+///* implementation is available on the host platform, the mutex subsystem
+///* might return such a mutex in response to SQLITE_MUTEX_FAST.
+///*
+///* The other allowed parameters to sqlite3_mutex_alloc() each return
+///* a pointer to a static preexisting mutex.  Six static mutexes are
+///* used by the current version of SQLite.  Future versions of SQLite
+///* may add additional static mutexes.  Static mutexes are for internal
+///* use by SQLite only.  Applications that use SQLite mutexes should
+///* use only the dynamic mutexes returned by SQLITE_MUTEX_FAST or
+///* SQLITE_MUTEX_RECURSIVE.
+///*
+///* Note that if one of the dynamic mutex parameters (SQLITE_MUTEX_FAST
+///* or SQLITE_MUTEX_RECURSIVE) is used then sqlite3_mutex_alloc()
+///* returns a different mutex on every call.  But for the static
+///* mutex types, the same mutex is returned on every call that has
+///* the same type number.
+#[allow(unused_doc_comments)]
 extern "C" fn pthread_mutex_alloc(i_type_1: i32) -> *mut Sqlite3Mutex {
     unsafe {
         unsafe {
@@ -438,6 +503,7 @@ extern "C" fn pthread_mutex_alloc(i_type_1: i32) -> *mut Sqlite3Mutex {
                                                 u64)
                                     } as *mut Sqlite3Mutex;
                             if !(p).is_null() {
+                                /// Use a recursive mutex if it is available
                                 let mut recursive_attr: PthreadMutexattrT =
                                     unsafe { core::mem::zeroed() };
                                 unsafe { pthread_mutexattr_init(&mut recursive_attr) };
@@ -504,6 +570,9 @@ extern "C" fn pthread_mutex_alloc(i_type_1: i32) -> *mut Sqlite3Mutex {
     }
 }
 
+///* This routine deallocates a previously
+///* allocated mutex.  SQLite is careful to deallocate every
+///* mutex that it allocates.
 extern "C" fn pthread_mutex_free(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
     {
@@ -512,8 +581,20 @@ extern "C" fn pthread_mutex_free(p: *mut Sqlite3Mutex) -> () {
     }
 }
 
+///* The sqlite3_mutex_enter() and sqlite3_mutex_try() routines attempt
+///* to enter a mutex.  If another thread is already within the mutex,
+///* sqlite3_mutex_enter() will block and sqlite3_mutex_try() will return
+///* SQLITE_BUSY.  The sqlite3_mutex_try() interface returns SQLITE_OK
+///* upon successful entry.  Mutexes created using SQLITE_MUTEX_RECURSIVE can
+///* be entered multiple times by the same thread.  In such cases the,
+///* mutex must be exited an equal number of times before another thread
+///* can enter.  If the same thread tries to enter any other kind of mutex
+///* more than once, the behavior is undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn pthread_mutex_enter(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
+
+    /// Use the built-in recursive mutexes if they are available.
     unsafe { pthread_mutex_lock(unsafe { &mut (*p).mutex }) };
 }
 
@@ -526,6 +607,10 @@ extern "C" fn pthread_mutex_try(p: *mut Sqlite3Mutex) -> i32 {
     return rc;
 }
 
+///* The sqlite3_mutex_leave() routine exits a mutex that was
+///* previously entered by the same thread.  The behavior
+///* is undefined if the mutex is not currently entered or
+///* is not currently allocated.  SQLite will never do either.
 extern "C" fn pthread_mutex_leave(p: *mut Sqlite3Mutex) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -537,6 +622,9 @@ pub extern "C" fn sqlite3_default_mutex() -> *const Sqlite3MutexMethods {
     return &s_mutex;
 }
 
+///* Try to provide a memory barrier operation, needed for initialization
+///* and also for the implementation of xShmBarrier in the VFS in cases
+///* where SQLite is compiled without mutexes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memory_barrier() -> () {
     core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);

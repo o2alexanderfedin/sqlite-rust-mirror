@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -23,6 +29,7 @@ struct QpvtabCursor {
     flags: i32,
 }
 
+///* Names of columns
 static mut az_colname: [*const i8; 13] =
     [c"vn".as_ptr() as *const i8, c"ix".as_ptr() as *const i8,
             c"cn".as_ptr() as *const i8, c"op".as_ptr() as *const i8,
@@ -32,6 +39,8 @@ static mut az_colname: [*const i8; 13] =
             c"e".as_ptr() as *const i8, c"flags".as_ptr() as *const i8,
             c"".as_ptr() as *const i8];
 
+///* The qpvtabConnect() method is invoked to create a new
+///* qpvtab virtual table.
 extern "C" fn qpvtab_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -59,12 +68,14 @@ extern "C" fn qpvtab_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* This method is the destructor for qpvtab_vtab objects.
 extern "C" fn qpvtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut QpvtabVtab = p_vtab_1 as *mut QpvtabVtab;
     unsafe { sqlite3_free(p as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new qpvtab_cursor object.
 extern "C" fn qpvtab_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut QpvtabCursor = core::ptr::null_mut();
@@ -82,12 +93,14 @@ extern "C" fn qpvtab_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a qpvtab_cursor.
 extern "C" fn qpvtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut QpvtabCursor = cur as *mut QpvtabCursor;
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
 
+///* Advance a qpvtab_cursor to its next row of output.
 extern "C" fn qpvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut QpvtabCursor = cur as *mut QpvtabCursor;
     if unsafe { (*p_cur).i_rowid } < unsafe { (*p_cur).n_data } as i64 {
@@ -116,6 +129,8 @@ extern "C" fn qpvtab_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the qpvtab_cursor
+///* is currently pointing.
 extern "C" fn qpvtab_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const QpvtabCursor =
@@ -176,6 +191,8 @@ extern "C" fn qpvtab_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn qpvtab_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const QpvtabCursor =
@@ -184,6 +201,8 @@ extern "C" fn qpvtab_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn qpvtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const QpvtabCursor =
         cur as *mut QpvtabCursor as *const QpvtabCursor;
@@ -191,6 +210,10 @@ extern "C" fn qpvtab_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
             as i32;
 }
 
+///* This method is called to "rewind" the qpvtab_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to qpvtabColumn() or qpvtabRowid() or 
+///* qpvtabEof().
 extern "C" fn qpvtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -202,6 +225,7 @@ extern "C" fn qpvtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Append the text of a value to pStr
 extern "C" fn qpvtab_str_append_value(p_str_1: *mut Sqlite3Str,
     p_val_1: *mut Sqlite3Value) -> () {
     '__s1:
@@ -331,6 +355,10 @@ extern "C" fn qpvtab_str_append_value(p_str_1: *mut Sqlite3Str,
     }
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
 extern "C" fn qpvtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe {
@@ -550,6 +578,8 @@ extern "C" fn qpvtab_best_index(tab: *mut Sqlite3Vtab,
     }
 }
 
+///* This following structure defines all the methods for the 
+///* virtual table.
 static mut qpvtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

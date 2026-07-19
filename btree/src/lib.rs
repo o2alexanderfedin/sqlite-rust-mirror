@@ -2,21 +2,38 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod btree_int_h;
-pub(crate) use crate::btree_int_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::BtreePayload;
+use crate::btree_int_h::{
+    BtCursor, BtLock, BtShared, Btree, CellInfo, IntegrityCk, MemPage,
+};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, Uptr, VList, VTable, Walker,
+    WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -398,6 +415,48 @@ impl Parse {
     }
 }
 
+///* CAPI3REF: Enable Or Disable Shared Pager Cache
+///*
+///* ^(This routine enables or disables the sharing of the database cache
+///* and schema data structures between [database connection | connections]
+///* to the same database. Sharing is enabled if the argument is true
+///* and disabled if the argument is false.)^
+///*
+///* This interface is omitted if SQLite is compiled with
+///* [-DSQLITE_OMIT_SHARED_CACHE].  The [-DSQLITE_OMIT_SHARED_CACHE]
+///* compile-time option is recommended because the
+///* [use of shared cache mode is discouraged].
+///*
+///* ^Cache sharing is enabled and disabled for an entire process.
+///* This is a change as of SQLite [version 3.5.0] ([dateof:3.5.0]).
+///* In prior versions of SQLite,
+///* sharing was enabled or disabled for each thread separately.
+///*
+///* ^(The cache sharing mode set by this interface effects all subsequent
+///* calls to [sqlite3_open()], [sqlite3_open_v2()], and [sqlite3_open16()].
+///* Existing database connections continue to use the sharing mode
+///* that was in effect at the time they were opened.)^
+///*
+///* ^(This routine returns [SQLITE_OK] if shared cache was enabled or disabled
+///* successfully.  An [error code] is returned otherwise.)^
+///*
+///* ^Shared cache is disabled by default. It is recommended that it stay
+///* that way.  In other words, do not use this routine.  This interface
+///* continues to be provided for historical compatibility, but its use is
+///* discouraged.  Any use of shared cache is discouraged.  If shared cache
+///* must be used, it is recommended that shared cache only be enabled for
+///* individual database connections using the [sqlite3_open_v2()] interface
+///* with the [SQLITE_OPEN_SHAREDCACHE] flag.
+///*
+///* Note: This method is disabled on MacOS X 10.7 and iOS version 5.0
+///* and will always return SQLITE_MISUSE. On those systems,
+///* shared cache mode should be enabled per-database connection via
+///* [sqlite3_open_v2()] with [SQLITE_OPEN_SHAREDCACHE].
+///*
+///* This interface is threadsafe on processors where writing a
+///* 32-bit integer is atomic.
+///*
+///* See Also:  [SQLite Shared-Cache Mode]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_enable_shared_cache(enable: i32) -> i32 {
     unsafe { sqlite3Config.shared_cache_enabled = enable; return 0; }
@@ -405,6 +464,24 @@ pub extern "C" fn sqlite3_enable_shared_cache(enable: i32) -> i32 {
 
 static mut sqlite3_shared_cache_list: *mut BtShared = core::ptr::null_mut();
 
+///* This function returns a pointer to a blob of memory associated with
+///* a single shared-btree. The memory is used by client code for its own
+///* purposes (for example, to store a high-level schema associated with
+///* the shared-btree). The btree layer manages reference counting issues.
+///*
+///* The first time this is called on a shared-btree, nBytes bytes of memory
+///* are allocated, zeroed, and returned to the caller. For each subsequent
+///* call the nBytes parameter is ignored and a pointer to the same blob
+///* of memory returned.
+///*
+///* If the nBytes parameter is 0 and the blob of memory has not yet been
+///* allocated, a null pointer is returned. If the blob has already been
+///* allocated, it is returned as normal.
+///*
+///* Just before the shared-btree is closed, the function passed as the
+///* xFree argument when the memory allocation was made is invoked on the
+///* blob of allocated memory. The xFree function should not call sqlite3_free()
+///* on the memory, the btree layer does that.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_schema(p: *mut Btree, n_bytes_1: i32,
     x_free_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> *mut () {
@@ -428,6 +505,11 @@ pub extern "C" fn sqlite3_btree_schema(p: *mut Btree, n_bytes_1: i32,
     }
 }
 
+///* Change the "soft" limit on the number of pages in the cache.
+///* Unused and unmodified pages will be recycled when the number of
+///* pages in the cache exceeds this soft limit.  But the size of the
+///* cache is allowed to grow larger than this limit if it contains
+///* dirty pages or pages still in active use.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_cache_size(p: *mut Btree, mx_page_1: i32)
     -> i32 {
@@ -441,12 +523,17 @@ pub extern "C" fn sqlite3_btree_set_cache_size(p: *mut Btree, mx_page_1: i32)
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn cell_size_ptr_table_leaf(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = p_cell_1;
+    /// For looping over bytes of pCell
     let mut p_end: *mut u8 = core::ptr::null_mut();
+    /// End mark for a varint
     let mut n_size: u32 = 0 as u32;
-    n_size = unsafe { *p_iter } as u32;
+
+    /// Size value to return
+    (n_size = unsafe { *p_iter } as u32);
     if n_size >= 128 as u32 {
         p_end = unsafe { p_iter.offset(8 as isize) };
         n_size &= 127 as u32;
@@ -566,12 +653,29 @@ extern "C" fn cell_size_ptr_table_leaf(p_page_1: *mut MemPage,
     return n_size as u16;
 }
 
+///* This is common tail processing for btreeParseCellPtr() and
+///* btreeParseCellPtrIndex() for the case when the cell does not fit entirely
+///* on a single B-tree page.  Make necessary adjustments to the CellInfo
+///* structure.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_parse_cell_adjust_size_for_overflow(p_page_1: &MemPage,
     p_cell_1: *const u8, p_info_1: &mut CellInfo) -> () {
+    /// If the payload will not fit completely on the local page, we have
+    ///* to decide how much to store locally and how much to spill onto
+    ///* overflow pages.  The strategy is to minimize the amount of unused
+    ///* space on overflow pages while keeping the amount of local storage
+    ///* in between minLocal and maxLocal.
+    ///*
+    ///* Warning:  changing the way overflow payload is distributed in any
+    ///* way will result in an incompatible file format.
     let mut min_local: i32 = 0;
+    /// Minimum amount of payload held locally
     let mut max_local: i32 = 0;
+    /// Maximum amount of payload held locally
     let mut surplus: i32 = 0;
-    min_local = (*p_page_1).min_local as i32;
+
+    /// Overflow payload available for local storage
+    (min_local = (*p_page_1).min_local as i32);
     max_local = (*p_page_1).max_local as i32;
     surplus =
         (min_local as u32 +
@@ -590,17 +694,28 @@ extern "C" fn btree_parse_cell_adjust_size_for_overflow(p_page_1: &MemPage,
                             } as i64 as u16 as i32 + 4) as u16;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
     p_info_1: *mut CellInfo) -> () {
     let mut p_iter: *mut u8 = core::ptr::null_mut();
+    /// For scanning through pCell
     let mut n_payload: u64 = 0 as u64;
+    /// Number of bytes of cell payload
     let mut i_key: u64 = 0 as u64;
+
+    /// Extracted Key value
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     p_iter = p_cell_1;
-    n_payload = unsafe { *p_iter } as u64;
+
+    /// The next block of code is equivalent to:
+    ///*
+    ///*     pIter += getVarint32(pIter, nPayload);
+    ///*
+    ///* The code is inlined to avoid a function call.
+    (n_payload = unsafe { *p_iter } as u64);
     if n_payload >= 128 as u64 {
         let p_end: *mut u8 = unsafe { &mut *p_iter.offset(8 as isize) };
         n_payload &= 127 as u64;
@@ -629,7 +744,14 @@ extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
         *__p = unsafe { (*__p).offset(1) };
         __t
     };
-    i_key = unsafe { *p_iter } as u64;
+
+    /// The next block of code is equivalent to:
+    ///*
+    ///*     pIter += getVarint(pIter, (u64*)&pInfo->nKey);
+    ///*
+    ///* The code is inlined and the loop is unrolled for performance.
+    ///* This routine is a high-runner.
+    (i_key = unsafe { *p_iter } as u64);
     if i_key >= 128 as u64 {
         let mut x: u8 = 0 as u8;
         i_key =
@@ -758,6 +880,9 @@ extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
     unsafe { (*p_info_1).p_payload = p_iter };
     { let _ = 0; };
     if n_payload <= unsafe { (*p_page_1).max_local } as u64 {
+
+        /// This is the (easy) common case where the entire payload fits
+        ///* on the local page.  No overflow is required.
         unsafe {
             (*p_info_1).n_size =
                 (n_payload as u16 as i32 +
@@ -774,11 +899,16 @@ extern "C" fn btree_parse_cell_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn cell_size_ptr_idx_leaf(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = p_cell_1;
+    /// For looping over bytes of pCell
     let mut p_end: *mut u8 = core::ptr::null_mut();
+    /// End mark for a varint
     let mut n_size: u32 = 0 as u32;
+
+    /// Size value to return
     { let _ = 0; };
     n_size = unsafe { *p_iter } as u32;
     if n_size >= 128 as u32 {
@@ -829,10 +959,14 @@ extern "C" fn cell_size_ptr_idx_leaf(p_page_1: *mut MemPage,
     return n_size as u16;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn btree_parse_cell_ptr_index(p_page_1: *mut MemPage,
     p_cell_1: *mut u8, p_info_1: *mut CellInfo) -> () {
     let mut p_iter: *mut u8 = core::ptr::null_mut();
+    /// For scanning through pCell
     let mut n_payload: u32 = 0 as u32;
+
+    /// Number of bytes of cell payload
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -874,6 +1008,9 @@ extern "C" fn btree_parse_cell_ptr_index(p_page_1: *mut MemPage,
     { let _ = 0; };
     { let _ = 0; };
     if n_payload <= unsafe { (*p_page_1).max_local } as u32 {
+
+        /// This is the (easy) common case where the entire payload fits
+        ///* on the local page.  No overflow is required.
         unsafe {
             (*p_info_1).n_size =
                 (n_payload as u16 as i32 +
@@ -890,11 +1027,28 @@ extern "C" fn btree_parse_cell_ptr_index(p_page_1: *mut MemPage,
     }
 }
 
+///* The following routines are implementations of the MemPage.xCellSize
+///* method.
+///*
+///* Compute the total number of bytes that a Cell needs in the cell
+///* data area of the btree-page.  The return number includes the cell
+///* data header and the local payload, but not any overflow page or
+///* the space used by the cell pointer.
+///*
+///* cellSizePtrNoPayload()    =>   table internal nodes
+///* cellSizePtrTableLeaf()    =>   table leaf nodes
+///* cellSizePtr()             =>   index internal nodes
+///* cellSizeIdxLeaf()         =>   index leaf nodes
+#[allow(unused_doc_comments)]
 extern "C" fn cell_size_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8)
     -> u16 {
     let mut p_iter: *mut u8 = unsafe { p_cell_1.offset(4 as isize) };
+    /// For looping over bytes of pCell
     let mut p_end: *mut u8 = core::ptr::null_mut();
+    /// End mark for a varint
     let mut n_size: u32 = 0 as u32;
+
+    /// Size value to return
     { let _ = 0; };
     n_size = unsafe { *p_iter } as u32;
     if n_size >= 128 as u32 {
@@ -945,11 +1099,17 @@ extern "C" fn cell_size_ptr(p_page_1: *mut MemPage, p_cell_1: *mut u8)
     return n_size as u16;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn cell_size_ptr_no_payload(p_page_1: *mut MemPage,
     p_cell_1: *mut u8) -> u16 {
     let mut p_iter: *mut u8 = unsafe { p_cell_1.offset(4 as isize) };
+    /// For looping over bytes of pCell
     let mut p_end: *mut u8 = core::ptr::null_mut();
+
+    /// End mark for a varint
     { let _ = p_page_1; };
+
+    /// End mark for a varint
     { let _ = 0; };
     p_end = unsafe { p_iter.offset(9 as isize) };
     while unsafe {
@@ -964,6 +1124,18 @@ extern "C" fn cell_size_ptr_no_payload(p_page_1: *mut MemPage,
     return unsafe { p_iter.offset_from(p_cell_1) } as i64 as u16;
 }
 
+///* The following routines are implementations of the MemPage.xParseCell()
+///* method.
+///*
+///* Parse a cell content block and fill in the CellInfo structure.
+///*
+///* btreeParseCellPtr()        =>   table btree leaf nodes
+///* btreeParseCellNoPayload()  =>   table btree internal nodes
+///* btreeParseCellPtrIndex()   =>   index btree nodes
+///*
+///* There is also a wrapper function btreeParseCell() that works for
+///* all MemPage types and that references the cell by index rather than
+///* by pointer.
 extern "C" fn btree_parse_cell_ptr_no_payload(p_page_1: *mut MemPage,
     p_cell_1: *mut u8, p_info_1: *mut CellInfo) -> () {
     { let _ = 0; };
@@ -986,8 +1158,21 @@ extern "C" fn btree_parse_cell_ptr_no_payload(p_page_1: *mut MemPage,
     return;
 }
 
+///* Decode the flags byte (the first byte of the header) for a page
+///* and initialize fields of the MemPage structure accordingly.
+///*
+///* Only the following combinations are supported.  Anything different
+///* indicates a corrupt database files:
+///*
+///*         PTF_ZERODATA                             (0x02,  2)
+///*         PTF_LEAFDATA | PTF_INTKEY                (0x05,  5)
+///*         PTF_ZERODATA | PTF_LEAF                  (0x0a, 10)
+///*         PTF_LEAFDATA | PTF_INTKEY | PTF_LEAF     (0x0d, 13)
+#[allow(unused_doc_comments)]
 extern "C" fn decode_flags(p_page_1: &mut MemPage, flag_byte_1: i32) -> i32 {
     let mut p_bt: *const BtShared = core::ptr::null();
+
+    /// A copy of pPage->pBt
     { let _ = 0; };
     { let _ = 0; };
     p_bt = (*p_page_1).p_bt;
@@ -1044,18 +1229,30 @@ extern "C" fn decode_flags(p_page_1: &mut MemPage, flag_byte_1: i32) -> i32 {
     return 0;
 }
 
+///* Do additional sanity check after btreeInitPage() if
+///* PRAGMA cell_size_check=ON
+#[allow(unused_doc_comments)]
 extern "C" fn btree_cell_size_check(p_page_1: *mut MemPage) -> i32 {
     let mut i_cell_first: i32 = 0;
+    /// First allowable cell or freeblock offset
     let mut i_cell_last: i32 = 0;
+    /// Last possible cell or freeblock offset
     let mut i: i32 = 0;
+    /// Index into the cell pointer array
     let mut sz: i32 = 0;
+    /// Size of a cell
     let mut pc: i32 = 0;
+    /// Address of a freeblock within pPage->aData[]
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// Equal to pPage->aData
     let mut usable_size: i32 = 0;
+    /// Maximum usable space on the page
     let mut cell_offset: i32 = 0;
-    i_cell_first =
+
+    /// Start of cell content area
+    (i_cell_first =
         unsafe { (*p_page_1).cell_offset } as i32 +
-            2 * unsafe { (*p_page_1).n_cell } as i32;
+            2 * unsafe { (*p_page_1).n_cell } as i32);
     usable_size =
         unsafe { (*unsafe { (*p_page_1).p_bt }).usable_size } as i32;
     i_cell_last = usable_size - 4;
@@ -1102,9 +1299,20 @@ extern "C" fn btree_cell_size_check(p_page_1: *mut MemPage) -> i32 {
     return 0;
 }
 
+///* Initialize the auxiliary information for a disk block.
+///*
+///* Return SQLITE_OK on success.  If we see that the page does
+///* not contain a well-formed database page, then return
+///* SQLITE_CORRUPT.  Note that a return of SQLITE_OK does not
+///* guarantee that the page is well-formed.  It only shows that
+///* we failed to detect any corruption.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// Equal to pPage->aData
     let mut p_bt: *const BtShared = core::ptr::null();
+
+    /// The main btree structure
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -1162,6 +1370,9 @@ extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
                 }
             }
     };
+
+    /// EVIDENCE-OF: R-37002-32774 The two-byte integer at offset 3 gives the
+    ///* number of cells on the page.
     unsafe {
         (*p_page_1).n_cell =
             ((unsafe {
@@ -1173,10 +1384,19 @@ extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
     };
     if unsafe { (*p_page_1).n_cell } as u32 >
             (unsafe { (*p_bt).page_size } - 8 as u32) / 6 as u32 {
+
+        /// To many cells for a single page.  The page must be corrupt
         return unsafe { sqlite3_corrupt_error(2279) };
     }
+
+    /// EVIDENCE-OF: R-24089-57979 If a page contains no cells (which is only
+    ///* possible for a root page of a table that contains no rows) then the
+    ///* offset to the cell content area will equal the page size minus the
+    ///* bytes of reserved space.
     { let _ = 0; };
     unsafe { (*p_page_1).n_free = -1 };
+
+    /// Indicate that this value is yet uncomputed
     unsafe { (*p_page_1).is_init = 1 as u8 };
     if unsafe { (*unsafe { (*p_bt).db }).flags } & 2097152 as u64 != 0 {
         return btree_cell_size_check(p_page_1);
@@ -1184,6 +1404,13 @@ extern "C" fn btree_init_page(p_page_1: *mut MemPage) -> i32 {
     return 0;
 }
 
+///* During a rollback, when the pager reloads information into the cache
+///* so that the cache is restored to its original state at the start of
+///* the transaction, for each page restored this routine is called.
+///*
+///* This routine needs to reset the extra data section at the end of the
+///* page to agree with the restored data.
+#[allow(unused_doc_comments)]
 extern "C" fn page_reinit(p_data_1: *mut DbPage) -> () {
     let mut p_page: *mut MemPage = core::ptr::null_mut();
     p_page = unsafe { sqlite3_pager_get_extra(p_data_1) } as *mut MemPage;
@@ -1192,11 +1419,19 @@ extern "C" fn page_reinit(p_data_1: *mut DbPage) -> () {
         { let _ = 0; };
         unsafe { (*p_page).is_init = 0 as u8 };
         if unsafe { sqlite3_pager_page_refcount(p_data_1) } > 1 {
+
+            /// pPage might not be a btree page;  it might be an overflow page
+            ///* or ptrmap page or a free page.  In those cases, the following
+            ///* call to btreeInitPage() will likely return SQLITE_CORRUPT.
+            ///* But no harm is done by this.  And it is very important that
+            ///* btreeInitPage() be called on every btree page so we make
+            ///* the call for every page that comes in for re-initializing.
             btree_init_page(p_page);
         }
     }
 }
 
+///* Invoke the busy handler for a btree.
 extern "C" fn btree_invoke_busy_handler(p_arg_1: *mut ()) -> i32 {
     let p_bt: *const BtShared = p_arg_1 as *mut BtShared as *const BtShared;
     { let _ = 0; };
@@ -1208,26 +1443,80 @@ extern "C" fn btree_invoke_busy_handler(p_arg_1: *mut ()) -> i32 {
         };
 }
 
+///* Open a database file.
+///*
+///* zFilename is the name of the database file.  If zFilename is NULL
+///* then an ephemeral database is created.  The ephemeral database might
+///* be exclusively in memory, or it might use a disk-based memory cache.
+///* Either way, the ephemeral database will be automatically deleted
+///* when sqlite3BtreeClose() is called.
+///*
+///* If zFilename is ":memory:" then an in-memory database is created
+///* that is automatically destroyed when it is closed.
+///*
+///* The "flags" parameter is a bitmask that might contain bits like
+///* BTREE_OMIT_JOURNAL and/or BTREE_MEMORY.
+///*
+///* If the database is already opened in the same database connection
+///* and we are in shared cache mode, then the open will fail with an
+///* SQLITE_CONSTRAINT error.  We cannot allow two or more BtShared
+///* objects in the same database connection since doing so will lead
+///* to problems with locking.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_open(p_vfs_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8, db: *mut Sqlite3, pp_btree_1: &mut *mut Btree,
     mut flags: i32, mut vfs_flags_1: i32) -> i32 {
     unsafe {
         let mut p_bt: *mut BtShared = core::ptr::null_mut();
+        /// Shared part of btree structure
         let mut p: *mut Btree = core::ptr::null_mut();
+        /// Handle to return
         let mut mutex_open: *mut Sqlite3Mutex = core::ptr::null_mut();
+        /// Prevents a race condition. Ticket #3537
         let mut rc: i32 = 0;
+        /// Result code from this function
         let mut n_reserve: u8 = 0 as u8;
+        /// Byte of unused space on each page
         let mut z_db_header: [u8; 100] = [0; 100];
+        /// Database header content
+        /// True if opening an ephemeral, temporary database
         let mut is_temp_db: i32 = 0;
+        /// Set the variable isMemdb to true for an in-memory database, or
+        ///* false for a file-based database.
         let mut is_memdb: i32 = 0;
+        /// flags fit in 8 bits
+        /// Only a BTREE_SINGLE database can be BTREE_UNORDERED
+        /// A BTREE_SINGLE database is always a temporary and/or ephemeral
+        ///* If this Btree is a candidate for shared cache, try to find an
+        ///* existing BtShared object that we can share with
         let mut n_filename: i32 = 0;
         let mut n_full_pathname: i32 = 0;
         let mut z_full_pathname: *mut i8 = core::ptr::null_mut();
         let mut mutex_shared: *mut Sqlite3Mutex = core::ptr::null_mut();
         let mut i_db: i32 = 0;
         let mut p_existing: *const Btree = core::ptr::null();
+        ///* The following asserts make sure that structures used by the btree are
+        ///* the right size.  This is to guard against size changes that result
+        ///* when compiling on a different architecture.
+        /// Suppress false-positive compiler warning from PVS-Studio
+        /// EVIDENCE-OF: R-51873-39618 The page size for a database file is
+        ///* determined by the 2-byte integer located at an offset of 16 bytes from
+        ///* the beginning of the database file.
+        /// If the magic name ":memory:" will create an in-memory database, then
+        ///* leave the autoVacuum mode at 0 (do not auto-vacuum), even if
+        ///* SQLITE_DEFAULT_AUTOVACUUM is true. On the other hand, if
+        ///* SQLITE_OMIT_MEMORYDB has been defined, then ":memory:" is just a
+        ///* regular file-name. In this case the auto-vacuum applies as per normal.
+        /// EVIDENCE-OF: R-37497-42412 The size of the reserved region is
+        ///* determined by the one-byte unsigned integer found at an offset of 20
+        ///* into the database file header.
+        /// 8-byte alignment of pageSize
+        /// Add the new BtShared object to the linked list sharable BtShareds.
         let mut mutex_shared_1: *mut Sqlite3Mutex = core::ptr::null_mut();
+        /// If the new Btree uses a sharable pBtShared, then link the new
+        ///* Btree into the list of all sharable Btrees for the same connection.
+        ///* The list is kept in ascending order by pBt address.
         let mut i: i32 = 0;
         let mut p_sib: *mut Btree = core::ptr::null_mut();
         let mut p_file: *mut Sqlite3File = core::ptr::null_mut();
@@ -1847,6 +2136,44 @@ pub extern "C" fn sqlite3_btree_open(p_vfs_1: *mut Sqlite3Vfs,
                 }
             }
         }
+
+        /// Shared part of btree structure
+        /// Handle to return
+        /// Prevents a race condition. Ticket #3537
+        /// Result code from this function
+        /// Byte of unused space on each page
+        /// Database header content
+        /// True if opening an ephemeral, temporary database
+        /// Set the variable isMemdb to true for an in-memory database, or
+        ///* false for a file-based database.
+        /// flags fit in 8 bits
+        /// Only a BTREE_SINGLE database can be BTREE_UNORDERED
+        /// A BTREE_SINGLE database is always a temporary and/or ephemeral
+        ///* If this Btree is a candidate for shared cache, try to find an
+        ///* existing BtShared object that we can share with
+        ///* The following asserts make sure that structures used by the btree are
+        ///* the right size.  This is to guard against size changes that result
+        ///* when compiling on a different architecture.
+        /// Suppress false-positive compiler warning from PVS-Studio
+        /// EVIDENCE-OF: R-51873-39618 The page size for a database file is
+        ///* determined by the 2-byte integer located at an offset of 16 bytes from
+        ///* the beginning of the database file.
+        /// If the magic name ":memory:" will create an in-memory database, then
+        ///* leave the autoVacuum mode at 0 (do not auto-vacuum), even if
+        ///* SQLITE_DEFAULT_AUTOVACUUM is true. On the other hand, if
+        ///* SQLITE_OMIT_MEMORYDB has been defined, then ":memory:" is just a
+        ///* regular file-name. In this case the auto-vacuum applies as per normal.
+        /// EVIDENCE-OF: R-37497-42412 The size of the reserved region is
+        ///* determined by the one-byte unsigned integer found at an offset of 20
+        ///* into the database file header.
+        /// 8-byte alignment of pageSize
+        /// Add the new BtShared object to the linked list sharable BtShareds.
+        /// If the new Btree uses a sharable pBtShared, then link the new
+        ///* Btree into the list of all sharable Btrees for the same connection.
+        ///* The list is kept in ascending order by pBt address.
+        /// If the B-Tree was successfully opened, set the pager-cache size to the
+        ///* default value. Except, when opening on an existing shared pager-cache,
+        ///* do not change the pager-cache size.
         unreachable!();
     }
 }
@@ -1890,6 +2217,10 @@ extern "C" fn get_cell_info(p_cur_1: &mut BtCursor) -> () {
     } else {}
 }
 
+///* Return the value of the integer key or "rowid" for a table btree.
+///* This routine is only valid for a cursor that is pointing into a
+///* ordinary table btree.  If the cursor points to an index btree or
+///* is invalid, the result of this routine is undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_integer_key(p_cur_1: *mut BtCursor) -> i64 {
     { let _ = 0; };
@@ -1899,6 +2230,13 @@ pub extern "C" fn sqlite3_btree_integer_key(p_cur_1: *mut BtCursor) -> i64 {
     return unsafe { (*p_cur_1).info.n_key };
 }
 
+///* Return the number of bytes of payload for the entry that pCur is
+///* currently pointing to.  For table btrees, this will be the amount
+///* of data.  For index btrees, this will be the size of the key.
+///*
+///* The caller must guarantee that the cursor is pointing to a non-NULL
+///* valid entry.  In other words, the calling procedure must guarantee
+///* that the cursor has Cursor.eState==CURSOR_VALID.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload_size(p_cur_1: *mut BtCursor) -> u32 {
     { let _ = 0; };
@@ -1907,9 +2245,20 @@ pub extern "C" fn sqlite3_btree_payload_size(p_cur_1: *mut BtCursor) -> u32 {
     return unsafe { (*p_cur_1).info.n_payload };
 }
 
+///* Copy data from a buffer to a page, or from a page to a buffer.
+///*
+///* pPayload is a pointer to data stored on database page pDbPage.
+///* If argument eOp is false, then nByte bytes of data are copied
+///* from pPayload to the buffer pointed at by pBuf. If eOp is true,
+///* then sqlite3PagerWrite() is called on pDbPage and nByte bytes
+///* of data are copied from the buffer pBuf to pPayload.
+///*
+///* SQLITE_OK is returned on success, otherwise an error code.
+#[allow(unused_doc_comments)]
 extern "C" fn copy_payload(p_payload_1: *mut (), p_buf_1: &mut [u8],
     e_op_1: i32, p_db_page_1: *mut DbPage) -> i32 {
     if e_op_1 != 0 {
+        /// Copy data from buffer to page (a write operation)
         let rc: i32 = unsafe { sqlite3_pager_write(p_db_page_1) };
         if rc != 0 { return rc; }
         unsafe {
@@ -1917,6 +2266,8 @@ extern "C" fn copy_payload(p_payload_1: *mut (), p_buf_1: &mut [u8],
                 p_buf_1.len() as i32 as u64)
         };
     } else {
+
+        /// Copy data from page to buffer (a read operation)
         unsafe {
             memcpy(p_buf_1.as_ptr() as *mut (), p_payload_1 as *const (),
                 p_buf_1.len() as i32 as u64)
@@ -1925,6 +2276,13 @@ extern "C" fn copy_payload(p_payload_1: *mut (), p_buf_1: &mut [u8],
     return 0;
 }
 
+///* Given a page number of a regular database page, return the page
+///* number for the pointer-map page that contains the entry for the
+///* input page number.
+///*
+///* Return 0 (not a valid page) for pgno==1 since there is
+///* no pointer map associated with page 1.  The integrity_check logic
+///* requires that ptrmapPageno(*,1)!=1.
 extern "C" fn ptrmap_pageno(p_bt_1: &BtShared, pgno: Pgno) -> Pgno {
     unsafe {
         let mut n_pages_per_map_page: i32 = 0;
@@ -1945,16 +2303,28 @@ extern "C" fn ptrmap_pageno(p_bt_1: &BtShared, pgno: Pgno) -> Pgno {
     }
 }
 
+///* Return the size of the database file in pages. If there is any kind of
+///* error, return ((unsigned int)-1).
 extern "C" fn btree_pagecount(p_bt_1: &BtShared) -> Pgno {
     return (*p_bt_1).n_page;
 }
 
+///* Read an entry from the pointer map.
+///*
+///* This routine retrieves the pointer map entry for page 'key', writing
+///* the type and parent page number to *pEType and *pPgno respectively.
+///* An error code is returned if something goes wrong, otherwise SQLITE_OK.
+#[allow(unused_doc_comments)]
 extern "C" fn ptrmap_get(p_bt_1: *mut BtShared, key: Pgno,
     p_e_type_1: &mut u8, p_pgno_1: *mut Pgno) -> i32 {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
+    /// The pointer map page
     let mut i_ptrmap: i32 = 0;
+    /// Pointer map page index
     let mut p_ptrmap: *mut u8 = core::ptr::null_mut();
+    /// Pointer map page data
     let mut offset: i32 = 0;
+    /// Offset of entry in pointer map
     let mut rc: i32 = 0;
     { let _ = 0; };
     i_ptrmap = ptrmap_pageno(unsafe { &*p_bt_1 }, key) as i32;
@@ -1990,6 +2360,8 @@ extern "C" fn ptrmap_get(p_bt_1: *mut BtShared, key: Pgno,
     return 0;
 }
 
+///* Convert a DbPage obtained from the pager into a MemPage used by
+///* the btree layer.
 extern "C" fn btree_page_from_db_page(p_db_page_1: *mut DbPage, pgno: Pgno,
     p_bt_1: *mut BtShared) -> *mut MemPage {
     let p_page: *mut MemPage =
@@ -2011,6 +2383,15 @@ extern "C" fn btree_page_from_db_page(p_db_page_1: *mut DbPage, pgno: Pgno,
     return p_page;
 }
 
+///* Get a page from the pager.  Initialize the MemPage.pBt and
+///* MemPage.aData elements if needed.  See also: btreeGetUnusedPage().
+///*
+///* If the PAGER_GET_NOCONTENT flag is set, it means that we do not care
+///* about the content of the page at this time.  So do not go to the disk
+///* to fetch the content.  Just fill in the content with zeros for now.
+///* If in the future we call sqlite3PagerWrite() on this page, that
+///* means we have started to be concerned about content and the disk
+///* read should occur at that point.
 extern "C" fn btree_get_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: &mut *mut MemPage, flags: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -2027,6 +2408,10 @@ extern "C" fn btree_get_page(p_bt_1: *mut BtShared, pgno: Pgno,
     return 0;
 }
 
+///* Release a MemPage.  This should be called once for each prior
+///* call to btreeGetPage.
+///*
+///* Page1 is a special case and must be released using releasePageOne().
 extern "C" fn release_page_not_null(p_page_1: &MemPage) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -2041,6 +2426,23 @@ extern "C" fn release_page(p_page_1: *mut MemPage) -> () {
     if !(p_page_1).is_null() { release_page_not_null(unsafe { &*p_page_1 }); }
 }
 
+///* Given the page number of an overflow page in the database (parameter
+///* ovfl), this function finds the page number of the next page in the
+///* linked list of overflow pages. If possible, it uses the auto-vacuum
+///* pointer-map data instead of reading the content of page ovfl to do so.
+///*
+///* If an error occurs an SQLite error code is returned. Otherwise:
+///*
+///* The page number of the next overflow page in the linked list is
+///* written to *pPgnoNext. If page ovfl is the last page in its linked
+///* list, *pPgnoNext is set to zero.
+///*
+///* If ppPage is not NULL, and a reference to the MemPage object corresponding
+///* to page number pOvfl was obtained, then *ppPage is set to point to that
+///* reference. It is the responsibility of the caller to call releasePage()
+///* on *ppPage to free the reference. In no reference was obtained (because
+///* the pointer-map was used to obtain the value for *pPgnoNext), then
+///* *ppPage is set to zero.
 extern "C" fn get_overflow_page(p_bt_1: *mut BtShared, ovfl: Pgno,
     pp_page_1: *mut *mut MemPage, p_pgno_next_1: *mut Pgno) -> i32 {
     unsafe {
@@ -2088,6 +2490,34 @@ extern "C" fn get_overflow_page(p_bt_1: *mut BtShared, ovfl: Pgno,
     }
 }
 
+///* This function is used to read or overwrite payload information
+///* for the entry that the pCur cursor is pointing to. The eOp
+///* argument is interpreted as follows:
+///*
+///*   0: The operation is a read. Populate the overflow cache.
+///*   1: The operation is a write. Populate the overflow cache.
+///*
+///* A total of "amt" bytes are read or written beginning at "offset".
+///* Data is read to or from the buffer pBuf.
+///*
+///* The content being read or written might appear on the main page
+///* or be scattered out on multiple overflow pages.
+///*
+///* If the current cursor entry uses one or more overflow pages
+///* this function may allocate space for and lazily populate
+///* the overflow page-list cache array (BtCursor.aOverflow).
+///* Subsequent calls use this cache to make seeking to the supplied offset
+///* more efficient.
+///*
+///* Once an overflow page-list cache has been allocated, it must be
+///* invalidated if some other cursor writes to the same table, or if
+///* the cursor is moved to a different row. Additionally, in auto-vacuum
+///* mode, the following events may invalidate an overflow page-list cache.
+///*
+///*   * An incremental vacuum,
+///*   * A commit in auto_vacuum="full" mode,
+///*   * Creating a table (may require moving an overflow page).
+#[allow(unused_doc_comments)]
 extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
     mut amt: u32, mut p_buf_1: *mut u8, e_op_1: i32) -> i32 {
     let mut a_payload: *mut u8 = core::ptr::null_mut();
@@ -2095,8 +2525,12 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
     let mut i_idx: i32 = 0;
     let p_page: *const MemPage =
         unsafe { (*p_cur_1).p_page } as *const MemPage;
+    /// Btree page of current entry
     let p_bt: *mut BtShared = unsafe { (*p_cur_1).p_bt };
+    /// Btree this cursor belongs to
     let p_buf_start: *mut u8 = p_buf_1;
+
+    /// Start of original out buffer
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -2112,6 +2546,11 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
                 Uptr >
             (unsafe { (*p_bt).usable_size } -
                     unsafe { (*p_cur_1).info.n_local } as u32) as u64 {
+
+        /// Trying to read or write past the end of the data is an error.  The
+        ///* conditional above is really:
+        ///*    &aPayload[pCur->info.nLocal] > &pPage->aData[pBt->usableSize]
+        ///* but is recast into its current form to avoid integer overflow problems
         return unsafe { sqlite3_corrupt_error(5190) };
     }
     if offset < unsafe { (*p_cur_1).info.n_local } as u32 {
@@ -2139,6 +2578,7 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
     if rc == 0 && amt > 0 as u32 {
         let ovfl_size: u32 =
             (unsafe { (*p_bt).usable_size } - 4 as u32) as u32;
+        /// Bytes content per ovfl page
         let mut next_page: Pgno = 0 as Pgno;
         next_page =
             unsafe {
@@ -2179,6 +2619,8 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
             };
             unsafe { (*p_cur_1).cur_flags |= 4 as u8 };
         } else {
+
+            /// Sanity check the validity of the overflow page cache
             { let _ = 0; };
             { let _ = 0; };
             if unsafe {
@@ -2206,6 +2648,12 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
                     next_page
             };
             if offset >= ovfl_size {
+
+                /// The only reason to read this page is to obtain the page
+                ///* number for the next page in the overflow chain. The page
+                ///* data is not required. So first try to lookup the overflow
+                ///* page-list cache, if any, then fall back to the getOverflowPage()
+                ///* function.
                 { let _ = 0; };
                 { let _ = 0; };
                 if unsafe {
@@ -2226,6 +2674,8 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
                 }
                 offset -= ovfl_size as u32;
             } else {
+                /// Need to read this page properly. It contains some of the
+                ///* range of data that is being read (eOp==0) or written (eOp!=0).
                 let mut a: i32 = amt as i32;
                 if a as u32 + offset > ovfl_size {
                     a = (ovfl_size - offset) as i32;
@@ -2242,6 +2692,8 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
                     let a_write: *mut u8 =
                         unsafe { &mut *p_buf_1.offset(-4 as isize) };
                     { let _ = 0; };
+
+                    /// due to (6)
                     unsafe {
                         memcpy(&raw mut a_save[0 as usize] as *mut u8 as *mut (),
                             a_write as *const (), 4 as u64)
@@ -2307,11 +2759,28 @@ extern "C" fn access_payload(p_cur_1: *mut BtCursor, mut offset: u32,
         }
     }
     if rc == 0 && amt > 0 as u32 {
+
+        /// Overflow chain ends prematurely
         return unsafe { sqlite3_corrupt_error(5355) };
     }
     return rc;
 }
 
+///* Read part of the payload for the row at which that cursor pCur is currently
+///* pointing.  "amt" bytes will be transferred into pBuf[].  The transfer
+///* begins at "offset".
+///*
+///* pCur can be pointing to either a table or an index b-tree.
+///* If pointing to a table btree, then the content section is read.  If
+///* pCur is pointing to an index b-tree then the key section is read.
+///*
+///* For sqlite3BtreePayload(), the caller must ensure that pCur is pointing
+///* to a valid row in the table.  For sqlite3BtreePayloadChecked(), the
+///* cursor might be invalid or might need to be restored before being read.
+///*
+///* Return SQLITE_OK on success or an error code if anything goes
+///* wrong.  An error is returned if "offset+amt" is larger than
+///* the available payload.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload(p_cur_1: *mut BtCursor, offset: u32,
     amt: u32, p_buf_1: *mut ()) -> i32 {
@@ -2321,16 +2790,36 @@ pub extern "C" fn sqlite3_btree_payload(p_cur_1: *mut BtCursor, offset: u32,
     return access_payload(p_cur_1, offset, amt, p_buf_1 as *mut u8, 0);
 }
 
+///* The cursor passed as the only argument must point to a valid entry
+///* when this function is called (i.e. have eState==CURSOR_VALID). This
+///* function saves the current cursor key in variables pCur->nKey and
+///* pCur->pKey. SQLITE_OK is returned if successful or an SQLite error
+///* code otherwise.
+///*
+///* If the cursor is open on an intkey table, then the integer key
+///* (the rowid) is stored in pCur->nKey and pCur->pKey is left set to
+///* NULL. If the cursor is open on a non-intkey table, then pCur->pKey is
+///* set to point to a malloced buffer pCur->nKey bytes in size containing
+///* the key.
+#[allow(unused_doc_comments)]
 extern "C" fn save_cursor_key(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p_cur_1).cur_int_key } != 0 {
+
+        /// Only the rowid is required for a table btree
         unsafe {
             (*p_cur_1).n_key = unsafe { sqlite3_btree_integer_key(p_cur_1) }
         };
     } else {
+        /// For an index btree, save the complete key content. It is possible
+        ///* that the current key is corrupt. In that case, it is possible that
+        ///* the sqlite3VdbeRecordUnpack() function may overread the buffer by
+        ///* up to the size of 1 varint plus 1 8-byte value when the cursor
+        ///* position is restored. Hence the 17 bytes of padding allocated
+        ///* below.
         let mut p_key: *mut () = core::ptr::null_mut();
         unsafe {
             (*p_cur_1).n_key =
@@ -2362,6 +2851,7 @@ extern "C" fn save_cursor_key(p_cur_1: *mut BtCursor) -> i32 {
     return rc;
 }
 
+///* Release all of the apPage[] pages for a cursor.
 extern "C" fn btree_release_all_cursor_pages(p_cur_1: &mut BtCursor) -> () {
     let mut i: i32 = 0;
     if (*p_cur_1).i_page as i32 >= 0 {
@@ -2385,6 +2875,11 @@ extern "C" fn btree_release_all_cursor_pages(p_cur_1: &mut BtCursor) -> () {
     }
 }
 
+///* Save the current cursor position in the variables BtCursor.nKey
+///* and BtCursor.pKey. The cursor's state is set to CURSOR_REQUIRESEEK.
+///*
+///* The caller must ensure that the cursor is valid (has eState==CURSOR_VALID)
+///* prior to calling this routine.
 extern "C" fn save_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -2405,6 +2900,7 @@ extern "C" fn save_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     return rc;
 }
 
+/// Forward reference
 extern "C" fn save_cursors_on_list(mut p: *mut BtCursor, i_root_1: Pgno,
     p_except_1: *mut BtCursor) -> i32 {
     '__b12: loop {
@@ -2426,6 +2922,25 @@ extern "C" fn save_cursors_on_list(mut p: *mut BtCursor, i_root_1: Pgno,
     return 0;
 }
 
+///* Save the positions of all cursors (except pExcept) that are open on
+///* the table with root-page iRoot.  "Saving the cursor position" means that
+///* the location in the btree is remembered in such a way that it can be
+///* moved back to the same spot after the btree has been modified.  This
+///* routine is called just before cursor pExcept is used to modify the
+///* table, for example in BtreeDelete() or BtreeInsert().
+///*
+///* If there are two or more cursors on the same btree, then all such
+///* cursors should have their BTCF_Multiple flag set.  The btreeCursor()
+///* routine enforces that rule.  This routine only needs to be called in
+///* the uncommon case when pExpect has the BTCF_Multiple flag set.
+///*
+///* If pExpect!=NULL and if no other cursors are found on the same root-page,
+///* then the BTCF_Multiple flag on pExpect is cleared, to avoid another
+///* pointless call to this routine.
+///*
+///* Implementation note:  This routine merely checks to see if any cursors
+///* need to be saved.  It calls out to saveCursorsOnList() in the (unusual)
+///* event that cursors are in need to being saved.
 extern "C" fn save_all_cursors(p_bt_1: &BtShared, i_root_1: Pgno,
     p_except_1: *mut BtCursor) -> i32 {
     let mut p: *mut BtCursor = core::ptr::null_mut();
@@ -2455,6 +2970,7 @@ extern "C" fn save_all_cursors(p_bt_1: &BtShared, i_root_1: Pgno,
     return 0;
 }
 
+///* Clear the current cursor position.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_cursor(p_cur_1: &mut BtCursor) -> () {
     { let _ = 0; };
@@ -2463,6 +2979,30 @@ pub extern "C" fn sqlite3_btree_clear_cursor(p_cur_1: &mut BtCursor) -> () {
     (*p_cur_1).e_state = 1 as u8;
 }
 
+///* This routine sets the state to CURSOR_FAULT and the error
+///* code to errCode for every cursor on any BtShared that pBtree
+///* references.  Or if the writeOnly flag is set to 1, then only
+///* trip write cursors and leave read cursors unchanged.
+///*
+///* Every cursor is a candidate to be tripped, including cursors
+///* that belong to other database connections that happen to be
+///* sharing the cache with pBtree.
+///*
+///* This routine gets called when a rollback occurs. If the writeOnly
+///* flag is true, then only write-cursors need be tripped - read-only
+///* cursors save their current positions so that they may continue
+///* following the rollback. Or, if writeOnly is false, all cursors are
+///* tripped. In general, writeOnly is false if the transaction being
+///* rolled back modified the database schema. In this case b-tree root
+///* pages may be moved or deleted from the database altogether, making
+///* it unsafe for read cursors to continue.
+///*
+///* If the writeOnly flag is true and an error is encountered while
+///* saving the current position of a read-only cursor, all cursors,
+///* including all read-cursors are tripped.
+///*
+///* SQLITE_OK is returned if successful, or if an error occurs while
+///* saving a cursor position, an SQLite error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_trip_all_cursors(p_btree_1: *mut Btree,
     err_code_1: i32, write_only_1: i32) -> i32 {
@@ -2504,6 +3044,8 @@ pub extern "C" fn sqlite3_btree_trip_all_cursors(p_btree_1: *mut Btree,
     return rc;
 }
 
+///* Set the pBt->nPage field correctly, according to the current
+///* state of the database.  Assume pBt->pPage1 is valid.
 extern "C" fn btree_set_n_page(p_bt_1: &mut BtShared, p_page1_1: &MemPage)
     -> () {
     let mut n_page: i32 =
@@ -2529,11 +3071,14 @@ extern "C" fn release_page_one(p_page_1: &MemPage) -> () {
     unsafe { sqlite3_pager_unref_page_one((*p_page_1).p_db_page) };
 }
 
+///* Clear (destroy) the BtShared.pHasContent bitvec. This should be
+///* invoked at the conclusion of each write-transaction.
 extern "C" fn btree_clear_has_content(p_bt_1: &mut BtShared) -> () {
     unsafe { sqlite3_bitvec_destroy((*p_bt_1).p_has_content) };
     (*p_bt_1).p_has_content = core::ptr::null_mut();
 }
 
+///* This function changes all write-locks held by Btree p into read-locks.
 extern "C" fn downgrade_all_shared_cache_table_locks(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     if unsafe { (*p_bt).p_writer } == p {
@@ -2555,6 +3100,13 @@ extern "C" fn downgrade_all_shared_cache_table_locks(p: *mut Btree) -> () {
     }
 }
 
+///* Release all the table locks (locks obtained via calls to
+///* the setSharedCacheTableLock() procedure) held by Btree object p.
+///*
+///* This function assumes that Btree p has an open read or write
+///* transaction. If it does not, then the BTS_PENDING flag
+///* may be incorrectly cleared.
+#[allow(unused_doc_comments)]
 extern "C" fn clear_all_shared_cache_table_locks(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     let mut pp_iter: *mut *mut BtLock = unsafe { &mut (*p_bt).p_lock };
@@ -2578,10 +3130,25 @@ extern "C" fn clear_all_shared_cache_table_locks(p: *mut Btree) -> () {
         unsafe { (*p_bt).p_writer = core::ptr::null_mut() };
         unsafe { (*p_bt).bts_flags &= !(64 | 128) as u16 };
     } else if unsafe { (*p_bt).n_transaction } == 2 {
+
+        /// This function is called when Btree p is concluding its
+        ///* transaction. If there currently exists a writer, and p is not
+        ///* that writer, then the number of locks held by connections other
+        ///* than the writer must be about to drop to zero. In this case
+        ///* set the BTS_PENDING flag to 0.
+        ///*
+        ///* If there is not currently a writer, then BTS_PENDING must
+        ///* be zero already. So this next line is harmless in that case.
         unsafe { (*p_bt).bts_flags &= !128 as u16 };
     }
 }
 
+///* If there are no outstanding cursors and we are not in the middle
+///* of a transaction but there is a read lock on the database, then
+///* this routine unrefs the first page of the database file which
+///* has the effect of releasing the read lock.
+///*
+///* If there is a transaction in progress, this routine is a no-op.
 extern "C" fn unlock_btree_if_unused(p_bt_1: &mut BtShared) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -2595,6 +3162,9 @@ extern "C" fn unlock_btree_if_unused(p_bt_1: &mut BtShared) -> () {
     }
 }
 
+///* This function is called from both BtreeCommitPhaseTwo() and BtreeRollback()
+///* at the conclusion of a transaction.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
     let db: *const Sqlite3 = unsafe { (*p).db } as *const Sqlite3;
@@ -2602,6 +3172,10 @@ extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
     unsafe { (*p_bt).b_do_truncate = 0 as u8 };
     if unsafe { (*p).in_trans } as i32 > 0 && unsafe { (*db).n_vdbe_read } > 1
         {
+
+        /// If there are other active statements that belong to this database
+        ///* handle, downgrade to a read-only transaction. The other statements
+        ///* may still be reading from the database.
         downgrade_all_shared_cache_table_locks(p);
         unsafe { (*p).in_trans = 1 as u8 };
     } else {
@@ -2617,6 +3191,9 @@ extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
                 unsafe { (*p_bt).in_transaction = 0 as u8 };
             }
         }
+
+        /// Set the current transaction state to TRANS_NONE and unlock the
+        ///* pager if this call closed the only read or write transaction.
         unsafe { (*p).in_trans = 0 as u8 };
         unlock_btree_if_unused(unsafe { &mut *p_bt });
     }
@@ -2624,6 +3201,15 @@ extern "C" fn btree_end_transaction(p: *mut Btree) -> () {
     { let _ = 0; };
 }
 
+///* Rollback the transaction in progress.
+///*
+///* If tripCode is not SQLITE_OK then cursors will be invalidated (tripped).
+///* Only write cursors are tripped if writeOnly is true but all cursors are
+///* tripped if writeOnly is false.  Any attempt to use
+///* a tripped cursor will result in an error.
+///*
+///* This will release the write lock on the database file.  If there
+///* are no active cursors, it also releases the read lock.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_rollback(p: *mut Btree, mut trip_code_1: i32,
     mut write_only_1: i32) -> i32 {
@@ -2669,6 +3255,10 @@ pub extern "C" fn sqlite3_btree_rollback(p: *mut Btree, mut trip_code_1: i32,
     return rc;
 }
 
+///* Decrement the BtShared.nRef counter.  When it reaches zero,
+///* remove the BtShared structure from the sharing list.  Return
+///* true if the BtShared.nRef counter reaches zero and return
+///* false if it is still positive.
 extern "C" fn remove_from_sharing_list(p_bt_1: *mut BtShared) -> i32 {
     unsafe {
         let mut p_main_mtx: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -2706,6 +3296,7 @@ extern "C" fn remove_from_sharing_list(p_bt_1: *mut BtShared) -> i32 {
     }
 }
 
+///* Free the pBt->pTmpSpace allocation
 extern "C" fn free_temp_space(p_bt_1: &mut BtShared) -> () {
     if !((*p_bt_1).p_tmp_space).is_null() {
         {
@@ -2718,17 +3309,35 @@ extern "C" fn free_temp_space(p_bt_1: &mut BtShared) -> () {
     }
 }
 
+///* Close an open database and invalidate all cursors.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_close(p: *mut Btree) -> i32 {
     unsafe {
         let p_bt: *mut BtShared = unsafe { (*p).p_bt };
+
+        /// Close all cursors opened via this handle.
         { let _ = 0; };
         unsafe { sqlite3_btree_enter(p) };
+
+        /// Verify that no other cursors have this Btree open
+        /// Rollback any active transaction and free the handle structure.
+        ///* The call to sqlite3BtreeRollback() drops any table-locks held by
+        ///* this handle.
         unsafe { sqlite3_btree_rollback(p, 0, 0) };
         unsafe { sqlite3_btree_leave(p) };
+
+        /// If there are still other outstanding references to the shared-btree
+        ///* structure, return now. The remainder of this procedure cleans
+        ///* up the shared-btree.
         { let _ = 0; };
         if (unsafe { (*p).sharable } == 0) as i32 != 0 ||
                 remove_from_sharing_list(p_bt) != 0 {
+
+            /// The pBt is no longer on the sharing list, so we can access
+            ///* it without having to hold the mutex.
+            ///*
+            ///* Clean out and delete the BtShared object.
             { let _ = 0; };
             unsafe {
                 sqlite3_pager_close(unsafe { (*p_bt).p_pager },
@@ -2766,6 +3375,14 @@ pub extern "C" fn sqlite3_btree_close(p: *mut Btree) -> i32 {
     }
 }
 
+///* Change the "spill" limit on the number of pages in the cache.
+///* If the number of pages exceeds this limit during a write transaction,
+///* the pager might attempt to "spill" pages to the journal early in
+///* order to free up memory.
+///*
+///* The value returned is the current spill size.  If zero is passed
+///* as an argument, no changes are made to the spill size setting, so
+///* using mxPage of 0 is a way to query the current spill size.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_spill_size(p: *mut Btree, mx_page_1: i32)
     -> i32 {
@@ -2781,6 +3398,8 @@ pub extern "C" fn sqlite3_btree_set_spill_size(p: *mut Btree, mx_page_1: i32)
     return res;
 }
 
+///* Change the limit on the amount of the database file that may be
+///* memory mapped.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_mmap_limit(p: *mut Btree,
     sz_mmap_1: Sqlite3Int64) -> i32 {
@@ -2807,6 +3426,24 @@ pub extern "C" fn sqlite3_btree_set_pager_flags(p: *mut Btree,
     return 0;
 }
 
+///* Change the default pages size and the number of reserved bytes per page.
+///* Or, if the page size has already been fixed, return SQLITE_READONLY
+///* without changing anything.
+///*
+///* The page size must be a power of 2 between 512 and 65536.  If the page
+///* size supplied does not meet this constraint then the page size is not
+///* changed.
+///*
+///* Page sizes are constrained to be a power of two so that the region
+///* of the database file used for locking (beginning at PENDING_BYTE,
+///* the first byte past the 1GB boundary, 0x40000000) needs to occur
+///* at the beginning of a page.
+///*
+///* If parameter nReserve is less than zero, then the number of reserved
+///* bytes per page is left unchanged.
+///*
+///* If the iFix!=0 then the BTS_PAGESIZE_FIXED flag is set so that the page size
+///* and autovacuum mode can no longer be changed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_page_size(p: *mut Btree,
     mut page_size_1: i32, mut n_reserve_1: i32, i_fix_1: i32) -> i32 {
@@ -2853,11 +3490,15 @@ pub extern "C" fn sqlite3_btree_set_page_size(p: *mut Btree,
     return rc;
 }
 
+///* Return the currently defined page size
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_page_size(p: &Btree) -> i32 {
     return unsafe { (*(*p).p_bt).page_size } as i32;
 }
 
+///* Set the maximum page count for a database if mxPage is positive.
+///* No changes are made if mxPage is 0 or negative.
+///* Regardless of the value of mxPage, return the maximum page count.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_max_page_count(p: *mut Btree, mx_page_1: Pgno)
     -> Pgno {
@@ -2879,6 +3520,22 @@ pub extern "C" fn sqlite3_btree_last_page(p: &Btree) -> Pgno {
     return btree_pagecount(unsafe { &*(*p).p_bt });
 }
 
+///* Change the values for the BTS_SECURE_DELETE and BTS_OVERWRITE flags:
+///*
+///*    newFlag==0       Both BTS_SECURE_DELETE and BTS_OVERWRITE are cleared
+///*    newFlag==1       BTS_SECURE_DELETE set and BTS_OVERWRITE is cleared
+///*    newFlag==2       BTS_SECURE_DELETE cleared and BTS_OVERWRITE is set
+///*    newFlag==(-1)    No changes
+///*
+///* This routine acts as a query if newFlag is less than zero
+///*
+///* With BTS_OVERWRITE set, deleted content is overwritten by zeros, but
+///* freelist leaf pages are not written back to the database.  Thus in-page
+///* deleted content is cleared, but freelist deleted content is not.
+///*
+///* With BTS_SECURE_DELETE, operation is like BTS_OVERWRITE with the addition
+///* that freelist leaf pages are written back into the database, increasing
+///* the amount of disk I/O.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_secure_delete(p: *mut Btree, new_flag_1: i32)
     -> i32 {
@@ -2899,6 +3556,15 @@ pub extern "C" fn sqlite3_btree_secure_delete(p: *mut Btree, new_flag_1: i32)
     return b;
 }
 
+///* This function is similar to sqlite3BtreeGetReserve(), except that it
+///* may only be called if it is guaranteed that the b-tree mutex is already
+///* held.
+///*
+///* This is useful in one special case in the backup API code where it is
+///* known that the shared b-tree mutex is held, but the mutex on the
+///* database handle that owns *p is not. In this case if sqlite3BtreeEnter()
+///* were to be called, it might collide with some other operation on the
+///* database handle that owns *p, causing undefined behavior.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_reserve_no_mutex(p: &Btree) -> i32 {
     let mut n: i32 = 0;
@@ -2909,6 +3575,13 @@ pub extern "C" fn sqlite3_btree_get_reserve_no_mutex(p: &Btree) -> i32 {
     return n;
 }
 
+///* Return the number of bytes of space at the end of every page that
+///* are intentionally left unused.  This is the "reserved" space that is
+///* sometimes used by extensions.
+///*
+///* The value returned is the larger of the current reserve size and
+///* the latest reserve size requested by SQLITE_FILECTRL_RESERVE_BYTES.
+///* The amount of reserve can only grow - never shrink.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_requested_reserve(p: *mut Btree) -> i32 {
     let mut n1: i32 = 0;
@@ -2920,6 +3593,10 @@ pub extern "C" fn sqlite3_btree_get_requested_reserve(p: *mut Btree) -> i32 {
     return if n1 > n2 { n1 } else { n2 };
 }
 
+///* Change the 'auto-vacuum' property of the database. If the 'autoVacuum'
+///* parameter is non-zero, then auto-vacuum mode is enabled. If zero, it
+///* is disabled. The default value for the auto-vacuum property is
+///* determined by the SQLITE_DEFAULT_AUTOVACUUM macro.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_set_auto_vacuum(p: *mut Btree,
     auto_vacuum_1: i32) -> i32 {
@@ -2941,6 +3618,8 @@ pub extern "C" fn sqlite3_btree_set_auto_vacuum(p: *mut Btree,
     return rc;
 }
 
+///* Return the value of the 'auto-vacuum' property. If auto-vacuum is
+///* enabled 1 is returned. Otherwise 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_auto_vacuum(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -2958,6 +3637,11 @@ pub extern "C" fn sqlite3_btree_get_auto_vacuum(p: *mut Btree) -> i32 {
     return rc;
 }
 
+///* Query to see if Btree handle p may obtain a lock of type eLock
+///* (READ_LOCK or WRITE_LOCK) on the table with root-page iTab. Return
+///* SQLITE_OK if the lock may be obtained (by calling
+///* setSharedCacheTableLock()), or SQLITE_LOCKED if not.
+#[allow(unused_doc_comments)]
 extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
     e_lock_1: u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
@@ -2966,6 +3650,10 @@ extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// If requesting a write-lock, then the Btree must have an open write
+    ///* transaction on this file. And, obviously, for this to be so there
+    ///* must be an open write transaction on the file itself.
     { let _ = 0; };
     { let _ = 0; };
     if (unsafe { (*p).sharable } == 0) as i32 != 0 { return 0; }
@@ -2978,6 +3666,15 @@ extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
         '__b18: loop {
             if !(!(p_iter).is_null()) { break '__b18; }
             '__c18: loop {
+
+                /// The condition (pIter->eLock!=eLock) in the following if(...)
+                ///* statement is a simplification of:
+                ///*
+                ///*   (eLock==WRITE_LOCK || pIter->eLock==WRITE_LOCK)
+                ///*
+                ///* since we know that if eLock==WRITE_LOCK, then no other connection
+                ///* may hold a WRITE_LOCK on any table in this file (since there can
+                ///* only be a single writer).
                 { let _ = 0; };
                 { let _ = 0; };
                 if unsafe { (*p_iter).p_btree } != p &&
@@ -2997,18 +3694,34 @@ extern "C" fn query_shared_cache_table_lock(p: *mut Btree, i_tab_1: Pgno,
     return 0;
 }
 
+///* The header string that appears at the beginning of every
+///* SQLite database.
 static z_magic_header: [i8; 16] =
     [83 as i8, 81 as i8, 76 as i8, 105 as i8, 116 as i8, 101 as i8, 32 as i8,
             102 as i8, 111 as i8, 114 as i8, 109 as i8, 97 as i8, 116 as i8,
             32 as i8, 51 as i8, 0 as i8];
 
+///* Get a reference to pPage1 of the database file.  This will
+///* also acquire a readlock on that file.
+///*
+///* SQLITE_OK is returned on success.  If the file is not a
+///* well-formed database file, then SQLITE_CORRUPT is returned.
+///* SQLITE_BUSY is returned if the database is locked.  SQLITE_NOMEM
+///* is returned if we run out of memory.
+#[allow(unused_doc_comments)]
 extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
     let mut rc: i32 = 0;
+    /// Result code from subfunctions
     let mut p_page1: *mut MemPage = core::ptr::null_mut();
     '__b19: loop {
         '__c19: loop {
+            /// Result code from subfunctions
+            /// Page 1 of the database file
             let mut n_page: u32 = 0 as u32;
+            /// Number of pages in the database
             let mut n_page_file: u32 = 0 as u32;
+
+            /// Number of pages in the database file
             { let _ = 0; };
             { let _ = 0; };
             rc =
@@ -3018,13 +3731,16 @@ extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
             if rc != 0 { return rc; }
             rc = btree_get_page(p_bt_1, 1 as Pgno, &mut p_page1, 0);
             if rc != 0 { return rc; }
-            n_page =
+
+            /// Do some checking to help insure the file we opened really is
+            ///* a valid database file.
+            (n_page =
                 unsafe {
                     sqlite3_get4byte(unsafe {
                                 (unsafe { (*p_page1).a_data } as
                                         *mut u8).offset(28 as isize)
                             } as *const u8)
-                };
+                });
             unsafe {
                 sqlite3_pager_pagecount(unsafe { (*p_bt_1).p_pager },
                     &raw mut n_page_file as *mut i32)
@@ -3089,18 +3805,36 @@ extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
                         } != 0 {
                     break '__b19;
                 }
-                page_size =
+
+                /// EVIDENCE-OF: R-51873-39618 The page size for a database file is
+                ///* determined by the 2-byte integer located at an offset of 16 bytes from
+                ///* the beginning of the database file.
+                (page_size =
                     ((unsafe { *page1.offset(16 as isize) } as i32) << 8 |
                             (unsafe { *page1.offset(17 as isize) } as i32) << 16) as
-                        u32;
+                        u32);
                 if page_size - 1 as u32 & page_size != 0 as u32 ||
                             page_size > 65536 as u32 || page_size <= 256 as u32 {
                     break '__b19;
                 }
                 { let _ = 0; };
-                usable_size =
-                    page_size - unsafe { *page1.offset(20 as isize) } as u32;
+
+                /// EVIDENCE-OF: R-59310-51205 The "reserved space" size in the 1-byte
+                ///* integer at offset 20 is the number of bytes of space at the end of
+                ///* each page to reserve for extensions.
+                ///*
+                ///* EVIDENCE-OF: R-37497-42412 The size of the reserved region is
+                ///* determined by the one-byte unsigned integer found at an offset of 20
+                ///* into the database file header.
+                (usable_size =
+                    page_size - unsafe { *page1.offset(20 as isize) } as u32);
                 if page_size as u32 != unsafe { (*p_bt_1).page_size } {
+
+                    /// After reading the first page of the database assuming a page size
+                    ///* of BtShared.pageSize, we have discovered that the page-size is
+                    ///* actually pageSize. Unlock the database, leave pBt->pPage1 at
+                    ///* zero and return SQLITE_OK. The caller will call this function
+                    ///* again with the correct page-size.
                     release_page_one(unsafe { &*p_page1 });
                     unsafe { (*p_bt_1).usable_size = usable_size };
                     unsafe { (*p_bt_1).page_size = page_size };
@@ -3147,20 +3881,72 @@ extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
                             } else { 0 } as u8
                 };
             }
+
+            /// maxLocal is the maximum amount of payload to store locally for
+            ///* a cell.  Make sure it is small enough so that at least minFanout
+            ///* cells can will fit on one page.  We assume a 10-byte page header.
+            ///* Besides the payload, the cell must store:
+            ///*     2-byte pointer to the cell
+            ///*     4-byte child pointer
+            ///*     9-byte nKey value
+            ///*     4-byte nData value
+            ///*     4-byte overflow page pointer
+            ///* So a cell consists of a 2-byte pointer, a header which is as much as
+            ///* 17 bytes long, 0 to N bytes of payload, and an optional 4 byte overflow
+            ///* page pointer.
             unsafe {
                 (*p_bt_1).max_local =
                     ((unsafe { (*p_bt_1).usable_size } - 12 as u32) * 64 as u32
                                 / 255 as u32 - 23 as u32) as u16
             };
+
+            /// maxLocal is the maximum amount of payload to store locally for
+            ///* a cell.  Make sure it is small enough so that at least minFanout
+            ///* cells can will fit on one page.  We assume a 10-byte page header.
+            ///* Besides the payload, the cell must store:
+            ///*     2-byte pointer to the cell
+            ///*     4-byte child pointer
+            ///*     9-byte nKey value
+            ///*     4-byte nData value
+            ///*     4-byte overflow page pointer
+            ///* So a cell consists of a 2-byte pointer, a header which is as much as
+            ///* 17 bytes long, 0 to N bytes of payload, and an optional 4 byte overflow
+            ///* page pointer.
             unsafe {
                 (*p_bt_1).min_local =
                     ((unsafe { (*p_bt_1).usable_size } - 12 as u32) * 32 as u32
                                 / 255 as u32 - 23 as u32) as u16
             };
+
+            /// maxLocal is the maximum amount of payload to store locally for
+            ///* a cell.  Make sure it is small enough so that at least minFanout
+            ///* cells can will fit on one page.  We assume a 10-byte page header.
+            ///* Besides the payload, the cell must store:
+            ///*     2-byte pointer to the cell
+            ///*     4-byte child pointer
+            ///*     9-byte nKey value
+            ///*     4-byte nData value
+            ///*     4-byte overflow page pointer
+            ///* So a cell consists of a 2-byte pointer, a header which is as much as
+            ///* 17 bytes long, 0 to N bytes of payload, and an optional 4 byte overflow
+            ///* page pointer.
             unsafe {
                 (*p_bt_1).max_leaf =
                     (unsafe { (*p_bt_1).usable_size } - 35 as u32) as u16
             };
+
+            /// maxLocal is the maximum amount of payload to store locally for
+            ///* a cell.  Make sure it is small enough so that at least minFanout
+            ///* cells can will fit on one page.  We assume a 10-byte page header.
+            ///* Besides the payload, the cell must store:
+            ///*     2-byte pointer to the cell
+            ///*     4-byte child pointer
+            ///*     9-byte nKey value
+            ///*     4-byte nData value
+            ///*     4-byte overflow page pointer
+            ///* So a cell consists of a 2-byte pointer, a header which is as much as
+            ///* 17 bytes long, 0 to N bytes of payload, and an optional 4 byte overflow
+            ///* page pointer.
             unsafe {
                 (*p_bt_1).min_leaf =
                     ((unsafe { (*p_bt_1).usable_size } - 12 as u32) * 32 as u32
@@ -3182,11 +3968,67 @@ extern "C" fn lock_btree(p_bt_1: *mut BtShared) -> i32 {
         }
         if !(false) { break '__b19; }
     }
+
+    /// Result code from subfunctions
+    /// Page 1 of the database file
+    /// Number of pages in the database
+    /// Number of pages in the database file
+    /// Do some checking to help insure the file we opened really is
+    ///* a valid database file.
+    /// EVIDENCE-OF: R-43737-39999 Every valid SQLite database file begins
+    ///* with the following 16 bytes (in hex): 53 51 4c 69 74 65 20 66 6f 72 6d
+    ///* 61 74 20 33 00.
+    /// If the read version is set to 2, this database should be accessed
+    ///* in WAL mode. If the log is not already open, open it now. Then
+    ///* return SQLITE_OK and return without populating BtShared.pPage1.
+    ///* The caller detects this and calls this function again. This is
+    ///* required as the version of page 1 currently in the page1 buffer
+    ///* may not be the latest version - there may be a newer one in the log
+    ///* file.
+    /// EVIDENCE-OF: R-15465-20813 The maximum and minimum embedded payload
+    ///* fractions and the leaf payload fraction values must be 64, 32, and 32.
+    ///*
+    ///* The original design allowed these amounts to vary, but as of
+    ///* version 3.6.0, we require them to be fixed.
+    /// EVIDENCE-OF: R-51873-39618 The page size for a database file is
+    ///* determined by the 2-byte integer located at an offset of 16 bytes from
+    ///* the beginning of the database file.
+    /// EVIDENCE-OF: R-25008-21688 The size of a page is a power of two
+    ///* between 512 and 65536 inclusive.
+    /// EVIDENCE-OF: R-59310-51205 The "reserved space" size in the 1-byte
+    ///* integer at offset 20 is the number of bytes of space at the end of
+    ///* each page to reserve for extensions.
+    ///*
+    ///* EVIDENCE-OF: R-37497-42412 The size of the reserved region is
+    ///* determined by the one-byte unsigned integer found at an offset of 20
+    ///* into the database file header.
+    /// After reading the first page of the database assuming a page size
+    ///* of BtShared.pageSize, we have discovered that the page-size is
+    ///* actually pageSize. Unlock the database, leave pBt->pPage1 at
+    ///* zero and return SQLITE_OK. The caller will call this function
+    ///* again with the correct page-size.
+    /// EVIDENCE-OF: R-28312-64704 However, the usable size is not allowed to
+    ///* be less than 480. In other words, if the page size is 512, then the
+    ///* reserved space size cannot exceed 32.
+    /// maxLocal is the maximum amount of payload to store locally for
+    ///* a cell.  Make sure it is small enough so that at least minFanout
+    ///* cells can will fit on one page.  We assume a 10-byte page header.
+    ///* Besides the payload, the cell must store:
+    ///*     2-byte pointer to the cell
+    ///*     4-byte child pointer
+    ///*     9-byte nKey value
+    ///*     4-byte nData value
+    ///*     4-byte overflow page pointer
+    ///* So a cell consists of a 2-byte pointer, a header which is as much as
+    ///* 17 bytes long, 0 to N bytes of payload, and an optional 4 byte overflow
+    ///* page pointer.
     release_page_one(unsafe { &*p_page1 });
     unsafe { (*p_bt_1).p_page1 = core::ptr::null_mut() };
     return rc;
 }
 
+///* Set up a raw page so that it looks like a database page holding
+///* no entries.
 extern "C" fn zero_page(p_page_1: *mut MemPage, flags: i32) -> () {
     let data: *mut u8 = unsafe { (*p_page_1).a_data };
     let p_bt: *const BtShared =
@@ -3250,6 +4092,7 @@ extern "C" fn zero_page(p_page_1: *mut MemPage, flags: i32) -> () {
     unsafe { (*p_page_1).is_init = 1 as u8 };
 }
 
+/// Forward declaration
 extern "C" fn new_database(p_bt_1: &mut BtShared) -> i32 {
     let mut p_p1: *mut MemPage = core::ptr::null_mut();
     let mut data: *mut u8 = core::ptr::null_mut();
@@ -3306,13 +4149,66 @@ extern "C" fn new_database(p_bt_1: &mut BtShared) -> i32 {
     return 0;
 }
 
+///* Attempt to start a new transaction. A write-transaction
+///* is started if the second argument is nonzero, otherwise a read-
+///* transaction.  If the second argument is 2 or more and exclusive
+///* transaction is started, meaning that no other process is allowed
+///* to access the database.  A preexisting transaction may not be
+///* upgraded to exclusive by calling this routine a second time - the
+///* exclusivity flag only works for a new transaction.
+///*
+///* A write-transaction must be started before attempting any
+///* changes to the database.  None of the following routines
+///* will work unless a transaction is started first:
+///*
+///*      sqlite3BtreeCreateTable()
+///*      sqlite3BtreeCreateIndex()
+///*      sqlite3BtreeClearTable()
+///*      sqlite3BtreeDropTable()
+///*      sqlite3BtreeInsert()
+///*      sqlite3BtreeDelete()
+///*      sqlite3BtreeUpdateMeta()
+///*
+///* If an initial attempt to acquire the lock fails because of lock contention
+///* and the database was previously unlocked, then invoke the busy handler
+///* if there is one.  But if there was previously a read-lock, do not
+///* invoke the busy handler - just return SQLITE_BUSY.  SQLITE_BUSY is
+///* returned when there is already a read-lock in order to avoid a deadlock.
+///*
+///* Suppose there are two processes A and B.  A has a read lock and B has
+///* a reserved lock.  B tries to promote to exclusive but is blocked because
+///* of A's read lock.  A tries to promote to reserved but is blocked by B.
+///* One or the other of the two processes must give way or there can be
+///* no progress.  By returning SQLITE_BUSY and not invoking the busy callback
+///* when A already has a read lock, we encourage A to give up and let B
+///* proceed.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_begin_trans(p: *mut Btree, wrflag: i32,
     p_schema_version_1: *mut i32) -> i32 {
     let mut p_bt: *mut BtShared = core::ptr::null_mut();
     let mut p_pager: *mut Pager = core::ptr::null_mut();
     let mut rc: i32 = 0;
+    /// If the btree is already in a write-transaction, or it
+    ///* is already in a read-transaction and a read-transaction
+    ///* is requested, this is a no-op.
+    /// Write transactions are not possible on a read-only database
     let mut p_block: *const Sqlite3 = core::ptr::null();
+    /// If another database handle has already opened a write transaction
+    ///* on this shared-btree structure and a second write transaction is
+    ///* requested, return SQLITE_LOCKED.
     let mut p_iter: *const BtLock = core::ptr::null();
+    /// Any read-only or read-write transaction implies a read-lock on
+    ///* page 1. So if some other shared-cache client already has a write-lock
+    ///* on page 1, the transaction cannot be opened.
+    /// Call lockBtree() until either pBt->pPage1 is populated or
+    ///* lockBtree() returns something other than SQLITE_OK. lockBtree()
+    ///* may return SQLITE_OK but leave pBt->pPage1 set to 0 if after
+    ///* reading page 1 it discovers that the page-size of the database
+    ///* file is not pBt->pageSize. In this case lockBtree() will update
+    ///* pBt->pageSize to the page-size of the file on disk.
+    /// if there was no transaction opened when this function was
+    ///* called and SQLITE_BUSY_SNAPSHOT is returned, change the error
+    ///* code to SQLITE_BUSY.
     let mut p_page1: *const MemPage = core::ptr::null();
     let mut __state: i32 = 0;
     loop {
@@ -3604,10 +4500,39 @@ extern "C" fn btree_begin_trans(p: *mut Btree, wrflag: i32,
             }
         }
     }
+
+    /// If the btree is already in a write-transaction, or it
+    ///* is already in a read-transaction and a read-transaction
+    ///* is requested, this is a no-op.
+    /// Write transactions are not possible on a read-only database
+    /// If another database handle has already opened a write transaction
+    ///* on this shared-btree structure and a second write transaction is
+    ///* requested, return SQLITE_LOCKED.
+    /// Any read-only or read-write transaction implies a read-lock on
+    ///* page 1. So if some other shared-cache client already has a write-lock
+    ///* on page 1, the transaction cannot be opened.
+    /// Call lockBtree() until either pBt->pPage1 is populated or
+    ///* lockBtree() returns something other than SQLITE_OK. lockBtree()
+    ///* may return SQLITE_OK but leave pBt->pPage1 set to 0 if after
+    ///* reading page 1 it discovers that the page-size of the database
+    ///* file is not pBt->pageSize. In this case lockBtree() will update
+    ///* pBt->pageSize to the page-size of the file on disk.
+    /// if there was no transaction opened when this function was
+    ///* called and SQLITE_BUSY_SNAPSHOT is returned, change the error
+    ///* code to SQLITE_BUSY.
+    /// If the db-size header field is incorrect (as it may be if an old
+    ///* client has been writing the database file), update it now. Doing
+    ///* this sooner rather than later means the database size can safely
+    ///* re-read the database size from page 1 if a savepoint or transaction
+    ///* rollback occurs within the transaction.
+    /// This call makes sure that the pager has the correct number of
+    ///* open savepoints. If the second parameter is greater than 0 and
+    ///* the sub-journal is not already open, then it will be opened here.
     unreachable!();
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_begin_trans(p: *mut Btree, wrflag: i32,
     p_schema_version_1: *mut i32) -> i32 {
     let mut p_bt: *const BtShared = core::ptr::null();
@@ -3629,6 +4554,10 @@ pub extern "C" fn sqlite3_btree_begin_trans(p: *mut Btree, wrflag: i32,
         };
     }
     if wrflag != 0 {
+
+        /// This call makes sure that the pager has the correct number of
+        ///* open savepoints. If the second parameter is greater than 0 and
+        ///* the sub-journal is not already open, then it will be opened here.
         return unsafe {
                 sqlite3_pager_open_savepoint(unsafe { (*p_bt).p_pager },
                     unsafe { (*unsafe { (*p).db }).n_savepoint })
@@ -3636,6 +4565,8 @@ pub extern "C" fn sqlite3_btree_begin_trans(p: *mut Btree, wrflag: i32,
     } else { return 0; }
 }
 
+///* Invalidate the overflow page-list cache for all cursors opened
+///* on the shared btree structure pBt.
 extern "C" fn invalidate_all_overflow_cache(p_bt_1: &BtShared) -> () {
     let mut p: *mut BtCursor = core::ptr::null_mut();
     { let _ = 0; };
@@ -3652,13 +4583,21 @@ extern "C" fn invalidate_all_overflow_cache(p_bt_1: &BtShared) -> () {
     }
 }
 
+///* The database opened by the first argument is an auto-vacuum database
+///* nOrig pages in size containing nFree free pages. Return the expected
+///* size of the database in pages following an auto-vacuum operation.
+#[allow(unused_doc_comments)]
 extern "C" fn final_db_size(p_bt_1: *mut BtShared, n_orig_1: Pgno,
     n_free_1: Pgno) -> Pgno {
     unsafe {
         let mut n_entry: i32 = 0;
+        /// Number of entries on one ptrmap page
         let mut n_ptrmap: Pgno = 0 as Pgno;
+        /// Number of PtrMap pages to be freed
         let mut n_fin: Pgno = 0 as Pgno;
-        n_entry = (unsafe { (*p_bt_1).usable_size } / 5 as u32) as i32;
+
+        /// Return value
+        (n_entry = (unsafe { (*p_bt_1).usable_size } / 5 as u32) as i32);
         n_ptrmap =
             (n_free_1 - n_orig_1 +
                         ptrmap_pageno(unsafe { &*p_bt_1 }, n_orig_1) +
@@ -3682,6 +4621,13 @@ extern "C" fn final_db_size(p_bt_1: *mut BtShared, n_orig_1: Pgno,
     }
 }
 
+///* Get an unused page.
+///*
+///* This works just like btreeGetPage() with the addition:
+///*
+///*   *  If the page is already in use for some other purpose, immediately
+///*      release it and return an SQLITE_CURRUPT error.
+///*   *  Make sure the isInit flag is clear
 extern "C" fn btree_get_unused_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: *mut *mut MemPage, flags: i32) -> i32 {
     let rc: i32 =
@@ -3701,6 +4647,11 @@ extern "C" fn btree_get_unused_page(p_bt_1: *mut BtShared, pgno: Pgno,
     return rc;
 }
 
+///* Query the BtShared.pHasContent vector.
+///*
+///* This function is called when a free-list leaf page is removed from the
+///* free-list for reuse. It returns false if it is safe to retrieve the
+///* page from the pager layer with the 'no-content' flag set. True otherwise.
 extern "C" fn btree_get_has_content(p_bt_1: &BtShared, pgno: Pgno) -> i32 {
     let p: *mut Bitvec = (*p_bt_1).p_has_content;
     return (!(p).is_null() &&
@@ -3709,6 +4660,8 @@ extern "C" fn btree_get_has_content(p_bt_1: &BtShared, pgno: Pgno) -> i32 {
             i32;
 }
 
+/// Forward declaration required by incrVacuumStep().
+#[allow(unused_doc_comments)]
 extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
     pp_page_1: *mut *mut MemPage, p_pgno_1: *mut Pgno, nearby: Pgno,
     e_mode_1: u8) -> i32 {
@@ -3716,16 +4669,51 @@ extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
         let mut p_page1: *const MemPage = core::ptr::null();
         let mut rc: i32 = 0;
         let mut n: u32 = 0 as u32;
+        /// Number of pages on the freelist
         let mut k: u32 = 0 as u32;
+        /// Number of leaves on the trunk of the freelist
         let mut p_trunk: *mut MemPage = core::ptr::null_mut();
         let mut p_prev_trunk: *mut MemPage = core::ptr::null_mut();
         let mut mx_page: Pgno = 0 as Pgno;
+        /// Total size of the database file
+        /// EVIDENCE-OF: R-21003-45125 The 4-byte big-endian integer at offset 36
+        ///* stores the total number of pages on the freelist.
+        /// There are pages on the freelist.  Reuse one of those pages.
         let mut i_trunk: Pgno = 0 as Pgno;
         let mut search_list: u8 = 0 as u8;
+        /// If the free-list must be searched for 'nearby'
         let mut n_search: u32 = 0 as u32;
+        /// Count of the number of search attempts
+        /// If eMode==BTALLOC_EXACT and a query of the pointer-map
+        ///* shows that the page 'nearby' is somewhere on the free-list, then
+        ///* the entire-list will be searched for that page.
         let mut e_type: u8 = 0 as u8;
+        /// Decrement the free-list count by 1. Set iTrunk to the index of the
+        ///* first free-list trunk page. iPrevTrunk is initially 1.
+        /// The code within this loop is run only once if the 'searchList' variable
+        ///* is not true. Otherwise, it runs once for each trunk-page on the
+        ///* free-list until the page 'nearby' is located (eMode==BTALLOC_EXACT)
+        ///* or until a page less than 'nearby' is located (eMode==BTALLOC_LT)
+        /// EVIDENCE-OF: R-01506-11053 The first integer on a freelist trunk page
+        ///* is the page number of the next freelist trunk page in the list or
+        ///* zero if this is the last freelist trunk page.
+        /// EVIDENCE-OF: R-59841-13798 The 4-byte big-endian integer at offset 32
+        ///* stores the page number of the first page of the freelist, or zero if
+        ///* the freelist is empty.
+        /// EVIDENCE-OF: R-13523-04394 The second integer on a freelist trunk page
+        ///* is the number of leaf page pointers to follow.
+        /// The trunk has no leaves and the list is not being searched.
+        ///* So extract the trunk page itself and use it as the newly
+        ///* allocated page
+        /// Value of k is out of range.  Database corruption
+        /// The list is being searched and this trunk page is the page
+        ///* to allocate, regardless of whether it has leaves.
+        /// The trunk page is required by the caller but it contains
+        ///* pointers to free-list leaves. The first leaf becomes a trunk
+        ///* page in this case.
         let mut p_new_trunk: *mut MemPage = core::ptr::null_mut();
         let mut i_new_trunk: Pgno = 0 as Pgno;
+        /// Extract a leaf from the trunk
         let mut closest: u32 = 0 as u32;
         let mut i_page: Pgno = 0 as Pgno;
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -3733,7 +4721,27 @@ extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
         let mut dist: i32 = 0;
         let mut d2: i32 = 0;
         let mut no_content: i32 = 0;
+        /// There are no pages on the freelist, so append a new page to the
+        ///* database image.
+        ///*
+        ///* Normally, new pages allocated by this block can be requested from the
+        ///* pager layer with the 'no-content' flag set. This prevents the pager
+        ///* from trying to read the pages content from disk. However, if the
+        ///* current transaction has already run one or more incremental-vacuum
+        ///* steps, then the page we are about to allocate may contain content
+        ///* that is required in the event of a rollback. In this case, do
+        ///* not set the no-content flag. This causes the pager to load and journal
+        ///* the current page content before overwriting it.
+        ///*
+        ///* Note that the pager will not actually attempt to load or journal
+        ///* content for any page that really does lie past the end of the database
+        ///* file on disk. So the effects of disabling the no-content optimization
+        ///* here are confined to those pages that lie between the end of the
+        ///* database image and the end of the database file.
         let mut b_no_content: i32 = 0;
+        /// If *pPgno refers to a pointer-map page, allocate two new pages
+        ///* at the end of the file instead of one. The first allocated page
+        ///* becomes a new pointer-map page, the second is used by the caller.
         let mut p_pg: *mut MemPage = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -4465,21 +5473,92 @@ extern "C" fn allocate_btree_page(p_bt_1: *mut BtShared,
                 }
             }
         }
+
+        /// Number of pages on the freelist
+        /// Number of leaves on the trunk of the freelist
+        /// Total size of the database file
+        /// EVIDENCE-OF: R-21003-45125 The 4-byte big-endian integer at offset 36
+        ///* stores the total number of pages on the freelist.
+        /// There are pages on the freelist.  Reuse one of those pages.
+        /// If the free-list must be searched for 'nearby'
+        /// Count of the number of search attempts
+        /// If eMode==BTALLOC_EXACT and a query of the pointer-map
+        ///* shows that the page 'nearby' is somewhere on the free-list, then
+        ///* the entire-list will be searched for that page.
+        /// Decrement the free-list count by 1. Set iTrunk to the index of the
+        ///* first free-list trunk page. iPrevTrunk is initially 1.
+        /// The code within this loop is run only once if the 'searchList' variable
+        ///* is not true. Otherwise, it runs once for each trunk-page on the
+        ///* free-list until the page 'nearby' is located (eMode==BTALLOC_EXACT)
+        ///* or until a page less than 'nearby' is located (eMode==BTALLOC_LT)
+        /// EVIDENCE-OF: R-01506-11053 The first integer on a freelist trunk page
+        ///* is the page number of the next freelist trunk page in the list or
+        ///* zero if this is the last freelist trunk page.
+        /// EVIDENCE-OF: R-59841-13798 The 4-byte big-endian integer at offset 32
+        ///* stores the page number of the first page of the freelist, or zero if
+        ///* the freelist is empty.
+        /// EVIDENCE-OF: R-13523-04394 The second integer on a freelist trunk page
+        ///* is the number of leaf page pointers to follow.
+        /// The trunk has no leaves and the list is not being searched.
+        ///* So extract the trunk page itself and use it as the newly
+        ///* allocated page
+        /// Value of k is out of range.  Database corruption
+        /// The list is being searched and this trunk page is the page
+        ///* to allocate, regardless of whether it has leaves.
+        /// The trunk page is required by the caller but it contains
+        ///* pointers to free-list leaves. The first leaf becomes a trunk
+        ///* page in this case.
+        /// Extract a leaf from the trunk
+        /// There are no pages on the freelist, so append a new page to the
+        ///* database image.
+        ///*
+        ///* Normally, new pages allocated by this block can be requested from the
+        ///* pager layer with the 'no-content' flag set. This prevents the pager
+        ///* from trying to read the pages content from disk. However, if the
+        ///* current transaction has already run one or more incremental-vacuum
+        ///* steps, then the page we are about to allocate may contain content
+        ///* that is required in the event of a rollback. In this case, do
+        ///* not set the no-content flag. This causes the pager to load and journal
+        ///* the current page content before overwriting it.
+        ///*
+        ///* Note that the pager will not actually attempt to load or journal
+        ///* content for any page that really does lie past the end of the database
+        ///* file on disk. So the effects of disabling the no-content optimization
+        ///* here are confined to those pages that lie between the end of the
+        ///* database image and the end of the database file.
+        /// If *pPgno refers to a pointer-map page, allocate two new pages
+        ///* at the end of the file instead of one. The first allocated page
+        ///* becomes a new pointer-map page, the second is used by the caller.
         unreachable!();
     }
 }
 
+///* Write an entry into the pointer map.
+///*
+///* This routine updates the pointer map entry for page number 'key'
+///* so that it maps to type 'eType' and parent page number 'pgno'.
+///*
+///* If *pRC is initially non-zero (non-SQLITE_OK) then this routine is
+///* a no-op.  If an error occurs, the appropriate error code is written
+///* into *pRC.
+#[allow(unused_doc_comments)]
 extern "C" fn ptrmap_put(p_bt_1: *mut BtShared, key: Pgno, e_type_1: u8,
     parent: Pgno, p_rc_1: &mut i32) -> () {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
     '__b26: loop {
         '__c26: loop {
+            /// The pointer map page
             let mut p_ptrmap: *mut u8 = core::ptr::null_mut();
+            /// The pointer map data
             let mut i_ptrmap: Pgno = 0 as Pgno;
+            /// The pointer map page number
             let mut offset: i32 = 0;
+            /// Offset in pointer map page
             let mut rc: i32 = 0;
             if *p_rc_1 != 0 { return; }
             { let _ = 0; };
+
+            /// The super-journal page number must never be used as a pointer map page
             { let _ = 0; };
             { let _ = 0; };
             if key == 0 as u32 {
@@ -4497,7 +5576,11 @@ extern "C" fn ptrmap_put(p_bt_1: *mut BtShared, key: Pgno, e_type_1: u8,
                             *(unsafe { sqlite3_pager_get_extra(p_db_page) } as
                                         *mut i8).offset(0 as isize)
                         } as i32 != 0 {
-                *p_rc_1 = unsafe { sqlite3_corrupt_error(1115) };
+
+                /// The first byte of the extra data is the MemPage.isInit byte.
+                ///* If that byte is set, it means this page is also being used
+                ///* as a btree page.
+                (*p_rc_1 = unsafe { sqlite3_corrupt_error(1115) });
                 break '__b26;
             }
             offset = (5 as Pgno * (key - i_ptrmap - 1 as Pgno)) as i32;
@@ -4530,9 +5613,23 @@ extern "C" fn ptrmap_put(p_bt_1: *mut BtShared, key: Pgno, e_type_1: u8,
         }
         if !(false) { break '__b26; }
     }
+
+    /// The pointer map page
+    /// The pointer map data
+    /// The pointer map page number
+    /// Offset in pointer map page
+    /// Return code from subfunctions
+    /// The super-journal page number must never be used as a pointer map page
+    /// The first byte of the extra data is the MemPage.isInit byte.
+    ///* If that byte is set, it means this page is also being used
+    ///* as a btree page.
     unsafe { sqlite3_pager_unref(p_db_page) };
 }
 
+///* The cell pCell is currently part of page pSrc but will ultimately be part
+///* of pPage.  (pSrc and pPage are often the same.)  If pCell contains a
+///* pointer to an overflow page, insert an entry into the pointer-map for
+///* the overflow page that will be valid after pCell has been moved to pPage.
 extern "C" fn ptrmap_put_ovfl_ptr(p_page_1: *mut MemPage, p_src_1: &MemPage,
     p_cell_1: *mut u8, p_rc_1: *mut i32) -> () {
     let mut info: CellInfo = unsafe { core::mem::zeroed() };
@@ -4562,10 +5659,17 @@ extern "C" fn ptrmap_put_ovfl_ptr(p_page_1: *mut MemPage, p_src_1: &MemPage,
     }
 }
 
+///* Set the pointer-map entries for all children of page pPage. Also, if
+///* pPage contains cells that point to overflow pages, set the pointer
+///* map entries for the overflow pages as well.
+#[allow(unused_doc_comments)]
 extern "C" fn set_child_ptrmaps(p_page_1: *mut MemPage) -> i32 {
     let mut i: i32 = 0;
+    /// Counter variable
     let mut n_cell: i32 = 0;
+    /// Number of cells in page pPage
     let mut rc: i32 = 0;
+    /// Return code
     let p_bt: *mut BtShared = unsafe { (*p_page_1).p_bt };
     let pgno: Pgno = unsafe { (*p_page_1).pgno };
     { let _ = 0; };
@@ -4630,6 +5734,18 @@ extern "C" fn set_child_ptrmaps(p_page_1: *mut MemPage) -> i32 {
     return rc;
 }
 
+///* Somewhere on pPage is a pointer to page iFrom.  Modify this pointer so
+///* that it points to iTo. Parameter eType describes the type of pointer to
+///* be modified, as  follows:
+///*
+///* PTRMAP_BTREE:     pPage is a btree-page. The pointer points at a child
+///*                   page of pPage.
+///*
+///* PTRMAP_OVERFLOW1: pPage is a btree-page. The pointer points at an overflow
+///*                   page pointed to by one of the cells on pPage.
+///*
+///* PTRMAP_OVERFLOW2: pPage is an overflow-page. The pointer points at the next
+///*                   overflow page in the list.
 extern "C" fn modify_page_pointer(p_page_1: *mut MemPage, i_from_1: Pgno,
     i_to_1: Pgno, e_type_1: u8) -> i32 {
     { let _ = 0; };
@@ -4762,10 +5878,19 @@ extern "C" fn modify_page_pointer(p_page_1: *mut MemPage, i_from_1: Pgno,
     return 0;
 }
 
+///* Move the open database page pDbPage to location iFreePage in the
+///* database. The pDbPage reference remains valid.
+///*
+///* The isCommit flag indicates that there is no need to remember that
+///* the journal needs to be sync()ed before database page pDbPage->pgno
+///* can be written to. The caller has already promised not to write to that
+///* page.
+#[allow(unused_doc_comments)]
 extern "C" fn relocate_page(p_bt_1: *mut BtShared, p_db_page_1: *mut MemPage,
     e_type_1: u8, i_ptr_page_1: Pgno, i_free_page_1: Pgno, is_commit_1: i32)
     -> i32 {
     let mut p_ptr_page: *mut MemPage = core::ptr::null_mut();
+    /// The page that contains a pointer to pDbPage
     let i_db_page: Pgno = unsafe { (*p_db_page_1).pgno };
     let p_pager: *mut Pager = unsafe { (*p_bt_1).p_pager };
     let mut rc: i32 = 0;
@@ -4815,10 +5940,27 @@ extern "C" fn relocate_page(p_bt_1: *mut BtShared, p_db_page_1: *mut MemPage,
     return rc;
 }
 
+///* Perform a single step of an incremental-vacuum. If successful, return
+///* SQLITE_OK. If there is no work to do (and therefore no point in
+///* calling this function again), return SQLITE_DONE. Or, if an error
+///* occurs, return some other error code.
+///*
+///* More specifically, this function attempts to re-organize the database so
+///* that the last page of the file currently in use is no longer in use.
+///*
+///* Parameter nFin is the number of pages that this database would contain
+///* were this function called until it returns SQLITE_DONE.
+///*
+///* If the bCommit parameter is non-zero, this function assumes that the
+///* caller will keep calling incrVacuumStep() until it returns SQLITE_DONE
+///* or an error. bCommit is passed true for an auto-vacuum-on-commit
+///* operation, or false for an incremental vacuum.
+#[allow(unused_doc_comments)]
 extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
     mut i_last_pg_1: Pgno, b_commit_1: i32) -> i32 {
     unsafe {
         let mut n_free_list: Pgno = 0 as Pgno;
+        /// Number of pages still on the free-list
         let mut rc: i32 = 0;
         { let _ = 0; };
         { let _ = 0; };
@@ -4846,6 +5988,10 @@ extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
             }
             if e_type as i32 == 2 {
                 if b_commit_1 == 0 {
+                    /// Remove the page from the files free-list. This is not required
+                    ///* if bCommit is non-zero. In that case, the free-list will be
+                    ///* truncated to zero after this function returns, so it doesn't
+                    ///* matter if it still contains some garbage entries.
                     let mut i_free_pg: Pgno = 0 as Pgno;
                     let mut p_free_pg: *mut MemPage = core::ptr::null_mut();
                     rc =
@@ -4859,10 +6005,14 @@ extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
                 }
             } else {
                 let mut i_free_pg_1: Pgno = 0 as Pgno;
+                /// Index of free page to move pLastPg to
                 let mut p_last_pg: *mut MemPage = core::ptr::null_mut();
                 let mut e_mode: u8 = 0 as u8;
+                /// Mode parameter for allocateBtreePage()
                 let mut i_near: Pgno = 0 as Pgno;
-                rc = btree_get_page(p_bt_1, i_last_pg_1, &mut p_last_pg, 0);
+
+                /// nearby parameter for allocateBtreePage()
+                (rc = btree_get_page(p_bt_1, i_last_pg_1, &mut p_last_pg, 0));
                 if rc != 0 { return rc; }
                 if b_commit_1 == 0 { e_mode = 2 as u8; i_near = n_fin_1; }
                 '__b29: loop {
@@ -4920,6 +6070,9 @@ extern "C" fn incr_vacuum_step(p_bt_1: *mut BtShared, n_fin_1: Pgno,
     }
 }
 
+///* This routine is called prior to sqlite3PagerCommit when a transaction
+///* is committed for an auto-vacuum database.
+#[allow(unused_doc_comments)]
 extern "C" fn auto_vacuum_commit(p: *mut Btree) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -4934,15 +6087,25 @@ extern "C" fn auto_vacuum_commit(p: *mut Btree) -> i32 {
         { let _ = 0; };
         if (unsafe { (*p_bt).incr_vacuum } == 0) as i32 != 0 {
             let mut n_fin: Pgno = 0 as Pgno;
+            /// Number of pages in database after autovacuuming
             let mut n_free: Pgno = 0 as Pgno;
+            /// Number of pages on the freelist initially
             let mut n_vac: Pgno = 0 as Pgno;
+            /// Number of pages to vacuum
             let mut i_free: Pgno = 0 as Pgno;
+            /// The next page to be freed
             let mut n_orig: Pgno = 0 as Pgno;
-            n_orig = btree_pagecount(unsafe { &*p_bt });
+
+            /// Database size before freeing
+            (n_orig = btree_pagecount(unsafe { &*p_bt }));
             if ptrmap_pageno(unsafe { &*p_bt }, n_orig) == n_orig ||
                     n_orig ==
                         (sqlite3_pending_byte as u32 / unsafe { (*p_bt).page_size }
                                 + 1 as u32) as Pgno {
+
+                /// It is not possible to create a database for which the final page
+                ///* is either a pointer-map page or the pending-byte page. If one
+                ///* is encountered, this indicates corruption.
                 return unsafe { sqlite3_corrupt_error(4260) };
             }
             n_free =
@@ -5046,6 +6209,30 @@ extern "C" fn auto_vacuum_commit(p: *mut Btree) -> i32 {
     }
 }
 
+///* This routine does the first phase of a two-phase commit.  This routine
+///* causes a rollback journal to be created (if it does not already exist)
+///* and populated with enough information so that if a power loss occurs
+///* the database can be restored to its original state by playing back
+///* the journal.  Then the contents of the journal are flushed out to
+///* the disk.  After the journal is safely on oxide, the changes to the
+///* database are written into the database file and flushed to oxide.
+///* At the end of this call, the rollback journal still exists on the
+///* disk and we are still holding all locks, so the transaction has not
+///* committed.  See sqlite3BtreeCommitPhaseTwo() for the second phase of the
+///* commit process.
+///*
+///* This call is a no-op if no write-transaction is currently active on pBt.
+///*
+///* Otherwise, sync the database file for the btree pBt. zSuperJrnl points to
+///* the name of a super-journal file that should be written into the
+///* individual journal file, or is NULL, indicating no super-journal file
+///* (single database transaction).
+///*
+///* When this is called, the super-journal should already have been
+///* created, populated with this journal pointer and synced to disk.
+///*
+///* Once this is routine has returned, the only thing required to commit
+///* the write-transaction for this database file is to delete the journal.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_commit_phase_one(p: *mut Btree,
     z_super_jrnl_1: *const i8) -> i32 {
@@ -5073,7 +6260,32 @@ pub extern "C" fn sqlite3_btree_commit_phase_one(p: *mut Btree,
     return rc;
 }
 
+///* Commit the transaction currently in progress.
+///*
+///* This routine implements the second phase of a 2-phase commit.  The
+///* sqlite3BtreeCommitPhaseOne() routine does the first phase and should
+///* be invoked prior to calling this routine.  The sqlite3BtreeCommitPhaseOne()
+///* routine did all the work of writing information out to disk and flushing the
+///* contents so that they are written onto the disk platter.  All this
+///* routine has to do is delete or truncate or zero the header in the
+///* the rollback journal (which causes the transaction to commit) and
+///* drop locks.
+///*
+///* Normally, if an error occurs while the pager layer is attempting to
+///* finalize the underlying journal file, this function returns an error and
+///* the upper layer will attempt a rollback. However, if the second argument
+///* is non-zero then this b-tree transaction is part of a multi-file
+///* transaction. In this case, the transaction has already been committed
+///* (by deleting a super-journal file) and the caller will ignore this
+///* functions return code. So, even if an error occurs in the pager layer,
+///* reset the b-tree objects internal state to indicate that the write
+///* transaction has been closed. This is quite safe, as the pager will have
+///* transitioned to the error state.
+///*
+///* This will release the write lock on the database file.  If there
+///* are no active cursors, it also releases the read lock.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_commit_phase_two(p: *mut Btree,
     b_cleanup_1: i32) -> i32 {
     if unsafe { (*p).in_trans } as i32 == 0 { return 0; }
@@ -5099,6 +6311,8 @@ pub extern "C" fn sqlite3_btree_commit_phase_two(p: *mut Btree,
             *__p -= 1;
             __t
         };
+
+        /// Compensate for pPager->iDataVersion++;
         unsafe { (*p_bt).in_transaction = 1 as u8 };
         btree_clear_has_content(unsafe { &mut *p_bt });
     }
@@ -5107,6 +6321,7 @@ pub extern "C" fn sqlite3_btree_commit_phase_two(p: *mut Btree,
     return 0;
 }
 
+///* Do both phases of a commit.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_commit(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5117,7 +6332,24 @@ pub extern "C" fn sqlite3_btree_commit(p: *mut Btree) -> i32 {
     return rc;
 }
 
+///* Start a statement subtransaction. The subtransaction can be rolled
+///* back independently of the main transaction. You must start a transaction
+///* before starting a subtransaction. The subtransaction is ended automatically
+///* if the main transaction commits or rolls back.
+///*
+///* Statement subtransactions are used around individual SQL statements
+///* that are contained within a BEGIN...COMMIT block.  If a constraint
+///* error occurs within the statement, the effect of that one statement
+///* can be rolled back without having to rollback the entire transaction.
+///*
+///* A statement sub-transaction is implemented as an anonymous savepoint. The
+///* value passed as the second parameter is the total number of savepoints,
+///* including the new anonymous savepoint, open on the B-Tree. i.e. if there
+///* are no active savepoints and no other statement-transactions open,
+///* iStatement is 1. This anonymous savepoint can be released or rolled back
+///* using the sqlite3BtreeSavepoint() function.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_begin_stmt(p: *mut Btree, i_statement_1: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -5128,16 +6360,40 @@ pub extern "C" fn sqlite3_btree_begin_stmt(p: *mut Btree, i_statement_1: i32)
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
-    rc =
+
+    /// At the pager level, a statement transaction is a savepoint with
+    ///* an index greater than all savepoints created explicitly using
+    ///* SQL statements. It is illegal to open, release or rollback any
+    ///* such savepoints while the statement transaction savepoint is active.
+    (rc =
         unsafe {
             sqlite3_pager_open_savepoint(unsafe { (*p_bt).p_pager },
                 i_statement_1)
-        };
+        });
     unsafe { sqlite3_btree_leave(p) };
     return rc;
 }
 
+///* This function may only be called if the b-tree connection already
+///* has a read or write transaction open on the database.
+///*
+///* Read the meta-information out of a database file.  Meta[0]
+///* is the number of free pages currently in the database.  Meta[1]
+///* through meta[15] are available for use by higher layers.  Meta[0]
+///* is read-only, the others are read/write.
+///*
+///* The schema layer numbers meta values differently.  At the schema
+///* layer (and the SetCookie and ReadCookie opcodes) the number of
+///* free pages is not visible.  So Cookie[0] is the same as Meta[1].
+///*
+///* This routine treats Meta[BTREE_DATA_VERSION] as a special case.  Instead
+///* of reading the value out of the header, it instead loads the "DataVersion"
+///* from the pager.  The BTREE_DATA_VERSION value is not actually stored in the
+///* database file.  It is a number computed by the pager.  But its access
+///* pattern is the same as header meta values, and so it is convenient to
+///* read it from this routine.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_get_meta(p: *mut Btree, idx: i32,
     p_meta_1: &mut u32) -> () {
     let p_bt: *const BtShared = unsafe { (*p).p_bt } as *const BtShared;
@@ -5162,9 +6418,14 @@ pub extern "C" fn sqlite3_btree_get_meta(p: *mut Btree, idx: i32,
                         } as *const u8)
             };
     }
+
+    /// If auto-vacuum is disabled in this build and this is an auto-vacuum
+    ///* database, mark the database as read-only.
     unsafe { sqlite3_btree_leave(p) };
 }
 
+///* Write meta-information back into the database.  Meta[0] is
+///* read-only and may not be written.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_update_meta(p: *mut Btree, idx: i32,
     i_meta_1: u32) -> i32 {
@@ -5198,6 +6459,16 @@ pub extern "C" fn sqlite3_btree_update_meta(p: *mut Btree, idx: i32,
     return rc;
 }
 
+///* Create a new BTree table.  Write into *piTable the page
+///* number for the root page of the new table.
+///*
+///* The type of type is determined by the flags parameter.  Only the
+///* following values of flags are currently in use.  Other values for
+///* flags might not work:
+///*
+///*     BTREE_INTKEY|BTREE_LEAFDATA     Used for SQL tables with rowid keys
+///*     BTREE_ZERODATA                  Used for SQL indices
+#[allow(unused_doc_comments)]
 extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
     create_tab_flags_1: i32) -> i32 {
     unsafe {
@@ -5206,13 +6477,26 @@ extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
         let mut pgno_root: Pgno = 0 as Pgno;
         let mut rc: i32 = 0;
         let mut ptf_flags: i32 = 0;
+
+        /// Page-type flags for the root page of new table
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*p_bt).auto_vacuum } != 0 {
             let mut pgno_move: Pgno = 0 as Pgno;
+            /// Move a page here to make room for the root-page
             let mut p_page_move: *mut MemPage = core::ptr::null_mut();
+
+            /// The page to move to.
+            /// Creating a new table may probably require moving an existing database
+            ///* to make room for the new tables root page. In case this page turns
+            ///* out to be an overflow page, delete all overflow page-map caches
+            ///* held by open cursors.
             invalidate_all_overflow_cache(unsafe { &*p_bt });
+
+            /// Read the value of meta[3] from the database to determine where the
+            ///* root page of the new table should go. meta[3] is the largest root-page
+            ///* created so far, so the new root-page is (meta[3]+1).
             unsafe { sqlite3_btree_get_meta(p, 4, &mut pgno_root) };
             if pgno_root > btree_pagecount(unsafe { &*p_bt }) {
                 return unsafe { sqlite3_corrupt_error(10120) };
@@ -5225,19 +6509,34 @@ extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
                 { let __p = &mut pgno_root; let __t = *__p; *__p += 1; __t };
             }
             { let _ = 0; };
-            rc =
+
+            /// Allocate a page. The page that currently resides at pgnoRoot will
+            ///* be moved to the allocated page (unless the allocated page happens
+            ///* to reside at pgnoRoot).
+            (rc =
                 allocate_btree_page(p_bt, &mut p_page_move, &mut pgno_move,
-                    pgno_root, 1 as u8);
+                    pgno_root, 1 as u8));
             if rc != 0 { return rc; }
             if pgno_move != pgno_root {
+                /// pgnoRoot is the page that will be used for the root-page of
+                ///* the new table (assuming an error did not occur). But we were
+                ///* allocated pgnoMove. If required (i.e. if it was not allocated
+                ///* by extending the file), the current page at position pgnoMove
+                ///* is already journaled.
                 let mut e_type: u8 = 0 as u8;
                 let mut i_ptr_page: Pgno = 0 as Pgno;
-                rc =
+
+                /// Save the positions of any open cursors. This is required in
+                ///* case they are holding a reference to an xFetch reference
+                ///* corresponding to page pgnoRoot.
+                (rc =
                     save_all_cursors(unsafe { &*p_bt }, 0 as Pgno,
-                        core::ptr::null_mut());
+                        core::ptr::null_mut()));
                 release_page(p_page_move);
                 if rc != 0 { return rc; }
-                rc = btree_get_page(p_bt, pgno_root, &mut p_root, 0);
+
+                /// Move the page currently at pgnoRoot to pgnoMove.
+                (rc = btree_get_page(p_bt, pgno_root, &mut p_root, 0));
                 if rc != 0 { return rc; }
                 rc =
                     ptrmap_get(p_bt, pgno_root, &mut e_type, &mut i_ptr_page);
@@ -5260,8 +6559,14 @@ extern "C" fn btree_create_table(p: *mut Btree, pi_table_1: &mut Pgno,
                     };
                 if rc != 0 { release_page(p_root); return rc; }
             } else { p_root = p_page_move; }
+
+            /// Update the pointer-map and meta-data with the new root-page number.
             ptrmap_put(p_bt, pgno_root, 1 as u8, 0 as Pgno, &mut rc);
             if rc != 0 { release_page(p_root); return rc; }
+
+            /// When the new root page was allocated, page 1 was made writable in
+            ///* order either to increase the database filesize, or to decrement the
+            ///* freelist count.  Hence, the sqlite3BtreeUpdateMeta() call cannot fail.
             { let _ = 0; };
             rc = unsafe { sqlite3_btree_update_meta(p, 4, pgno_root) };
             if rc != 0 { release_page(p_root); return rc; }
@@ -5293,12 +6598,15 @@ pub extern "C" fn sqlite3_btree_create_table(p: *mut Btree,
     return rc;
 }
 
+///* Return one of SQLITE_TXN_NONE, SQLITE_TXN_READ, or SQLITE_TXN_WRITE
+///* to describe the current transaction state of Btree p.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_txn_state(p: *const Btree) -> i32 {
     { let _ = 0; };
     return if !(p).is_null() { (unsafe { (*p).in_trans }) as i32 } else { 0 };
 }
 
+///* Return true if there is currently a backup running on Btree p.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_in_backup(p: &Btree) -> i32 {
     { let _ = 0; };
@@ -5306,10 +6614,16 @@ pub extern "C" fn sqlite3_btree_is_in_backup(p: &Btree) -> i32 {
     return ((*p).n_backup != 0) as i32;
 }
 
+///* Return SQLITE_LOCKED_SHAREDCACHE if another user of the same shared
+///* btree as the argument handle holds an exclusive lock on the
+///* sqlite_schema table. Otherwise SQLITE_OK.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_schema_locked(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p; };
+
+    /// only used in DEBUG builds
     { let _ = 0; };
     unsafe { sqlite3_btree_enter(p) };
     rc = query_shared_cache_table_lock(p, 1 as Pgno, 1 as u8);
@@ -5318,6 +6632,22 @@ pub extern "C" fn sqlite3_btree_schema_locked(p: *mut Btree) -> i32 {
     return rc;
 }
 
+///* Add a lock on the table with root-page iTable to the shared-btree used
+///* by Btree handle p. Parameter eLock must be either READ_LOCK or
+///* WRITE_LOCK.
+///*
+///* This function assumes the following:
+///*
+///*   (a) The specified Btree object p is connected to a sharable
+///*       database (one with the BtShared.sharable flag set), and
+///*
+///*   (b) No other Btree objects hold a lock that conflicts
+///*       with the requested lock (i.e. querySharedCacheTableLock() has
+///*       already been called and returned SQLITE_OK).
+///*
+///* SQLITE_OK is returned if the lock is added successfully. SQLITE_NOMEM
+///* is returned if a malloc attempt fails.
+#[allow(unused_doc_comments)]
 extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
     e_lock_1: u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p).p_bt };
@@ -5326,7 +6656,15 @@ extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// A connection with the read-uncommitted flag set will never try to
+    ///* obtain a read-lock using this function. The only read-lock obtained
+    ///* by a connection in read-uncommitted mode is on the sqlite_schema
+    ///* table, and that lock is obtained in BtreeBeginTrans().
     { let _ = 0; };
+
+    /// This function should only be called on a sharable b-tree after it
+    ///* has been determined that no other b-tree holds a conflicting lock.
     { let _ = 0; };
     { let _ = 0; };
     {
@@ -5355,6 +6693,10 @@ extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
         unsafe { (*p_lock).p_next = unsafe { (*p_bt).p_lock } };
         unsafe { (*p_bt).p_lock = p_lock };
     }
+
+    /// Set the BtLock.eLock variable to the maximum of the current lock
+    ///* and the requested lock. This means if a write-lock was already held
+    ///* and a read-lock requested, we don't incorrectly downgrade the lock.
     { let _ = 0; };
     if e_lock_1 as i32 > unsafe { (*p_lock).e_lock } as i32 {
         unsafe { (*p_lock).e_lock = e_lock_1 };
@@ -5362,6 +6704,9 @@ extern "C" fn set_shared_cache_table_lock(p: *mut Btree, i_table_1: Pgno,
     return 0;
 }
 
+///* Obtain a lock on the table whose root page is iTab.  The
+///* lock is a write lock if isWritelock is true or a read lock
+///* if it is false.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_lock_table(p: *mut Btree, i_tab_1: i32,
     is_write_lock_1: u8) -> i32 {
@@ -5381,7 +6726,10 @@ pub extern "C" fn sqlite3_btree_lock_table(p: *mut Btree, i_tab_1: i32,
     return rc;
 }
 
+/// Savepoints are named, nestable SQL transactions mostly implemented */ 
+////* in vdbe.c and pager.c See https://sqlite.org/lang_savepoint.html
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_savepoint(p: *mut Btree, op: i32,
     i_savepoint_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -5410,6 +6758,9 @@ pub extern "C" fn sqlite3_btree_savepoint(p: *mut Btree, op: i32,
             rc = new_database(unsafe { &mut *p_bt });
             btree_set_n_page(unsafe { &mut *p_bt },
                 unsafe { &*unsafe { (*p_bt).p_page1 } });
+
+            /// pBt->nPage might be zero if the database was corrupt when
+            ///* the transaction was started. Otherwise, it must be at least 1.
             { let _ = 0; };
         }
         unsafe { sqlite3_btree_leave(p) };
@@ -5417,6 +6768,12 @@ pub extern "C" fn sqlite3_btree_savepoint(p: *mut Btree, op: i32,
     return rc;
 }
 
+///* Run a checkpoint on the Btree passed as the first argument.
+///*
+///* Return SQLITE_LOCKED if this or any other connection has an open
+///* transaction on the shared-cache the argument Btree is connected to.
+///*
+///* Parameter eMode is one of SQLITE_CHECKPOINT_PASSIVE, FULL or RESTART.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_checkpoint(p: *mut Btree, e_mode_1: i32,
     pn_log_1: *mut i32, pn_ckpt_1: *mut i32) -> i32 {
@@ -5438,6 +6795,11 @@ pub extern "C" fn sqlite3_btree_checkpoint(p: *mut Btree, e_mode_1: i32,
     return rc;
 }
 
+///* Return the full pathname of the underlying database file.  Return
+///* an empty string if the database is in-memory or a TEMP database.
+///*
+///* The pager filename is invariant as long as the pager is
+///* open so it is safe to access without the BtShared mutex.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_filename(p: &Btree) -> *const i8 {
     { let _ = 0; };
@@ -5447,6 +6809,12 @@ pub extern "C" fn sqlite3_btree_get_filename(p: &Btree) -> *const i8 {
         };
 }
 
+///* Return the pathname of the journal file for this database. The return
+///* value of this routine is the same regardless of whether the journal file
+///* has been created or not.
+///*
+///* The pager journal filename is invariant as long as the pager is
+///* open so it is safe to access without the BtShared mutex.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_get_journalname(p: &Btree) -> *const i8 {
     { let _ = 0; };
@@ -5455,6 +6823,12 @@ pub extern "C" fn sqlite3_btree_get_journalname(p: &Btree) -> *const i8 {
         };
 }
 
+///* A write-transaction must be opened before calling this function.
+///* It performs a single unit of work towards an incremental vacuum.
+///*
+///* If the incremental vacuum is finished after this function has run,
+///* SQLITE_DONE is returned. If it is not finished, but no error occurred,
+///* SQLITE_OK is returned. Otherwise an SQLite error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_incr_vacuum(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -5505,6 +6879,17 @@ pub extern "C" fn sqlite3_btree_incr_vacuum(p: *mut Btree) -> i32 {
     return rc;
 }
 
+///* This function is called before modifying the contents of a table
+///* to invalidate any incrblob cursors that are open on the
+///* row or one of the rows being modified.
+///*
+///* If argument isClearTable is true, then the entire contents of the
+///* table is about to be deleted. In this case invalidate all incrblob
+///* cursors open on any row within the table with root-page pgnoRoot.
+///*
+///* Otherwise, if argument isClearTable is false, then the row with
+///* rowid iRow is being replaced or deleted. In this case invalidate
+///* only those incrblob cursors open on that specific row.
 extern "C" fn invalidate_incrblob_cursors(p_btree_1: &mut Btree,
     pgno_root_1: Pgno, i_row_1: i64, is_clear_table_1: i32) -> () {
     let mut p: *mut BtCursor = core::ptr::null_mut();
@@ -5531,6 +6916,7 @@ extern "C" fn invalidate_incrblob_cursors(p_btree_1: &mut Btree,
     }
 }
 
+///* Get a page from the pager and initialize it.
 extern "C" fn get_and_init_page(p_bt_1: *mut BtShared, pgno: Pgno,
     pp_page_1: &mut *mut MemPage, b_read_only_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -5563,6 +6949,9 @@ extern "C" fn get_and_init_page(p_bt_1: *mut BtShared, pgno: Pgno,
     return 0;
 }
 
+///* Retrieve a page from the pager cache. If the requested page is not
+///* already in the pager cache return NULL. Initialize the MemPage.pBt and
+///* MemPage.aData elements if needed.
 extern "C" fn btree_page_lookup(p_bt_1: *mut BtShared, pgno: Pgno)
     -> *mut MemPage {
     let mut p_db_page: *mut DbPage = core::ptr::null_mut();
@@ -5575,6 +6964,39 @@ extern "C" fn btree_page_lookup(p_bt_1: *mut BtShared, pgno: Pgno)
     return core::ptr::null_mut();
 }
 
+///* Set bit pgno of the BtShared.pHasContent bitvec. This is called
+///* when a page that previously contained data becomes a free-list leaf
+///* page.
+///*
+///* The BtShared.pHasContent bitvec exists to work around an obscure
+///* bug caused by the interaction of two useful IO optimizations surrounding
+///* free-list leaf pages:
+///*
+///*   1) When all data is deleted from a page and the page becomes
+///*      a free-list leaf page, the page is not written to the database
+///*      (as free-list leaf pages contain no meaningful data). Sometimes
+///*      such a page is not even journalled (as it will not be modified,
+///*      why bother journalling it?).
+///*
+///*   2) When a free-list leaf page is reused, its content is not read
+///*      from the database or written to the journal file (why should it
+///*      be, if it is not at all meaningful?).
+///*
+///* By themselves, these optimizations work fine and provide a handy
+///* performance boost to bulk delete or insert operations. However, if
+///* a page is moved to the free-list and then reused within the same
+///* transaction, a problem comes up. If the page is not journalled when
+///* it is moved to the free-list and it is also not journalled when it
+///* is extracted from the free-list and reused, then the original data
+///* may be lost. In the event of a rollback, it may not be possible
+///* to restore the database to its original configuration.
+///*
+///* The solution is the BtShared.pHasContent bitvec. Whenever a page is
+///* moved to become a free-list leaf page, the corresponding bit is
+///* set in the bitvec. Whenever a leaf page is extracted from the free-list,
+///* optimization 2 above is omitted if the corresponding bit is already
+///* set in BtShared.pHasContent. The contents of the bitvec are cleared
+///* at the end of every transaction.
 extern "C" fn btree_set_has_content(p_bt_1: &mut BtShared, pgno: Pgno)
     -> i32 {
     let mut rc: i32 = 0;
@@ -5591,17 +7013,39 @@ extern "C" fn btree_set_has_content(p_bt_1: &mut BtShared, pgno: Pgno)
     return rc;
 }
 
+///* This function is used to add page iPage to the database file free-list.
+///* It is assumed that the page is not already a part of the free-list.
+///*
+///* The value passed as the second argument to this function is optional.
+///* If the caller happens to have a pointer to the MemPage object
+///* corresponding to page iPage handy, it may pass it as the second value.
+///* Otherwise, it may pass NULL.
+///*
+///* If a pointer to a MemPage object is passed as the second argument,
+///* its reference count is not altered by this function.
+#[allow(unused_doc_comments)]
 extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
     i_page_1: Pgno) -> i32 {
     let mut p_trunk: *mut MemPage = core::ptr::null_mut();
+    /// Free-list trunk page
+    /// Page number of free-list trunk page
+    /// Local reference to page 1
     let mut p_page: *mut MemPage = core::ptr::null_mut();
+    /// Page being freed. May be NULL.
     let mut rc: i32 = 0;
     '__b36: loop {
         '__c36: loop {
+            /// Free-list trunk page
             let mut i_trunk: Pgno = 0 as Pgno;
+            /// Page number of free-list trunk page
             let p_page1: *const MemPage =
                 unsafe { (*p_bt_1).p_page1 } as *const MemPage;
+            /// Local reference to page 1
+            /// Page being freed. May be NULL.
+            /// Return Code
             let mut n_free: u32 = 0 as u32;
+
+            /// Initial number of pages on free-list
             { let _ = 0; };
             { let _ = 0; };
             { let _ = 0; };
@@ -5612,10 +7056,12 @@ extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
                 p_page = p_mem_page_1;
                 unsafe { sqlite3_pager_ref(unsafe { (*p_page).p_db_page }) };
             } else { p_page = btree_page_lookup(p_bt_1, i_page_1); }
-            rc =
+
+            /// Increment the free page count on pPage1
+            (rc =
                 unsafe {
                     sqlite3_pager_write(unsafe { (*p_page1).p_db_page })
-                };
+                });
             if rc != 0 { break '__b36; }
             n_free =
                 unsafe {
@@ -5654,12 +7100,14 @@ extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
             }
             if n_free != 0 as u32 {
                 let mut n_leaf: u32 = 0 as u32;
-                i_trunk =
+
+                /// Initial number of leaf cells on trunk page
+                (i_trunk =
                     unsafe {
                         sqlite3_get4byte(unsafe {
                                     &raw mut *unsafe { (*p_page1).a_data.offset(32 as isize) }
                                 } as *const u8)
-                    };
+                    });
                 if i_trunk > btree_pagecount(unsafe { &*p_bt_1 }) {
                     rc = unsafe { sqlite3_corrupt_error(6928) };
                     break '__b36;
@@ -5682,10 +7130,29 @@ extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
                 if n_leaf <
                         unsafe { (*p_bt_1).usable_size } as u32 / 4 as u32 -
                             8 as u32 {
-                    rc =
+
+                    /// In this case there is room on the trunk page to insert the page
+                    ///* being freed as a new leaf.
+                    ///*
+                    ///* Note that the trunk page is not really full until it contains
+                    ///* usableSize/4 - 2 entries, not usableSize/4 - 8 entries as we have
+                    ///* coded.  But due to a coding error in versions of SQLite prior to
+                    ///* 3.6.0, databases with freelist trunk pages holding more than
+                    ///* usableSize/4 - 8 entries will be reported as corrupt.  In order
+                    ///* to maintain backwards compatibility with older versions of SQLite,
+                    ///* we will continue to restrict the number of entries to usableSize/4 - 8
+                    ///* for now.  At some point in the future (once everyone has upgraded
+                    ///* to 3.6.0 or later) we should consider fixing the conditional above
+                    ///* to read "usableSize/4-2" instead of "usableSize/4-8".
+                    ///*
+                    ///* EVIDENCE-OF: R-19920-11576 However, newer versions of SQLite still
+                    ///* avoid using the last six entries in the freelist trunk page array in
+                    ///* order that database files created by newer versions of SQLite can be
+                    ///* read by older versions of SQLite.
+                    (rc =
                         unsafe {
                             sqlite3_pager_write(unsafe { (*p_trunk).p_db_page })
-                        };
+                        });
                     if rc == 0 {
                         unsafe {
                             sqlite3_put4byte(unsafe {
@@ -5746,6 +7213,8 @@ extern "C" fn free_page2(p_bt_1: *mut BtShared, p_mem_page_1: *mut MemPage,
     return rc;
 }
 
+///* Free the overflow pages associated with the given Cell.
+#[allow(unused_doc_comments)]
 extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
     p_info_1: &CellInfo) -> i32 {
     let mut p_bt: *mut BtShared = core::ptr::null_mut();
@@ -5757,6 +7226,8 @@ extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
     { let _ = 0; };
     if unsafe { p_cell_1.add((*p_info_1).n_size as usize) } >
             (*p_page_1).a_data_end {
+
+        /// Cell extends past end of page
         return unsafe { sqlite3_corrupt_error(7028) };
     }
     ovfl_pgno =
@@ -5780,6 +7251,10 @@ extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
         let mut p_ovfl: *mut MemPage = core::ptr::null_mut();
         if ovfl_pgno < 2 as u32 ||
                 ovfl_pgno > btree_pagecount(unsafe { &*p_bt }) {
+
+            /// 0 is not a legal page number and page 1 cannot be an
+            ///* overflow page. Therefore if ovflPgno<2 or past the end of the
+            ///* file the database must be corrupt.
             return unsafe { sqlite3_corrupt_error(7045) };
         }
         if n_ovfl != 0 {
@@ -5792,7 +7267,17 @@ extern "C" fn clear_cell_overflow(p_page_1: &MemPage, p_cell_1: *const u8,
                 unsafe {
                         sqlite3_pager_page_refcount(unsafe { (*p_ovfl).p_db_page })
                     } != 1 {
-            rc = unsafe { sqlite3_corrupt_error(7065) };
+
+            /// There is no reason any cursor should have an outstanding reference
+            ///* to an overflow page belonging to a cell that is being deleted/updated.
+            ///* So if there exists more than one reference to this page, then it
+            ///* must not really be an overflow page and the database must be corrupt.
+            ///* It is helpful to detect this before calling freePage2(), as
+            ///* freePage2() may zero the page contents if secure-delete mode is
+            ///* enabled. If this 'overflow' page happens to be a page that the
+            ///* caller is iterating through or using in some other way, this
+            ///* can be problematic.
+            (rc = unsafe { sqlite3_corrupt_error(7065) });
         } else { rc = free_page2(p_bt, p_ovfl, ovfl_pgno); }
         if !(p_ovfl).is_null() {
             unsafe { sqlite3_pager_unref(unsafe { (*p_ovfl).p_db_page }) };
@@ -5811,6 +7296,8 @@ extern "C" fn free_page(p_page_1: *mut MemPage, p_rc_1: &mut i32) -> () {
     }
 }
 
+///* Erase the given database page and all its children.  Return
+///* the page to the freelist.
 extern "C" fn clear_database_page(p_bt_1: *mut BtShared, pgno: Pgno,
     free_page_flag_1: i32, mut pn_change_1: *mut i64) -> i32 {
     let mut p_page: *mut MemPage = core::ptr::null_mut();
@@ -6004,6 +7491,16 @@ extern "C" fn clear_database_page(p_bt_1: *mut BtShared, pgno: Pgno,
     unreachable!();
 }
 
+///* Delete all information from a single table in the database.  iTable is
+///* the page number of the root of the table.  After this routine returns,
+///* the root page is empty, but still exists.
+///*
+///* This routine will fail with SQLITE_LOCKED if there are any open
+///* read cursors on the table.  Open write cursors are moved to the
+///* root of the table.
+///*
+///* If pnChange is not NULL, then the integer value pointed to by pnChange
+///* is incremented by the number of entries in the table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_table(p: *mut Btree, i_table_1: i32,
     pn_change_1: *mut i64) -> i32 {
@@ -6025,6 +7522,25 @@ pub extern "C" fn sqlite3_btree_clear_table(p: *mut Btree, i_table_1: i32,
     return rc;
 }
 
+///* Erase all information in a table and add the root of the table to
+///* the freelist.  Except, the root of the principle table (the one on
+///* page 1) is never added to the freelist.
+///*
+///* This routine will fail with SQLITE_LOCKED if there are any open
+///* cursors on the table.
+///*
+///* If AUTOVACUUM is enabled and the page at iTable is not the last
+///* root page in the database file, then the last root page
+///* in the database file is moved into the slot formerly occupied by
+///* iTable and that last slot formerly occupied by the last root page
+///* is added to the freelist instead of iTable.  In this say, all
+///* root pages are kept at the beginning of the database file, which
+///* is necessary for AUTOVACUUM to work right.  *piMoved is set to the
+///* page number that used to be the last root page in the file before
+///* the move.  If no page gets moved, *piMoved is set to 0.
+///* The last root page is recorded in meta[3] and the value of
+///* meta[3] is updated by this procedure.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_drop_table(p: *mut Btree, i_table_1: Pgno,
     pi_moved_1: &mut i32) -> i32 {
     unsafe {
@@ -6048,10 +7564,16 @@ extern "C" fn btree_drop_table(p: *mut Btree, i_table_1: Pgno,
             let mut max_root_pgno: Pgno = 0 as Pgno;
             unsafe { sqlite3_btree_get_meta(p, 4, &mut max_root_pgno) };
             if i_table_1 == max_root_pgno {
+
+                /// If the table being dropped is the table with the largest root-page
+                ///* number in the database, put the root page on the free list.
                 free_page(p_page, &mut rc);
                 release_page(p_page);
                 if rc != 0 { return rc; }
             } else {
+                /// The table being dropped does not have the largest root-page
+                ///* number in the database. So move the page that does into the
+                ///* gap left by the deleted root-page.
                 let mut p_move: *mut MemPage = core::ptr::null_mut();
                 release_page(p_page);
                 rc = btree_get_page(p_bt, max_root_pgno, &mut p_move, 0);
@@ -6068,6 +7590,11 @@ extern "C" fn btree_drop_table(p: *mut Btree, i_table_1: Pgno,
                 if rc != 0 { return rc; }
                 *pi_moved_1 = max_root_pgno as i32;
             }
+
+            /// Set the new 'max-root-page' value in the database header. This
+            ///* is the old value less one, less one more if that happens to
+            ///* be a root-page number, less one again if that is the
+            ///* PENDING_BYTE_PAGE.
             { let __p = &mut max_root_pgno; let __t = *__p; *__p -= 1; __t };
             while max_root_pgno ==
                         (sqlite3_pending_byte as u32 / unsafe { (*p_bt).page_size }
@@ -6098,6 +7625,9 @@ pub extern "C" fn sqlite3_btree_drop_table(p: *mut Btree, i_table_1: i32,
     return rc;
 }
 
+///* Delete all information from the single table that pCur is open on.
+///*
+///* This routine only work for pCur on an ephemeral table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_table_of_cursor(p_cur_1: &BtCursor)
     -> i32 {
@@ -6105,6 +7635,9 @@ pub extern "C" fn sqlite3_btree_clear_table_of_cursor(p_cur_1: &BtCursor)
             (*p_cur_1).pgno_root as i32, core::ptr::null_mut());
 }
 
+///* Initialize the first page of the database file (creating a database
+///* consisting of a single page and no schema objects). Return SQLITE_OK
+///* if successful, or an SQLite error code otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_new_db(p: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
@@ -6115,21 +7648,45 @@ pub extern "C" fn sqlite3_btree_new_db(p: *mut Btree) -> i32 {
     return rc;
 }
 
+///* Make sure pBt->pTmpSpace points to an allocation of
+///* MX_CELL_SIZE(pBt) bytes with a 4-byte prefix for a left-child
+///* pointer.
+#[allow(unused_doc_comments)]
 extern "C" fn allocate_temp_space(p_bt_1: &mut BtShared) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
+
+    /// This routine is called only by btreeCursor() when allocating the
+    ///* first write cursor for the BtShared object
     { let _ = 0; };
     (*p_bt_1).p_tmp_space =
         unsafe { sqlite3_page_malloc((*p_bt_1).page_size as i32) } as *mut u8;
     if (*p_bt_1).p_tmp_space == core::ptr::null_mut() {
         let p_cur: *mut BtCursor = (*p_bt_1).p_cursor;
         (*p_bt_1).p_cursor = unsafe { (*p_cur).p_next };
+
+        /// Unlink the cursor
         unsafe {
             memset(p_cur as *mut (), 0,
                 core::mem::size_of::<BtCursor>() as u64)
         };
         return 7;
     }
+
+    /// One of the uses of pBt->pTmpSpace is to format cells before
+    ///* inserting them into a leaf page (function fillInCell()). If
+    ///* a cell is less than 4 bytes in size, it is rounded up to 4 bytes
+    ///* by the various routines that manipulate binary cells. Which
+    ///* can mean that fillInCell() only initializes the first 2 or 3
+    ///* bytes of pTmpSpace, but that the first 4 bytes are copied from
+    ///* it into a database page. This is not actually a problem, but it
+    ///* does cause a valgrind error when the 1 or 2 bytes of uninitialized
+    ///* data is passed to system call write(). So to avoid this error,
+    ///* zero the first 4 bytes of temp space here.
+    ///*
+    ///* Also:  Provide four bytes of initialized space before the
+    ///* beginning of pTmpSpace as an area available to prepend the
+    ///* left-child pointer to the beginning of a cell.
     unsafe { memset((*p_bt_1).p_tmp_space as *mut (), 0, 8 as u64) };
     {
         let __n = 4;
@@ -6139,15 +7696,66 @@ extern "C" fn allocate_temp_space(p_bt_1: &mut BtShared) -> i32 {
     return 0;
 }
 
+///* Create a new cursor for the BTree whose root is on the page
+///* iTable. If a read-only cursor is requested, it is assumed that
+///* the caller already has at least a read-only transaction open
+///* on the database already. If a write-cursor is requested, then
+///* the caller is assumed to have an open write transaction.
+///*
+///* If the BTREE_WRCSR bit of wrFlag is clear, then the cursor can only
+///* be used for reading.  If the BTREE_WRCSR bit is set, then the cursor
+///* can be used for reading or for writing if other conditions for writing
+///* are also met.  These are the conditions that must be met in order
+///* for writing to be allowed:
+///*
+///* 1:  The cursor must have been opened with wrFlag containing BTREE_WRCSR
+///*
+///* 2:  Other database connections that share the same pager cache
+///*     but which are not in the READ_UNCOMMITTED state may not have
+///*     cursors open with wrFlag==0 on the same table.  Otherwise
+///*     the changes made by this write cursor would be visible to
+///*     the read cursors in the other database connection.
+///*
+///* 3:  The database must be writable (not on read-only media)
+///*
+///* 4:  There must be an active transaction.
+///*
+///* The BTREE_FORDELETE bit of wrFlag may optionally be set if BTREE_WRCSR
+///* is set.  If FORDELETE is set, that is a hint to the implementation that
+///* this cursor will only be used to seek to and delete entries of an index
+///* as part of a larger DELETE statement.  The FORDELETE hint is not used by
+///* this implementation.  But in a hypothetical alternative storage engine
+///* in which index entries are automatically deleted when corresponding table
+///* rows are deleted, the FORDELETE flag is a hint that all SEEK and DELETE
+///* operations on this cursor can be no-ops and all READ operations can
+///* return a null row (2-bytes: 0x01 0x00).
+///*
+///* No checking is done to make sure that page iTable really is the
+///* root page of a b-tree.  If it is not, then the cursor acquired
+///* will not work correctly.
+///*
+///* It is assumed that the sqlite3BtreeCursorZero() has been called
+///* on pCur to initialize the memory space prior to invoking this routine.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_cursor(p: *mut Btree, mut i_table_1: Pgno, wr_flag_1: i32,
     p_key_info_1: *mut KeyInfo, p_cur_1: *mut BtCursor) -> i32 {
     unsafe {
         let p_bt: *mut BtShared = unsafe { (*p).p_bt };
+        /// Shared b-tree handle
         let mut p_x: *mut BtCursor = core::ptr::null_mut();
+
+        /// Looping over other all cursors
         { let _ = 0; };
         { let _ = 0; };
+
+        /// The following assert statements verify that if this is a sharable
+        ///* b-tree database, the connection is holding the required table locks,
+        ///* and that no other connection has any open cursor that conflicts with
+        ///* this lock.  The iTable<1 term disables the check for corrupt schemas.
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Assert that the caller has opened the required transaction.
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -6160,6 +7768,9 @@ extern "C" fn btree_cursor(p: *mut Btree, mut i_table_1: Pgno, wr_flag_1: i32,
                 i_table_1 = 0 as Pgno;
             }
         }
+
+        /// Now that no other errors can occur, finish filling in the BtCursor
+        ///* variables and link the cursor into the BtShared list.
         unsafe { (*p_cur_1).pgno_root = i_table_1 };
         unsafe { (*p_cur_1).i_page = -1 as i8 };
         unsafe { (*p_cur_1).p_key_info = p_key_info_1 };
@@ -6216,17 +7827,32 @@ pub extern "C" fn sqlite3_btree_cursor(p: *mut Btree, i_table_1: Pgno,
     }
 }
 
+///* Return a pointer to a fake BtCursor object that will always answer
+///* false to the sqlite3BtreeCursorHasMoved() routine above.  The fake
+///* cursor returned must not be used with any other Btree interface.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_fake_valid_cursor() -> *mut BtCursor {
     unsafe { { let _ = 0; }; return &raw mut fake_cursor as *mut BtCursor; }
 }
 
+///* Return the size of a BtCursor object in bytes.
+///*
+///* This interfaces is needed so that users of cursors can preallocate
+///* sufficient storage to hold a cursor.  The BtCursor object is opaque
+///* to users so they cannot do the sizeof() themselves - they must call
+///* this routine.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_size() -> i32 {
     return (core::mem::size_of::<BtCursor>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
 
+///* Initialize memory that will be converted into a BtCursor object.
+///*
+///* The simple approach here would be to memset() the entire object
+///* to zero.  But it turns out that the apPage[] and aiIdx[] arrays
+///* do not need to be zeroed and they are large, so we can save a lot
+///* of run-time by skipping the initialization of those elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_zero(p: *mut BtCursor) -> () {
     unsafe {
@@ -6234,6 +7860,7 @@ pub extern "C" fn sqlite3_btree_cursor_zero(p: *mut BtCursor) -> () {
     };
 }
 
+///* Provide flag hints to the cursor.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_hint_flags(p_cur_1: &mut BtCursor,
     x: u32) -> () {
@@ -6241,7 +7868,10 @@ pub extern "C" fn sqlite3_btree_cursor_hint_flags(p_cur_1: &mut BtCursor,
     (*p_cur_1).hints = x as u8;
 }
 
+///* Close a cursor.  The read lock on the database file is released
+///* when the last cursor is closed.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_close_cursor(p_cur_1: *mut BtCursor) -> i32 {
     let p_btree: *mut Btree = unsafe { (*p_cur_1).p_btree };
     if !(p_btree).is_null() {
@@ -6270,6 +7900,9 @@ pub extern "C" fn sqlite3_btree_close_cursor(p_cur_1: *mut BtCursor) -> i32 {
         unsafe { sqlite3_free(unsafe { (*p_cur_1).p_key }) };
         if unsafe { (*p_bt).open_flags } as i32 & 4 != 0 &&
                 unsafe { (*p_bt).p_cursor } == core::ptr::null_mut() {
+
+            /// Since the BtShared is not sharable, there is no need to
+            ///* worry about the missing sqlite3BtreeLeave() call here.
             { let _ = 0; };
             sqlite3_btree_close(p_btree);
         } else { unsafe { sqlite3_btree_leave(p_btree) }; }
@@ -6278,6 +7911,8 @@ pub extern "C" fn sqlite3_btree_close_cursor(p_cur_1: *mut BtCursor) -> i32 {
     return 0;
 }
 
+///* Return true (non-zero) if pCur is current pointing to the last
+///* page of a table.
 extern "C" fn cursor_on_last_page(p_cur_1: &BtCursor) -> i32 {
     let mut i: i32 = 0;
     { let _ = 0; };
@@ -6300,6 +7935,21 @@ extern "C" fn cursor_on_last_page(p_cur_1: &BtCursor) -> i32 {
     return 1;
 }
 
+///* Compare the "idx"-th cell on the page pPage against the key
+///* pointing to by pIdxKey using xRecordCompare.  Return negative or
+///* zero if the cell is less than or equal pIdxKey.  Return positive
+///* if unknown.
+///*
+///*    Return value negative:     Cell at pPage[idx] less than pIdxKey
+///*
+///*    Return value is zero:      Cell at pPage[idx] equals pIdxKey
+///*
+///*    Return value positive:     Nothing is known about the relationship
+///*                               of the cell at pPage[idx] and pIdxKey.
+///*
+///* This routine is part of an optimization.  It is always safe to return
+///* a positive value as that will cause the optimization to be skipped.
+#[allow(unused_doc_comments)]
 extern "C" fn index_cell_compare(p_page_1: &MemPage, idx: i32,
     p_idx_key_1: *mut UnpackedRecord,
     x_record_compare_1:
@@ -6307,6 +7957,7 @@ extern "C" fn index_cell_compare(p_page_1: &MemPage, idx: i32,
             -> i32>) -> i32 {
     let mut c: i32 = 0;
     let mut n_cell: i32 = 0;
+    /// Size of the pCell cell in bytes
     let p_cell: *mut u8 =
         unsafe {
             (*p_page_1).a_data_ofst.offset(((*p_page_1).mask_page as i32 &
@@ -6353,10 +8004,22 @@ extern "C" fn index_cell_compare(p_page_1: &MemPage, idx: i32,
                     unsafe { &raw mut *p_cell.offset(2 as isize) } as *mut () as
                         *const (), p_idx_key_1)
             };
-    } else { c = 99; }
+    } else {
+
+        /// If the record extends into overflow pages, do not attempt
+        ///* the optimization.
+        (c = 99);
+    }
     return c;
 }
 
+///* Move the cursor down to a new child page.  The newPgno argument is the
+///* page number of the child page to move to.
+///*
+///* This function returns SQLITE_CORRUPT if the page-header flags field of
+///* the new child page does not match the flags field of the parent (i.e.
+///* if an intkey page appears to be the parent of a non-intkey page, or
+///* vice-versa).
 extern "C" fn move_to_child(p_cur_1: &mut BtCursor, new_pgno_1: u32) -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
@@ -6394,10 +8057,40 @@ extern "C" fn move_to_child(p_cur_1: &mut BtCursor, new_pgno_1: u32) -> i32 {
     return rc;
 }
 
+///* Move the cursor to point to the root page of its b-tree structure.
+///*
+///* If the table has a virtual root page, then the cursor is moved to point
+///* to the virtual root page instead of the actual root page. A table has a
+///* virtual root page when the actual root page contains no cells and a
+///* single child page. This can only happen with the table rooted at page 1.
+///*
+///* If the b-tree structure is empty, the cursor state is set to
+///* CURSOR_INVALID and this routine returns SQLITE_EMPTY. Otherwise,
+///* the cursor is set to point to the first cell located on the root
+///* (or virtual root) page and the cursor state is set to CURSOR_VALID.
+///*
+///* If this function returns successfully, it may be assumed that the
+///* page-header flags indicate that the [virtual] root-page is the expected
+///* kind of b-tree page (i.e. if when opening the cursor the caller did not
+///* specify a KeyInfo structure the flags byte is set to 0x05 or 0x0D,
+///* indicating a table b-tree, or if the caller did specify a KeyInfo
+///* structure the flags byte is set to 0x02 or 0x0A, indicating an index
+///* b-tree).
+#[allow(unused_doc_comments)]
 extern "C" fn move_to_root(p_cur_1: *mut BtCursor) -> i32 {
     unsafe {
         let mut p_root: *const MemPage = core::ptr::null();
         let mut rc: i32 = 0;
+        /// If pCur->pKeyInfo is not NULL, then the caller that opened this cursor
+        ///* expected to open it on an index b-tree. Otherwise, if pKeyInfo is
+        ///* NULL, the caller expects a table b-tree. If this is not the case,
+        ///* return an SQLITE_CORRUPT error.
+        ///*
+        ///* Earlier versions of SQLite assumed that this test could not fail
+        ///* if the root page was already loaded when this function was called (i.e.
+        ///* if pCur->iPage>=0). But this is not so if the database is corrupted
+        ///* in such a way that page pRoot is linked into a second b-tree table
+        ///* (or the freelist).
         let mut subpage: Pgno = 0 as Pgno;
         let mut __state: i32 = 0;
         loop {
@@ -6587,18 +8280,67 @@ extern "C" fn move_to_root(p_cur_1: *mut BtCursor) -> i32 {
                 }
             }
         }
+
+        /// If pCur->pKeyInfo is not NULL, then the caller that opened this cursor
+        ///* expected to open it on an index b-tree. Otherwise, if pKeyInfo is
+        ///* NULL, the caller expects a table b-tree. If this is not the case,
+        ///* return an SQLITE_CORRUPT error.
+        ///*
+        ///* Earlier versions of SQLite assumed that this test could not fail
+        ///* if the root page was already loaded when this function was called (i.e.
+        ///* if pCur->iPage>=0). But this is not so if the database is corrupted
+        ///* in such a way that page pRoot is linked into a second b-tree table
+        ///* (or the freelist).
         unreachable!();
     }
 }
 
+/// Move the cursor so that it points to an entry in an index table
+///* near the key pIdxKey.   Return a success code.
+///*
+///* If an exact match is not found, then the cursor is always
+///* left pointing at a leaf page which would hold the entry if it
+///* were present.  The cursor might point to an entry that comes
+///* before or after the key.
+///*
+///* An integer is written into *pRes which is the result of
+///* comparing the key with the entry to which the cursor is
+///* pointing.  The meaning of the integer written into
+///* *pRes is as follows:
+///*
+///*     *pRes<0      The cursor is left pointing at an entry that
+///*                  is smaller than pIdxKey or if the table is empty
+///*                  and the cursor is therefore left point to nothing.
+///*
+///*     *pRes==0     The cursor is left pointing at an entry that
+///*                  exactly matches pIdxKey.
+///*
+///*     *pRes>0      The cursor is left pointing at an entry that
+///*                  is larger than pIdxKey.
+///*
+///* The pIdxKey->eqSeen field is set to 1 if there
+///* exists an entry in the table that exactly matches pIdxKey.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_index_moveto(p_cur_1: *mut BtCursor,
     p_idx_key_1: *mut UnpackedRecord, p_res_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
     let mut x_record_compare:
             Option<unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord)
                 -> i32> = None;
+    /// Check to see if we can skip a lot of work.  Two cases:
+    ///*
+    ///*    (1) If the cursor is already pointing to the very last cell
+    ///*        in the table and the pIdxKey search key is greater than or
+    ///*        equal to that last cell, then no movement is required.
+    ///*
+    ///*    (2) If the cursor is on the last page of the table and the first
+    ///*        cell on that last page is less than or equal to the pIdxKey
+    ///*        search key, then we can start the search on the current page
+    ///*        without needing to go back to root.
     let mut c: i32 = 0;
+    /// Cursor already pointing at the correct spot
+    /// Start search on the current page
     let mut lwr: i32 = 0;
     let mut upr: i32 = 0;
     let mut idx: i32 = 0;
@@ -6606,7 +8348,37 @@ pub extern "C" fn sqlite3_btree_index_moveto(p_cur_1: *mut BtCursor,
     let mut chld_pg: Pgno = 0 as Pgno;
     let mut p_page: *mut MemPage = core::ptr::null_mut();
     let mut p_cell: *mut u8 = core::ptr::null_mut();
+    /// Pointer to current cell in pPage
+    /// pPage->nCell must be greater than zero. If this is the root-page
+    ///* the cursor would have been INVALID above and this for(;;) loop
+    ///* not run. If this is not the root-page, then the moveToChild() routine
+    ///* would have already detected db corruption. Similarly, pPage must
+    ///* be the right kind (index or table) of b-tree page. Otherwise
+    ///* a moveToChild() or moveToRoot() call would have detected corruption.
+    /// idx = (lwr+upr)/2;
     let mut n_cell: i32 = 0;
+    /// Size of the pCell cell in bytes
+    /// The maximum supported page-size is 65536 bytes. This means that
+    ///* the maximum number of record bytes stored on an index B-Tree
+    ///* page is less than 16384 bytes and may be stored as a 2-byte
+    ///* varint. This information is used to attempt to avoid parsing
+    ///* the entire cell by checking for the cases where the record is
+    ///* stored entirely within the b-tree page by inspecting the first
+    ///* 2 bytes of the cell.
+    /// This branch runs if the record-size field of the cell is a
+    ///* single byte varint and the record fits entirely on the main
+    ///* b-tree page.
+    /// The record-size field is a 2 byte varint and the record
+    ///* fits entirely on the main b-tree page.
+    /// The record flows over onto one or more overflow pages. In
+    ///* this case the whole cell needs to be parsed, a buffer allocated
+    ///* and accessPayload() used to retrieve the record into the
+    ///* buffer before VdbeRecordCompare() can be called.
+    ///*
+    ///* If the record is corrupt, the xRecordCompare routine may read
+    ///* up to two varints past the end of the buffer. An extra 18
+    ///* bytes of padding is allocated at the end of the buffer in
+    ///* case this happens.
     let mut p_cell_key: *mut () = core::ptr::null_mut();
     let mut p_cell_body: *mut u8 = core::ptr::null_mut();
     let mut n_overrun: i32 = 0;
@@ -7049,13 +8821,74 @@ pub extern "C" fn sqlite3_btree_index_moveto(p_cur_1: *mut BtCursor,
             }
         }
     }
+
+    /// Check to see if we can skip a lot of work.  Two cases:
+    ///*
+    ///*    (1) If the cursor is already pointing to the very last cell
+    ///*        in the table and the pIdxKey search key is greater than or
+    ///*        equal to that last cell, then no movement is required.
+    ///*
+    ///*    (2) If the cursor is on the last page of the table and the first
+    ///*        cell on that last page is less than or equal to the pIdxKey
+    ///*        search key, then we can start the search on the current page
+    ///*        without needing to go back to root.
+    /// Cursor already pointing at the correct spot
+    /// Start search on the current page
+    /// Pointer to current cell in pPage
+    /// pPage->nCell must be greater than zero. If this is the root-page
+    ///* the cursor would have been INVALID above and this for(;;) loop
+    ///* not run. If this is not the root-page, then the moveToChild() routine
+    ///* would have already detected db corruption. Similarly, pPage must
+    ///* be the right kind (index or table) of b-tree page. Otherwise
+    ///* a moveToChild() or moveToRoot() call would have detected corruption.
+    /// idx = (lwr+upr)/2;
+    /// Size of the pCell cell in bytes
+    /// The maximum supported page-size is 65536 bytes. This means that
+    ///* the maximum number of record bytes stored on an index B-Tree
+    ///* page is less than 16384 bytes and may be stored as a 2-byte
+    ///* varint. This information is used to attempt to avoid parsing
+    ///* the entire cell by checking for the cases where the record is
+    ///* stored entirely within the b-tree page by inspecting the first
+    ///* 2 bytes of the cell.
+    /// This branch runs if the record-size field of the cell is a
+    ///* single byte varint and the record fits entirely on the main
+    ///* b-tree page.
+    /// The record-size field is a 2 byte varint and the record
+    ///* fits entirely on the main b-tree page.
+    /// The record flows over onto one or more overflow pages. In
+    ///* this case the whole cell needs to be parsed, a buffer allocated
+    ///* and accessPayload() used to retrieve the record into the
+    ///* buffer before VdbeRecordCompare() can be called.
+    ///*
+    ///* If the record is corrupt, the xRecordCompare routine may read
+    ///* up to two varints past the end of the buffer. An extra 18
+    ///* bytes of padding is allocated at the end of the buffer in
+    ///* case this happens.
+    /// Size of the overrun padding
+    /// True if key size is 2^32 or more
+    /// Invalid key size:  0x80 0x80 0x00
+    /// Invalid key size:  0x80 0x80 0x01
+    /// Minimum legal index key size
+    /// Fix uninit warnings
+    /// idx = (lwr+upr)/2
+    /// This block is similar to an in-lined version of:
+    ///*
+    ///*    pCur->ix = (u16)lwr;
+    ///*    rc = moveToChild(pCur, chldPg);
+    ///*    if( rc ) break;
+    ///**** End of in-lined moveToChild() call
     unreachable!();
 }
 
+///* In this version of BtreeMoveto, pKey is a packed index record
+///* such as is generated by the OP_MakeRecord opcode.  Unpack the
+///* record and then call sqlite3BtreeIndexMoveto() to do the work.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_moveto(p_cur_1: *mut BtCursor, p_key_1: *const (),
     n_key_1: i64, bias: i32, p_res_1: *mut i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Status code
         let mut p_idx_key: *mut UnpackedRecord = core::ptr::null_mut();
         if !(p_key_1).is_null() {
             let p_key_info: *mut KeyInfo = unsafe { (*p_cur_1).p_key_info };
@@ -7094,6 +8927,11 @@ extern "C" fn btree_moveto(p_cur_1: *mut BtCursor, p_key_1: *const (),
     }
 }
 
+///* Restore the cursor to the position it was in (or as close to as possible)
+///* when saveCursorPosition() was called. Note that this call deletes the
+///* saved position info stored by saveCursorPosition(), so there can be
+///* at most one effective restoreCursorPosition() call after each
+///* saveCursorPosition().
 extern "C" fn btree_restore_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut skip_next: i32 = 0;
@@ -7123,6 +8961,11 @@ extern "C" fn btree_restore_cursor_position(p_cur_1: *mut BtCursor) -> i32 {
     return rc;
 }
 
+///* Move the cursor down to the left-most leaf entry beneath the
+///* entry to which it is currently pointing.
+///*
+///* The left-most leaf is the one with the smallest key - the first
+///* in ascending order.
 extern "C" fn move_to_leftmost(p_cur_1: *mut BtCursor) -> i32 {
     let mut pgno: Pgno = 0 as Pgno;
     let mut rc: i32 = 0;
@@ -7166,6 +9009,12 @@ extern "C" fn move_to_leftmost(p_cur_1: *mut BtCursor) -> i32 {
     return rc;
 }
 
+///* Move the cursor up to the parent page.
+///*
+///* pCur->idx is set to the cell index that contains the pointer
+///* to the page we are coming from.  If we are coming from the
+///* right-most child page then pCur->idx is set to one more than
+///* the largest cell index.
 extern "C" fn move_to_parent(p_cur_1: &mut BtCursor) -> () {
     let mut p_leaf: *mut MemPage = core::ptr::null_mut();
     { let _ = 0; };
@@ -7186,6 +9035,24 @@ extern "C" fn move_to_parent(p_cur_1: &mut BtCursor) -> () {
     release_page_not_null(unsafe { &*p_leaf });
 }
 
+///* Advance the cursor to the next entry in the database.
+///* Return value:
+///*
+///*    SQLITE_OK        success
+///*    SQLITE_DONE      cursor is already pointing at the last element
+///*    otherwise        some kind of error occurred
+///*
+///* The main entry point is sqlite3BtreeNext().  That routine is optimized
+///* for the common case of merely incrementing the cell counter BtCursor.aiIdx
+///* to the next cell on the current page.  The (slower) btreeNext() helper
+///* routine is called when it is necessary to move to a different page or
+///* to restore the cursor.
+///*
+///* If bit 0x01 of the F argument in sqlite3BtreeNext(C,F) is 1, then the
+///* cursor corresponds to an SQL index and this routine could have been
+///* skipped if the SQL index had been a unique index.  The F argument
+///* is a hint to the implement.  SQLite btree implementation does not use
+///* this hint, but COMDB2 does.
 extern "C" fn btree_next(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut idx: i32 = 0;
@@ -7252,10 +9119,13 @@ extern "C" fn btree_next(p_cur_1: *mut BtCursor) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_next(p_cur_1: *mut BtCursor, flags: i32)
     -> i32 {
     let mut p_page: *const MemPage = core::ptr::null();
     { let _ = flags; };
+
+    /// Used in COMDB2 but not native SQLite
     { let _ = 0; };
     { let _ = 0; };
     unsafe { (*p_cur_1).info.n_size = 0 as u16 };
@@ -7279,10 +9149,39 @@ pub extern "C" fn sqlite3_btree_next(p_cur_1: *mut BtCursor, flags: i32)
     } else { return move_to_leftmost(p_cur_1); }
 }
 
+/// Move the cursor so that it points to an entry in a table (a.k.a INTKEY)
+///* table near the key intKey.   Return a success code.
+///*
+///* If an exact match is not found, then the cursor is always
+///* left pointing at a leaf page which would hold the entry if it
+///* were present.  The cursor might point to an entry that comes
+///* before or after the key.
+///*
+///* An integer is written into *pRes which is the result of
+///* comparing the key with the entry to which the cursor is
+///* pointing.  The meaning of the integer written into
+///* *pRes is as follows:
+///*
+///*     *pRes<0      The cursor is left pointing at an entry that
+///*                  is smaller than intKey or if the table is empty
+///*                  and the cursor is therefore left point to nothing.
+///*
+///*     *pRes==0     The cursor is left pointing at an entry that
+///*                  exactly matches intKey.
+///*
+///*     *pRes>0      The cursor is left pointing at an entry that
+///*                  is larger than intKey.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_table_moveto(p_cur_1: *mut BtCursor,
     int_key_1: i64, bias_right_1: i32, p_res_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
+    /// If the cursor is already positioned at the point we are trying
+    ///* to move to, then just return without doing any work
+    /// If the requested key is one more than the previous key, then
+    ///* try to get there using sqlite3BtreeNext() rather than a full
+    ///* binary search.  This is an optimization only.  The correct answer
+    ///* is still obtained without this case, only a little more slowly.
     let mut lwr: i32 = 0;
     let mut upr: i32 = 0;
     let mut idx: i32 = 0;
@@ -7290,6 +9189,14 @@ pub extern "C" fn sqlite3_btree_table_moveto(p_cur_1: *mut BtCursor,
     let mut chld_pg: Pgno = 0 as Pgno;
     let mut p_page: *const MemPage = core::ptr::null();
     let mut p_cell: *mut u8 = core::ptr::null_mut();
+    /// Pointer to current cell in pPage
+    /// pPage->nCell must be greater than zero. If this is the root-page
+    ///* the cursor would have been INVALID above and this for(;;) loop
+    ///* not run. If this is not the root-page, then the moveToChild() routine
+    ///* would have already detected db corruption. Similarly, pPage must
+    ///* be the right kind (index or table) of b-tree page. Otherwise
+    ///* a moveToChild() or moveToRoot() call would have detected corruption.
+    /// idx = biasRight ? upr : (lwr+upr)/2;
     let mut n_cell_key: i64 = 0 as i64;
     let mut __state: i32 = 0;
     loop {
@@ -7571,9 +9478,35 @@ pub extern "C" fn sqlite3_btree_table_moveto(p_cur_1: *mut BtCursor,
             }
         }
     }
+
+    /// If the cursor is already positioned at the point we are trying
+    ///* to move to, then just return without doing any work
+    /// If the requested key is one more than the previous key, then
+    ///* try to get there using sqlite3BtreeNext() rather than a full
+    ///* binary search.  This is an optimization only.  The correct answer
+    ///* is still obtained without this case, only a little more slowly.
+    /// Pointer to current cell in pPage
+    /// pPage->nCell must be greater than zero. If this is the root-page
+    ///* the cursor would have been INVALID above and this for(;;) loop
+    ///* not run. If this is not the root-page, then the moveToChild() routine
+    ///* would have already detected db corruption. Similarly, pPage must
+    ///* be the right kind (index or table) of b-tree page. Otherwise
+    ///* a moveToChild() or moveToRoot() call would have detected corruption.
+    /// idx = biasRight ? upr : (lwr+upr)/2;
+    /// idx = (lwr+upr)/2;
     unreachable!();
 }
 
+///* Determine whether or not a cursor has moved from the position where
+///* it was last placed, or has been invalidated for any other reason.
+///* Cursors can move when the row they are pointing at is deleted out
+///* from under them, for example.  Cursor might also move if a btree
+///* is rebalanced.
+///*
+///* Calling this routine with a NULL cursor pointer returns false.
+///*
+///* Use the separate sqlite3BtreeCursorRestore() routine to restore a cursor
+///* back to where it ought to be if this routine returns true.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_has_moved(p_cur_1: *mut BtCursor)
     -> i32 {
@@ -7583,6 +9516,17 @@ pub extern "C" fn sqlite3_btree_cursor_has_moved(p_cur_1: *mut BtCursor)
     return (0 != unsafe { *(p_cur_1 as *mut u8) } as i32) as i32;
 }
 
+///* This routine restores a cursor back to its original position after it
+///* has been moved by some outside activity (such as a btree rebalance or
+///* a row having been deleted out from under the cursor). 
+///*
+///* On success, the *pDifferentRow parameter is false if the cursor is left
+///* pointing at exactly the same row.  *pDifferntRow is the row the cursor
+///* was pointing to has been deleted, forcing the cursor to point to some
+///* nearby row.
+///*
+///* This routine should only be called for a cursor that just returned
+///* TRUE from sqlite3BtreeCursorHasMoved().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_restore(p_cur_1: *mut BtCursor,
     p_different_row_1: &mut i32) -> i32 {
@@ -7600,15 +9544,27 @@ pub extern "C" fn sqlite3_btree_cursor_restore(p_cur_1: *mut BtCursor,
     return 0;
 }
 
+///* Compute the amount of freespace on the page.  In other words, fill
+///* in the pPage->nFree field.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
     let mut pc: i32 = 0;
+    /// Address of a freeblock within pPage->aData[]
     let mut hdr: u8 = 0 as u8;
+    /// Offset to beginning of page header
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// Equal to pPage->aData
     let mut usable_size: i32 = 0;
+    /// Amount of usable space on each page
     let mut n_free: i32 = 0;
+    /// Number of unused bytes on the page
     let mut top: i32 = 0;
+    /// First byte of the cell content area
     let mut i_cell_first: i32 = 0;
+    /// First allowable cell or freeblock offset
     let mut i_cell_last: i32 = 0;
+
+    /// Last possible cell or freeblock offset
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -7620,7 +9576,11 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
     usable_size = unsafe { (*(*p_page_1).p_bt).usable_size } as i32;
     hdr = (*p_page_1).hdr_offset;
     data = (*p_page_1).a_data;
-    top =
+
+    /// EVIDENCE-OF: R-58015-48175 The two-byte integer at offset 5 designates
+    ///* the start of the cell content area. A zero value for this integer is
+    ///* interpreted as 65536.
+    (top =
         (((unsafe {
                                             *unsafe {
                                                     data.offset((hdr as i32 + 5) as isize).offset(0 as isize)
@@ -7630,12 +9590,17 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
                                     *unsafe {
                                             data.offset((hdr as i32 + 5) as isize).offset(1 as isize)
                                         }
-                                } as i32) as i32 - 1 & 65535) + 1;
+                                } as i32) as i32 - 1 & 65535) + 1);
     i_cell_first =
         hdr as i32 + 8 + (*p_page_1).child_ptr_size as i32 +
             2 * (*p_page_1).n_cell as i32;
     i_cell_last = usable_size - 4;
-    pc =
+
+    /// Compute the total free space on the page
+    ///* EVIDENCE-OF: R-23588-34450 The two-byte integer at offset 1 gives the
+    ///* start of the first freeblock on the page, or is zero if there are no
+    ///* freeblocks.
+    (pc =
         (unsafe {
                             *unsafe {
                                     data.offset((hdr as i32 + 1) as isize).offset(0 as isize)
@@ -7645,14 +9610,21 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
                     *unsafe {
                             data.offset((hdr as i32 + 1) as isize).offset(1 as isize)
                         }
-                } as i32;
+                } as i32);
     n_free = unsafe { *data.offset((hdr as i32 + 7) as isize) } as i32 + top;
     if pc > 0 {
         let mut next: u32 = 0 as u32;
         let mut size: u32 = 0 as u32;
-        if pc < top { return unsafe { sqlite3_corrupt_error(2159) }; }
+        if pc < top {
+
+            /// EVIDENCE-OF: R-55530-52930 In a well-formed b-tree page, there will
+            ///* always be at least one cell before the first freeblock.
+            return unsafe { sqlite3_corrupt_error(2159) };
+        }
         loop {
             if pc > i_cell_last {
+
+                /// Freeblock off the end of the page
                 return unsafe { sqlite3_corrupt_error(2164) };
             }
             next =
@@ -7674,14 +9646,25 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
                                     }
                             } as i32) as u32;
             if size < 4 as u32 && unsafe { sqlite3_fault_sim(422) } == 0 {
+
+                /// Minimum freeblock size is 4.  Enable fault-sim 422 to disable this
+                ///* check to reach interesting error stats.  However, disabling this
+                ///* check can cause assertion faults due to min-heap overflow.  All
+                ///* fault-sims are for testing use only, but this one especially so.
                 return unsafe { sqlite3_corrupt_error(2173) };
             }
             n_free = (n_free as u32 + size) as i32;
             if next < pc as u32 + size + 4 as u32 { break; }
             pc = next as i32;
         }
-        if next > 0 as u32 { return unsafe { sqlite3_corrupt_error(2181) }; }
+        if next > 0 as u32 {
+
+            /// Freeblock not in ascending order
+            return unsafe { sqlite3_corrupt_error(2181) };
+        }
         if pc as u32 + size > usable_size as u32 {
+
+            /// Last freeblock extends past page end
             return unsafe { sqlite3_corrupt_error(2185) };
         }
     }
@@ -7692,6 +9675,14 @@ extern "C" fn btree_compute_free_space(p_page_1: &mut MemPage) -> i32 {
     return 0;
 }
 
+///* Move the cursor down to the right-most leaf entry beneath the
+///* page to which it is currently pointing.  Notice the difference
+///* between moveToLeftmost() and moveToRightmost().  moveToLeftmost()
+///* finds the left-most entry beneath the *entry* whereas moveToRightmost()
+///* finds the right-most entry beneath the *page*.
+///*
+///* The right-most entry is the one with the largest key - the last
+///* key in ascending order.
 extern "C" fn move_to_rightmost(p_cur_1: *mut BtCursor) -> i32 {
     let mut pgno: Pgno = 0 as Pgno;
     let mut rc: i32 = 0;
@@ -7722,6 +9713,24 @@ extern "C" fn move_to_rightmost(p_cur_1: *mut BtCursor) -> i32 {
     return 0;
 }
 
+///* Step the cursor to the back to the previous entry in the database.
+///* Return values:
+///*
+///*     SQLITE_OK     success
+///*     SQLITE_DONE   the cursor is already on the first element of the table
+///*     otherwise     some kind of error occurred
+///*
+///* The main entry point is sqlite3BtreePrevious().  That routine is optimized
+///* for the common case of merely decrementing the cell counter BtCursor.aiIdx
+///* to the previous cell on the current page.  The (slower) btreePrevious()
+///* helper routine is called when it is necessary to move to a different page
+///* or to restore the cursor.
+///*
+///* If bit 0x01 of the F argument to sqlite3BtreePrevious(C,F) is 1, then
+///* the cursor corresponds to an SQL index and this routine could have been
+///* skipped if the SQL index had been a unique index.  The F argument is a
+///* hint to the implement.  The native SQLite btree implementation does not
+///* use this hint, but COMDB2 does.
 extern "C" fn btree_previous(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut p_page: *mut MemPage = core::ptr::null_mut();
@@ -7803,11 +9812,14 @@ extern "C" fn btree_previous(p_cur_1: *mut BtCursor) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_previous(p_cur_1: *mut BtCursor, flags: i32)
     -> i32 {
     { let _ = 0; };
     { let _ = 0; };
     { let _ = flags; };
+
+    /// Used in COMDB2 but not native SQLite
     unsafe { (*p_cur_1).cur_flags &= !(8 | 4 | 2) as u8 };
     unsafe { (*p_cur_1).info.n_size = 0 as u16 };
     if unsafe { (*p_cur_1).e_state } as i32 != 0 ||
@@ -7824,25 +9836,52 @@ pub extern "C" fn sqlite3_btree_previous(p_cur_1: *mut BtCursor, flags: i32)
     return 0;
 }
 
+///* Return a section of the pPage->aData to the freelist.
+///* The first byte of the new free block is pPage->aData[iStart]
+///* and the size of the block is iSize bytes.
+///*
+///* Adjacent freeblocks are coalesced.
+///*
+///* Even though the freeblock list was checked by btreeComputeFreeSpace(),
+///* that routine will not detect overlap between cells or freeblocks.  Nor
+///* does it detect cells or freeblocks that encroach into the reserved bytes
+///* at the end of the page.  So do additional corruption checks inside this
+///* routine and return SQLITE_CORRUPT if any problems are found.
+#[allow(unused_doc_comments)]
 extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
     mut i_size_1: i32) -> i32 {
     let mut i_ptr: i32 = 0;
+    /// Address of ptr to next freeblock
     let mut i_free_blk: i32 = 0;
+    /// Address of the next freeblock
     let mut hdr: u8 = 0 as u8;
+    /// Page header size.  0 or 100
     let mut n_frag: i32 = 0;
+    /// Reduction in fragmentation
     let i_orig_size: i32 = i_size_1;
+    /// Original value of iSize
     let mut x: i32 = 0;
+    /// Offset to cell content area
     let mut i_end: i32 = i_start_1 + i_size_1;
+    /// First byte past the iStart buffer
     let data: *mut u8 = (*p_page_1).a_data;
+    /// Page content
     let mut p_tmp: *const u8 = core::ptr::null();
+
+    /// Temporary ptr into data[]
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// Minimum cell size is 4
     { let _ = 0; };
-    hdr = (*p_page_1).hdr_offset;
+
+    /// The list of freeblocks must be in ascending order.  Find the
+    ///* spot on the list where iStart should be inserted.
+    (hdr = (*p_page_1).hdr_offset);
     i_ptr = hdr as i32 + 1;
     if unsafe { *data.offset((i_ptr + 1) as isize) } as i32 == 0 &&
             unsafe { *data.offset(i_ptr as isize) } as i32 == 0 {
@@ -7860,12 +9899,16 @@ extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
                 } < i_start_1 {
             if i_free_blk <= i_ptr {
                 if i_free_blk == 0 { break; }
+
+                /// TH3: corrupt082.100
                 return unsafe { sqlite3_corrupt_error(1975) };
             }
             i_ptr = i_free_blk;
         }
         if i_free_blk > unsafe { (*(*p_page_1).p_bt).usable_size } as i32 - 4
             {
+
+            /// TH3: corrupt081.100
             return unsafe { sqlite3_corrupt_error(1980) };
         }
         { let _ = 0; };
@@ -7938,6 +9981,9 @@ extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
         (unsafe { *p_tmp.offset(0 as isize) } as i32) << 8 |
             unsafe { *p_tmp.offset(1 as isize) } as i32;
     if unsafe { (*(*p_page_1).p_bt).bts_flags } as i32 & 12 != 0 {
+
+        /// Overwrite deleted information with zeros when the secure_delete
+        ///* option is enabled
         unsafe {
             memset(unsafe { &raw mut *data.offset(i_start_1 as isize) } as
                     *mut (), 0, i_size_1 as u64)
@@ -7973,6 +10019,8 @@ extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
             }
         };
     } else {
+
+        /// Insert the new freeblock into the freelist
         {
             unsafe {
                 *unsafe { data.offset(i_ptr as isize).offset(0 as isize) } =
@@ -8011,12 +10059,23 @@ extern "C" fn free_space(p_page_1: &mut MemPage, mut i_start_1: i32,
     return 0;
 }
 
+///* Remove the i-th cell from pPage.  This routine effects pPage only.
+///* The cell content is not freed or deallocated.  It is assumed that
+///* the cell content has been copied someplace else.  This routine just
+///* removes the reference to the cell from pPage.
+///*
+///* "sz" must be the number of bytes in the cell.
+#[allow(unused_doc_comments)]
 extern "C" fn drop_cell(p_page_1: *mut MemPage, idx: i32, sz: i32,
     p_rc_1: &mut i32) -> () {
     let mut pc: u32 = 0 as u32;
+    /// Offset to cell content of cell being deleted
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// pPage->aData
     let mut ptr: *mut u8 = core::ptr::null_mut();
+    /// Used to move bytes around within data[]
     let mut rc: i32 = 0;
+    /// The return code
     let mut hdr: i32 = 0;
     if *p_rc_1 != 0 { return; }
     { let _ = 0; };
@@ -8094,23 +10153,49 @@ extern "C" fn drop_cell(p_page_1: *mut MemPage, idx: i32, sz: i32,
     }
 }
 
+///* Search the free-list on page pPg for space to store a cell nByte bytes in
+///* size. If one can be found, return a pointer to the space and remove it
+///* from the free-list.
+///*
+///* If no suitable space can be found on the free-list, return NULL.
+///*
+///* This function may detect corruption within pPg.  If corruption is
+///* detected then *pRc is set to SQLITE_CORRUPT and NULL is returned.
+///*
+///* Slots on the free list that are between 1 and 3 bytes larger than nByte
+///* will be ignored if adding the extra space to the fragmentation count
+///* causes the fragmentation count to exceed 60.
+#[allow(unused_doc_comments)]
 extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
     p_rc_1: &mut i32) -> *mut u8 {
     let hdr: i32 = (*p_pg_1).hdr_offset as i32;
+    /// Offset to page header
     let a_data: *mut u8 = (*p_pg_1).a_data;
+    /// Page data
     let mut i_addr: i32 = hdr + 1;
+    /// Address of ptr to pc
     let mut p_tmp: *const u8 =
         unsafe { &raw mut *a_data.offset(i_addr as isize) } as *const u8;
+    /// Temporary ptr into aData[]
     let mut pc: i32 =
         (unsafe { *p_tmp.offset(0 as isize) } as i32) << 8 |
             unsafe { *p_tmp.offset(1 as isize) } as i32;
+    /// Address of a free slot
     let mut x: i32 = 0;
+    /// Excess size of the slot
     let max_pc: i32 =
         (unsafe { (*(*p_pg_1).p_bt).usable_size } - n_byte_1 as u32) as i32;
+    /// Max address for a usable slot
     let mut size: i32 = 0;
+
+    /// Size of the free slot
     { let _ = 0; };
     while pc <= max_pc {
-        p_tmp = unsafe { a_data.offset((pc + 2) as isize) };
+
+        /// EVIDENCE-OF: R-22710-53328 The third and fourth bytes of each
+        ///* freeblock form a big-endian integer which is the size of the freeblock
+        ///* in bytes, including the 4-byte header.
+        (p_tmp = unsafe { a_data.offset((pc + 2) as isize) });
         size =
             (unsafe { *p_tmp.offset(0 as isize) } as i32) << 8 |
                 unsafe { *p_tmp.offset(1 as isize) } as i32;
@@ -8119,6 +10204,9 @@ extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
                 if unsafe { *a_data.offset((hdr + 7) as isize) } as i32 > 57 {
                     return core::ptr::null_mut();
                 }
+
+                /// Remove the slot from the free-list. Update the number of
+                ///* fragmented bytes within the page.
                 unsafe {
                     memcpy(unsafe { &raw mut *a_data.offset(i_addr as isize) }
                             as *mut (),
@@ -8130,9 +10218,14 @@ extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
                 };
                 return unsafe { &mut *a_data.offset(pc as isize) };
             } else if x + pc > max_pc {
-                *p_rc_1 = unsafe { sqlite3_corrupt_error(1806) };
+
+                /// This slot extends off the end of the usable part of the page
+                (*p_rc_1 = unsafe { sqlite3_corrupt_error(1806) });
                 return core::ptr::null_mut();
             } else {
+
+                /// The slot remains on the free-list. Reduce its size to account
+                ///* for the portion used by the new allocation.
                 {
                     unsafe {
                         *unsafe {
@@ -8154,32 +10247,68 @@ extern "C" fn page_find_slot(p_pg_1: &MemPage, n_byte_1: i32,
             (unsafe { *p_tmp.offset(0 as isize) } as i32) << 8 |
                 unsafe { *p_tmp.offset(1 as isize) } as i32;
         if pc <= i_addr {
-            if pc != 0 { *p_rc_1 = unsafe { sqlite3_corrupt_error(1821) }; }
+            if pc != 0 {
+
+                /// The next slot in the chain comes before the current slot
+                (*p_rc_1 = unsafe { sqlite3_corrupt_error(1821) });
+            }
             return core::ptr::null_mut();
         }
     }
     if pc > max_pc + n_byte_1 - 4 {
-        *p_rc_1 = unsafe { sqlite3_corrupt_error(1828) };
+
+        /// The free slot chain extends off the end of the page
+        (*p_rc_1 = unsafe { sqlite3_corrupt_error(1828) });
     }
     return core::ptr::null_mut();
 }
 
+///* Defragment the page given. This routine reorganizes cells within the
+///* page so that there are no free-blocks on the free-block list.
+///*
+///* Parameter nMaxFrag is the maximum amount of fragmented space that may be
+///* present in the page after this routine returns.
+///*
+///* EVIDENCE-OF: R-44582-60138 SQLite may from time to time reorganize a
+///* b-tree page so that there are no freeblocks or fragment bytes, all
+///* unused bytes are contained in the unallocated space region, and all
+///* cells are packed tightly at the end of the page.
+#[allow(unused_doc_comments)]
 extern "C" fn defragment_page(p_page_1: *mut MemPage, n_max_frag_1: i32)
     -> i32 {
     let mut i: i32 = 0;
+    /// Loop counter
     let mut pc: i32 = 0;
+    /// Address of the i-th cell
     let mut hdr: i32 = 0;
+    /// Offset to the page header
     let mut size: i32 = 0;
+    /// Size of a cell
     let mut usable_size: i32 = 0;
+    /// Number of usable bytes on a page
     let mut cell_offset: i32 = 0;
+    /// Offset to the cell pointer array
     let mut cbrk: i32 = 0;
+    /// Offset to the cell content area
     let mut n_cell: i32 = 0;
+    /// Number of cells on the page
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// The page data
     let mut temp: *mut u8 = core::ptr::null_mut();
+    /// Temp area for cell content
     let mut src: *mut u8 = core::ptr::null_mut();
+    /// Source of content
     let mut i_cell_first: i32 = 0;
+    /// First allowable cell index
     let mut i_cell_last: i32 = 0;
+    /// Last possible cell index
     let mut i_cell_start: i32 = 0;
+    /// First cell offset in input
+    /// This block handles pages with two or fewer free blocks and nMaxFrag
+    ///* or fewer fragmented bytes. In this case it is faster to move the
+    ///* two (or one) blocks of cells using memmove() and add the required
+    ///* offsets to each pointer in the cell-pointer array than it is to
+    ///* reconstruct the entire page.
     let mut i_free: i32 = 0;
     let mut i_free2: i32 = 0;
     let mut p_end: *mut u8 = core::ptr::null_mut();
@@ -8581,21 +10710,65 @@ extern "C" fn defragment_page(p_page_1: *mut MemPage, n_max_frag_1: i32)
             }
         }
     }
+
+    /// Loop counter
+    /// Address of the i-th cell
+    /// Offset to the page header
+    /// Size of a cell
+    /// Number of usable bytes on a page
+    /// Offset to the cell pointer array
+    /// Offset to the cell content area
+    /// Number of cells on the page
+    /// The page data
+    /// Temp area for cell content
+    /// Source of content
+    /// First allowable cell index
+    /// Last possible cell index
+    /// First cell offset in input
+    /// This block handles pages with two or fewer free blocks and nMaxFrag
+    ///* or fewer fragmented bytes. In this case it is faster to move the
+    ///* two (or one) blocks of cells using memmove() and add the required
+    ///* offsets to each pointer in the cell-pointer array than it is to
+    ///* reconstruct the entire page.
+    /// The i-th cell pointer
+    /// These conditions have already been verified in btreeInitPage()
+    ///* if PRAGMA cell_size_check=ON.
     unreachable!();
 }
 
+///* Allocate nByte bytes of space from within the B-Tree page passed
+///* as the first argument. Write into *pIdx the index into pPage->aData[]
+///* of the first byte of allocated space. Return either SQLITE_OK or
+///* an error code (usually SQLITE_CORRUPT).
+///*
+///* The caller guarantees that there is sufficient space to make the
+///* allocation.  This routine might need to defragment in order to bring
+///* all the space together, however.  This routine will avoid using
+///* the first two bytes past the cell pointer area since presumably this
+///* allocation is being made in order to insert a new cell, so we will
+///* also end up needing a new cell pointer.
+#[allow(unused_doc_comments)]
 extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
     p_idx_1: &mut i32) -> i32 {
     let hdr: i32 = unsafe { (*p_page_1).hdr_offset } as i32;
+    /// Local cache of pPage->hdrOffset
     let data: *mut u8 = unsafe { (*p_page_1).a_data };
+    /// Local cache of pPage->aData
     let mut top: i32 = 0;
+    /// First byte of cell content area
     let mut rc: i32 = 0;
+    /// Integer return code
     let mut p_tmp: *const u8 = core::ptr::null();
+    /// Temp ptr into data[]
     let mut gap: i32 = 0;
+
+    /// First byte of gap between cell pointers and cell content
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// Minimum cell size is 4
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -8604,7 +10777,13 @@ extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
         unsafe { (*p_page_1).cell_offset } as i32 +
             2 * unsafe { (*p_page_1).n_cell } as i32;
     { let _ = 0; };
-    p_tmp = unsafe { data.offset((hdr + 5) as isize) };
+
+    /// EVIDENCE-OF: R-29356-02391 If the database uses a 65536-byte page size
+    ///* and the reserved space is zero (the usual value for reserved space)
+    ///* then the cell content offset of an empty page wants to be 65536.
+    ///* However, that integer is too large to be stored in a 2-byte unsigned
+    ///* integer, so a value of 0 is used in its place.
+    (p_tmp = unsafe { data.offset((hdr + 5) as isize) });
     top =
         (unsafe { *p_tmp.offset(0 as isize) } as i32) << 8 |
             unsafe { *p_tmp.offset(1 as isize) } as i32;
@@ -8659,7 +10838,13 @@ extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
                                     } as i32) as i32 - 1 & 65535) + 1;
         { let _ = 0; };
     }
-    top -= n_byte_1;
+
+    /// Allocate memory from the gap in between the cell pointer array
+    ///* and the cell content area.  The btreeComputeFreeSpace() call has already
+    ///* validated the freelist.  Given that the freelist is valid, there
+    ///* is no way that the allocation can extend off the end of the page.
+    ///* The assert() below verifies the previous sentence.
+    (top -= n_byte_1);
     {
         unsafe {
             *unsafe { data.offset((hdr + 5) as isize).offset(0 as isize) } =
@@ -8675,13 +10860,37 @@ extern "C" fn allocate_space(p_page_1: *mut MemPage, n_byte_1: i32,
     return 0;
 }
 
+///* Insert a new cell on pPage at cell index "i".  pCell points to the
+///* content of the cell.
+///*
+///* If the cell content will fit on the page, then put it there.  If it
+///* will not fit, then make a copy of the cell content into pTemp if
+///* pTemp is not null.  Regardless of pTemp, allocate a new entry
+///* in pPage->apOvfl[] and make it point to the cell content (either
+///* in pTemp or the original pCell) and also record its index.
+///* Allocating a new entry in pPage->aCell[] implies that
+///* pPage->nOverflow is incremented.
+///*
+///* The insertCellFast() routine below works exactly the same as
+///* insertCell() except that it lacks the pTemp and iChild parameters
+///* which are assumed zero.  Other than that, the two routines are the
+///* same.
+///*
+///* Fixes or enhancements to this routine should be reflected in
+///* insertCellFast()!
+#[allow(unused_doc_comments)]
 extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
     mut p_cell_1: *mut u8, sz: i32, p_temp_1: *mut u8, i_child_1: Pgno)
     -> i32 {
     let mut idx: i32 = 0;
+    /// Where to write new cell content in data[]
     let mut j: i32 = 0;
+    /// Loop counter
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// The content of the whole page
     let mut p_ins: *mut u8 = core::ptr::null_mut();
+
+    /// The point in pPage->aCellIdx[] where no cell inserted
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -8707,10 +10916,21 @@ extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
                     *__p += 1;
                     __t
                 } as i32;
+
+        /// Comparison against ArraySize-1 since we hold back one extra slot
+        ///* as a contingency.  In other words, never need more than 3 overflow
+        ///* slots but 4 are allocated, just to be safe.
         { let _ = 0; };
         unsafe { (*p_page_1).ap_ovfl[j as usize] = p_cell_1 };
         unsafe { (*p_page_1).ai_ovfl[j as usize] = i as u16 };
+
+        /// When multiple overflows occur, they are always sequential and in
+        ///* sorted order.  This invariants arise because multiple overflows can
+        ///* only occur when inserting divider cells into the parent page during
+        ///* balancing, and the dividers are adjacent and sorted.
         { let _ = 0; };
+
+        /// Overflows in sorted order
         { let _ = 0; };
     } else {
         let mut rc: i32 =
@@ -8721,10 +10941,19 @@ extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
         { let _ = 0; };
         rc = allocate_space(p_page_1, sz, &mut idx);
         if rc != 0 { return rc; }
+
+        /// The allocateSpace() routine guarantees the following properties
+        ///* if it returns successfully
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
         unsafe { (*p_page_1).n_free -= (2 + sz) as u16 as i32 };
+
+        /// In a corrupt database where an entry in the cell index section of
+        ///* a btree page has a value of 3 or less, the pCell value might point
+        ///* as many as 4 bytes in front of the start of the aData buffer for
+        ///* the source page.  Make sure this does not cause problems by not
+        ///* reading the first 4 bytes
         unsafe {
             memcpy(unsafe { &raw mut *data.offset((idx + 4) as isize) } as
                     *mut (),
@@ -8777,6 +11006,9 @@ extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
         { let _ = 0; };
         if unsafe { (*unsafe { (*p_page_1).p_bt }).auto_vacuum } != 0 {
             let mut rc2: i32 = 0;
+
+            /// The cell may contain a pointer to an overflow page. If so, write
+            ///* the entry for the overflow page into the pointer map.
             ptrmap_put_ovfl_ptr(p_page_1, unsafe { &*p_page_1 }, p_cell_1,
                 &mut rc2);
             if rc2 != 0 { return rc2; }
@@ -8785,6 +11017,15 @@ extern "C" fn insert_cell(p_page_1: *mut MemPage, i: i32,
     return 0;
 }
 
+///* Return SQLITE_CORRUPT if any cursor other than pCur is currently valid
+///* on the same B-tree as pCur.
+///*
+///* This can occur if a database is corrupt with two or more SQL tables
+///* pointing to the same b-tree.  If an insert occurs on one SQL table
+///* and causes a BEFORE TRIGGER to do a secondary insert on the other SQL
+///* table linked to the same b-tree.  If the secondary insert causes a
+///* rebalance, that can change content out from under the cursor on the
+///* first SQL table, violating invariants on the first insert.
 extern "C" fn another_valid_cursor(p_cur_1: *mut BtCursor) -> i32 {
     let mut p_other: *mut BtCursor = core::ptr::null_mut();
     {
@@ -8806,6 +11047,22 @@ extern "C" fn another_valid_cursor(p_cur_1: *mut BtCursor) -> i32 {
     return 0;
 }
 
+///* This function is used to copy the contents of the b-tree node stored
+///* on page pFrom to page pTo. If page pFrom was not a leaf page, then
+///* the pointer-map entries for each child page are updated so that the
+///* parent page stored in the pointer map is page pTo. If pFrom contained
+///* any cells with overflow page pointers, then the corresponding pointer
+///* map entries are also updated so that the parent page is page pTo.
+///*
+///* If pFrom is currently carrying any overflow cells (entries in the
+///* MemPage.apOvfl[] array), they are not copied to pTo.
+///*
+///* Before returning, page pTo is reinitialized using btreeInitPage().
+///*
+///* The performance of this function is not critical. It is only used by
+///* the balance_shallower() and balance_deeper() procedures, neither of
+///* which are called often under normal circumstances.
+#[allow(unused_doc_comments)]
 extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
     p_rc_1: &mut i32) -> () {
     if *p_rc_1 == 0 {
@@ -8821,7 +11078,9 @@ extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
-        i_data =
+
+        /// Copy the b-tree node content from page pFrom to page pTo.
+        (i_data =
             (unsafe {
                                 *unsafe {
                                         a_from.offset((i_from_hdr + 5) as isize).offset(0 as isize)
@@ -8831,7 +11090,7 @@ extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
                         *unsafe {
                                 a_from.offset((i_from_hdr + 5) as isize).offset(1 as isize)
                             }
-                    } as i32;
+                    } as i32);
         unsafe {
             memcpy(unsafe { &raw mut *a_to.offset(i_data as isize) } as
                     *mut (),
@@ -8847,6 +11106,11 @@ extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
                 ((*p_from_1).cell_offset as i32 +
                         2 * (*p_from_1).n_cell as i32) as u64)
         };
+
+        /// Reinitialize page pTo so that the contents of the MemPage structure
+        ///* match the new data. The initialization of pTo can actually fail under
+        ///* fairly obscure circumstances, even though it is a copy of initialized
+        ///* page pFrom.
         unsafe { (*p_to_1).is_init = 0 as u8 };
         rc = btree_init_page(p_to_1);
         if rc == 0 { rc = btree_compute_free_space(unsafe { &mut *p_to_1 }); }
@@ -8857,15 +11121,42 @@ extern "C" fn copy_node_content(p_from_1: &MemPage, p_to_1: *mut MemPage,
     }
 }
 
+///* This function is called when the root page of a b-tree structure is
+///* overfull (has one or more overflow pages).
+///*
+///* A new child page is allocated and the contents of the current root
+///* page, including overflow cells, are copied into the child. The root
+///* page is then overwritten to make it an empty page with the right-child
+///* pointer pointing to the new page.
+///*
+///* Before returning, all pointer-map entries corresponding to pages
+///* that the new child-page now contains pointers to are updated. The
+///* entry corresponding to the new right-child pointer of the root
+///* page is also updated.
+///*
+///* If successful, *ppChild is set to contain a reference to the child
+///* page and SQLITE_OK is returned. In this case the caller is required
+///* to call releasePage() on *ppChild exactly once. If an error occurs,
+///* an error code is returned and *ppChild is set to 0.
+#[allow(unused_doc_comments)]
 extern "C" fn balance_deeper(p_root_1: *mut MemPage,
     pp_child_1: &mut *mut MemPage) -> i32 {
     let mut rc: i32 = 0;
+    /// Return value from subprocedures
     let mut p_child: *mut MemPage = core::ptr::null_mut();
+    /// Pointer to a new child page
     let mut pgno_child: Pgno = 0 as Pgno;
+    /// Page number of the new child page
     let p_bt: *mut BtShared = unsafe { (*p_root_1).p_bt };
+
+    /// The BTree
     { let _ = 0; };
     { let _ = 0; };
-    rc = unsafe { sqlite3_pager_write(unsafe { (*p_root_1).p_db_page }) };
+
+    /// Make pRoot, the root page of the b-tree, writable. Allocate a new
+    ///* page that will become the new right-child of pPage. Copy the contents
+    ///* of the node stored on pRoot into the new child page.
+    (rc = unsafe { sqlite3_pager_write(unsafe { (*p_root_1).p_db_page }) });
     if rc == 0 {
         rc =
             allocate_btree_page(p_bt, &mut p_child, &mut pgno_child,
@@ -8884,6 +11175,8 @@ extern "C" fn balance_deeper(p_root_1: *mut MemPage,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// Copy the overflow cells from pRoot to pChild
     unsafe {
         memcpy(unsafe { &raw mut (*p_child).ai_ovfl[0 as usize] } as *mut u16
                 as *mut (),
@@ -8901,6 +11194,8 @@ extern "C" fn balance_deeper(p_root_1: *mut MemPage,
                 core::mem::size_of::<*mut u8>() as u64)
     };
     unsafe { (*p_child).n_overflow = unsafe { (*p_root_1).n_overflow } };
+
+    /// Zero the contents of pRoot. Then install pChild as the right-child.
     zero_page(p_root_1,
         unsafe { *unsafe { (*p_child).a_data.offset(0 as isize) } } as i32 &
             !8);
@@ -8927,15 +11222,32 @@ struct CellArray {
     ix_nx: [i32; 6],
 }
 
+///* Array apCell[] contains pointers to nCell b-tree page cells. The
+///* szCell[] array contains the size in bytes of each cell. This function
+///* replaces the current contents of page pPg with the contents of the cell
+///* array.
+///*
+///* Some of the cells in apCell[] may currently be stored in pPg. This
+///* function works around problems caused by this by making a copy of any
+///* such cells before overwriting the page data.
+///*
+///* The MemPage.nFree field is invalidated by this function. It is the
+///* responsibility of the caller to set it correctly.
+#[allow(unused_doc_comments)]
 extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
     n_cell_1: i32, p_pg_1: &mut MemPage) -> i32 {
     let hdr: i32 = (*p_pg_1).hdr_offset as i32;
+    /// Offset of header on pPg
     let a_data: *mut u8 = (*p_pg_1).a_data;
+    /// Pointer to data for pPg
     let usable_size: i32 = unsafe { (*(*p_pg_1).p_bt).usable_size } as i32;
     let p_end: *mut u8 = unsafe { &mut *a_data.offset(usable_size as isize) };
     let mut i: i32 = i_first_1;
+    /// Which cell to copy from pCArray
     let mut j: u32 = 0 as u32;
+    /// Start of cell content area
     let i_end: i32 = i + n_cell_1;
+    /// Loop terminator
     let mut p_cellptr: *mut u8 = (*p_pg_1).a_cell_idx;
     let p_tmp: *mut u8 =
         unsafe {
@@ -8943,7 +11255,10 @@ extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
             } as *mut u8;
     let mut p_data: *mut u8 = core::ptr::null_mut();
     let mut k: i32 = 0;
+    /// Current slot in pCArray->apEnd[]
     let mut p_src_end: *const u8 = core::ptr::null();
+
+    /// Current pCArray->apEnd[k] value
     { let _ = 0; };
     { let _ = 0; };
     j =
@@ -9026,6 +11341,8 @@ extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
             p_src_end = (*p_c_array_1).ap_end[k as usize];
         }
     }
+
+    /// The pPg->nFree field is now set incorrectly. The caller will fix it.
     { let _ = 0; };
     (*p_pg_1).n_cell = n_cell_1 as u16;
     (*p_pg_1).n_overflow = 0 as u8;
@@ -9063,23 +11380,56 @@ extern "C" fn rebuild_page(p_c_array_1: &CellArray, i_first_1: i32,
     return 0;
 }
 
+///* This version of balance() handles the common special case where
+///* a new entry is being inserted on the extreme right-end of the
+///* tree, in other words, when the new entry will become the largest
+///* entry in the tree.
+///*
+///* Instead of trying to balance the 3 right-most leaf pages, just add
+///* a new page to the right-hand side and put the one new entry in
+///* that page.  This leaves the right side of the tree somewhat
+///* unbalanced.  But odds are that we will be inserting new entries
+///* at the end soon afterwards so the nearly empty page will quickly
+///* fill up.  On average.
+///*
+///* pPage is the leaf page which is the right-most page in the tree.
+///* pParent is its parent.  pPage must have a single overflow entry
+///* which is also the right-most entry on the page.
+///*
+///* The pSpace buffer is used to store a temporary copy of the divider
+///* cell that will be inserted into pParent. Such a cell consists of a 4
+///* byte page number followed by a variable length integer. In other
+///* words, at most 13 bytes. Hence the pSpace buffer must be at
+///* least 13 bytes in size.
+#[allow(unused_doc_comments)]
 extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
     p_space_1: *mut u8) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p_page_1).p_bt };
+    /// B-Tree Database
     let mut p_new: *mut MemPage = core::ptr::null_mut();
+    /// Newly allocated page
     let mut rc: i32 = 0;
+    /// Return Code
     let mut pgno_new: Pgno = 0 as Pgno;
+
+    /// Page number of pNew
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p_page_1).n_cell } as i32 == 0 {
         return unsafe { sqlite3_corrupt_error(8049) };
     }
+
+    /// dbfuzz001.test
     { let _ = 0; };
     { let _ = 0; };
-    rc =
+
+    /// Allocate a new page. This page will become the right-sibling of
+    ///* pPage. Make the parent page writable, so that the new divider cell
+    ///* may be inserted. If both these operations are successful, proceed.
+    (rc =
         allocate_btree_page(p_bt, &mut p_new, &mut pgno_new, 0 as Pgno,
-            0 as u8);
+            0 as u8));
     if rc == 0 {
         let mut p_out: *mut u8 =
             unsafe { &mut *p_space_1.offset(4 as isize) };
@@ -9118,7 +11468,20 @@ extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
                     &mut rc);
             }
         }
-        p_cell =
+
+        /// Create a divider cell to insert into pParent. The divider cell
+        ///* consists of a 4-byte page number (the page number of pPage) and
+        ///* a variable length key value (which must be the same value as the
+        ///* largest key on pPage).
+        ///*
+        ///* To find the largest key value on pPage, first find the right-most
+        ///* cell on pPage. The first two fields of this cell are the
+        ///* record-length (a variable length integer at most 32-bits in size)
+        ///* and the key value (a variable length integer, may have any value).
+        ///* The first of the while(...) loops below skips over the record-length
+        ///* field. The second while(...) loop copies the key value from the
+        ///* cell on pPage into the pSpace buffer.
+        (p_cell =
             unsafe {
                 unsafe {
                     (*p_page_1).a_data.offset((unsafe { (*p_page_1).mask_page }
@@ -9142,7 +11505,7 @@ extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
                                                 }
                                         } as i32)) as isize)
                 }
-            };
+            });
         p_stop = unsafe { p_cell.offset(9 as isize) };
         while unsafe {
                                 *{
@@ -9180,6 +11543,8 @@ extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
                     unsafe { p_out.offset_from(p_space_1) } as i64 as i32,
                     core::ptr::null_mut(), unsafe { (*p_page_1).pgno });
         }
+
+        /// Set the right-child pointer of pParent to point to the new page.
         unsafe {
             sqlite3_put4byte(unsafe {
                     &mut *unsafe {
@@ -9189,11 +11554,14 @@ extern "C" fn balance_quick(p_parent_1: *mut MemPage, p_page_1: *mut MemPage,
                             }
                 }, pgno_new)
         };
+
+        /// Release the reference to the new page.
         release_page(p_new);
     }
     return rc;
 }
 
+///* Return the size of the Nth element of the cell array
 extern "C" fn compute_cell_size(p: &CellArray, n_1: i32) -> u16 {
     { let _ = 0; };
     { let _ = 0; };
@@ -9217,6 +11585,14 @@ extern "C" fn cached_cell_size(p: *mut CellArray, n_1: i32) -> u16 {
     return compute_cell_size(unsafe { &*p }, n_1);
 }
 
+///* The pCArray object contains pointers to b-tree cells and their sizes.
+///*
+///* This function adds the space associated with each cell in the array
+///* that is currently stored within the body of pPg to the pPg free-list.
+///* The cell-pointers and other fields of the page are not updated.
+///*
+///* This function returns the total number of cells added to the free-list.
+#[allow(unused_doc_comments)]
 extern "C" fn page_free_array(p_pg_1: *mut MemPage, i_first_1: i32,
     n_cell_1: i32, p_c_array_1: &CellArray) -> i32 {
     let a_data: *mut u8 = unsafe { (*p_pg_1).a_data };
@@ -9252,9 +11628,13 @@ extern "C" fn page_free_array(p_pg_1: *mut MemPage, i_first_1: i32,
                     let mut sz: i32 = 0;
                     let mut i_after: i32 = 0;
                     let mut i_ofst: i32 = 0;
-                    sz =
+
+                    /// No need to use cachedCellSize() here.  The sizes of all cells that
+                    ///* are to be freed have already been computing while deciding which
+                    ///* cells need freeing
+                    (sz =
                         unsafe { *(*p_c_array_1).sz_cell.offset(i as isize) } as
-                            i32;
+                            i32);
                     { let _ = 0; };
                     i_ofst =
                         unsafe { p_cell.offset_from(a_data) } as i64 as u16 as i32;
@@ -9323,15 +11703,45 @@ extern "C" fn page_free_array(p_pg_1: *mut MemPage, i_first_1: i32,
     return n_ret;
 }
 
+///* The pCArray objects contains pointers to b-tree cells and the cell sizes.
+///* This function attempts to add the cells stored in the array to page pPg.
+///* If it cannot (because the page needs to be defragmented before the cells
+///* will fit), non-zero is returned. Otherwise, if the cells are added
+///* successfully, zero is returned.
+///*
+///* Argument pCellptr points to the first entry in the cell-pointer array
+///* (part of page pPg) to populate. After cell apCell[0] is written to the
+///* page body, a 16-bit offset is written to pCellptr. And so on, for each
+///* cell in the array. It is the responsibility of the caller to ensure
+///* that it is safe to overwrite this part of the cell-pointer array.
+///*
+///* When this function is called, *ppData points to the start of the
+///* content area on page pPg. If the size of the content area is extended,
+///* *ppData is updated to point to the new start of the content area
+///* before returning.
+///*
+///* Finally, argument pBegin points to the byte immediately following the
+///* end of the space required by this page for the cell-pointer area (for
+///* all cells - not just those inserted by the current call). If the content
+///* area must be extended to before this point in order to accommodate all
+///* cells in apCell[], then the cells do not fit and non-zero is returned.
+#[allow(unused_doc_comments)]
 extern "C" fn page_insert_array(p_pg_1: *mut MemPage, p_begin_1: *const u8,
     pp_data_1: &mut *mut u8, mut p_cellptr_1: *mut u8, i_first_1: i32,
     n_cell_1: i32, p_c_array_1: &CellArray) -> i32 {
     let mut i: i32 = i_first_1;
+    /// Loop counter - cell index to insert
     let a_data: *const u8 = unsafe { (*p_pg_1).a_data } as *const u8;
+    /// Complete page
     let mut p_data: *mut u8 = *pp_data_1;
+    /// Content area.  A subset of aData[]
     let i_end: i32 = i_first_1 + n_cell_1;
+    /// End of loop. One past last cell to ins
     let mut k: i32 = 0;
+    /// Current slot in pCArray->apEnd[]
     let mut p_end: *const u8 = core::ptr::null();
+
+    /// Maximum extent of cell data
     { let _ = 0; };
     if i_end <= i_first_1 { return 0; }
     { let _ = 0; };
@@ -9366,6 +11776,10 @@ extern "C" fn page_insert_array(p_pg_1: *mut MemPage, p_begin_1: *const u8,
             };
             p_slot = p_data;
         }
+
+        /// pSlot and pCArray->apCell[i] will never overlap on a well-formed
+        ///* database.  But they might for a corrupt database.  Hence use memmove()
+        ///* since memcpy() sends SIGABORT with overlapping buffers on OpenBSD
         { let _ = 0; };
         if unsafe {
                             unsafe {
@@ -9410,6 +11824,8 @@ extern "C" fn page_insert_array(p_pg_1: *mut MemPage, p_begin_1: *const u8,
     return 0;
 }
 
+///* Make sure the cell sizes at idx, idx+1, ..., idx+N-1 have been
+///* computed.
 extern "C" fn populate_cell_cache(p: &CellArray, mut idx: i32, mut n_1: i32)
     -> () {
     let p_ref: *mut MemPage = (*p).p_ref;
@@ -9432,20 +11848,35 @@ extern "C" fn populate_cell_cache(p: &CellArray, mut idx: i32, mut n_1: i32)
     }
 }
 
+///* pCArray contains pointers to and sizes of all cells in the page being
+///* balanced.  The current page, pPg, has pPg->nCell cells starting with
+///* pCArray->apCell[iOld].  After balancing, this page should hold nNew cells
+///* starting at apCell[iNew].
+///*
+///* This routine makes the necessary adjustments to pPg so that it contains
+///* the correct cells after being balanced.
+///*
+///* The pPg->nFree field is invalid when this function returns. It is the
+///* responsibility of the caller to set it correctly.
+#[allow(unused_doc_comments)]
 extern "C" fn edit_page(p_pg_1: *mut MemPage, i_old_1: i32, i_new_1: i32,
     n_new_1: i32, p_c_array_1: *mut CellArray) -> i32 {
     let mut a_data: *mut u8 = core::ptr::null_mut();
     let mut hdr: i32 = 0;
     let mut p_begin: *mut u8 = core::ptr::null_mut();
     let mut n_cell: i32 = 0;
+    /// Cells stored on pPg
     let mut p_data: *mut u8 = core::ptr::null_mut();
     let mut p_cellptr: *mut u8 = core::ptr::null_mut();
     let mut i: i32 = 0;
     let mut i_old_end: i32 = 0;
     let mut i_new_end: i32 = 0;
+    /// Remove cells from the start and end of the page
     let mut n_shift: i32 = 0;
     let mut n_tail: i32 = 0;
+    /// Add cells to the start of the page
     let mut n_add: i32 = 0;
+    /// Add any overflow cells
     let mut i_cell: i32 = 0;
     let mut __state: i32 = 0;
     loop {
@@ -9717,81 +12148,359 @@ extern "C" fn edit_page(p_pg_1: *mut MemPage, i_old_1: i32, i_new_1: i32,
             }
         }
     }
+
+    /// Cells stored on pPg
+    /// Remove cells from the start and end of the page
+    /// Add cells to the start of the page
+    /// Add any overflow cells
+    /// Append cells to the end of the page
+    /// Unable to edit this page. Rebuild it from scratch instead.
     unreachable!();
 }
 
+///* This routine redistributes cells on the iParentIdx'th child of pParent
+///* (hereafter "the page") and up to 2 siblings so that all pages have about the
+///* same amount of free space. Usually a single sibling on either side of the
+///* page are used in the balancing, though both siblings might come from one
+///* side if the page is the first or last child of its parent. If the page
+///* has fewer than 2 siblings (something which can only happen if the page
+///* is a root page or a child of a root page) then all available siblings
+///* participate in the balancing.
+///*
+///* The number of siblings of the page might be increased or decreased by
+///* one or two in an effort to keep pages nearly full but not over full.
+///*
+///* Note that when this routine is called, some of the cells on the page
+///* might not actually be stored in MemPage.aData[]. This can happen
+///* if the page is overfull. This routine ensures that all cells allocated
+///* to the page and its siblings fit into MemPage.aData[] before returning.
+///*
+///* In the course of balancing the page and its siblings, cells may be
+///* inserted into or removed from the parent page (pParent). Doing so
+///* may cause the parent page to become overfull or underfull. If this
+///* happens, it is the responsibility of the caller to invoke the correct
+///* balancing routine to fix this problem (see the balance() routine).
+///*
+///* If this routine fails for any reason, it might leave the database
+///* in a corrupted state. So if this routine fails, the database should
+///* be rolled back.
+///*
+///* The third argument to this function, aOvflSpace, is a pointer to a
+///* buffer big enough to hold one page. If while inserting cells into the parent
+///* page (pParent) the parent page becomes overfull, this buffer is
+///* used to store the parent's overflow cells. Because this function inserts
+///* a maximum of four divider cells into the parent page, and the maximum
+///* size of a cell stored within an internal node is always less than 1/4
+///* of the page-size, the aOvflSpace[] buffer is guaranteed to be large
+///* enough for all overflow cells.
+///*
+///* If aOvflSpace is set to a null pointer, this function returns
+///* SQLITE_NOMEM.
+#[allow(unused_doc_comments)]
 extern "C" fn balance_nonroot(p_parent_1: *mut MemPage, i_parent_idx_1: i32,
     a_ovfl_space_1: *mut u8, is_root_1: i32, b_bulk_1: i32) -> i32 {
     unsafe {
         let mut p_bt: *mut BtShared = core::ptr::null_mut();
+        /// The whole database
         let mut n_max_cells: i32 = 0;
+        /// Allocated size of apCell, szCell, aFrom.
         let mut n_new: i32 = 0;
+        /// Number of pages in apNew[]
         let mut n_old: i32 = 0;
+        /// Number of pages in apOld[]
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         let mut k: i32 = 0;
+        /// Loop counters
         let mut nx_div: i32 = 0;
+        /// Next divider slot in pParent->aCell[]
         let mut rc: i32 = 0;
+        /// The return code
         let mut leaf_correction: u16 = 0 as u16;
+        /// 4 if pPage is a leaf.  0 if not
         let mut leaf_data: i32 = 0;
+        /// True if pPage is a leaf of a LEAFDATA tree
         let mut usable_space: i32 = 0;
+        /// Bytes in pPage beyond the header
         let mut page_flags: i32 = 0;
+        /// Value of pPage->aData[0]
         let mut i_space1: i32 = 0;
+        /// First unused byte of aSpace1[]
         let mut i_ovfl_space: i32 = 0;
+        /// First unused byte of aOvflSpace[]
         let mut sz_scratch: u64 = 0 as u64;
+        /// Size of scratch memory requested
         let mut ap_old: [*mut MemPage; 3] = [core::ptr::null_mut(); 3];
+        /// pPage and up to two siblings
         let mut ap_new: [*mut MemPage; 5] = [core::ptr::null_mut(); 5];
+        /// pPage and up to NB siblings after balancing
         let mut p_right: *mut u8 = core::ptr::null_mut();
+        /// Location in parent of right-sibling pointer
         let mut ap_div: [*mut u8; 2] = [core::ptr::null_mut(); 2];
+        /// Divider cells in pParent
         let mut cnt_new: [i32; 5] = [0; 5];
+        /// Index in b.paCell[] of cell after i-th page
         let mut cnt_old: [i32; 5] = [0; 5];
+        /// Old index in b.apCell[]
         let mut sz_new: [i32; 5] = [0; 5];
+        /// Combined size of cells placed on i-th page
         let mut a_space1: *mut u8 = core::ptr::null_mut();
+        /// Space for copies of dividers cells
         let mut pgno: Pgno = 0 as Pgno;
+        /// Temp var to store a page number in
         let mut ab_done: [u8; 5] = [0; 5];
+        /// True after i'th new page is populated
         let mut a_pgno: [u32; 5] = [0; 5];
+        /// Page numbers of new pages before shuffling
         let mut b: CellArray = unsafe { core::mem::zeroed() };
+        /// Parsed information on cells being balanced
+        /// At this point pParent may have at most one overflow cell. And if
+        ///* this overflow cell is present, it must be the cell with
+        ///* index iParentIdx. This scenario comes about when this function
+        ///* is called (indirectly) from sqlite3BtreeDelete().
+        /// Find the sibling pages to balance. Also locate the cells in pParent
+        ///* that divide the siblings. An attempt is made to find NN siblings on
+        ///* either side of pPage. More siblings are taken from one side, however,
+        ///* if there are fewer than NN siblings on the other side. If pParent
+        ///* has NB or fewer children then all children of pParent are taken. 
+        ///*
+        ///* This loop also drops the divider cells from the parent page. This
+        ///* way, the remainder of the function does not have to deal with any
+        ///* overflow cells in the parent page, since if any existed they will
+        ///* have already been removed.
+        /// Drop the cell from the parent page. apDiv[i] still points to
+        ///* the cell within the parent, even though it has been dropped.
+        ///* This is safe because dropping a cell only overwrites the first
+        ///* four bytes of it, and this function does not need the first
+        ///* four bytes of the divider cell. So the pointer is safe to use
+        ///* later on. 
+        ///*
+        ///* But not if we are in secure-delete mode. In secure-delete mode,
+        ///* the dropCell() routine will overwrite the entire cell with zeroes.
+        ///* In this case, temporarily copy the cell into the aOvflSpace[]
+        ///* buffer. It will be copied out again as soon as the aSpace[] buffer
+        ///* is allocated.
         let mut i_off: i32 = 0;
+        /// If the following if() condition is not true, the db is corrupted.
+        ///* The call to dropCell() below will detect this.
+        /// Make nMaxCells a multiple of 4 in order to preserve 8-byte
+        ///* alignment
+        ///* Allocate space for memory structures
+        /// b.apCell
+        /// b.szCell
+        /// aSpace1
+        ///* Load pointers to all cells on sibling pages and the divider cells
+        ///* into the local b.apCell[] array.  Make copies of the divider cells
+        ///* into space obtained from aSpace1[]. The divider cells have already
+        ///* been removed from pParent.
+        ///*
+        ///* If the siblings are on leaf pages, then the child pointers of the
+        ///* divider cells are stripped from the cells before they are copied
+        ///* into aSpace1[].  In this way, all cells in b.apCell[] are without
+        ///* child pointers.  If siblings are not leaves, then all cell in
+        ///* b.apCell[] include child pointers.  Either way, all cells in b.apCell[]
+        ///* are alike.
+        ///*
+        ///* leafCorrection:  4 if pPage is a leaf.  0 if pPage is not a leaf.
+        ///*       leafData:  1 if pPage holds key+data and pParent holds only keys.
         let mut p_old: *const MemPage = core::ptr::null();
         let mut limit: i32 = 0;
         let mut a_data: *mut u8 = core::ptr::null_mut();
         let mut mask_page: u16 = 0 as u16;
         let mut pi_cell: *mut u8 = core::ptr::null_mut();
         let mut pi_end: *mut u8 = core::ptr::null_mut();
+        /// Verify that all sibling pages are of the same "type" (table-leaf,
+        ///* table-interior, index-leaf, or index-interior).
+        /// Load b.apCell[] with pointers to all cells in pOld.  If pOld
+        ///* contains overflow cells, include them in the b.apCell[] array
+        ///* in the correct spot.
+        ///*
+        ///* Note that when there are multiple overflow cells, it is always the
+        ///* case that they are sequential and adjacent.  This invariant arises
+        ///* because multiple overflows can only occurs when inserting divider
+        ///* cells into a parent on a prior balance, and divider cells are always
+        ///* adjacent and are inserted in order.  There is an assert() tagged
+        ///* with "NOTE 1" in the overflow cell insertion loop to prove this
+        ///* invariant.
+        ///*
+        ///* This must be done in advance.  Once the balance starts, the cell
+        ///* offset section of the btree page will be overwritten and we will no
+        ///* long be able to find the cells if a pointer to each cell is not saved
+        ///* first.
+        /// NOTE 1
         let mut sz: u16 = 0 as u16;
         let mut p_temp: *mut u8 = core::ptr::null_mut();
+        /// The right pointer of the child page pOld becomes the left
+        ///* pointer of the divider cell
+        /// Do not allow any cells smaller than 4 bytes. If a smaller cell
+        ///* does exist, pad it with 0x00 bytes.
+        ///* Figure out the number of pages needed to hold all b.nCell cells.
+        ///* Store this number in "k".  Also compute szNew[] which is the total
+        ///* size of all cells on the i-th page and cntNew[] which is the index
+        ///* in b.apCell[] of the cell that divides page i from page i+1. 
+        ///* cntNew[k] should equal b.nCell.
+        ///*
+        ///* Values computed by this block:
+        ///*
+        ///*           k: The total number of sibling pages
+        ///*    szNew[i]: Spaced used on the i-th sibling page.
+        ///*   cntNew[i]: Index in b.apCell[] and b.szCell[] for the first cell to
+        ///*              the right of the i-th sibling page.
+        ///* usableSpace: Number of bytes of space available on each sibling.
+        ///*
         let mut p: *mut MemPage = core::ptr::null_mut();
+        /// Omit b.ixNx[] entry for child pages with no cells
         let mut sz__1: i32 = 0;
+        ///* The packing computed by the previous block is biased toward the siblings
+        ///* on the left side (siblings with smaller keys). The left siblings are
+        ///* always nearly full, while the right-most sibling might be nearly empty.
+        ///* The next block of code attempts to adjust the packing of siblings to
+        ///* get a better balance.
+        ///*
+        ///* This adjustment is more than an optimization.  The packing above might
+        ///* be so out of balance as to be illegal.  For example, the right-most
+        ///* sibling might be completely empty.  This adjustment is not optional.
         let mut sz_right: i32 = 0;
+        /// Size of sibling on the right
         let mut sz_left: i32 = 0;
+        /// Size of sibling on the left
         let mut r: i32 = 0;
+        /// Index of right-most cell in left sibling
         let mut d: i32 = 0;
+        /// Index of first cell to the left of right sibling
         let mut sz_r: i32 = 0;
         let mut sz_d: i32 = 0;
+        /// Sanity check:  For a non-corrupt database file one of the following
+        ///* must be true:
+        ///*    (1) We found one or more cells (cntNew[0])>0), or
+        ///*    (2) pPage is a virtual root page.  A virtual root page is when
+        ///*        the real root page is page 1 and we are the only child of
+        ///*        that page.
+        ///* Allocate k new pages.  Reuse old pages where possible.
         let mut p_new: *mut MemPage = core::ptr::null_mut();
+        /// Set the pointer-map entry for the new sibling page.
+        ///* Reassign page numbers so that the new pages are in ascending order.
+        ///* This helps to keep entries in the disk file in order so that a scan
+        ///* of the table is closer to a linear scan through the file. That in turn
+        ///* helps the operating system to deliver pages from the disk more rapidly.
+        ///*
+        ///* An O(N*N) sort algorithm is used, but since N is never more than NB+2
+        ///* (5), that is not a performance concern.
+        ///*
+        ///* When NB==3, this one optimization makes the database about 25% faster
+        ///* for large insertions and deletions.
         let mut i_b: i32 = 0;
+        /// If apNew[i] has a page number that is bigger than any of the
+        ///* subsequence apNew[i] entries, then swap apNew[i] with the subsequent
+        ///* entry that has the smallest page number (which we know to be
+        ///* entry apNew[iB]).
         let mut pgno_a: Pgno = 0 as Pgno;
         let mut pgno_b: Pgno = 0 as Pgno;
         let mut pgno_temp: Pgno = 0 as Pgno;
         let mut fg_a: u16 = 0 as u16;
         let mut fg_b: u16 = 0 as u16;
+        /// If the sibling pages are not leaves, ensure that the right-child pointer
+        ///* of the right-most new sibling page is set to the value that was
+        ///* originally in the same field of the right-most old sibling page.
         let mut p_old_1: *const MemPage = core::ptr::null();
+        /// Make any required updates to pointer map entries associated with
+        ///* cells stored on sibling pages following the balance operation. Pointer
+        ///* map entries associated with divider cells are set by the insertCell()
+        ///* routine. The associated pointer map entries are:
+        ///*
+        ///*   a) if the cell contains a reference to an overflow chain, the
+        ///*      entry associated with the first page in the overflow chain, and
+        ///*
+        ///*   b) if the sibling pages are not leaves, the child page associated
+        ///*      with the cell.
+        ///*
+        ///* If the sibling pages are not leaves, then the pointer map entry
+        ///* associated with the right-child of each sibling may also need to be
+        ///* updated. This happens below, after the sibling pages have been
+        ///* populated, not here.
         let mut p_old_2: *mut MemPage = core::ptr::null_mut();
         let mut p_new_1: *mut MemPage = core::ptr::null_mut();
         let mut cnt_old_next: i32 = 0;
         let mut i_new: i32 = 0;
         let mut i_old: i32 = 0;
         let mut p_cell: *mut u8 = core::ptr::null_mut();
+        /// Cell pCell is destined for new sibling page pNew. Originally, it
+        ///* was either part of sibling page iOld (possibly an overflow cell),
+        ///* or else the divider cell to the left of sibling page iOld. So,
+        ///* if sibling page iOld had the same page number as pNew, and if
+        ///* pCell really was a part of sibling page iOld (not a divider or
+        ///* overflow cell), we can skip updating the pointer map entries.
+        /// Insert new divider cells into pParent.
         let mut p_cell_1: *mut u8 = core::ptr::null_mut();
         let mut p_temp_1: *mut u8 = core::ptr::null_mut();
         let mut sz__2: i32 = 0;
         let mut p_src_end: *const u8 = core::ptr::null();
         let mut p_new_2: *mut MemPage = core::ptr::null_mut();
+        /// If the tree is a leaf-data tree, and the siblings are leaves,
+        ///* then there is no divider cell in b.apCell[]. Instead, the divider
+        ///* cell consists of the integer key for the right-most cell of
+        ///* the sibling-page assembled above only.
         let mut info: CellInfo = unsafe { core::mem::zeroed() };
+        /// Obscure case for non-leaf-data trees: If the cell at pCell was
+        ///* previously stored on a leaf node, and its reported size was 4
+        ///* bytes, then it may actually be smaller than this
+        ///* (see btreeParseCellPtr(), 4 bytes is the minimum size of
+        ///* any cell). But it is important to pass the correct size to
+        ///* insertCell(), so reparse the cell now.
+        ///*
+        ///* This can only happen for b-trees used to evaluate "IN (SELECT ...)"
+        ///* and WITHOUT ROWID tables with exactly one column which is the
+        ///* primary key.
+        /// Now update the actual sibling pages. The order in which they are updated
+        ///* is important, as this code needs to avoid disrupting any page from which
+        ///* cells may still to be read. In practice, this means:
+        ///*
+        ///*  (1) If cells are moving left (from apNew[iPg] to apNew[iPg-1])
+        ///*      then it is not safe to update page apNew[iPg] until after
+        ///*      the left-hand sibling apNew[iPg-1] has been updated.
+        ///*
+        ///*  (2) If cells are moving right (from apNew[iPg] to apNew[iPg+1])
+        ///*      then it is not safe to update page apNew[iPg] until after
+        ///*      the right-hand sibling apNew[iPg+1] has been updated.
+        ///*
+        ///* If neither of the above apply, the page is safe to update.
+        ///*
+        ///* The iPg value in the following loop starts at nNew-1 goes down
+        ///* to 0, then back up to nNew-1 again, thus making two passes over
+        ///* the pages.  On the initial downward pass, only condition (1) above
+        ///* needs to be tested because (2) will always be true from the previous
+        ///* step.  On the upward pass, both conditions are always true, so the
+        ///* upwards pass simply processes pages that were missed on the downward
+        ///* pass.
         let mut i_pg: i32 = 0;
+        /// Skip pages already processed
+        /// On the upwards pass, or...
+        /// Condition (1) is true
         let mut i_new_1: i32 = 0;
         let mut i_old_1: i32 = 0;
         let mut n_new_cell: i32 = 0;
+        /// Verify condition (1):  If cells are moving left, update iPg
+        ///* only after iPg-1 has already been updated.
+        /// Verify condition (2):  If cells are moving right, update iPg
+        ///* only after iPg+1 has already been updated.
+        /// All pages have been processed exactly once
+        /// The root page of the b-tree now contains no cells. The only sibling
+        ///* page is the right-child of the parent. Copy the contents of the
+        ///* child page into the parent, decreasing the overall height of the
+        ///* b-tree structure by one. This is described as the "balance-shallower"
+        ///* sub-algorithm in some documentation.
+        ///*
+        ///* If this is an auto-vacuum database, the call to copyNodeContent()
+        ///* sets all pointer-map entries corresponding to database image pages
+        ///* for which the pointer is stored within the content being copied.
+        ///*
+        ///* It is critical that the child page be defragmented before being
+        ///* copied into the parent, because if the parent is page 1 then it will
+        ///* by smaller than the child due to the database header, and so all the
+        ///* free space needs to be up front.
+        /// Fix the pointer map entries associated with the right-child of each
+        ///* sibling page. All other pointer map entries have already been taken
+        ///* care of.
         let mut key: u32 = 0 as u32;
         let mut __state: i32 = 0;
         loop {
@@ -11360,10 +14069,254 @@ extern "C" fn balance_nonroot(p_parent_1: *mut MemPage, i_parent_idx_1: i32,
                 }
             }
         }
+
+        /// The whole database
+        /// Allocated size of apCell, szCell, aFrom.
+        /// Number of pages in apNew[]
+        /// Number of pages in apOld[]
+        /// Loop counters
+        /// Next divider slot in pParent->aCell[]
+        /// The return code
+        /// 4 if pPage is a leaf.  0 if not
+        /// True if pPage is a leaf of a LEAFDATA tree
+        /// Bytes in pPage beyond the header
+        /// Value of pPage->aData[0]
+        /// First unused byte of aSpace1[]
+        /// First unused byte of aOvflSpace[]
+        /// Size of scratch memory requested
+        /// pPage and up to two siblings
+        /// pPage and up to NB siblings after balancing
+        /// Location in parent of right-sibling pointer
+        /// Divider cells in pParent
+        /// Index in b.paCell[] of cell after i-th page
+        /// Old index in b.apCell[]
+        /// Combined size of cells placed on i-th page
+        /// Space for copies of dividers cells
+        /// Temp var to store a page number in
+        /// True after i'th new page is populated
+        /// Page numbers of new pages before shuffling
+        /// Parsed information on cells being balanced
+        /// At this point pParent may have at most one overflow cell. And if
+        ///* this overflow cell is present, it must be the cell with
+        ///* index iParentIdx. This scenario comes about when this function
+        ///* is called (indirectly) from sqlite3BtreeDelete().
+        /// Find the sibling pages to balance. Also locate the cells in pParent
+        ///* that divide the siblings. An attempt is made to find NN siblings on
+        ///* either side of pPage. More siblings are taken from one side, however,
+        ///* if there are fewer than NN siblings on the other side. If pParent
+        ///* has NB or fewer children then all children of pParent are taken. 
+        ///*
+        ///* This loop also drops the divider cells from the parent page. This
+        ///* way, the remainder of the function does not have to deal with any
+        ///* overflow cells in the parent page, since if any existed they will
+        ///* have already been removed.
+        /// Drop the cell from the parent page. apDiv[i] still points to
+        ///* the cell within the parent, even though it has been dropped.
+        ///* This is safe because dropping a cell only overwrites the first
+        ///* four bytes of it, and this function does not need the first
+        ///* four bytes of the divider cell. So the pointer is safe to use
+        ///* later on. 
+        ///*
+        ///* But not if we are in secure-delete mode. In secure-delete mode,
+        ///* the dropCell() routine will overwrite the entire cell with zeroes.
+        ///* In this case, temporarily copy the cell into the aOvflSpace[]
+        ///* buffer. It will be copied out again as soon as the aSpace[] buffer
+        ///* is allocated.
+        /// If the following if() condition is not true, the db is corrupted.
+        ///* The call to dropCell() below will detect this.
+        /// Make nMaxCells a multiple of 4 in order to preserve 8-byte
+        ///* alignment
+        ///* Allocate space for memory structures
+        /// b.apCell
+        /// b.szCell
+        /// aSpace1
+        ///* Load pointers to all cells on sibling pages and the divider cells
+        ///* into the local b.apCell[] array.  Make copies of the divider cells
+        ///* into space obtained from aSpace1[]. The divider cells have already
+        ///* been removed from pParent.
+        ///*
+        ///* If the siblings are on leaf pages, then the child pointers of the
+        ///* divider cells are stripped from the cells before they are copied
+        ///* into aSpace1[].  In this way, all cells in b.apCell[] are without
+        ///* child pointers.  If siblings are not leaves, then all cell in
+        ///* b.apCell[] include child pointers.  Either way, all cells in b.apCell[]
+        ///* are alike.
+        ///*
+        ///* leafCorrection:  4 if pPage is a leaf.  0 if pPage is not a leaf.
+        ///*       leafData:  1 if pPage holds key+data and pParent holds only keys.
+        /// Verify that all sibling pages are of the same "type" (table-leaf,
+        ///* table-interior, index-leaf, or index-interior).
+        /// Load b.apCell[] with pointers to all cells in pOld.  If pOld
+        ///* contains overflow cells, include them in the b.apCell[] array
+        ///* in the correct spot.
+        ///*
+        ///* Note that when there are multiple overflow cells, it is always the
+        ///* case that they are sequential and adjacent.  This invariant arises
+        ///* because multiple overflows can only occurs when inserting divider
+        ///* cells into a parent on a prior balance, and divider cells are always
+        ///* adjacent and are inserted in order.  There is an assert() tagged
+        ///* with "NOTE 1" in the overflow cell insertion loop to prove this
+        ///* invariant.
+        ///*
+        ///* This must be done in advance.  Once the balance starts, the cell
+        ///* offset section of the btree page will be overwritten and we will no
+        ///* long be able to find the cells if a pointer to each cell is not saved
+        ///* first.
+        /// NOTE 1
+        /// The right pointer of the child page pOld becomes the left
+        ///* pointer of the divider cell
+        /// Do not allow any cells smaller than 4 bytes. If a smaller cell
+        ///* does exist, pad it with 0x00 bytes.
+        ///* Figure out the number of pages needed to hold all b.nCell cells.
+        ///* Store this number in "k".  Also compute szNew[] which is the total
+        ///* size of all cells on the i-th page and cntNew[] which is the index
+        ///* in b.apCell[] of the cell that divides page i from page i+1. 
+        ///* cntNew[k] should equal b.nCell.
+        ///*
+        ///* Values computed by this block:
+        ///*
+        ///*           k: The total number of sibling pages
+        ///*    szNew[i]: Spaced used on the i-th sibling page.
+        ///*   cntNew[i]: Index in b.apCell[] and b.szCell[] for the first cell to
+        ///*              the right of the i-th sibling page.
+        ///* usableSpace: Number of bytes of space available on each sibling.
+        ///*
+        /// Omit b.ixNx[] entry for child pages with no cells
+        ///* The packing computed by the previous block is biased toward the siblings
+        ///* on the left side (siblings with smaller keys). The left siblings are
+        ///* always nearly full, while the right-most sibling might be nearly empty.
+        ///* The next block of code attempts to adjust the packing of siblings to
+        ///* get a better balance.
+        ///*
+        ///* This adjustment is more than an optimization.  The packing above might
+        ///* be so out of balance as to be illegal.  For example, the right-most
+        ///* sibling might be completely empty.  This adjustment is not optional.
+        /// Size of sibling on the right
+        /// Size of sibling on the left
+        /// Index of right-most cell in left sibling
+        /// Index of first cell to the left of right sibling
+        /// Sanity check:  For a non-corrupt database file one of the following
+        ///* must be true:
+        ///*    (1) We found one or more cells (cntNew[0])>0), or
+        ///*    (2) pPage is a virtual root page.  A virtual root page is when
+        ///*        the real root page is page 1 and we are the only child of
+        ///*        that page.
+        ///* Allocate k new pages.  Reuse old pages where possible.
+        /// Set the pointer-map entry for the new sibling page.
+        ///* Reassign page numbers so that the new pages are in ascending order.
+        ///* This helps to keep entries in the disk file in order so that a scan
+        ///* of the table is closer to a linear scan through the file. That in turn
+        ///* helps the operating system to deliver pages from the disk more rapidly.
+        ///*
+        ///* An O(N*N) sort algorithm is used, but since N is never more than NB+2
+        ///* (5), that is not a performance concern.
+        ///*
+        ///* When NB==3, this one optimization makes the database about 25% faster
+        ///* for large insertions and deletions.
+        /// If apNew[i] has a page number that is bigger than any of the
+        ///* subsequence apNew[i] entries, then swap apNew[i] with the subsequent
+        ///* entry that has the smallest page number (which we know to be
+        ///* entry apNew[iB]).
+        /// If the sibling pages are not leaves, ensure that the right-child pointer
+        ///* of the right-most new sibling page is set to the value that was
+        ///* originally in the same field of the right-most old sibling page.
+        /// Make any required updates to pointer map entries associated with
+        ///* cells stored on sibling pages following the balance operation. Pointer
+        ///* map entries associated with divider cells are set by the insertCell()
+        ///* routine. The associated pointer map entries are:
+        ///*
+        ///*   a) if the cell contains a reference to an overflow chain, the
+        ///*      entry associated with the first page in the overflow chain, and
+        ///*
+        ///*   b) if the sibling pages are not leaves, the child page associated
+        ///*      with the cell.
+        ///*
+        ///* If the sibling pages are not leaves, then the pointer map entry
+        ///* associated with the right-child of each sibling may also need to be
+        ///* updated. This happens below, after the sibling pages have been
+        ///* populated, not here.
+        /// Cell pCell is destined for new sibling page pNew. Originally, it
+        ///* was either part of sibling page iOld (possibly an overflow cell),
+        ///* or else the divider cell to the left of sibling page iOld. So,
+        ///* if sibling page iOld had the same page number as pNew, and if
+        ///* pCell really was a part of sibling page iOld (not a divider or
+        ///* overflow cell), we can skip updating the pointer map entries.
+        /// Insert new divider cells into pParent.
+        /// If the tree is a leaf-data tree, and the siblings are leaves,
+        ///* then there is no divider cell in b.apCell[]. Instead, the divider
+        ///* cell consists of the integer key for the right-most cell of
+        ///* the sibling-page assembled above only.
+        /// Obscure case for non-leaf-data trees: If the cell at pCell was
+        ///* previously stored on a leaf node, and its reported size was 4
+        ///* bytes, then it may actually be smaller than this
+        ///* (see btreeParseCellPtr(), 4 bytes is the minimum size of
+        ///* any cell). But it is important to pass the correct size to
+        ///* insertCell(), so reparse the cell now.
+        ///*
+        ///* This can only happen for b-trees used to evaluate "IN (SELECT ...)"
+        ///* and WITHOUT ROWID tables with exactly one column which is the
+        ///* primary key.
+        /// Now update the actual sibling pages. The order in which they are updated
+        ///* is important, as this code needs to avoid disrupting any page from which
+        ///* cells may still to be read. In practice, this means:
+        ///*
+        ///*  (1) If cells are moving left (from apNew[iPg] to apNew[iPg-1])
+        ///*      then it is not safe to update page apNew[iPg] until after
+        ///*      the left-hand sibling apNew[iPg-1] has been updated.
+        ///*
+        ///*  (2) If cells are moving right (from apNew[iPg] to apNew[iPg+1])
+        ///*      then it is not safe to update page apNew[iPg] until after
+        ///*      the right-hand sibling apNew[iPg+1] has been updated.
+        ///*
+        ///* If neither of the above apply, the page is safe to update.
+        ///*
+        ///* The iPg value in the following loop starts at nNew-1 goes down
+        ///* to 0, then back up to nNew-1 again, thus making two passes over
+        ///* the pages.  On the initial downward pass, only condition (1) above
+        ///* needs to be tested because (2) will always be true from the previous
+        ///* step.  On the upward pass, both conditions are always true, so the
+        ///* upwards pass simply processes pages that were missed on the downward
+        ///* pass.
+        /// Skip pages already processed
+        /// On the upwards pass, or...
+        /// Condition (1) is true
+        /// Verify condition (1):  If cells are moving left, update iPg
+        ///* only after iPg-1 has already been updated.
+        /// Verify condition (2):  If cells are moving right, update iPg
+        ///* only after iPg+1 has already been updated.
+        /// All pages have been processed exactly once
+        /// The root page of the b-tree now contains no cells. The only sibling
+        ///* page is the right-child of the parent. Copy the contents of the
+        ///* child page into the parent, decreasing the overall height of the
+        ///* b-tree structure by one. This is described as the "balance-shallower"
+        ///* sub-algorithm in some documentation.
+        ///*
+        ///* If this is an auto-vacuum database, the call to copyNodeContent()
+        ///* sets all pointer-map entries corresponding to database image pages
+        ///* for which the pointer is stored within the content being copied.
+        ///*
+        ///* It is critical that the child page be defragmented before being
+        ///* copied into the parent, because if the parent is page 1 then it will
+        ///* by smaller than the child due to the database header, and so all the
+        ///* free space needs to be up front.
+        /// Fix the pointer map entries associated with the right-child of each
+        ///* sibling page. All other pointer map entries have already been taken
+        ///* care of.
+        /// Free any old pages that were not reused as new pages.
+        ///* Cleanup before returning.
         unreachable!();
     }
 }
 
+///* The page that pCur currently points to has just been modified in
+///* some way. This function figures out if this modification means the
+///* tree needs to be balanced, and if so calls the appropriate balancing
+///* routine. Balancing routines are:
+///*
+///*   balance_quick()
+///*   balance_deeper()
+///*   balance_nonroot()
+#[allow(unused_doc_comments)]
 extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
     let mut rc: i32 = 0;
     let mut a_balance_quick_space: [u8; 13] = [0; 13];
@@ -11380,11 +14333,21 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
                     unsafe { (*p_page).n_free } * 3 <=
                         unsafe { (*unsafe { (*p_cur_1).p_bt }).usable_size } as i32
                             * 2 {
+
+                /// No rebalance required as long as:
+                ///*   (1) There are no overflow cells
+                ///*   (2) The amount of free space on the page is less than 2/3rds of
+                ///*       the total usable space on the page.
                 break '__b75;
             } else if { i_page = unsafe { (*p_cur_1).i_page } as i32; i_page }
                     == 0 {
                 if unsafe { (*p_page).n_overflow } != 0 &&
                         { rc = another_valid_cursor(p_cur_1); rc } == 0 {
+
+                    /// The root page of the b-tree is overfull. In this case call the
+                    ///* balance_deeper() function to create a new child for the root-page
+                    ///* and copy the current contents of the root-page to it. The
+                    ///* next iteration of the do-loop will balance the child page.
                     { let _ = 0; };
                     rc =
                         balance_deeper(p_page,
@@ -11404,7 +14367,11 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
             } else if unsafe {
                         sqlite3_pager_page_refcount(unsafe { (*p_page).p_db_page })
                     } > 1 {
-                rc = unsafe { sqlite3_corrupt_error(9206) };
+
+                /// The page being written is not a root page, and there is currently
+                ///* more than one reference to it. This only happens if the page is one
+                ///* of its own ancestor pages. Corruption.
+                (rc = unsafe { sqlite3_corrupt_error(9206) });
             } else {
                 let p_parent: *mut MemPage =
                     unsafe { (*p_cur_1).ap_page[(i_page - 1) as usize] };
@@ -11424,11 +14391,40 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
                                         unsafe { (*p_page).n_cell } as i32 &&
                                 unsafe { (*p_parent).pgno } != 1 as u32 &&
                             unsafe { (*p_parent).n_cell } as i32 == i_idx {
+
+                        /// Call balance_quick() to create a new sibling of pPage on which
+                        ///* to store the overflow cell. balance_quick() inserts a new cell
+                        ///* into pParent, which may cause pParent overflow. If this
+                        ///* happens, the next iteration of the do-loop will balance pParent
+                        ///* use either balance_nonroot() or balance_deeper(). Until this
+                        ///* happens, the overflow cell is stored in the aBalanceQuickSpace[]
+                        ///* buffer.
+                        ///*
+                        ///* The purpose of the following assert() is to check that only a
+                        ///* single call to balance_quick() is made for each call to this
+                        ///* function. If this were not verified, a subtle bug involving reuse
+                        ///* of the aBalanceQuickSpace[] might sneak in.
                         { let _ = 0; };
                         rc =
                             balance_quick(p_parent, p_page,
                                 &raw mut a_balance_quick_space[0 as usize] as *mut u8);
                     } else {
+                        /// In this case, call balance_nonroot() to redistribute cells
+                        ///* between pPage and up to 2 of its sibling pages. This involves
+                        ///* modifying the contents of pParent, which may cause pParent to
+                        ///* become overfull or underfull. The next iteration of the do-loop
+                        ///* will balance the parent page to correct this.
+                        ///*
+                        ///* If the parent page becomes overfull, the overflow cell or cells
+                        ///* are stored in the pSpace buffer allocated immediately below.
+                        ///* A subsequent iteration of the do-loop will deal with this by
+                        ///* calling balance_nonroot() (balance_deeper() may be called first,
+                        ///* but it doesn't deal with overflow cells - just moves them to a
+                        ///* different page). Once this subsequent call to balance_nonroot()
+                        ///* has completed, it is safe to release the pSpace buffer used by
+                        ///* the previous call, as the overflow cell data will have been
+                        ///* copied either into the body of a database page or into the new
+                        ///* pSpace buffer passed to the latter call to balance_nonroot().
                         let p_space: *mut u8 =
                             unsafe {
                                     sqlite3_page_malloc(unsafe {
@@ -11440,12 +14436,23 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
                                 (i_page == 1) as i32,
                                 unsafe { (*p_cur_1).hints } as i32 & 1);
                         if !(p_free).is_null() {
+
+                            /// If pFree is not NULL, it points to the pSpace buffer used
+                            ///* by a previous call to balance_nonroot(). Its contents are
+                            ///* now stored either on real database pages or within the
+                            ///* new pSpace buffer, so it may be safely freed here.
                             unsafe { sqlite3_page_free(p_free as *mut ()) };
                         }
-                        p_free = p_space;
+
+                        /// The pSpace buffer will be freed after the next call to
+                        ///* balance_nonroot(), or just before this function returns, whichever
+                        ///* comes first.
+                        (p_free = p_space);
                     }
                 }
                 unsafe { (*p_page).n_overflow = 0 as u8 };
+
+                /// The next iteration of the do-loop balances the parent page.
                 release_page(p_page);
                 {
                     let __p = unsafe { &mut (*p_cur_1).i_page };
@@ -11471,19 +14478,43 @@ extern "C" fn balance(p_cur_1: *mut BtCursor) -> i32 {
     return rc;
 }
 
+///* Delete the entry that the cursor is pointing to.
+///*
+///* If the BTREE_SAVEPOSITION bit of the flags parameter is zero, then
+///* the cursor is left pointing at an arbitrary location after the delete.
+///* But if that bit is set, then the cursor is left in a state such that
+///* the next call to BtreeNext() or BtreePrev() moves it to the same row
+///* as it would have been on if the call to BtreeDelete() had been omitted.
+///*
+///* The BTREE_AUXDELETE bit of flags indicates that is one of several deletes
+///* associated with a single table entry and its indexes.  Only one of those
+///* deletes is considered the "primary" delete.  The primary delete occurs
+///* on a cursor that is not a BTREE_FORDELETE cursor.  All but one delete
+///* operation on non-FORDELETE cursors is tagged with the AUXDELETE flag.
+///* The BTREE_AUXDELETE bit is a hint that is not used by this implementation,
+///* but which might be used by alternative storage engines.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
     -> i32 {
     unsafe {
         let p: *mut Btree = unsafe { (*p_cur_1).p_btree };
         let p_bt: *mut BtShared = unsafe { (*p).p_bt };
         let mut rc: i32 = 0;
+        /// Return code
         let mut p_page: *mut MemPage = core::ptr::null_mut();
+        /// Page to delete cell from
         let mut p_cell: *mut u8 = core::ptr::null_mut();
+        /// Pointer to cell to delete
         let mut i_cell_idx: i32 = 0;
+        /// Index of cell to delete
         let mut i_cell_depth: i32 = 0;
+        /// Depth of node containing pCell
         let mut info: CellInfo = unsafe { core::mem::zeroed() };
+        /// Size of the cell being deleted
         let mut b_preserve: u8 = 0 as u8;
+
+        /// Keep cursor valid.  2 for CURSOR_SKIPNEXT
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -11543,7 +14574,23 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
                 } {
             return unsafe { sqlite3_corrupt_error(9913) };
         }
-        b_preserve = (flags as i32 & 2 != 0) as u8;
+
+        /// If the BTREE_SAVEPOSITION bit is on, then the cursor position must
+        ///* be preserved following this delete operation. If the current delete
+        ///* will cause a b-tree rebalance, then this is done by saving the cursor
+        ///* key and leaving the cursor in CURSOR_REQUIRESEEK state before
+        ///* returning.
+        ///*
+        ///* If the current delete will not cause a rebalance, then the cursor
+        ///* will be left in CURSOR_SKIPNEXT state pointing to the entry immediately
+        ///* before or after the deleted entry.
+        ///*
+        ///* The bPreserve value records which path is required:
+        ///*
+        ///*    bPreserve==0         Not necessary to save the cursor position
+        ///*    bPreserve==1         Use CURSOR_REQUIRESEEK to save the cursor position
+        ///*    bPreserve==2         Cursor won't move.  Set CURSOR_SKIPNEXT.
+        (b_preserve = (flags as i32 & 2 != 0) as u8);
         if b_preserve != 0 {
             if (unsafe { (*p_page).leaf } == 0) as i32 != 0 ||
                         unsafe { (*p_page).n_free } +
@@ -11552,7 +14599,10 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
                                         } as i32 + 2 >
                             (unsafe { (*p_bt).usable_size } * 2 as u32 / 3 as u32) as
                                 i32 || unsafe { (*p_page).n_cell } as i32 == 1 {
-                rc = save_cursor_key(p_cur_1);
+
+                /// A b-tree rebalance will be required after deleting this entry.
+                ///* Save the cursor key.
+                (rc = save_cursor_key(p_cur_1));
                 if rc != 0 { return rc; }
             } else { b_preserve = 2 as u8; }
         }
@@ -11573,7 +14623,11 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
                 unsafe { (*p_cur_1).pgno_root },
                 unsafe { (*p_cur_1).info.n_key }, 0);
         }
-        rc = unsafe { sqlite3_pager_write(unsafe { (*p_page).p_db_page }) };
+
+        /// Make the page containing the entry to be deleted writable. Then free any
+        ///* overflow pages associated with the entry and finally remove the cell
+        ///* itself from within the page.
+        (rc = unsafe { sqlite3_pager_write(unsafe { (*p_page).p_db_page }) });
         if rc != 0 { return rc; }
         unsafe {
             (unsafe {
@@ -11654,12 +14708,31 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
                 &mut rc);
             if rc != 0 { return rc; }
         }
+
+        /// Balance the tree. If the entry deleted was located on a leaf page,
+        ///* then the cursor still points to that page. In this case the first
+        ///* call to balance() repairs the tree, and the if(...) condition is
+        ///* never true.
+        ///*
+        ///* Otherwise, if the entry deleted was on an internal node page, then
+        ///* pCur is pointing to the leaf page from which a cell was removed to
+        ///* replace the cell deleted from the internal node. This is slightly
+        ///* tricky as the leaf node may be underfull, and the internal node may
+        ///* be either under or overfull. In this case run the balancing algorithm
+        ///* on the leaf node first. If the balance proceeds far enough up the
+        ///* tree that we can be sure that any problem in the internal node has
+        ///* been corrected, so be it. Otherwise, after balancing the leaf node,
+        ///* walk the cursor up the tree to the internal node and balance it as
+        ///* well.
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*unsafe { (*p_cur_1).p_page }).n_free } * 3 <=
                 unsafe { (*unsafe { (*p_cur_1).p_bt }).usable_size } as i32 *
                     2 {
-            rc = 0;
+
+            /// Optimization: If the free space is less than 2/3rds of the page,
+            ///* then balance() will always be a no-op.  No need to invoke it.
+            (rc = 0);
         } else { rc = balance(p_cur_1); }
         if rc == 0 && unsafe { (*p_cur_1).i_page } as i32 > i_cell_depth {
             release_page_not_null(unsafe { &*unsafe { (*p_cur_1).p_page } });
@@ -11713,11 +14786,15 @@ pub extern "C" fn sqlite3_btree_delete(p_cur_1: *mut BtCursor, flags: u8)
     }
 }
 
+/// Overwrite content from pX into pDest.  Only do the write if the
+///* content is different from what is already there.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
     p_dest_1: *mut u8, p_x_1: *const BtreePayload, i_offset_1: i32,
     mut i_amt_1: i32) -> i32 {
     let n_data: i32 = unsafe { (*p_x_1).n_data } - i_offset_1;
     if n_data <= 0 {
+        /// Overwriting with zeros
         let mut i: i32 = 0;
         {
             i = 0;
@@ -11743,6 +14820,8 @@ extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
         }
     } else {
         if n_data < i_amt_1 {
+            /// Mixed read data and zeros at the end.  Make a recursive call
+            ///* to write the zeros then fall through to write the real data
             let rc: i32 =
                 btree_overwrite_content(p_page_1,
                     unsafe { p_dest_1.offset(n_data as isize) }, p_x_1,
@@ -11762,6 +14841,11 @@ extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
                     sqlite3_pager_write(unsafe { (*p_page_1).p_db_page })
                 };
             if rc != 0 { return rc; }
+
+            /// In a corrupt database, it is possible for the source and destination
+            ///* buffers to overlap.  This is harmless since the database is already
+            ///* corrupt but it does cause valgrind and ASAN warnings.  So use
+            ///* memmove().
             unsafe {
                 memmove(p_dest_1 as *mut (),
                     unsafe {
@@ -11774,22 +14858,39 @@ extern "C" fn btree_overwrite_content(p_page_1: *mut MemPage,
     return 0;
 }
 
+///* Overwrite the cell that cursor pCur is pointing to with fresh content
+///* contained in pX.  In this variant, pCur is pointing to an overflow
+///* cell.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_overwrite_overflow_cell(p_cur_1: &BtCursor,
     p_x_1: *const BtreePayload) -> i32 {
     let mut i_offset: i32 = 0;
+    /// Next byte of pX->pData to write
     let n_total: i32 =
         unsafe { (*p_x_1).n_data } + unsafe { (*p_x_1).n_zero } as i32;
+    /// Total bytes of to write
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_page: *mut MemPage = (*p_cur_1).p_page;
+    /// Page being written
     let mut p_bt: *mut BtShared = core::ptr::null_mut();
+    /// Btree
     let mut ovfl_pgno: Pgno = 0 as Pgno;
+    /// Next overflow page to write
     let mut ovfl_page_size: u32 = 0 as u32;
+
+    /// Size to write on overflow page
     { let _ = 0; };
-    rc =
+
+    /// pCur is an overflow cell
+    /// Overwrite the local portion first
+    (rc =
         btree_overwrite_content(p_page, (*p_cur_1).info.p_payload, p_x_1, 0,
-            (*p_cur_1).info.n_local as i32);
+            (*p_cur_1).info.n_local as i32));
     if rc != 0 { return rc; }
-    i_offset = (*p_cur_1).info.n_local as i32;
+
+    /// Now overwrite the overflow pages
+    (i_offset = (*p_cur_1).info.n_local as i32);
     { let _ = 0; };
     { let _ = 0; };
     ovfl_pgno =
@@ -11830,10 +14931,14 @@ extern "C" fn btree_overwrite_overflow_cell(p_cur_1: &BtCursor,
     return 0;
 }
 
+///* Overwrite the cell that cursor pCur is pointing to with fresh content
+///* contained in pX.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_overwrite_cell(p_cur_1: *mut BtCursor,
     p_x_1: *const BtreePayload) -> i32 {
     let n_total: i32 =
         unsafe { (*p_x_1).n_data } + unsafe { (*p_x_1).n_zero } as i32;
+    /// Total bytes of to write
     let p_page: *mut MemPage = unsafe { (*p_cur_1).p_page };
     if unsafe {
                     unsafe {
@@ -11852,14 +14957,29 @@ extern "C" fn btree_overwrite_cell(p_cur_1: *mut BtCursor,
         return unsafe { sqlite3_corrupt_error(9398) };
     }
     if unsafe { (*p_cur_1).info.n_local } as i32 == n_total {
+
+        /// The entire cell is local
         return btree_overwrite_content(p_page,
                 unsafe { (*p_cur_1).info.p_payload }, p_x_1, 0,
                 unsafe { (*p_cur_1).info.n_local } as i32);
     } else {
+
+        /// The cell contains overflow content
         return btree_overwrite_overflow_cell(unsafe { &*p_cur_1 }, p_x_1);
     }
 }
 
+///* Create the byte sequence used to represent a cell on page pPage
+///* and write that byte sequence into pCell[].  Overflow pages are
+///* allocated and filled in as necessary.  The calling procedure
+///* is responsible for making sure sufficient space has been allocated
+///* for pCell[].
+///*
+///* Note that pCell does not necessary need to point to the pPage->aData
+///* area.  pCell might point to some temporary storage.  The cell will
+///* be constructed in this temporary area then copied into pPage->aData
+///* later.
+#[allow(unused_doc_comments)]
 extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
     p_x_1: &BtreePayload, pn_size_1: &mut i32) -> i32 {
     unsafe {
@@ -11877,14 +14997,21 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
         let mut pgno_ovfl: Pgno = 0 as Pgno;
         let mut n_header: i32 = 0;
         { let _ = 0; };
+
+        /// pPage is not necessarily writeable since pCell might be auxiliary
+        ///* buffer space that is separate from the pPage buffer area
         { let _ = 0; };
-        n_header = (*p_page_1).child_ptr_size as i32;
+
+        /// Fill in the header.
+        (n_header = (*p_page_1).child_ptr_size as i32);
         if (*p_page_1).int_key != 0 {
             n_payload = (*p_x_1).n_data + (*p_x_1).n_zero as i32;
             p_src = (*p_x_1).p_data as *const u8;
             n_src = (*p_x_1).n_data as i32;
             { let _ = 0; };
-            n_header +=
+
+            /// fillInCell() only called for leaves
+            (n_header +=
                 if (n_payload as u32) < 128 as u32 {
                             {
                                 ({
@@ -11902,7 +15029,7 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
                                         &mut *p_cell_1.offset(n_header as isize)
                                     }, n_payload as u64)
                             }
-                        } as u8 as i32;
+                        } as u8 as i32);
             n_header +=
                 unsafe {
                     sqlite3_put_varint(unsafe {
@@ -11933,9 +15060,14 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
                             }
                         } as u8 as i32;
         }
-        p_payload = unsafe { p_cell_1.offset(n_header as isize) };
+
+        /// Fill in the payload
+        (p_payload = unsafe { p_cell_1.offset(n_header as isize) });
         if n_payload <= (*p_page_1).max_local as i32 {
-            n = n_header + n_payload;
+
+            /// This is the common case where everything fits on the btree page
+            ///* and no overflow pages are required.
+            (n = n_header + n_payload);
             if n < 4 {
                 n = 4;
                 unsafe { *p_payload.offset(n_payload as isize) = 0 as u8 };
@@ -11951,7 +15083,10 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
             };
             return 0;
         }
-        mn = (*p_page_1).min_local as i32;
+
+        /// If we reach this point, it means that some of the content will need
+        ///* to spill onto overflow pages.
+        (mn = (*p_page_1).min_local as i32);
         n =
             (mn as u32 +
                     (n_payload - mn) as u32 %
@@ -11967,7 +15102,13 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
         loop {
             n = n_payload;
             if n > space_left { n = space_left; }
+
+            /// If pToRelease is not zero than pPayload points into the data area
+            ///* of pToRelease.  Make sure pToRelease is still writeable.
             { let _ = 0; };
+
+            /// If pPayload is part of the data area of pPage, then make sure pPage
+            ///* is still writeable
             { let _ = 0; };
             if n_src >= n {
                 unsafe {
@@ -12025,7 +15166,13 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
                     if rc != 0 { release_page(p_ovfl); }
                 }
                 if rc != 0 { release_page(p_to_release); return rc; }
+
+                /// If pToRelease is not zero than pPrior points into the data area
+                ///* of pToRelease.  Make sure pToRelease is still writeable.
                 { let _ = 0; };
+
+                /// If pPrior is part of the data area of pPage, then make sure pPage
+                ///* is still writeable
                 { let _ = 0; };
                 unsafe { sqlite3_put4byte(p_prior, pgno_ovfl) };
                 release_page(p_to_release);
@@ -12043,12 +15190,26 @@ extern "C" fn fill_in_cell(p_page_1: &MemPage, p_cell_1: *mut u8,
     }
 }
 
+///* This variant of insertCell() assumes that the pTemp and iChild
+///* parameters are both zero.  Use this variant in sqlite3BtreeInsert()
+///* for performance improvement, and also so that this variant is only
+///* called from that one place, and is thus inlined, and thus runs must
+///* faster.
+///*
+///* Fixes or enhancements to this routine should be reflected into
+///* the insertCell() routine.
+#[allow(unused_doc_comments)]
 extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
     p_cell_1: *mut u8, sz: i32) -> i32 {
     let mut idx: i32 = 0;
+    /// Where to write new cell content in data[]
     let mut j: i32 = 0;
+    /// Loop counter
     let mut data: *mut u8 = core::ptr::null_mut();
+    /// The content of the whole page
     let mut p_ins: *mut u8 = core::ptr::null_mut();
+
+    /// The point in pPage->aCellIdx[] where no cell inserted
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -12066,10 +15227,21 @@ extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
                     *__p += 1;
                     __t
                 } as i32;
+
+        /// Comparison against ArraySize-1 since we hold back one extra slot
+        ///* as a contingency.  In other words, never need more than 3 overflow
+        ///* slots but 4 are allocated, just to be safe.
         { let _ = 0; };
         unsafe { (*p_page_1).ap_ovfl[j as usize] = p_cell_1 };
         unsafe { (*p_page_1).ai_ovfl[j as usize] = i as u16 };
+
+        /// When multiple overflows occur, they are always sequential and in
+        ///* sorted order.  This invariants arise because multiple overflows can
+        ///* only occur when inserting divider cells into the parent page during
+        ///* balancing, and the dividers are adjacent and sorted.
         { let _ = 0; };
+
+        /// Overflows in sorted order
         { let _ = 0; };
     } else {
         let mut rc: i32 =
@@ -12080,6 +15252,9 @@ extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
         { let _ = 0; };
         rc = allocate_space(p_page_1, sz, &mut idx);
         if rc != 0 { return rc; }
+
+        /// The allocateSpace() routine guarantees the following properties
+        ///* if it returns successfully
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -12130,6 +15305,9 @@ extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
         { let _ = 0; };
         if unsafe { (*unsafe { (*p_page_1).p_bt }).auto_vacuum } != 0 {
             let mut rc2: i32 = 0;
+
+            /// The cell may contain a pointer to an overflow page. If so, write
+            ///* the entry for the overflow page into the pointer map.
             ptrmap_put_ovfl_ptr(p_page_1, unsafe { &*p_page_1 }, p_cell_1,
                 &mut rc2);
             if rc2 != 0 { return rc2; }
@@ -12138,7 +15316,36 @@ extern "C" fn insert_cell_fast(p_page_1: *mut MemPage, i: i32,
     return 0;
 }
 
+///* Insert a new record into the BTree.  The content of the new record
+///* is described by the pX object.  The pCur cursor is used only to
+///* define what table the record should be inserted into, and is left
+///* pointing at a random location.
+///*
+///* For a table btree (used for rowid tables), only the pX.nKey value of
+///* the key is used. The pX.pKey value must be NULL.  The pX.nKey is the
+///* rowid or INTEGER PRIMARY KEY of the row.  The pX.nData,pData,nZero fields
+///* hold the content of the row.
+///*
+///* For an index btree (used for indexes and WITHOUT ROWID tables), the
+///* key is an arbitrary byte sequence stored in pX.pKey,nKey.  The
+///* pX.pData,nData,nZero fields must be zero.
+///*
+///* If the seekResult parameter is non-zero, then a successful call to
+///* sqlite3BtreeIndexMoveto() to seek cursor pCur to (pKey,nKey) has already
+///* been performed.  In other words, if seekResult!=0 then the cursor
+///* is currently pointing to a cell that will be adjacent to the cell
+///* to be inserted.  If seekResult<0 then pCur points to a cell that is
+///* smaller then (pKey,nKey).  If seekResult>0 then pCur points to a cell
+///* that is larger than (pKey,nKey).
+///*
+///* If seekResult==0, that means pCur is pointing at some unknown location.
+///* In that case, this routine must seek the cursor to the correct insertion
+///* point for (pKey,nKey) before doing the insertion.  For index btrees,
+///* if pX->nMem is non-zero, then pX->aMem contains pointers to the unpacked
+///* key values and pX->aMem can be used instead of pX->pKey to avoid having
+///* to decode the key.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
     p_x_1: *const BtreePayload, flags: i32, seek_result_1: i32) -> i32 {
     unsafe {
@@ -12146,6 +15353,7 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
         '__b81: loop {
             '__c81: loop {
                 let mut loc: i32 = seek_result_1;
+                /// -1: before desired location  +1: after
                 let mut sz_new: i32 = 0;
                 let mut idx: i32 = 0;
                 let mut p_page: *mut MemPage = core::ptr::null_mut();
@@ -12160,6 +15368,12 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                             unsafe { (*p_cur_1).pgno_root }, p_cur_1);
                     if rc != 0 { return rc; }
                     if loc != 0 && (unsafe { (*p_cur_1).i_page } as i32) < 0 {
+
+                        /// This can only happen if the schema is corrupt such that there is more
+                        ///* than one table or index with the same root page as used by the cursor.
+                        ///* Which can only happen if the SQLITE_NoSchemaError flag was set when
+                        ///* the schema was loaded. This cannot be asserted though, as a user might
+                        ///* set the flag, load the schema, and then unset the flag.
                         return unsafe { sqlite3_corrupt_error(9479) };
                     }
                 }
@@ -12170,6 +15384,12 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
+
+                /// Assert that the caller has been consistent. If this cursor was opened
+                ///* expecting an index b-tree, then the caller should be inserting blob
+                ///* keys with no associated data. If the cursor was opened expecting an
+                ///* intkey table, the caller should be inserting integer keys with a
+                ///* blob of associated data.
                 { let _ = 0; };
                 if unsafe { (*p_cur_1).p_key_info } == core::ptr::null_mut() {
                     { let _ = 0; };
@@ -12181,22 +15401,35 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                     if unsafe { (*p_cur_1).cur_flags } as i32 & 2 != 0 &&
                             unsafe { (*p_x_1).n_key } as Sqlite3Int64 ==
                                 unsafe { (*p_cur_1).info.n_key } {
+
+                        /// The cursor is pointing to the entry that is to be
+                        ///* overwritten
                         { let _ = 0; };
                         if unsafe { (*p_cur_1).info.n_size } as i32 != 0 &&
                                 unsafe { (*p_cur_1).info.n_payload } ==
                                     unsafe { (*p_x_1).n_data } as u32 +
                                         unsafe { (*p_x_1).n_zero } as u32 {
+
+                            /// New entry is the same size as the old.  Do an overwrite
                             return btree_overwrite_cell(p_cur_1, p_x_1);
                         }
                         { let _ = 0; };
                     } else if loc == 0 {
-                        rc =
+
+                        /// The cursor is *not* pointing to the cell to be overwritten, nor
+                        ///* to an adjacent cell.  Move the cursor so that it is pointing either
+                        ///* to the cell to be overwritten or an adjacent cell.
+                        (rc =
                             sqlite3_btree_table_moveto(p_cur_1,
                                 unsafe { (*p_x_1).n_key }, (flags & 8 != 0) as i32,
-                                &mut loc);
+                                &mut loc));
                         if rc != 0 { return rc; }
                     }
                 } else {
+
+                    /// This is an index or a WITHOUT ROWID table
+                    /// If BTREE_SAVEPOSITION is set, the cursor must already be pointing
+                    ///* to a row with the same key as the new entry being inserted.
                     { let _ = 0; };
                     if loc == 0 && flags & 2 == 0 {
                         if unsafe { (*p_x_1).n_mem } != 0 {
@@ -12235,7 +15468,9 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                 { let _ = 0; };
                 if unsafe { (*p_page).n_free } < 0 {
                     if unsafe { (*p_cur_1).e_state } as i32 > 1 {
-                        rc = unsafe { sqlite3_corrupt_error(9602) };
+
+                        /// ^^^^^--- due to the moveToRoot() call above
+                        (rc = unsafe { sqlite3_corrupt_error(9602) });
                     } else {
                         rc = btree_compute_free_space(unsafe { &mut *p_page });
                     }
@@ -12338,6 +15573,16 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                             ((unsafe { (*unsafe { (*p).p_bt }).auto_vacuum } == 0) as
                                         i32 != 0 || sz_new < unsafe { (*p_page).min_local } as i32)
                         {
+
+                        /// Overwrite the old cell with the new if they are the same size.
+                        ///* We could also try to do this if the old cell is smaller, then add
+                        ///* the leftover space to the free list.  But experiments show that
+                        ///* doing that is no faster then skipping this optimization and just
+                        ///* calling dropCell() and insertCell().
+                        ///*
+                        ///* This optimization cannot be used on an autovacuum database if the
+                        ///* new entry uses overflow pages, as the insertCell() call below is
+                        ///* necessary to add the PTRMAP_OVERFLOW1 pointer-map entry.
                         { let _ = 0; };
                         if old_cell <
                                 unsafe {
@@ -12376,6 +15621,11 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
                     { let _ = 0; };
                     unsafe { (*p_cur_1).cur_flags &= !(2 | 4) as u8 };
                     rc = balance(p_cur_1);
+
+                    /// Must make sure nOverflow is reset to zero even if the balance()
+                    ///* fails. Internal data structure corruption will result otherwise.
+                    ///* Also, set the cursor state to invalid. This stops saveCursorPosition()
+                    ///* from trying to save the current position of the cursor.
                     unsafe {
                         (*unsafe { (*p_cur_1).p_page }).n_overflow = 0 as u8
                     };
@@ -12408,10 +15658,94 @@ pub extern "C" fn sqlite3_btree_insert(p_cur_1: *mut BtCursor,
             }
             if !(false) { break '__b81; }
         }
+
+        /// -1: before desired location  +1: after
+        /// Save the positions of any other cursors open on this table.
+        ///*
+        ///* In some cases, the call to btreeMoveto() below is a no-op. For
+        ///* example, when inserting data into a table with auto-generated integer
+        ///* keys, the VDBE layer invokes sqlite3BtreeLast() to figure out the
+        ///* integer key to use. It then calls this function to actually insert the
+        ///* data into the intkey B-Tree. In this case btreeMoveto() recognizes
+        ///* that the cursor is already where it needs to be and returns without
+        ///* doing any work. To avoid thwarting these optimizations, it is important
+        ///* not to clear the cursor here.
+        /// This can only happen if the schema is corrupt such that there is more
+        ///* than one table or index with the same root page as used by the cursor.
+        ///* Which can only happen if the SQLITE_NoSchemaError flag was set when
+        ///* the schema was loaded. This cannot be asserted though, as a user might
+        ///* set the flag, load the schema, and then unset the flag.
+        /// Ensure that the cursor is not in the CURSOR_FAULT state and that it
+        ///* points to a valid cell.
+        /// Assert that the caller has been consistent. If this cursor was opened
+        ///* expecting an index b-tree, then the caller should be inserting blob
+        ///* keys with no associated data. If the cursor was opened expecting an
+        ///* intkey table, the caller should be inserting integer keys with a
+        ///* blob of associated data.
+        /// If this is an insert into a table b-tree, invalidate any incrblob
+        ///* cursors open on the row being replaced
+        /// If BTREE_SAVEPOSITION is set, the cursor must already be pointing
+        ///* to a row with the same key as the new entry being inserted.
+        /// On the other hand, BTREE_SAVEPOSITION==0 does not imply
+        ///* that the cursor is not pointing to a row to be overwritten.
+        ///* So do a complete check.
+        /// The cursor is pointing to the entry that is to be
+        ///* overwritten
+        /// New entry is the same size as the old.  Do an overwrite
+        /// The cursor is *not* pointing to the cell to be overwritten, nor
+        ///* to an adjacent cell.  Move the cursor so that it is pointing either
+        ///* to the cell to be overwritten or an adjacent cell.
+        /// This is an index or a WITHOUT ROWID table
+        /// If BTREE_SAVEPOSITION is set, the cursor must already be pointing
+        ///* to a row with the same key as the new entry being inserted.
+        /// If the cursor is not already pointing either to the cell to be
+        ///* overwritten, or if a new cell is being inserted, if the cursor is
+        ///* not pointing to an immediately adjacent cell, then move the cursor
+        ///* so that it does.
+        /// If the cursor is currently pointing to an entry to be overwritten
+        ///* and the new content is the same as as the old, then use the
+        ///* overwrite optimization.
+        /// ^^^^^--- due to the moveToRoot() call above
+        /// Overwrite the old cell with the new if they are the same size.
+        ///* We could also try to do this if the old cell is smaller, then add
+        ///* the leftover space to the free list.  But experiments show that
+        ///* doing that is no faster then skipping this optimization and just
+        ///* calling dropCell() and insertCell().
+        ///*
+        ///* This optimization cannot be used on an autovacuum database if the
+        ///* new entry uses overflow pages, as the insertCell() call below is
+        ///* necessary to add the PTRMAP_OVERFLOW1 pointer-map entry.
+        /// clearCell never fails when nLocal==nPayload
+        /// If no error has occurred and pPage has an overflow cell, call balance()
+        ///* to redistribute the cells within the tree. Since balance() may move
+        ///* the cursor, zero the BtCursor.info.nSize and BTCF_ValidNKey
+        ///* variables.
+        ///*
+        ///* Previous versions of SQLite called moveToRoot() to move the cursor
+        ///* back to the root page as balance() used to invalidate the contents
+        ///* of BtCursor.apPage[] and BtCursor.aiIdx[]. Instead of doing that,
+        ///* set the cursor state to "invalid". This makes common insert operations
+        ///* slightly faster.
+        ///*
+        ///* There is a subtle but important optimization here too. When inserting
+        ///* multiple records into an intkey b-tree using a single cursor (as can
+        ///* happen while processing an "INSERT INTO ... SELECT" statement), it
+        ///* is advantageous to leave the cursor pointing to the last entry in
+        ///* the b-tree if possible. If the cursor is left pointing to the last
+        ///* entry in the table, and the next row inserted has an integer key
+        ///* larger than the largest existing key, it is possible to insert the
+        ///* row without seeking the cursor. This can be a big performance boost.
+        /// Must make sure nOverflow is reset to zero even if the balance()
+        ///* fails. Internal data structure corruption will result otherwise.
+        ///* Also, set the cursor state to invalid. This stops saveCursorPosition()
+        ///* from trying to save the current position of the cursor.
         return rc;
     }
 }
 
+/// Move the cursor to the first entry in the table.  Return SQLITE_OK
+///* on success.  Set *pRes to 0 if the cursor actually points to something
+///* or set *pRes to 1 if the table is empty.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_first(p_cur_1: *mut BtCursor,
     p_res_1: &mut i32) -> i32 {
@@ -12427,6 +15761,10 @@ pub extern "C" fn sqlite3_btree_first(p_cur_1: *mut BtCursor,
     return rc;
 }
 
+/// Set *pRes to 1 (true) if the BTree pointed to by cursor pCur contains zero
+///* rows of content.  Set *pRes to 0 (false) if the table contains content.
+///* Return SQLITE_OK on success or some error code (ex: SQLITE_NOMEM) if
+///* something goes wrong.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_empty(p_cur_1: *mut BtCursor,
     p_res_1: &mut i32) -> i32 {
@@ -12439,6 +15777,9 @@ pub extern "C" fn sqlite3_btree_is_empty(p_cur_1: *mut BtCursor,
     return rc;
 }
 
+/// Move the cursor to the last entry in the table.  Return SQLITE_OK
+///* on success.  Set *pRes to 0 if the cursor actually points to something
+///* or set *pRes to 1 if the table is empty.
 extern "C" fn btree_last(p_cur_1: *mut BtCursor, p_res_1: &mut i32) -> i32 {
     let mut rc: i32 = move_to_root(p_cur_1);
     if rc == 0 {
@@ -12466,11 +15807,22 @@ pub extern "C" fn sqlite3_btree_last(p_cur_1: *mut BtCursor,
     return btree_last(p_cur_1, unsafe { &mut *p_res_1 });
 }
 
+///* Return TRUE if the cursor is not pointing at an entry of the table.
+///*
+///* TRUE will be returned after a call to sqlite3BtreeNext() moves
+///* past the last entry in the table or sqlite3BtreePrev() moves past
+///* the first entry.  TRUE is also returned if the table is empty.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_eof(p_cur_1: &BtCursor) -> i32 {
+
+    /// TODO: What if the cursor is in CURSOR_REQUIRESEEK but all table entries
+    ///* have been deleted? This API will need to change to return an error code
+    ///* as well as the boolean result value.
     return (0 != (*p_cur_1).e_state as i32) as i32;
 }
 
+///* Pin or unpin a cursor.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_pin(p_cur_1: &mut BtCursor) -> () {
     { let _ = 0; };
@@ -12483,6 +15835,8 @@ pub extern "C" fn sqlite3_btree_cursor_unpin(p_cur_1: &mut BtCursor) -> () {
     (*p_cur_1).cur_flags &= !64 as u8;
 }
 
+///* Return the offset into the database file for the start of the
+///* payload to which the cursor is pointing.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_offset(p_cur_1: *mut BtCursor) -> i64 {
     { let _ = 0; };
@@ -12500,6 +15854,24 @@ pub extern "C" fn sqlite3_btree_offset(p_cur_1: *mut BtCursor) -> i64 {
                     } as i64 as i64;
 }
 
+///* Return a pointer to payload information from the entry that the
+///* pCur cursor is pointing to.  The pointer is to the beginning of
+///* the key if index btrees (pPage->intKey==0) and is the data for
+///* table btrees (pPage->intKey==1). The number of bytes of available
+///* key/data is written into *pAmt.  If *pAmt==0, then the value
+///* returned will not be a valid pointer.
+///*
+///* This routine is an optimization.  It is common for the entire key
+///* and data to fit on the local page and for there to be no overflow
+///* pages.  When that is so, this routine can be used to access the
+///* key and data without making a copy.  If the key and/or data spills
+///* onto overflow pages, then accessPayload() must be used to reassemble
+///* the key/data and copy it into a preallocated buffer.
+///*
+///* The pointer returned by this routine looks directly into the cached
+///* page of the database.  The data might change or move the next time
+///* any btree routine is called.
+#[allow(unused_doc_comments)]
 extern "C" fn fetch_payload(p_cur_1: &mut BtCursor, p_amt_1: &mut u32)
     -> *const () {
     let mut amt: i32 = 0;
@@ -12518,6 +15890,9 @@ extern "C" fn fetch_payload(p_cur_1: &mut BtCursor, p_amt_1: &mut u32)
                             (*(*p_cur_1).p_page).a_data_end.offset_from((*p_cur_1).info.p_payload)
                         }
                     } as i64 as i32 {
+
+        /// There is too little space on the page for the expected amount
+        ///* of local content. Database must be corrupt.
         { let _ = 0; };
         amt =
             if 0 >
@@ -12539,12 +15914,35 @@ extern "C" fn fetch_payload(p_cur_1: &mut BtCursor, p_amt_1: &mut u32)
     return (*p_cur_1).info.p_payload as *mut () as *const ();
 }
 
+///* For the entry that cursor pCur is point to, return as
+///* many bytes of the key or data as are available on the local
+///* b-tree page.  Write the number of available bytes into *pAmt.
+///*
+///* The pointer returned is ephemeral.  The key/data may move
+///* or be destroyed on the next call to any Btree routine,
+///* including calls from other threads against the same cache.
+///* Hence, a mutex on the BtShared should be held prior to calling
+///* this routine.
+///*
+///* These routines is used to get quick access to key and data
+///* in the common case where no overflow pages are used.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_payload_fetch(p_cur_1: *mut BtCursor,
     p_amt_1: *mut u32) -> *const () {
     return fetch_payload(unsafe { &mut *p_cur_1 }, unsafe { &mut *p_amt_1 });
 }
 
+///* Return an upper bound on the size of any record for the table
+///* that the cursor is pointing into.
+///*
+///* This is an optimization.  Everything will still work if this
+///* routine always returns 2147483647 (which is the largest record
+///* that SQLite can handle) or more.  But returning a smaller value might
+///* prevent large memory allocations when trying to interpret a
+///* corrupt database.
+///*
+///* The current implementation merely returns the size of the underlying
+///* database file.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_max_record_size(p_cur_1: &BtCursor)
     -> Sqlite3Int64 {
@@ -12554,6 +15952,7 @@ pub extern "C" fn sqlite3_btree_max_record_size(p_cur_1: &BtCursor)
             unsafe { (*(*p_cur_1).p_bt).n_page } as Sqlite3Int64;
 }
 
+///* Record an OOM error during integrity_check
 extern "C" fn check_oom(p_check_1: &mut IntegrityCk) -> () {
     (*p_check_1).rc = 7;
     (*p_check_1).mx_err = 0;
@@ -12562,6 +15961,7 @@ extern "C" fn check_oom(p_check_1: &mut IntegrityCk) -> () {
     }
 }
 
+///* Set the bit in the IntegrityCk.aPgRef[] array that corresponds to page iPg.
 extern "C" fn set_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
     -> () {
     { let _ = 0; };
@@ -12572,6 +15972,8 @@ extern "C" fn set_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
     };
 }
 
+///* Invoke the progress handler, if appropriate.  Also check for an
+///* interrupt.
 extern "C" fn check_progress(p_check_1: &mut IntegrityCk) -> () {
     unsafe {
         let db: *mut Sqlite3 = (*p_check_1).db;
@@ -12617,6 +16019,7 @@ extern "C" fn check_progress(p_check_1: &mut IntegrityCk) -> () {
     }
 }
 
+///* Append a message to the error message string.
 unsafe extern "C" fn check_append_msg(p_check_1: *mut IntegrityCk,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -12659,6 +16062,8 @@ unsafe extern "C" fn check_append_msg(p_check_1: *mut IntegrityCk,
     }
 }
 
+///* Return non-zero if the bit in the IntegrityCk.aPgRef[] array that
+///* corresponds to page iPg is already set.
 extern "C" fn get_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
     -> i32 {
     { let _ = 0; };
@@ -12668,6 +16073,12 @@ extern "C" fn get_page_referenced(p_check_1: &IntegrityCk, i_pg_1: Pgno)
                 } as i32 & 1 << (i_pg_1 & 7 as Pgno);
 }
 
+///* Add 1 to the reference count for page iPage.  If this is the second
+///* reference to the page, add an error message to pCheck->zErrMsg.
+///* Return 1 if there are 2 or more references to the page and 0 if
+///* if this is the first reference to the page.
+///*
+///* Also check that the page number is in bounds.
 extern "C" fn check_ref(p_check_1: *mut IntegrityCk, i_page_1: Pgno) -> i32 {
     if i_page_1 > unsafe { (*p_check_1).n_ck_page } || i_page_1 == 0 as u32 {
         unsafe {
@@ -12689,6 +16100,9 @@ extern "C" fn check_ref(p_check_1: *mut IntegrityCk, i_page_1: Pgno) -> i32 {
     return 0;
 }
 
+///* Check that the entry in the pointer-map for page iChild maps to
+///* page iParent, pointer type ptrType. If not, append an error message
+///* to pCheck.
 extern "C" fn check_ptrmap(p_check_1: *mut IntegrityCk, i_child_1: Pgno,
     e_type_1: u8, i_parent_1: Pgno) -> () {
     let mut rc: i32 = 0;
@@ -12719,6 +16133,8 @@ extern "C" fn check_ptrmap(p_check_1: *mut IntegrityCk, i_child_1: Pgno,
     }
 }
 
+///* Check the integrity of the freelist or of an overflow page list.
+///* Verify that the number of pages on the list is N.
 extern "C" fn check_list(p_check_1: *mut IntegrityCk, is_free_list_1: i32,
     mut i_page_1: Pgno, mut n_1: u32) -> () {
     let mut i: i32 = 0;
@@ -12809,6 +16225,26 @@ extern "C" fn check_list(p_check_1: *mut IntegrityCk, is_free_list_1: i32,
     }
 }
 
+///* An implementation of a min-heap.
+///*
+///* aHeap[0] is the number of elements on the heap.  aHeap[1] is the
+///* root element.  The daughter nodes of aHeap[N] are aHeap[N*2]
+///* and aHeap[N*2+1].
+///*
+///* The heap property is this:  Every node is less than or equal to both
+///* of its daughter nodes.  A consequence of the heap property is that the
+///* root node aHeap[1] is always the minimum value currently in the heap.
+///*
+///* The btreeHeapInsert() routine inserts an unsigned 32-bit number onto
+///* the heap, preserving the heap property.  The btreeHeapPull() routine
+///* removes the root element from the heap (the minimum value in the heap)
+///* and then moves other nodes around as necessary to preserve the heap
+///* property.
+///*
+///* This heap is used for cell overlap and coverage testing.  Each u32
+///* entry represents the span of a cell or freeblock on a btree page. 
+///* The upper 16 bits are the index of the first byte of a range and the
+///* lower 16 bits are the index of the last byte of that range.
 extern "C" fn btree_heap_insert(a_heap_1: *mut u32, mut x: u32) -> () {
     let mut j: u32 = 0 as u32;
     let mut i: u32 = 0 as u32;
@@ -12870,39 +16306,105 @@ extern "C" fn btree_heap_pull(a_heap_1: *mut u32, p_out_1: &mut u32) -> i32 {
     return 1;
 }
 
+///* Do various sanity checks on a single page of a tree.  Return
+///* the tree depth.  Root pages return 0.  Parents of root pages
+///* return 1, and so forth.
+///*
+///* These checks are done:
+///*
+///*      1.  Make sure that cells and freeblocks do not overlap
+///*          but combine to completely cover the page.
+///*      2.  Make sure integer cell keys are in order.
+///*      3.  Check the integrity of overflow pages.
+///*      4.  Recursively call checkTreePage on all children.
+///*      5.  Verify that the depth of all children is the same.
+#[allow(unused_doc_comments)]
 extern "C" fn check_tree_page(p_check_1: *mut IntegrityCk, i_page_1: Pgno,
     pi_min_key_1: *mut i64, mut max_key_1: i64) -> i32 {
     unsafe {
         let mut p_page: *mut MemPage = core::ptr::null_mut();
+        /// The page being analyzed
         let mut i: i32 = 0;
+        /// Loop counter
         let mut rc: i32 = 0;
+        /// Result code from subroutine call
         let mut depth: i32 = 0;
         let mut d2: i32 = 0;
+        /// Depth of a subtree
         let mut pgno: i32 = 0;
+        /// Page number
         let mut n_frag: i32 = 0;
+        /// Number of fragmented bytes on the page
         let mut hdr: i32 = 0;
+        /// Offset to the page header
         let mut cell_start: i32 = 0;
+        /// Offset to the start of the cell pointer array
         let mut n_cell: i32 = 0;
+        /// Number of cells
         let mut do_coverage_check: i32 = 0;
+        /// True if cell coverage checking should be done
         let mut key_can_be_equal: i32 = 0;
+        /// True if IPK can be equal to maxKey
+        ///* False if IPK must be strictly less than maxKey
         let mut data: *mut u8 = core::ptr::null_mut();
+        /// Page content
         let mut p_cell: *mut u8 = core::ptr::null_mut();
+        /// Cell content
         let mut p_cell_idx: *const u8 = core::ptr::null();
+        /// Next element of the cell pointer array
         let mut p_bt: *mut BtShared = core::ptr::null_mut();
+        /// The BtShared object that owns pPage
         let mut pc: u32 = 0 as u32;
+        /// Address of a cell
         let mut usable_size: u32 = 0 as u32;
+        /// Usable size of the page
         let mut content_offset: u32 = 0 as u32;
+        /// Offset to the start of the cell content area
         let mut heap: *mut u32 = core::ptr::null_mut();
+        /// Min-heap used for checking cell coverage
         let mut x: u32 = 0 as u32;
         let mut prev: u32 = 0 as u32;
+        /// Next and previous entry on the min-heap
         let mut saved_z_pfx: *const i8 = core::ptr::null();
         let mut saved_v1: i32 = 0;
         let mut saved_v2: i32 = 0;
         let mut saved_is_init: u8 = 0 as u8;
+        /// Check that the page exists
+        /// Clear MemPage.isInit to make sure the corruption detection code in
+        ///* btreeInitPage() is executed.
+        /// The only possible error from InitPage
+        /// Set up for cell analysis
+        /// Enforced by btreeInitPage()
+        /// EVIDENCE-OF: R-37002-32774 The two-byte integer at offset 3 gives the
+        ///* number of cells on the page.
+        /// EVIDENCE-OF: R-23882-45353 The cell pointer array of a b-tree page
+        ///* immediately follows the b-tree page header.
+        /// Analyze the right-child page of internal pages
+        /// For leaf pages, the coverage check will occur in the same loop
+        ///* as the other cell checks, so initialize the heap.
+        /// EVIDENCE-OF: R-02776-14802 The cell pointer array consists of K 2-byte
+        ///* integer offsets to the cell contents.
         let mut info: CellInfo = unsafe { core::mem::zeroed() };
+        /// Check cell size
+        /// Check for integer primary key out of range
+        /// Only the first key on the page may ==maxKey
+        /// Check the content overflow list
         let mut n_page: u32 = 0 as u32;
+        /// Number of pages on the overflow chain
         let mut pgno_ovfl: Pgno = 0 as Pgno;
+        /// First page of the overflow chain
+        /// Check sanity of left child page for internal pages
+        /// Populate the coverage-checking heap for leaf pages
+        /// Check for complete coverage of the page
+        /// For leaf pages, the min-heap has already been initialized and the
+        ///* cells have already been inserted.  But for internal pages, that has
+        ///* not yet been done, so do it now
         let mut size: u32 = 0 as u32;
+        /// Add the freeblocks to the min-heap
+        ///*
+        ///* EVIDENCE-OF: R-20690-50594 The second field of the b-tree page header
+        ///* is the offset of the first freeblock, or zero if there are no
+        ///* freeblocks on the page.
         let mut size__1: i32 = 0;
         let mut j: i32 = 0;
         let mut __state: i32 = 0;
@@ -13533,11 +17035,113 @@ extern "C" fn check_tree_page(p_check_1: *mut IntegrityCk, i_page_1: Pgno,
                 }
             }
         }
+
+        /// The page being analyzed
+        /// Loop counter
+        /// Result code from subroutine call
+        /// Depth of a subtree
+        /// Page number
+        /// Number of fragmented bytes on the page
+        /// Offset to the page header
+        /// Offset to the start of the cell pointer array
+        /// Number of cells
+        /// True if cell coverage checking should be done
+        /// True if IPK can be equal to maxKey
+        ///* False if IPK must be strictly less than maxKey
+        /// Page content
+        /// Cell content
+        /// Next element of the cell pointer array
+        /// The BtShared object that owns pPage
+        /// Address of a cell
+        /// Usable size of the page
+        /// Offset to the start of the cell content area
+        /// Min-heap used for checking cell coverage
+        /// Next and previous entry on the min-heap
+        /// Check that the page exists
+        /// Clear MemPage.isInit to make sure the corruption detection code in
+        ///* btreeInitPage() is executed.
+        /// The only possible error from InitPage
+        /// Set up for cell analysis
+        /// Enforced by btreeInitPage()
+        /// EVIDENCE-OF: R-37002-32774 The two-byte integer at offset 3 gives the
+        ///* number of cells on the page.
+        /// EVIDENCE-OF: R-23882-45353 The cell pointer array of a b-tree page
+        ///* immediately follows the b-tree page header.
+        /// Analyze the right-child page of internal pages
+        /// For leaf pages, the coverage check will occur in the same loop
+        ///* as the other cell checks, so initialize the heap.
+        /// EVIDENCE-OF: R-02776-14802 The cell pointer array consists of K 2-byte
+        ///* integer offsets to the cell contents.
+        /// Check cell size
+        /// Check for integer primary key out of range
+        /// Only the first key on the page may ==maxKey
+        /// Check the content overflow list
+        /// Number of pages on the overflow chain
+        /// First page of the overflow chain
+        /// Check sanity of left child page for internal pages
+        /// Populate the coverage-checking heap for leaf pages
+        /// Check for complete coverage of the page
+        /// For leaf pages, the min-heap has already been initialized and the
+        ///* cells have already been inserted.  But for internal pages, that has
+        ///* not yet been done, so do it now
+        /// Add the freeblocks to the min-heap
+        ///*
+        ///* EVIDENCE-OF: R-20690-50594 The second field of the b-tree page header
+        ///* is the offset of the first freeblock, or zero if there are no
+        ///* freeblocks on the page.
+        /// Enforced by btreeComputeFreeSpace()
+        /// due to btreeComputeFreeSpace()
+        /// EVIDENCE-OF: R-58208-19414 The first 2 bytes of a freeblock are a
+        ///* big-endian integer which is the offset in the b-tree page of the next
+        ///* freeblock in the chain, or zero if the freeblock is the last on the
+        ///* chain.
+        /// EVIDENCE-OF: R-06866-39125 Freeblocks are always connected in order of
+        ///* increasing offset.
+        /// Enforced by btreeComputeFreeSpace()
+        /// Enforced by btreeComputeFreeSpace()
+        /// Analyze the min-heap looking for overlap between cells and/or
+        ///* freeblocks, and counting the number of untracked bytes in nFrag.
+        ///*
+        ///* Each min-heap entry is of the form:    (start_address<<16)|end_address.
+        ///* There is an implied first entry the covers the page header, the cell
+        ///* pointer index, and the gap between the cell pointer index and the start
+        ///* of cell content. 
+        ///*
+        ///* The loop below pulls entries from the min-heap in order and compares
+        ///* the start_address against the previous end_address.  If there is an
+        ///* overlap, that means bytes are used multiple times.  If there is a gap,
+        ///* that gap is added to the fragmentation count.
+        /// Implied first min-heap entry
+        /// EVIDENCE-OF: R-43263-13491 The total number of bytes in all fragments
+        ///* is stored in the fifth field of the b-tree page header.
+        ///* EVIDENCE-OF: R-07161-27322 The one-byte integer at offset 7 gives the
+        ///* number of fragmented free bytes within the cell content area.
         unreachable!();
     }
 }
 
+///* This routine does a complete check of the given BTree file.  aRoot[] is
+///* an array of pages numbers were each page number is the root page of
+///* a table.  nRoot is the number of entries in aRoot.
+///*
+///* A read-only or read-write transaction must be opened before calling
+///* this function.
+///*
+///* Write the number of error seen in *pnErr.  Except for some memory
+///* allocation errors,  an error message held in memory obtained from
+///* malloc is returned if *pnErr is non-zero.  If *pnErr==0 then NULL is
+///* returned.  If a memory allocation error occurs, NULL is returned.
+///*
+///* If the first entry in aRoot[] is 0, that indicates that the list of
+///* root pages is incomplete.  This is a "partial integrity-check".  This
+///* happens when performing an integrity check on a single table.  The
+///* zero is skipped, of course.  But in addition, the freelist checks
+///* and the checks to make sure every page is referenced are also skipped,
+///* since obviously it is not possible to know which pages are covered by
+///* the unverified btrees.  Except, if aRoot[1] is 1, then the freelist
+///* checks are still performed.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_integrity_check(db: *mut Sqlite3,
     p: *mut Btree, a_root_1: *const Pgno, a_cnt_1: *mut Mem, n_root_1: i32,
     mx_err_1: i32, pn_err_1: &mut i32, pz_out_1: &mut *mut i8) -> i32 {
@@ -13549,7 +17153,12 @@ pub extern "C" fn sqlite3_btree_integrity_check(db: *mut Sqlite3,
             let mut saved_db_flags: u64 = 0 as u64;
             let mut z_err: [i8; 100] = [0; 100];
             let mut b_partial: i32 = 0;
+            /// True if not checking all btrees
             let mut b_ck_freelist: i32 = 0;
+            /// True to scan the freelist
+            /// aRoot[0]==0 means this is a partial check
+            /// Check the integrity of the freelist
+            /// Check all the tables.
             let mut mx: Pgno = 0 as Pgno;
             let mut mx_in_hdr: Pgno = 0 as Pgno;
             let mut not_used: i64 = 0 as i64;
@@ -13905,16 +17514,32 @@ pub extern "C" fn sqlite3_btree_integrity_check(db: *mut Sqlite3,
                     }
                 }
             }
+
+            /// True if not checking all btrees
+            /// True to scan the freelist
+            /// aRoot[0]==0 means this is a partial check
+            /// Check the integrity of the freelist
+            /// Check all the tables.
+            /// Make sure every page in the file is referenced
+            /// If the database supports auto-vacuum, make sure no tables contain
+            ///* references to pointer-map pages.
+            /// Clean  up and report errors.
+            /// Make sure this analysis did not leave any unref() pages.
             unreachable!();
         }
     }
 }
 
+///* Return the pager associated with a BTree.  This routine is used for
+///* testing and debugging only.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_pager(p: &Btree) -> *mut Pager {
     return unsafe { (*(*p).p_bt).p_pager };
 }
 
+///* Return an estimate for the number of rows in the table that pCur is
+///* pointing to.  Return a negative number if no estimate is currently
+///* available.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_row_count_est(p_cur_1: &BtCursor) -> i64 {
     let mut n: i64 = 0 as i64;
@@ -13962,7 +17587,16 @@ pub extern "C" fn sqlite3_btree_payload_checked(p_cur_1: *mut BtCursor,
     } else { return access_payload_checked(p_cur_1, offset, amt, p_buf_1); }
 }
 
+///* Argument pCsr must be a cursor opened for writing on an
+///* INTKEY table currently pointing at a valid table entry.
+///* This function modifies the data stored as part of that entry.
+///*
+///* Only the data content may only be modified, it is not possible to
+///* change the length of the data stored. If this function is called with
+///* parameters that attempt to write past the end of the existing data,
+///* no modifications are made and SQLITE_CORRUPT is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_put_data(p_csr_1: *mut BtCursor, offset: u32,
     amt: u32, z: *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -13976,6 +17610,14 @@ pub extern "C" fn sqlite3_btree_put_data(p_csr_1: *mut BtCursor, offset: u32,
     if rc != 0 { return rc; }
     { let _ = 0; };
     if unsafe { (*p_csr_1).e_state } as i32 != 0 { return 4; }
+
+    /// Save the positions of all other cursors open on this table. This is
+    ///* required in case any of them are holding references to an xFetch
+    ///* version of the b-tree page modified by the accessPayload call below.
+    ///*
+    ///* Note that pCsr must be open on a INTKEY table and saveCursorPosition()
+    ///* and hence saveAllCursors() cannot fail on a BTREE_INTKEY table, hence
+    ///* saveAllCursors can only return SQLITE_OK.
     save_all_cursors(unsafe { &*unsafe { (*p_csr_1).p_bt } },
         unsafe { (*p_csr_1).pgno_root }, p_csr_1);
     { let _ = 0; };
@@ -13987,6 +17629,7 @@ pub extern "C" fn sqlite3_btree_put_data(p_csr_1: *mut BtCursor, offset: u32,
     return access_payload(p_csr_1, offset, amt, z as *mut u8, 1);
 }
 
+///* Mark this cursor as an incremental blob cursor.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_incrblob_cursor(p_cur_1: &mut BtCursor)
     -> () {
@@ -13994,12 +17637,21 @@ pub extern "C" fn sqlite3_btree_incrblob_cursor(p_cur_1: &mut BtCursor)
     unsafe { (*(*p_cur_1).p_btree).has_incrblob_cur = 1 as u8 };
 }
 
+///* Set both the "read version" (single byte at byte offset 18) and
+///* "write version" (single byte at byte offset 19) fields in the database
+///* header to iVersion.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_set_version(p_btree_1: *mut Btree,
     i_version_1: i32) -> i32 {
     let p_bt: *mut BtShared = unsafe { (*p_btree_1).p_bt };
     let mut rc: i32 = 0;
+
+    /// Return code
     { let _ = 0; };
+
+    /// If setting the version fields to 1, do not automatically open the
+    ///* WAL connection, even if the version fields are currently set to 2.
     unsafe { (*p_bt).bts_flags &= !32 as u16 };
     if i_version_1 == 1 { unsafe { (*p_bt).bts_flags |= 32 as u16 }; }
     rc = sqlite3_btree_begin_trans(p_btree_1, 0, core::ptr::null_mut());
@@ -14030,17 +17682,21 @@ pub extern "C" fn sqlite3_btree_set_version(p_btree_1: *mut Btree,
     return rc;
 }
 
+///* Return true if the cursor has a hint specified.  This routine is
+///* only used from within assert() statements
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_cursor_has_hint(p_csr_1: &BtCursor, mask: u32)
     -> i32 {
     return ((*p_csr_1).hints as u32 & mask != 0 as u32) as i32;
 }
 
+///* Return true if the given Btree is read-only.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_is_readonly(p: &Btree) -> i32 {
     return (unsafe { (*(*p).p_bt).bts_flags } as i32 & 1 != 0) as i32;
 }
 
+///* Return the size of the header added to each page by this module.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_header_size_btree() -> i32 {
     return (core::mem::size_of::<MemPage>() as u64 + 7 as u64 & !7 as u64) as
@@ -14054,13 +17710,23 @@ pub extern "C" fn sqlite3_btree_cursor_is_valid_nn(p_cur_1: &BtCursor)
     return ((*p_cur_1).e_state as i32 == 0) as i32;
 }
 
+///* The first argument, pCur, is a cursor opened on some b-tree. Count the
+///* number of entries in the b-tree and write the result to *pnEntry.
+///*
+///* SQLITE_OK is returned if the operation is successfully executed.
+///* Otherwise, if an error is encountered (i.e. an IO error or database
+///* corruption) an SQLite error code is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
     p_cur_1: *mut BtCursor, pn_entry_1: &mut i64) -> i32 {
     unsafe {
         let mut n_entry: i64 = 0 as i64;
+        /// Value to return in *pnEntry
         let mut rc: i32 = 0;
-        rc = move_to_root(p_cur_1);
+
+        /// Return code
+        (rc = move_to_root(p_cur_1));
         if rc == 16 { *pn_entry_1 = 0 as i64; return 0; }
         while rc == 0 &&
                 (unsafe {
@@ -14068,8 +17734,14 @@ pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
                                             as *mut i32).load(std::sync::atomic::Ordering::Relaxed)
                             } == 0) as i32 != 0 {
             let mut i_idx: i32 = 0;
+            /// Index of child node in parent
             let mut p_page: *const MemPage = core::ptr::null();
-            p_page = unsafe { (*p_cur_1).p_page };
+
+            /// Current page of the b-tree
+            /// If this is a leaf page or the tree is not an int-key tree, then
+            ///* this page contains countable entries. Increment the entry counter
+            ///* accordingly.
+            (p_page = unsafe { (*p_cur_1).p_page });
             if unsafe { (*p_page).leaf } != 0 ||
                     (unsafe { (*p_page).int_key } == 0) as i32 != 0 {
                 n_entry += unsafe { (*p_page).n_cell } as i64;
@@ -14078,7 +17750,9 @@ pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
                 '__b92: loop {
                     '__c92: loop {
                         if unsafe { (*p_cur_1).i_page } as i32 == 0 {
-                            *pn_entry_1 = n_entry;
+
+                            /// All pages of the b-tree have been visited. Return successfully.
+                            (*pn_entry_1 = n_entry);
                             return move_to_root(p_cur_1);
                         }
                         move_to_parent(unsafe { &mut *p_cur_1 });
@@ -14097,7 +17771,10 @@ pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
                 };
                 p_page = unsafe { (*p_cur_1).p_page };
             }
-            i_idx = unsafe { (*p_cur_1).ix } as i32;
+
+            /// Descend to the child node of the cell that the cursor currently
+            ///* points at. This is the right-child if (iIdx==pPage->nCell).
+            (i_idx = unsafe { (*p_cur_1).ix } as i32);
             if i_idx == unsafe { (*p_page).n_cell } as i32 {
                 rc =
                     move_to_child(unsafe { &mut *p_cur_1 },
@@ -14138,21 +17815,31 @@ pub extern "C" fn sqlite3_btree_count(db: &mut Sqlite3,
                         });
             }
         }
+
+        /// An error has occurred. Return an error code.
         return rc;
     }
 }
 
+///* Given a record with nPayload bytes of payload stored within btree
+///* page pPage, return the number of bytes of payload stored locally.
+#[allow(unused_doc_comments)]
 extern "C" fn btree_payload_to_local(p_page_1: &MemPage, n_payload_1: i64)
     -> i32 {
     let mut max_local: i32 = 0;
-    max_local = (*p_page_1).max_local as i32;
+
+    /// Maximum amount of payload held locally
+    (max_local = (*p_page_1).max_local as i32);
     { let _ = 0; };
     if n_payload_1 <= max_local as i64 {
         return n_payload_1 as i32;
     } else {
         let mut min_local: i32 = 0;
+        /// Minimum amount of payload held locally
         let mut surplus: i32 = 0;
-        min_local = (*p_page_1).min_local as i32;
+
+        /// Overflow payload available for local storage
+        (min_local = (*p_page_1).min_local as i32);
         surplus =
             (min_local as i64 +
                     (n_payload_1 - min_local as i64) %
@@ -14162,15 +17849,34 @@ extern "C" fn btree_payload_to_local(p_page_1: &MemPage, n_payload_1: i64)
     }
 }
 
+///* This function is used as part of copying the current row from cursor
+///* pSrc into cursor pDest. If the cursors are open on intkey tables, then
+///* parameter iKey is used as the rowid value when the record is copied
+///* into pDest. Otherwise, the record is copied verbatim.
+///*
+///* This function does not actually write the new value to cursor pDest.
+///* Instead, it creates and populates any required overflow pages and
+///* writes the data for the new cell into the BtShared.pTmpSpace buffer
+///* for the destination database. The size of the cell, in bytes, is left
+///* in BtShared.nPreformatSize. The caller completes the insertion by
+///* calling sqlite3BtreeInsert() with the BTREE_PREFORMAT flag specified.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
     p_src_1: *mut BtCursor, i_key_1: i64) -> i32 {
     unsafe {
         let p_bt: *mut BtShared = (*p_dest_1).p_bt;
         let mut a_out: *mut u8 = unsafe { (*p_bt).p_tmp_space };
+        /// Pointer to next output buffer
         let mut a_in: *const u8 = core::ptr::null();
+        /// Pointer to next input buffer
         let mut n_in: u32 = 0 as u32;
+        /// Size of input buffer aIn[]
         let mut n_rem: u32 = 0 as u32;
+
+        /// Bytes of data still to copy
         get_cell_info(unsafe { &mut *p_src_1 });
         if unsafe { (*p_src_1).info.n_payload } < 128 as u32 {
             unsafe {
@@ -14229,9 +17935,11 @@ pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
             let mut p_page_in: *mut DbPage = core::ptr::null_mut();
             let mut p_page_out: *mut MemPage = core::ptr::null_mut();
             let mut n_out: u32 = 0 as u32;
-            n_out =
+
+            /// Size of output buffer aOut[]
+            (n_out =
                 btree_payload_to_local(unsafe { &*(*p_dest_1).p_page },
-                        unsafe { (*p_src_1).info.n_payload } as i64) as u32;
+                        unsafe { (*p_src_1).info.n_payload } as i64) as u32);
             unsafe {
                 (*p_bt).n_preformat_size =
                     n_out as i32 +
@@ -14311,6 +18019,7 @@ pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
                     }
                     if rc == 0 && n_rem > 0 as u32 && !(p_pgno_out).is_null() {
                         let mut pgno_new: Pgno = 0 as Pgno;
+                        /// Prevent harmless static-analyzer warning
                         let mut p_new: *mut MemPage = core::ptr::null_mut();
                         rc =
                             allocate_btree_page(p_bt, &mut p_new, &mut pgno_new,
@@ -14344,6 +18053,8 @@ pub extern "C" fn sqlite3_btree_transfer_row(p_dest_1: &BtCursor,
     }
 }
 
+///* If no transaction is active and the database is not a temp-db, clear
+///* the in-memory pager cache.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_clear_cache(p: &Btree) -> () {
     let p_bt: *const BtShared = (*p).p_bt as *const BtShared;
@@ -14352,11 +18063,15 @@ pub extern "C" fn sqlite3_btree_clear_cache(p: &Btree) -> () {
     }
 }
 
+///* Return true if the Btree passed as the only argument is sharable.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_sharable(p: &Btree) -> i32 {
     return (*p).sharable as i32;
 }
 
+///* Return the number of connections to the BtShared object accessed by
+///* the Btree handle passed as the only argument. For private caches
+///* this is always 1. For shared caches it may be 1 or greater.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_connection_count(p: &Btree) -> i32 {
     return unsafe { (*(*p).p_bt).n_ref };

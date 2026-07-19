@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type ClientData = *mut ();
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+///* c_collation_test
+#[allow(unused_doc_comments)]
 extern "C" fn c_collation_test(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_err_function: *const i8 =
@@ -408,11 +425,13 @@ extern "C" fn c_collation_test(client_data_1: ClientData,
                 };
                 return 1;
             }
-            rc =
+
+            /// Open a database.
+            (rc =
                 unsafe {
                     sqlite3_open(c":memory:".as_ptr() as *mut i8 as *const i8,
                         &mut db)
-                };
+                });
             if rc != 0 {
                 z_err_function =
                     c"sqlite3_open".as_ptr() as *mut i8 as *const i8;
@@ -437,6 +456,8 @@ extern "C" fn c_collation_test(client_data_1: ClientData,
         }
         if !(false) { break '__b0; }
     }
+
+    /// Open a database.
     unsafe { Tcl_ResetResult(interp) };
     unsafe {
         Tcl_AppendResult(interp,
@@ -446,6 +467,8 @@ extern "C" fn c_collation_test(client_data_1: ClientData,
     return 1;
 }
 
+///* c_realloc_test
+#[allow(unused_doc_comments)]
 extern "C" fn c_realloc_test(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_err_function: *const i8 =
@@ -466,7 +489,10 @@ extern "C" fn c_realloc_test(client_data_1: ClientData,
                     c"sqlite3_malloc".as_ptr() as *mut i8 as *const i8;
                 break '__b1;
             }
-            p = unsafe { sqlite3_realloc(p, -1) };
+
+            /// Test that realloc()ing a block of memory to a negative size is
+            ///* the same as free()ing that memory.
+            (p = unsafe { sqlite3_realloc(p, -1) });
             if !(p).is_null() {
                 z_err_function =
                     c"sqlite3_realloc".as_ptr() as *mut i8 as *const i8;
@@ -477,6 +503,9 @@ extern "C" fn c_realloc_test(client_data_1: ClientData,
         }
         if !(false) { break '__b1; }
     }
+
+    /// Test that realloc()ing a block of memory to a negative size is
+    ///* the same as free()ing that memory.
     unsafe { Tcl_ResetResult(interp) };
     unsafe {
         Tcl_AppendResult(interp,
@@ -486,6 +515,8 @@ extern "C" fn c_realloc_test(client_data_1: ClientData,
     return 1;
 }
 
+///* c_misuse_test
+#[allow(unused_doc_comments)]
 extern "C" fn c_misuse_test(client_data_1: ClientData, interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_err_function: *const i8 =
@@ -502,11 +533,14 @@ extern "C" fn c_misuse_test(client_data_1: ClientData, interp: *mut TclInterp,
                 };
                 return 1;
             }
-            rc =
+
+            /// Open a database. Then close it again. We need to do this so that
+            ///* we have a "closed database handle" to pass to various API functions.
+            (rc =
                 unsafe {
                     sqlite3_open(c":memory:".as_ptr() as *mut i8 as *const i8,
                         &mut db)
-                };
+                });
             if rc != 0 {
                 z_err_function =
                     c"sqlite3_open".as_ptr() as *mut i8 as *const i8;
@@ -531,12 +565,16 @@ extern "C" fn c_misuse_test(client_data_1: ClientData, interp: *mut TclInterp,
                 break '__b2;
             }
             { let _ = 0; };
-            p_stmt = 1234 as *mut Sqlite3Stmt;
-            rc =
+
+            /// Verify that pStmt is zeroed even on a MISUSE error
+            (p_stmt = 1234 as *mut Sqlite3Stmt);
+
+            /// Verify that pStmt is zeroed even on a MISUSE error
+            (rc =
                 unsafe {
                     sqlite3_prepare_v2(db, core::ptr::null(), 0, &mut p_stmt,
                         core::ptr::null_mut())
-                };
+                });
             if rc != 21 {
                 z_err_function =
                     c"sqlite3_prepare_v2".as_ptr() as *mut i8 as *const i8;
@@ -572,6 +610,10 @@ extern "C" fn c_misuse_test(client_data_1: ClientData, interp: *mut TclInterp,
         }
         if !(false) { break '__b2; }
     }
+
+    /// Open a database. Then close it again. We need to do this so that
+    ///* we have a "closed database handle" to pass to various API functions.
+    /// Verify that pStmt is zeroed even on a MISUSE error
     unsafe { Tcl_ResetResult(interp) };
     unsafe {
         Tcl_AppendResult(interp,

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    LookasideSlot, Module, NameContext, OnOrUsing, Parse, RowSet,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    Uptr, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+///* State information local to the memory allocation subsystem.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Mem0Global {
@@ -410,12 +426,34 @@ static mut mem0: Mem0Global =
         nearly_full: 0,
     };
 
+///* CAPI3REF: Attempt To Free Heap Memory
+///*
+///* ^The sqlite3_release_memory() interface attempts to free N bytes
+///* of heap memory by deallocating non-essential memory allocations
+///* held by the database library.   Memory used to cache database
+///* pages to improve performance is an example of non-essential memory.
+///* ^sqlite3_release_memory() returns the number of bytes actually freed,
+///* which might be more or less than the amount requested.
+///* ^The sqlite3_release_memory() routine is a no-op returning zero
+///* if SQLite is not compiled with [SQLITE_ENABLE_MEMORY_MANAGEMENT].
+///*
+///* See also: [sqlite3_db_release_memory()]
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_release_memory(n: i32) -> i32 {
+
+    /// IMPLEMENTATION-OF: R-34391-24921 The sqlite3_release_memory() routine
+    ///* is a no-op returning zero if SQLite is not compiled with
+    ///* SQLITE_ENABLE_MEMORY_MANAGEMENT.
     { let _ = n; };
+
+    /// IMPLEMENTATION-OF: R-34391-24921 The sqlite3_release_memory() routine
+    ///* is a no-op returning zero if SQLite is not compiled with
+    ///* SQLITE_ENABLE_MEMORY_MANAGEMENT.
     return 0;
 }
 
+///* Trigger the alarm
 extern "C" fn sqlite3_malloc_alarm(n_byte_1: i32) -> () {
     unsafe {
         if mem0.alarm_threshold <= 0 as i64 { return; }
@@ -425,6 +463,8 @@ extern "C" fn sqlite3_malloc_alarm(n_byte_1: i32) -> () {
     }
 }
 
+///* Return the size of a memory allocation previously obtained from
+///* sqlite3Malloc() or sqlite3_malloc().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc_size(p: *const ()) -> i32 {
     unsafe {
@@ -433,13 +473,22 @@ pub extern "C" fn sqlite3_malloc_size(p: *const ()) -> i32 {
     }
 }
 
+///* Do a memory allocation with statistics and alarms.  Assume the
+///* lock is already held.
+#[allow(unused_doc_comments)]
 extern "C" fn malloc_with_alarm(n: i32, pp: &mut *mut ()) -> () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
         let mut n_full: i32 = 0;
         { let _ = 0; };
         { let _ = 0; };
-        n_full = unsafe { sqlite3Config.m.x_roundup.unwrap()(n) };
+
+        /// In Firefox (circa 2017-02-08), xRoundup() is remapped to an internal
+        ///* implementation of malloc_good_size(), which must be called in debug
+        ///* mode and specifically when the DMD "Dark Matter Detector" is enabled
+        ///* or else a crash results.  Hence, do not attempt to optimize out the
+        ///* following xRoundup() call.
+        (n_full = unsafe { sqlite3Config.m.x_roundup.unwrap()(n) });
         unsafe { sqlite3_status_highwater(5, n) };
         if mem0.alarm_threshold > 0 as i64 {
             let mut n_used: Sqlite3Int64 = unsafe { sqlite3_status_value(0) };
@@ -477,7 +526,10 @@ extern "C" fn malloc_with_alarm(n: i32, pp: &mut *mut ()) -> () {
     }
 }
 
+///* Allocate memory.  This routine is like sqlite3_malloc() except that it
+///* assumes the memory subsystem has already been initialized.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3Malloc(n: u64) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -489,10 +541,85 @@ pub extern "C" fn sqlite3Malloc(n: u64) -> *mut () {
             unsafe { sqlite3_mutex_leave(mem0.mutex) };
         } else { p = unsafe { sqlite3Config.m.x_malloc.unwrap()(n as i32) }; }
         { let _ = 0; };
+
+        /// IMP: R-11148-40995
         return p;
     }
 }
 
+///* CAPI3REF: Memory Allocation Subsystem
+///*
+///* The SQLite core uses these three routines for all of its own
+///* internal memory allocation needs. "Core" in the previous sentence
+///* does not include operating-system specific [VFS] implementation.  The
+///* Windows VFS uses native malloc() and free() for some operations.
+///*
+///* ^The sqlite3_malloc() routine returns a pointer to a block
+///* of memory at least N bytes in length, where N is the parameter.
+///* ^If sqlite3_malloc() is unable to obtain sufficient free
+///* memory, it returns a NULL pointer.  ^If the parameter N to
+///* sqlite3_malloc() is zero or negative then sqlite3_malloc() returns
+///* a NULL pointer.
+///*
+///* ^The sqlite3_malloc64(N) routine works just like
+///* sqlite3_malloc(N) except that N is an unsigned 64-bit integer instead
+///* of a signed 32-bit integer.
+///*
+///* ^Calling sqlite3_free() with a pointer previously returned
+///* by sqlite3_malloc() or sqlite3_realloc() releases that memory so
+///* that it might be reused.  ^The sqlite3_free() routine is
+///* a no-op if it is called with a NULL pointer.  Passing a NULL pointer
+///* to sqlite3_free() is harmless.  After being freed, memory
+///* should neither be read nor written.  Even reading previously freed
+///* memory might result in a segmentation fault or other severe error.
+///* Memory corruption, a segmentation fault, or other severe error
+///* might result if sqlite3_free() is called with a non-NULL pointer that
+///* was not obtained from sqlite3_malloc() or sqlite3_realloc().
+///*
+///* ^The sqlite3_realloc(X,N) interface attempts to resize a
+///* prior memory allocation X to be at least N bytes.
+///* ^If the X parameter to sqlite3_realloc(X,N)
+///* is a NULL pointer then its behavior is identical to calling
+///* sqlite3_malloc(N).
+///* ^If the N parameter to sqlite3_realloc(X,N) is zero or
+///* negative then the behavior is exactly the same as calling
+///* sqlite3_free(X).
+///* ^sqlite3_realloc(X,N) returns a pointer to a memory allocation
+///* of at least N bytes in size or NULL if insufficient memory is available.
+///* ^If M is the size of the prior allocation, then min(N,M) bytes of the
+///* prior allocation are copied into the beginning of the buffer returned
+///* by sqlite3_realloc(X,N) and the prior allocation is freed.
+///* ^If sqlite3_realloc(X,N) returns NULL and N is positive, then the
+///* prior allocation is not freed.
+///*
+///* ^The sqlite3_realloc64(X,N) interface works the same as
+///* sqlite3_realloc(X,N) except that N is a 64-bit unsigned integer instead
+///* of a 32-bit signed integer.
+///*
+///* ^If X is a memory allocation previously obtained from sqlite3_malloc(),
+///* sqlite3_malloc64(), sqlite3_realloc(), or sqlite3_realloc64(), then
+///* sqlite3_msize(X) returns the size of that memory allocation in bytes.
+///* ^The value returned by sqlite3_msize(X) might be larger than the number
+///* of bytes requested when X was allocated.  ^If X is a NULL pointer then
+///* sqlite3_msize(X) returns zero.  If X points to something that is not
+///* the beginning of memory allocation, or if it points to a formerly
+///* valid memory allocation that has now been freed, then the behavior
+///* of sqlite3_msize(X) is undefined and possibly harmful.
+///*
+///* ^The memory returned by sqlite3_malloc(), sqlite3_realloc(),
+///* sqlite3_malloc64(), and sqlite3_realloc64()
+///* is always aligned to at least an 8 byte boundary, or to a
+///* 4 byte boundary if the [SQLITE_4_BYTE_ALIGNED_MALLOC] compile-time
+///* option is used.
+///*
+///* The pointer arguments to [sqlite3_free()] and [sqlite3_realloc()]
+///* must be either NULL or else pointers obtained from a prior
+///* invocation of [sqlite3_malloc()] or [sqlite3_realloc()] that have
+///* not yet been released.
+///*
+///* The application must not read or write any part of
+///* a block of memory after it has been released using
+///* [sqlite3_free()] or [sqlite3_realloc()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc(n: i32) -> *mut () {
     if unsafe { sqlite3_initialize() } != 0 { return core::ptr::null_mut(); }
@@ -507,10 +634,14 @@ pub extern "C" fn sqlite3_malloc64(n: Sqlite3Uint64) -> *mut () {
     return sqlite3Malloc(n);
 }
 
+///* Free memory previously obtained from sqlite3Malloc().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_free(p: *mut ()) -> () {
     unsafe {
         if p == core::ptr::null_mut() { return; }
+
+        /// IMP: R-49053-54554
         { let _ = 0; };
         { let _ = 0; };
         if sqlite3Config.b_memstat != 0 {
@@ -525,7 +656,9 @@ pub extern "C" fn sqlite3_free(p: *mut ()) -> () {
     }
 }
 
+///* Change the size of an existing memory allocation
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3Realloc(p_old: *mut (), n_bytes: u64) -> *mut () {
     unsafe {
         let mut n_old: i32 = 0;
@@ -537,11 +670,18 @@ pub extern "C" fn sqlite3Realloc(p_old: *mut (), n_bytes: u64) -> *mut () {
         if p_old == core::ptr::null_mut() { return sqlite3Malloc(n_bytes); }
         if n_bytes == 0 as u64 {
             sqlite3_free(p_old);
+
+            /// IMP: R-26507-47431
             return core::ptr::null_mut();
         }
         if n_bytes > 2147483391 as u64 { return core::ptr::null_mut(); }
         n_old = sqlite3_malloc_size(p_old as *const ());
-        n_new = unsafe { sqlite3Config.m.x_roundup.unwrap()(n_bytes as i32) };
+
+        /// IMPLEMENTATION-OF: R-46199-30249 SQLite guarantees that the second
+        ///* argument to xRealloc is always a value returned by a prior call to
+        ///* xRoundup.
+        (n_new =
+            unsafe { sqlite3Config.m.x_roundup.unwrap()(n_bytes as i32) });
         if n_old == n_new {
             p_new = p_old;
         } else if sqlite3Config.b_memstat != 0 {
@@ -571,14 +711,21 @@ pub extern "C" fn sqlite3Realloc(p_old: *mut (), n_bytes: u64) -> *mut () {
                 unsafe { sqlite3Config.m.x_realloc.unwrap()(p_old, n_new) };
         }
         { let _ = 0; };
+
+        /// IMP: R-11148-40995
         return p_new;
     }
 }
 
+///* The public interface to sqlite3Realloc.  Make sure that the memory
+///* subsystem is initialized prior to invoking sqliteRealloc.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_realloc(p_old: *mut (), mut n: i32) -> *mut () {
     if unsafe { sqlite3_initialize() } != 0 { return core::ptr::null_mut(); }
     if n < 0 { n = 0; }
+
+    /// IMP: R-26507-47431
     return sqlite3Realloc(p_old, n as u64);
 }
 
@@ -600,6 +747,27 @@ pub extern "C" fn sqlite3_msize(p: *mut ()) -> Sqlite3Uint64 {
     }
 }
 
+///* CAPI3REF: Memory Allocator Statistics
+///*
+///* SQLite provides these two interfaces for reporting on the status
+///* of the [sqlite3_malloc()], [sqlite3_free()], and [sqlite3_realloc()]
+///* routines, which form the built-in memory allocation subsystem.
+///*
+///* ^The [sqlite3_memory_used()] routine returns the number of bytes
+///* of memory currently outstanding (malloced but not freed).
+///* ^The [sqlite3_memory_highwater()] routine returns the maximum
+///* value of [sqlite3_memory_used()] since the high-water mark
+///* was last reset.  ^The values returned by [sqlite3_memory_used()] and
+///* [sqlite3_memory_highwater()] include any overhead
+///* added by SQLite in its implementation of [sqlite3_malloc()],
+///* but not overhead added by any underlying system library
+///* routines that [sqlite3_malloc()] may call.
+///*
+///* ^The memory high-water mark is reset to the current value of
+///* [sqlite3_memory_used()] if and only if the parameter to
+///* [sqlite3_memory_highwater()] is true.  ^The value returned
+///* by [sqlite3_memory_highwater(1)] is the high-water mark
+///* prior to the reset.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memory_used() -> Sqlite3Int64 {
     let mut res: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -608,6 +776,9 @@ pub extern "C" fn sqlite3_memory_used() -> Sqlite3Int64 {
     return res;
 }
 
+///* Return the maximum amount of memory that has ever been
+///* checked out since either the beginning of this process
+///* or since the most recent reset.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memory_highwater(reset_flag: i32) -> Sqlite3Int64 {
     let mut res: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -616,6 +787,9 @@ pub extern "C" fn sqlite3_memory_highwater(reset_flag: i32) -> Sqlite3Int64 {
     return mx;
 }
 
+///* Deprecated external interface.  It used to set an alarm callback
+///* that was invoked when memory usage grew too large.  Now it is a
+///* no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_memory_alarm(x_callback:
         Option<unsafe extern "C" fn(*mut (), i64, i32) -> ()>, p_arg: *mut (),
@@ -633,6 +807,68 @@ pub extern "C" fn sqlite3_memory_alarm(x_callback:
     return 0;
 }
 
+///* CAPI3REF: Impose A Limit On Heap Size
+///*
+///* These interfaces impose limits on the amount of heap memory that will be
+///* used by all database connections within a single process.
+///*
+///* ^The sqlite3_soft_heap_limit64() interface sets and/or queries the
+///* soft limit on the amount of heap memory that may be allocated by SQLite.
+///* ^SQLite strives to keep heap memory utilization below the soft heap
+///* limit by reducing the number of pages held in the page cache
+///* as heap memory usages approaches the limit.
+///* ^The soft heap limit is "soft" because even though SQLite strives to stay
+///* below the limit, it will exceed the limit rather than generate
+///* an [SQLITE_NOMEM] error.  In other words, the soft heap limit
+///* is advisory only.
+///*
+///* ^The sqlite3_hard_heap_limit64(N) interface sets a hard upper bound of
+///* N bytes on the amount of memory that will be allocated.  ^The
+///* sqlite3_hard_heap_limit64(N) interface is similar to
+///* sqlite3_soft_heap_limit64(N) except that memory allocations will fail
+///* when the hard heap limit is reached.
+///*
+///* ^The return value from both sqlite3_soft_heap_limit64() and
+///* sqlite3_hard_heap_limit64() is the size of
+///* the heap limit prior to the call, or negative in the case of an
+///* error.  ^If the argument N is negative
+///* then no change is made to the heap limit.  Hence, the current
+///* size of heap limits can be determined by invoking
+///* sqlite3_soft_heap_limit64(-1) or sqlite3_hard_heap_limit(-1).
+///*
+///* ^Setting the heap limits to zero disables the heap limiter mechanism.
+///*
+///* ^The soft heap limit may not be greater than the hard heap limit.
+///* ^If the hard heap limit is enabled and if sqlite3_soft_heap_limit(N)
+///* is invoked with a value of N that is greater than the hard heap limit,
+///* the soft heap limit is set to the value of the hard heap limit.
+///* ^The soft heap limit is automatically enabled whenever the hard heap
+///* limit is enabled. ^When sqlite3_hard_heap_limit64(N) is invoked and
+///* the soft heap limit is outside the range of 1..N, then the soft heap
+///* limit is set to N.  ^Invoking sqlite3_soft_heap_limit64(0) when the
+///* hard heap limit is enabled makes the soft heap limit equal to the
+///* hard heap limit.
+///*
+///* The memory allocation limits can also be adjusted using
+///* [PRAGMA soft_heap_limit] and [PRAGMA hard_heap_limit].
+///*
+///* ^(The heap limits are not enforced in the current implementation
+///* if one or more of following conditions are true:
+///*
+///* <ul>
+///* <li> The limit value is set to zero.
+///* <li> Memory accounting is disabled using a combination of the
+///*      [sqlite3_config]([SQLITE_CONFIG_MEMSTATUS],...) start-time option and
+///*      the [SQLITE_DEFAULT_MEMSTATUS] compile-time option.
+///* <li> An alternative page cache implementation is specified using
+///*      [sqlite3_config]([SQLITE_CONFIG_PCACHE2],...).
+///* <li> The page cache allocates from its own memory pool supplied
+///*      by [sqlite3_config]([SQLITE_CONFIG_PAGECACHE],...) rather than
+///*      from the heap.
+///* </ul>)^
+///*
+///* The circumstances under which SQLite will enforce the heap limits may
+///* change in future releases of SQLite.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_soft_heap_limit64(mut n: Sqlite3Int64)
     -> Sqlite3Int64 {
@@ -670,6 +906,16 @@ pub extern "C" fn sqlite3_soft_heap_limit64(mut n: Sqlite3Int64)
     }
 }
 
+///* Set the hard heap-size limit for the library. An argument of zero
+///* disables the hard heap limit.  A negative argument is a no-op used
+///* to obtain the return value without affecting the hard heap limit.
+///*
+///* The return value is the value of the hard heap limit just prior to
+///* calling this interface.
+///*
+///* Setting the hard heap limit will also activate the soft heap limit
+///* and constrain the soft heap limit to be no more than the hard heap
+///* limit.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_hard_heap_limit64(n: Sqlite3Int64) -> Sqlite3Int64 {
     unsafe {
@@ -689,12 +935,20 @@ pub extern "C" fn sqlite3_hard_heap_limit64(n: Sqlite3Int64) -> Sqlite3Int64 {
     }
 }
 
+///* CAPI3REF: Deprecated Soft Heap Limit Interface
+///* DEPRECATED
+///*
+///* This is a deprecated version of the [sqlite3_soft_heap_limit64()]
+///* interface.  This routine is provided for historical compatibility
+///* only.  All new applications should use the
+///* [sqlite3_soft_heap_limit64()] interface rather than this one.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_soft_heap_limit(mut n: i32) -> () {
     if n < 0 { n = 0; }
     sqlite3_soft_heap_limit64(n as Sqlite3Int64);
 }
 
+///* Initialize the memory allocation subsystem.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc_init() -> i32 {
     unsafe {
@@ -722,6 +976,7 @@ pub extern "C" fn sqlite3_malloc_init() -> i32 {
     }
 }
 
+///* Deinitialize the memory allocation subsystem.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc_end() -> () {
     unsafe {
@@ -737,6 +992,7 @@ pub extern "C" fn sqlite3_malloc_end() -> () {
     }
 }
 
+///* Allocate and zero memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc_zero(n: u64) -> *mut () {
     let p: *mut () = sqlite3Malloc(n);
@@ -744,6 +1000,17 @@ pub extern "C" fn sqlite3_malloc_zero(n: u64) -> *mut () {
     return p;
 }
 
+///* Call this routine to record the fact that an OOM (out-of-memory) error
+///* has happened.  This routine will set db->mallocFailed, and also
+///* temporarily disable the lookaside memory allocator and interrupt
+///* any running VDBEs.
+///*
+///* Always return a NULL pointer so that this routine can be invoked using
+///*
+///*      return sqlite3OomFault(db);
+///*
+///* and thereby avoid unnecessary stack frame allocations for the overwhelmingly
+///* common case where no OOM occurs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_oom_fault(db: &mut Sqlite3) -> *mut () {
     unsafe {
@@ -795,6 +1062,8 @@ pub extern "C" fn sqlite3_oom_fault(db: &mut Sqlite3) -> *mut () {
     }
 }
 
+/// Finish the work of sqlite3DbMallocRawNN for the unusual and
+///* slower case when the allocation cannot be fulfilled using lookaside.
 extern "C" fn db_malloc_raw_finish(db: *mut Sqlite3, n: u64) -> *mut () {
     let mut p: *mut () = core::ptr::null_mut();
     { let _ = 0; };
@@ -888,6 +1157,26 @@ pub extern "C" fn sqlite3_db_malloc_raw_nn(db: *mut Sqlite3, n: u64)
     }
 }
 
+///* Allocate memory, either lookaside (if possible) or heap.  
+///* If the allocation fails, set the mallocFailed flag in
+///* the connection pointer.
+///*
+///* If db!=0 and db->mallocFailed is true (indicating a prior malloc
+///* failure on the same database connection) then always return 0.
+///* Hence for a particular database connection, once malloc starts
+///* failing, it fails consistently until mallocFailed is reset.
+///* This is an important assumption.  There are many places in the
+///* code that do things like this:
+///*
+///*         int *a = (int*)sqlite3DbMallocRaw(db, 100);
+///*         int *b = (int*)sqlite3DbMallocRaw(db, 200);
+///*         if( b ) a[10] = 9;
+///*
+///* In other words, if a subsequent malloc (ex: "b") worked, it is assumed
+///* that all prior mallocs (ex: "a") worked too.
+///*
+///* The sqlite3MallocRawNN() variant guarantees that the "db" parameter is
+///* not a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_malloc_raw(db: *mut Sqlite3, n: u64) -> *mut () {
     let mut p: *mut () = core::ptr::null_mut();
@@ -896,6 +1185,8 @@ pub extern "C" fn sqlite3_db_malloc_raw(db: *mut Sqlite3, n: u64) -> *mut () {
     return p;
 }
 
+///* Allocate and zero memory.  If the allocation fails, make
+///* the mallocFailed flag in the connection pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_malloc_zero(db: *mut Sqlite3, n: u64)
     -> *mut () {
@@ -905,6 +1196,11 @@ pub extern "C" fn sqlite3_db_malloc_zero(db: *mut Sqlite3, n: u64)
     return p;
 }
 
+///* Make a copy of a string in memory obtained from sqliteMalloc(). These 
+///* functions call sqlite3MallocRaw() directly instead of sqliteMalloc(). This
+///* is because when memory debugging is turned on, these two functions are 
+///* called via macros that record the current file and line number in the
+///* ThreadData structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_str_dup(db: *mut Sqlite3, z: *const i8)
     -> *mut i8 {
@@ -937,6 +1233,9 @@ pub extern "C" fn sqlite3_db_str_n_dup(db: *mut Sqlite3, z: *const i8, n: u64)
     return z_new;
 }
 
+///* The text between zStart and zEnd represents a phrase within a larger
+///* SQL statement.  Make a copy of this phrase in space obtained form
+///* sqlite3DbMalloc().  Omit leading and trailing whitespace.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_span_dup(db: *mut Sqlite3,
     mut z_start: *const i8, z_end: *const i8) -> *mut i8 {
@@ -998,6 +1297,8 @@ pub extern "C" fn sqlite3_db_malloc_size(db: *mut Sqlite3, p: *const ())
     }
 }
 
+///* Add the size of memory allocation "p" to the count in
+///* *db->pnBytesFreed.
 extern "C" fn measure_allocation_size(db: *mut Sqlite3, p: *mut ()) -> () {
     unsafe {
         *unsafe { (*db).pn_bytes_freed } +=
@@ -1005,6 +1306,9 @@ extern "C" fn measure_allocation_size(db: *mut Sqlite3, p: *mut ()) -> () {
     };
 }
 
+///* Free memory that might be associated with a particular database
+///* connection.  Calling sqlite3DbFree(D,X) for X==0 is a harmless no-op.
+///* The sqlite3DbFreeNN(D,X) version requires that X be non-NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_free_nn(db: *mut Sqlite3, p: *mut ()) -> () {
     { let _ = 0; };
@@ -1047,6 +1351,7 @@ pub extern "C" fn sqlite3_db_free(db: *mut Sqlite3, p: *mut ()) -> () {
     if !(p).is_null() { sqlite3_db_free_nn(db, p); }
 }
 
+/// Forward declaration
 extern "C" fn db_realloc_finish(db: *mut Sqlite3, p: *mut (), n: u64)
     -> *mut () {
     let mut p_new: *mut () = core::ptr::null_mut();
@@ -1075,6 +1380,8 @@ extern "C" fn db_realloc_finish(db: *mut Sqlite3, p: *mut (), n: u64)
     return p_new;
 }
 
+///* Resize the block of memory pointed to by p to n bytes. If the
+///* resize fails, set the mallocFailed flag in the connection object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_realloc(db: *mut Sqlite3, p: *mut (), n: u64)
     -> *mut () {
@@ -1091,6 +1398,8 @@ pub extern "C" fn sqlite3_db_realloc(db: *mut Sqlite3, p: *mut (), n: u64)
     return db_realloc_finish(db, p, n);
 }
 
+///* Attempt to reallocate p.  If the reallocation fails, then free p
+///* and set the mallocFailed flag in the database connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_realloc_or_free(db: *mut Sqlite3, p: *mut (),
     n: u64) -> *mut () {
@@ -1132,6 +1441,9 @@ pub extern "C" fn sqlite3_db_nn_free_nn(db: *mut Sqlite3, p: *mut ()) -> () {
     sqlite3_free(p);
 }
 
+///* Return true if the heap is currently under memory pressure - in other
+///* words if the amount of heap used is close to the limit set by
+///* sqlite3_soft_heap_limit().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_heap_nearly_full() -> i32 {
     unsafe {
@@ -1142,11 +1454,13 @@ pub extern "C" fn sqlite3_heap_nearly_full() -> i32 {
     }
 }
 
+///* Return the memory allocator mutex. sqlite3_status() needs it.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_malloc_mutex() -> *mut Sqlite3Mutex {
     unsafe { return mem0.mutex; }
 }
 
+///* Free any prior content in *pz and replace it with a copy of zNew.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_string(pz: &mut *mut i8, db: *mut Sqlite3,
     z_new: *const i8) -> () {
@@ -1155,6 +1469,11 @@ pub extern "C" fn sqlite3_set_string(pz: &mut *mut i8, db: *mut Sqlite3,
     *pz = z;
 }
 
+///* This routine reactivates the memory allocator and clears the
+///* db->mallocFailed flag as necessary.
+///*
+///* The memory allocator is not restarted if there are running
+///* VDBEs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_oom_clear(db: &mut Sqlite3) -> () {
     unsafe {
@@ -1181,6 +1500,7 @@ pub extern "C" fn sqlite3_oom_clear(db: &mut Sqlite3) -> () {
     }
 }
 
+///* Take actions at the end of an API call to deal with error codes.
 extern "C" fn api_handle_error(db: *mut Sqlite3, rc: i32) -> i32 {
     if unsafe { (*db).malloc_failed } != 0 || rc == 10 | 12 << 8 {
         sqlite3_oom_clear(unsafe { &mut *db });
@@ -1190,8 +1510,23 @@ extern "C" fn api_handle_error(db: *mut Sqlite3, rc: i32) -> i32 {
     return rc & unsafe { (*db).err_mask };
 }
 
+///* This function must be called before exiting any API function (i.e. 
+///* returning control to the user) that has called sqlite3_malloc or
+///* sqlite3_realloc.
+///*
+///* The returned value is normally a copy of the second argument to this
+///* function. However, if a malloc() failure has occurred since the previous
+///* invocation SQLITE_NOMEM is returned instead. 
+///*
+///* If an OOM as occurred, then the connection error-code (the value
+///* returned by sqlite3_errcode()) is set to SQLITE_NOMEM.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_api_exit(db: *mut Sqlite3, rc: i32) -> i32 {
+
+    /// If the db handle must hold the connection handle mutex here.
+    ///* Otherwise the read (and possible write) of db->mallocFailed 
+    ///* is unsafe, as is the call to sqlite3Error().
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*db).malloc_failed } != 0 || rc != 0 {

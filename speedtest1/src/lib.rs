@@ -2,10 +2,41 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* A program for performance testing.
+///*
+///* To build this program against an historical version of SQLite for comparison
+///* testing:
+///*
+///*    Unix:
+///*
+///*        ./configure --all
+///*        make clean speedtest1
+///*        mv speedtest1 speedtest1-current
+///*        cp $HISTORICAL_SQLITE3_C_H .
+///*        touch sqlite3.c sqlite3.h .target_source
+///*        make speedtest1
+///*        mv speedtest1 speedtest1-baseline
+///*
+///*    Windows:
+///*
+///*        nmake /f Makefile.msc clean speedtest1.exe
+///*        mv speedtest1.exe speedtest1-current.exe
+///*        cp $HISTORICAL_SQLITE_C_H .
+///*        touch sqlite3.c sqlite3.h .target_source
+///*        nmake /f Makefile.msc speedtest1.exe
+///*        mv speedtest1.exe speedtest1-baseline.exe
+///*
+///* The available command-line options are described below:
 static z_help: [i8; 2897] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
             37 as i8, 115 as i8, 32 as i8, 91 as i8, 45 as i8, 45 as i8,
@@ -501,6 +532,7 @@ struct HashContext {
     r: [u8; 32],
 }
 
+/// All global state is held in this structure
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Global {
@@ -539,6 +571,7 @@ struct Global {
 
 static mut g: Global = unsafe { core::mem::zeroed() };
 
+/// Return " TEMP" or "", as appropriate for creating a table.
 extern "C" fn is_temp(n_1: i32) -> *const i8 {
     unsafe {
         return if g.e_temp >= n_1 {
@@ -547,6 +580,7 @@ extern "C" fn is_temp(n_1: i32) -> *const i8 {
     }
 }
 
+/// Print an error message and exit
 unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     unsafe {
         let mut ap: *mut i8 = core::ptr::null_mut();
@@ -557,6 +591,9 @@ unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     }
 }
 
+///* Initialize a new hash.  iSize determines the size of the hash
+///* in bits and should be one of 224, 256, 384, or 512.  Or iSize
+///* can be zero to use the default hash size of 256 bits.
 extern "C" fn hash_init() -> () {
     unsafe {
         let mut k: u32 = 0 as u32;
@@ -573,6 +610,8 @@ extern "C" fn hash_init() -> () {
     }
 }
 
+///* Make consecutive calls to the HashUpdate function to add new content
+///* to the hash
 extern "C" fn hash_update(a_data_1: *const u8, n_data_1: u32) -> () {
     unsafe {
         let mut t: u8 = 0 as u8;
@@ -607,6 +646,8 @@ extern "C" fn hash_update(a_data_1: *const u8, n_data_1: u32) -> () {
     }
 }
 
+///* After all content has been added, invoke HashFinal() to compute
+///* the final hash.  The hash result is stored in g.hash.r[].
 extern "C" fn hash_final() -> () {
     unsafe {
         let mut k: u32 = 0 as u32;
@@ -635,6 +676,8 @@ extern "C" fn hash_final() -> () {
     }
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -648,6 +691,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -737,6 +781,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     }
 }
 
+/// Return the current wall-clock time, in milliseconds
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_timestamp() -> Sqlite3Int64 {
     unsafe {
@@ -764,6 +809,7 @@ pub extern "C" fn speedtest1_timestamp() -> Sqlite3Int64 {
     }
 }
 
+/// Return a pseudo-random unsigned integer
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_random() -> u32 {
     unsafe {
@@ -773,6 +819,8 @@ pub extern "C" fn speedtest1_random() -> u32 {
     }
 }
 
+/// Map the value in within the range of 1...limit into another
+///* number in a way that is chatic and invertable.
 #[unsafe(no_mangle)]
 pub extern "C" fn swizzle(mut in__1: u32, mut limit: u32) -> u32 {
     let mut out: u32 = 0 as u32;
@@ -784,6 +832,7 @@ pub extern "C" fn swizzle(mut in__1: u32, mut limit: u32) -> u32 {
     return out;
 }
 
+/// Round up a number so that it is a power of two minus one
 #[unsafe(no_mangle)]
 pub extern "C" fn roundup_allones(limit: u32) -> u32 {
     let mut m: u32 = 1 as u32;
@@ -791,6 +840,13 @@ pub extern "C" fn roundup_allones(limit: u32) -> u32 {
     return m;
 }
 
+/// The speedtest1_numbername procedure below converts its argment (an integer)
+///* into a string which is the English-language name for that number.
+///* The returned string should be freed with sqlite3_free().
+///*
+///* Example:
+///*
+///*     speedtest1_numbername(123)   ->  "one hundred twenty three"
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_numbername(mut n: u32, z_out_1: *mut i8,
     n_out_1: i32) -> i32 {
@@ -957,6 +1013,7 @@ static z_dots: [i8; 72] =
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8, 46 as i8,
             46 as i8, 46 as i8, 46 as i8, 46 as i8, 0 as i8];
 
+/// Current test # for begin/end_test().
 static mut i_test_number: i32 = 0;
 
 #[unsafe(no_mangle)]
@@ -1004,6 +1061,7 @@ pub unsafe extern "C" fn speedtest1_begin_test(i_test_num_1: i32,
     }
 }
 
+/// Print an SQL statement to standard output
 extern "C" fn print_sql(z_sql_1: *const i8) -> () {
     unsafe {
         let mut n: i32 = unsafe { strlen(z_sql_1) } as i32;
@@ -1043,6 +1101,8 @@ extern "C" fn print_sql(z_sql_1: *const i8) -> () {
     }
 }
 
+/// Shrink memory used, if appropriate and if the SQLite version is capable
+///* of doing so.
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_shrink_memory() -> () {
     unsafe {
@@ -1050,6 +1110,7 @@ pub extern "C" fn speedtest1_shrink_memory() -> () {
     }
 }
 
+/// Forward reference
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_exec(z_format: *const i8, mut __va0: ...)
     -> () {
@@ -1093,6 +1154,7 @@ pub unsafe extern "C" fn speedtest1_exec(z_format: *const i8, mut __va0: ...)
     }
 }
 
+/// Complete a test case
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_end_test() -> () {
     unsafe {
@@ -1133,6 +1195,7 @@ pub extern "C" fn speedtest1_end_test() -> () {
     }
 }
 
+/// Report end of testing
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_final() -> () {
     unsafe {
@@ -1175,6 +1238,9 @@ pub extern "C" fn speedtest1_final() -> () {
     }
 }
 
+/// Run SQL and return the first column of the first row as a string.  The
+///* returned string is obtained from sqlite_malloc() and must be freed by
+///* the caller.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_once(z_format_1: *const i8,
     mut __va0: ...) -> *mut i8 {
@@ -1234,6 +1300,7 @@ pub unsafe extern "C" fn speedtest1_once(z_format_1: *const i8,
     }
 }
 
+/// Prepare an SQL statement
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn speedtest1_prepare(z_format_1: *const i8,
     mut __va0: ...) -> () {
@@ -1266,7 +1333,9 @@ pub unsafe extern "C" fn speedtest1_prepare(z_format_1: *const i8,
     }
 }
 
+/// Run an SQL statement previously prepared
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn speedtest1_run() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -1322,7 +1391,11 @@ pub extern "C" fn speedtest1_run() -> () {
                                         } as *const u8, 1 as u32);
                             }
                             if e_type == 2 {
-                                g.n_res_byte += 2 as u64;
+
+                                /// Omit the value of floating-point results from the verification
+                                ///* hash.  The only thing we record is the fact that the result was
+                                ///* a floating-point value.
+                                (g.n_res_byte += 2 as u64);
                             } else if e_type == 4 {
                                 let n_blob: i32 =
                                     unsafe { sqlite3_column_bytes(g.p_stmt, i) };
@@ -1413,6 +1486,7 @@ pub extern "C" fn speedtest1_run() -> () {
     }
 }
 
+/// The sqlite3_trace() callback function
 extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
     unsafe {
         let mut n: i32 = unsafe { strlen(z_sql_1) } as i32;
@@ -1432,6 +1506,8 @@ extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
     }
 }
 
+/// Substitute random() function that gives the same random
+///* sequence on each run, for repeatability.
 extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1439,6 +1515,7 @@ extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     };
 }
 
+/// Estimate the square root of an integer
 extern "C" fn est_square_root(x: i32) -> i32 {
     let mut y0: i32 = x / 2;
     let mut y1: i32 = 0;
@@ -1459,18 +1536,28 @@ extern "C" fn est_square_root(x: i32) -> i32 {
     return y0;
 }
 
+///* The main and default testset
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn testset_main() -> () {
     unsafe {
         let mut i: i32 = 0;
+        /// Loop counter
         let mut n: i32 = 0;
+        /// iteration count
         let mut sz: i32 = 0;
+        /// Size of the tables
         let mut maxb: i32 = 0;
+        /// Maximum swizzled value
         let mut x1: u32 = 0 as u32;
         let mut x2: u32 = 0 as u32;
+        /// Parameters
         let mut len: i32 = 0;
+        /// Length of the zNum[] string
         let mut z_num: [i8; 2000] = [0; 2000];
-        sz = { n = g.sz_test * 500; n };
+
+        /// A number name
+        (sz = { n = g.sz_test * 500; n });
         z_num[0 as usize] = 0 as i8;
         maxb = roundup_allones(sz as u32) as i32;
         unsafe {
@@ -1725,6 +1812,8 @@ pub extern "C" fn testset_main() -> () {
         };
         speedtest1_end_test();
         n = 10;
+
+        /// g.szTest/5;
         unsafe {
             speedtest1_begin_test(145,
                 c"%d SELECTS w/ORDER BY and LIMIT, unindexed".as_ptr() as
@@ -2230,6 +2319,13 @@ pub extern "C" fn testset_main() -> () {
                 c"%d SELECTS on an IPK".as_ptr() as *mut i8 as *const i8, n)
         };
         if g.do_big_transactions != 0 {
+
+            /// Historical note: tests 410 and 510 have historically not used
+            ///* explicit transactions. The --big-transactions flag was added
+            ///* 2022-09-08 to support the WASM/OPFS build, as the run-times
+            ///* approach 1 minute for each of these tests if they're not in an
+            ///* explicit transaction. The run-time effect of --big-transaciions
+            ///* on native builds is negligible.
             unsafe {
                 speedtest1_exec(c"BEGIN".as_ptr() as *mut i8 as *const i8)
             };
@@ -2309,6 +2405,8 @@ pub extern "C" fn testset_main() -> () {
                 n)
         };
         if g.do_big_transactions != 0 {
+
+            /// See notes for test 410.
             unsafe {
                 speedtest1_exec(c"BEGIN".as_ptr() as *mut i8 as *const i8)
             };
@@ -2376,9 +2474,15 @@ pub extern "C" fn testset_main() -> () {
     }
 }
 
+///* A testset for common table expressions.  This exercises code
+///* for views, subqueries, co-routines, etc.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn testset_cte() -> () {
     unsafe {
+        /// Easy
+        /// Medium
+        /// Hard
         let mut z_puz: *const i8 = core::ptr::null();
         let mut r_spacing: f64 = 0.0;
         let mut n_elem: i32 = 0;
@@ -2440,6 +2544,7 @@ pub extern "C" fn testset_cte() -> () {
     }
 }
 
+///* Compute a pseudo-random floating point ascii number.
 #[unsafe(no_mangle)]
 pub extern "C" fn speedtest1_random_ascii_fp(z_fp_1: *mut i8) -> () {
     let x: i32 = speedtest1_random() as i32;
@@ -2454,6 +2559,7 @@ pub extern "C" fn speedtest1_random_ascii_fp(z_fp_1: *mut i8) -> () {
     };
 }
 
+///* A testset for floating-point numbers.
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_fp() -> () {
     unsafe {
@@ -2621,6 +2727,7 @@ pub extern "C" fn testset_fp() -> () {
     }
 }
 
+///* A testset for star-schema queries.
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_star() -> () {
     unsafe {
@@ -2718,6 +2825,13 @@ pub extern "C" fn testset_star() -> () {
     }
 }
 
+///* Tests that simulate an application opening and closing an SQLite database
+///* frequently.  Fossil is used as the model.  The focus here is on rapidly
+///* parsing the database schema and rapidly generating prepared statements,
+///* in other words, rapid start-up of Fossil-like applications.
+///*
+///* The same database has no data, so the performance of sqlite3_step() is
+///* not significant to this testset.
 extern "C" fn testset_app() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -2806,7 +2920,10 @@ extern "C" fn testset_app() -> () {
     }
 }
 
+///* A testset that does key/value storage on tables with many columns.
+///* This is the kind of workload generated by ORMs such as CoreData.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn testset_orm() -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -2816,7 +2933,9 @@ pub extern "C" fn testset_orm() -> () {
         let mut x1: u32 = 0 as u32;
         let mut len: u32 = 0 as u32;
         let mut z_num: [i8; 2000] = [0; 2000];
-        n_row = { n = (g.sz_test * 250) as u32; n };
+
+        /// Types for all non-PK columns, in order
+        (n_row = { n = (g.sz_test * 250) as u32; n });
         unsafe {
             speedtest1_begin_test(100,
                 c"Fill %d rows".as_ptr() as *mut i8 as *const i8, n)
@@ -2930,11 +3049,13 @@ pub extern "C" fn testset_orm() -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn testset_trigger() -> () {
     unsafe {
         let mut jj: i32 = 0;
         let mut ii: i32 = 0;
         let mut z_num: [i8; 2000] = [0; 2000];
+        /// A number name
         let nrow: i32 = (500 * g.sz_test) as i32;
         let nrow2: i32 = (100 * g.sz_test) as i32;
         unsafe {
@@ -3185,6 +3306,10 @@ pub extern "C" fn testset_trigger() -> () {
             }
         }
         speedtest1_end_test();
+
+        ///* Note: Of the queries, only half actually update a row. This property
+        ///* was copied over from speed4p.test, where it was probably introduced
+        ///* inadvertantly.
         unsafe {
             speedtest1_begin_test(190,
                 c"speed4p-trigger2".as_ptr() as *mut i8 as *const i8)
@@ -3215,6 +3340,8 @@ pub extern "C" fn testset_trigger() -> () {
             }
         }
         speedtest1_end_test();
+
+        ///* Note: Same again.
         unsafe {
             speedtest1_begin_test(200,
                 c"speed4p-trigger3".as_ptr() as *mut i8 as *const i8)
@@ -3239,6 +3366,11 @@ pub extern "C" fn testset_trigger() -> () {
         unsafe {
             speedtest1_exec(c"COMMIT".as_ptr() as *mut i8 as *const i8)
         };
+
+        ///* The following block contains the same tests as the above block that
+        ///* tests triggers, with one crucial difference: no triggers are defined.
+        ///* So the difference in speed between these tests and the preceding ones
+        ///* is the amount of time taken to compile and execute the trigger programs.
         unsafe {
             speedtest1_exec(c"DROP TABLE t4;DROP TABLE log;VACUUM;CREATE TABLE t4(rowid INTEGER PRIMARY KEY, i INTEGER, t TEXT);BEGIN;".as_ptr()
                         as *mut i8 as *const i8)
@@ -3329,7 +3461,9 @@ pub extern "C" fn testset_trigger() -> () {
     }
 }
 
+///* A testset used for debugging speedtest1 itself.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn testset_debug1() -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -3337,7 +3471,9 @@ pub extern "C" fn testset_debug1() -> () {
         let mut x1: u32 = 0 as u32;
         let mut x2: u32 = 0 as u32;
         let mut z_num: [i8; 2000] = [0; 2000];
-        n = g.sz_test as u32;
+
+        /// A number name
+        (n = g.sz_test as u32);
         {
             i = 1 as u32;
             '__b60: loop {
@@ -3360,6 +3496,7 @@ pub extern "C" fn testset_debug1() -> () {
     }
 }
 
+///* Performance tests for JSON.
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_json() -> () {
     unsafe {
@@ -3447,6 +3584,10 @@ pub extern "C" fn testset_json() -> () {
     }
 }
 
+///* This testset focuses on the speed of parsing numeric literals (integers
+///* and real numbers). This was added to test the impact of allowing "_"
+///* characters to appear in numeric SQL literals to make them easier to read. 
+///* For example, "SELECT 1_000_000;" instead of "SELECT 1000000;".
 #[unsafe(no_mangle)]
 pub extern "C" fn testset_parsenumber() -> () {
     unsafe {
@@ -3556,48 +3697,84 @@ extern "C" fn x_compile_options(p_ctx_1: *mut (), n_val_1: i32,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut do_autovac: i32 = 0;
+        /// True for --autovacuum
         let mut cache_size: i32 = 0;
+        /// Desired cache size.  0 means default
         let mut do_exclusive: i32 = 0;
+        /// True for --exclusive
         let mut do_full_f_sync: i32 = 0;
+        /// True for --fullfsync
         let mut n_heap: i32 = 0;
         let mut mn_heap: i32 = 0;
+        /// Heap size from --heap
         let mut do_incrvac: i32 = 0;
+        /// True for --incrvacuum
         let mut z_j_mode: *const i8 = core::ptr::null();
+        /// Journal mode
         let mut z_key: *const i8 = core::ptr::null();
+        /// Encryption key
         let mut n_hard_heap_lmt: i32 = 0;
+        /// The hard heap limit
         let mut n_soft_heap_lmt: i32 = 0;
+        /// The soft heap limit
         let mut n_look: i32 = -1;
         let mut sz_look: i32 = 0;
+        /// --lookaside configuration
         let mut no_sync: i32 = 0;
+        /// True for --nosync
         let mut page_size: i32 = 0;
+        /// Desired page size.  0 means default
         let mut n_p_cache: i32 = 0;
         let mut sz_p_cache: i32 = 0;
+        /// --pcache configuration
         let mut do_p_cache: i32 = 0;
+        /// True if --pcache is seen
         let mut show_stats: i32 = 0;
+        /// True for --stats
         let mut n_thread: i32 = 0;
+        /// --threads value
         let mut mmap_size: i32 = 0;
+        /// How big of a memory map to use
         let mut mem_db: i32 = 0;
+        /// --memdb.  Use an in-memory database
         let mut open_flags: i32 = 2 | 4;
+        /// SQLITE_OPEN_xxx flags.
         let mut z_t_set: *mut i8 = c"mix1".as_ptr() as *mut i8;
+        /// Which --testset torun
         let mut do_trace: i32 = 0;
+        /// True for --trace
         let mut z_encoding: *const i8 = core::ptr::null();
+        /// --utf16be or --utf16le
         let mut p_heap: *mut () = core::ptr::null_mut();
+        /// Allocated heap space
         let mut p_look: *mut () = core::ptr::null_mut();
+        /// Allocated lookaside space
         let mut p_p_cache: *mut () = core::ptr::null_mut();
+        /// Allocated storage for pcache
         let mut i_cur: i32 = 0;
         let mut i_hi: i32 = 0;
+        /// Stats values, current and "highwater"
         let mut i: i32 = 0;
+        /// Loop counter
         let mut rc: i32 = 0;
+
+        /// This test misbehaves in WASM builds: sqlite3_open_v2() is
+        ///       failing to find the db file for reasons not yet understood.
+        ///* Confirms that argc has at least N arguments following argv[i].
+        /// Display the version of SQLite being tested
         unsafe {
             printf(c"-- Speedtest1 for SQLite %s %.48s\n".as_ptr() as *mut i8
                     as *const i8, unsafe { sqlite3_libversion() },
                 unsafe { sqlite3_sourceid() })
         };
-        g.z_db_name = core::ptr::null();
+
+        /// Process command-line arguments
+        (g.z_db_name = core::ptr::null());
         g.z_vfs = core::ptr::null();
         g.z_wr = c"".as_ptr() as *mut i8 as *const i8;
         g.z_nn = c"".as_ptr() as *mut i8 as *const i8;
@@ -4189,6 +4366,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         if g.stmt_scan_status != 0 {
             unsafe { sqlite3_db_config(g.db, 1018, 1, 0) };
         }
+
+        /// Set database connection options
         unsafe {
             sqlite3_create_function(g.db,
                 c"random".as_ptr() as *mut i8 as *const i8, 0, 1,
@@ -4552,6 +4731,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             };
         }
         if !(g.p_script).is_null() { unsafe { fclose(g.p_script) }; }
+
+        /// Release memory
         unsafe { free(p_look) };
         unsafe { free(p_p_cache) };
         unsafe { free(p_heap) };

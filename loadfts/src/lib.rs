@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -22,6 +28,10 @@ struct Dirent {
     d_name: [i8; 1024],
 }
 
+///* Implementation of the "readtext(X)" SQL function.  The entire content
+///* of the file named X is read and returned as a TEXT value. It is assumed
+///* the file contains UTF-8 text. NULL is returned if the file does not 
+///* exist or is unreadable.
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
@@ -48,6 +58,7 @@ extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { fclose(in_) };
 }
 
+///* Print usage text for this program and exit.
 extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe {
         printf(c"\nUsage: %s SWITCHES... DB\n\n  This program opens the database named on the command line and attempts to\n  create an FTS table named \"fts\" with a single column. If successful, it\n  recursively traverses the directory named by the -dir option and inserts\n  the contents of each file into the fts table. All files are assumed to\n  contain UTF-8 text.\n\nSwitches are:\n  -fts [345]       FTS version to use (default=5)\n  -idx [01]        Create a mapping from filename to rowid (default=0)\n  -dir <path>      Root of directory tree to load data from (default=.)\n  -trans <integer> Number of inserts per transaction (default=1)\n".as_ptr()
@@ -56,6 +67,7 @@ extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe { exit(1) };
 }
 
+///* Exit with a message based on the argument and the current value of errno.
 extern "C" fn error_out(z_text_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -67,6 +79,8 @@ extern "C" fn error_out(z_text_1: *const i8) -> () {
     }
 }
 
+///* Exit with a message based on the first argument and the error message
+///* currently stored in database handle db.
 extern "C" fn sqlite_error_out(z_text_1: *const i8, db: *mut Sqlite3) -> () {
     unsafe {
         unsafe {
@@ -85,11 +99,17 @@ struct VisitContext {
     p_insert: *mut Sqlite3Stmt,
 }
 
+///* Callback used with traverse(). The first argument points to an object
+///* of type VisitContext. This function inserts the contents of the text
+///* file zPath into the FTS table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn visit_file(p_ctx_1: *mut (), z_path_1: *const i8) -> () {
     let mut rc: i32 = 0;
     let p: *const VisitContext =
         p_ctx_1 as *mut VisitContext as *const VisitContext;
+
+    /// printf("%s\n", zPath);
     unsafe {
         sqlite3_bind_text(unsafe { (*p).p_insert }, 1, z_path_1, -1, None)
     };
@@ -110,6 +130,8 @@ pub extern "C" fn visit_file(p_ctx_1: *mut (), z_path_1: *const i8) -> () {
     }
 }
 
+///* Recursively traverse directory zDir. For each file that is not a 
+///* directory, invoke the supplied callback with its path.
 extern "C" fn traverse(z_dir_1: *const i8, p_ctx_1: *mut (),
     x_callback_1: Option<unsafe extern "C" fn(*mut (), *const i8) -> ()>)
     -> () {
@@ -161,11 +183,15 @@ extern "C" fn traverse(z_dir_1: *const i8, p_ctx_1: *mut (),
     unsafe { closedir(d) };
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i_fts: i32 = 5;
+    /// Value of -fts option
     let mut b_map: i32 = 0;
+    /// True to create mapping table
     let mut z_dir: *const i8 = c".".as_ptr() as *mut i8 as *const i8;
+    /// Directory to scan
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
     let mut n_row_per_trans: i32 = 0;
@@ -232,11 +258,13 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             i += 2;
         }
     }
-    rc =
+
+    /// Open the database file
+    (rc =
         unsafe {
             sqlite3_open(unsafe { *argv.offset((argc - 1) as isize) } as
                     *const i8, &mut db)
-        };
+        });
     if rc != 0 {
         sqlite_error_out(c"sqlite3_open()".as_ptr() as *mut i8 as *const i8,
             db);
@@ -251,11 +279,13 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         sqlite_error_out(c"sqlite3_create_function()".as_ptr() as *mut i8 as
                 *const i8, db);
     }
-    z_sql =
+
+    /// Create the FTS table
+    (z_sql =
         unsafe {
             sqlite3_mprintf(c"CREATE VIRTUAL TABLE fts USING fts%d(content)".as_ptr()
                         as *mut i8 as *const i8, i_fts)
-        };
+        });
     rc =
         unsafe {
             sqlite3_exec(db, z_sql as *const i8, None, core::ptr::null_mut(),
@@ -292,6 +322,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
+
+    /// Compile the INSERT statement to write data to the FTS table.
     unsafe {
         memset(&raw mut s_ctx as *mut (), 0,
             core::mem::size_of::<VisitContext>() as u64)
@@ -321,6 +353,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 core::ptr::null_mut(), core::ptr::null_mut())
         };
     }
+
+    /// Clean up and exit.
     unsafe { sqlite3_finalize(s_ctx.p_insert) };
     unsafe { sqlite3_close(db) };
     unsafe { sqlite3_free(a_cmd as *mut ()) };

@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type Int32T = i32;
 
@@ -171,6 +177,16 @@ struct SQLiteRsync {
     n_page_sent: u32,
 }
 
+///* Create a child process running shell command "zCmd".  *ppOut is
+///* a FILE that becomes the standard input of the child process.
+///* (The caller writes to *ppOut in order to send text to the child.)
+///* *ppIn is stdout from the child process.  (The caller
+///* reads from *ppIn in order to receive input from the child.)
+///* Note that *ppIn is an unbuffered file descriptor, not a FILE.
+///* The process ID of the child is written into *pChildPid.
+///*
+///* Return the number of errors.
+#[allow(unused_doc_comments)]
 extern "C" fn popen2(z_cmd_1: *const i8, pp_in_1: &mut *mut FILE,
     pp_out_1: &mut *mut FILE, p_child_pid_1: &mut i32, b_direct_1: i32)
     -> i32 {
@@ -203,6 +219,8 @@ extern "C" fn popen2(z_cmd_1: *const i8, pp_in_1: &mut *mut FILE,
     };
     if *p_child_pid_1 == 0 {
         let mut fd: i32 = 0;
+
+        /// This is the child process
         unsafe { close(0) };
         fd = unsafe { dup(pout[0 as usize]) };
         if fd != 0 {
@@ -230,6 +248,8 @@ extern "C" fn popen2(z_cmd_1: *const i8, pp_in_1: &mut *mut FILE,
         }
         return 1;
     } else {
+
+        /// This is the parent process
         unsafe { close(pin[1 as usize]) };
         *pp_in_1 =
             unsafe {
@@ -245,6 +265,8 @@ extern "C" fn popen2(z_cmd_1: *const i8, pp_in_1: &mut *mut FILE,
     }
 }
 
+///* Close the connection to a child process previously created using
+///* popen2().
 extern "C" fn pclose2(p_in_1: *mut FILE, p_out_1: *mut FILE, child_pid_1: i32)
     -> i32 {
     let mut wp: i32 = 0;
@@ -269,6 +291,14 @@ extern "C" fn pclose2(p_in_1: *mut FILE, p_out_1: *mut FILE, child_pid_1: i32)
     return rc;
 }
 
+///* Meanings for bytes in a filename:
+///*
+///*    0      Ordinary character.  No encoding required
+///*    1      Needs to be escaped
+///*    2      Illegal character.  Do not allow in a filename
+///*    3      First byte of a 2-byte UTF-8
+///*    4      First byte of a 3-byte UTF-8
+///*    5      First byte of a 4-byte UTF-8
 static a_safe_char: [i8; 256] =
     [2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8,
             2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8, 2 as i8,
@@ -308,7 +338,22 @@ static a_safe_char: [i8; 256] =
             5 as i8, 5 as i8, 5 as i8, 5 as i8, 5 as i8, 5 as i8, 5 as i8,
             5 as i8, 5 as i8, 5 as i8];
 
+///* pStr is a shell command under construction.  This routine safely
+///* appends filename argument zIn.  It returns 0 on success or non-zero
+///* on any error.
+///*
+///* The argument is escaped if it contains white space or other characters
+///* that need to be escaped for the shell.  If zIn contains characters
+///* that cannot be safely escaped, then throw a fatal error.
+///*
+///* If the isFilename argument is true, then the argument is expected
+///* to be a filename.  As shell commands commonly have command-line
+///* options that begin with "-" and since we do not want an attacker
+///* to be able to invoke these switches using filenames that begin
+///* with "-", if zIn begins with "-", prepend an additional "./"
+///* (or ".\\" on Windows).
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn append_escaped_arg(p_str_1: *mut Sqlite3Str,
     z_in_1: *const i8, is_filename_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -328,6 +373,8 @@ pub extern "C" fn append_escaped_arg(p_str_1: *mut Sqlite3Str,
                     let x: u8 = a_safe_char[c as usize] as u8;
                     need_escape = 1;
                     if x as i32 == 2 {
+
+                        /// Bad ASCII character
                         return 1;
                     } else if x as i32 > 2 {
                         if unsafe { *z_in_1.offset((i + 1) as isize) } as i32 & 192
@@ -338,6 +385,8 @@ pub extern "C" fn append_escaped_arg(p_str_1: *mut Sqlite3Str,
                                 x as i32 == 5 &&
                                     unsafe { *z_in_1.offset((i + 3) as isize) } as i32 & 192 !=
                                         128 {
+
+                            /// Bad UTF8 character
                             return 1;
                         }
                         i += x as i32 - 2;
@@ -409,6 +458,46 @@ pub extern "C" fn append_escaped_arg(p_str_1: *mut Sqlite3Str,
     return 0;
 }
 
+/// Add an approprate PATH= argument to the SSH command under construction
+///* in pStr
+///*
+///* About This Feature
+///* ==================
+///*
+///* On some ssh servers (Macs in particular are guilty of this) the PATH
+///* variable in the shell that runs the command that is sent to the remote
+///* host contains a limited number of read-only system directories:
+///*
+///*      /usr/bin:/bin:/usr/sbin:/sbin
+///*
+///* The sqlite3_rsync executable cannot be installed into any of those
+///* directories because they are locked down, and so the "sqlite3_rsync"
+///* command cannot run.
+///*
+///* To work around this, the sqlite3_rsync command is prefixed with a PATH=
+///* argument, inserted by this function, to augment the PATH with additional
+///* directories in which the sqlite3_rsync executable can be installed.
+///*
+///* But other ssh servers are confused by this initial PATH= argument.
+///* Some ssh servers have a list of programs that they are allowed to run
+///* and will fail if the first argument is not on that list, and PATH=....
+///* is not on that list.
+///*
+///* So that sqlite3_rsync can invoke itself on a remote system using ssh
+///* on a variety of platforms, the following algorithm is used:
+///*
+///*   *  First try running the sqlite3_rsync without any PATH= argument.
+///*      If that works (and it does on a majority of systems) then we are
+///*      done.
+///*
+///*   *  If the first attempt fails, then try again after adding the
+///*      PATH= prefix argument.  (This function is what adds that
+///*      argument.)
+///*
+///* A consequence of this is that if the remote system is a Mac, the
+///* "ssh" command always ends up being invoked twice.  If anybody knows a
+///* way around that problem, please bring it to the attention of the
+///* developers.
 #[unsafe(no_mangle)]
 pub extern "C" fn add_path_argument(p_str_1: *mut Sqlite3Str) -> () {
     append_escaped_arg(p_str_1,
@@ -433,6 +522,7 @@ union HashContextU0 {
     x: [u8; 1600],
 }
 
+///* A single step of the Keccak mixing function for a 1600-bit state
 extern "C" fn keccak_f1600_step(p: &mut HashContext) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -588,6 +678,10 @@ extern "C" fn keccak_f1600_step(p: &mut HashContext) -> () {
     }
 }
 
+///* Initialize a new hash.  iSize determines the size of the hash
+///* in bits and should be one of 224, 256, 384, or 512.  Or iSize
+///* can be zero to use the default hash size of 256 bits.
+#[allow(unused_doc_comments)]
 extern "C" fn hash_init(p: *mut HashContext, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -602,12 +696,20 @@ extern "C" fn hash_init(p: *mut HashContext, i_size_1: i32) -> () {
         } else { unsafe { (*p).n_rate = ((1600 - 2 * 256) / 8) as u32 }; }
         {
             if 1 == unsafe { *(&raw mut one as *mut u8) } as i32 {
+
+                /// Little endian.  No byte swapping.
                 unsafe { (*p).ix_mask = 0 as u32 };
-            } else { unsafe { (*p).ix_mask = 7 as u32 }; }
+            } else {
+
+                /// Big endian.  Byte swap.
+                unsafe { (*p).ix_mask = 7 as u32 };
+            }
         }
     }
 }
 
+///* Make consecutive calls to the HashUpdate function to add new content
+///* to the hash
 extern "C" fn hash_update(p: *mut HashContext, a_data_1: *const u8,
     n_data_1: u32) -> () {
     unsafe {
@@ -640,6 +742,9 @@ extern "C" fn hash_update(p: *mut HashContext, a_data_1: *const u8,
     }
 }
 
+///* After all content has been added, invoke HashFinal() to compute
+///* the final hash.  The function returns a pointer to the binary
+///* hash value.
 extern "C" fn hash_final(p: *mut HashContext) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -671,6 +776,9 @@ extern "C" fn hash_final(p: *mut HashContext) -> *mut u8 {
     }
 }
 
+///* Implementation of the hash(X) function.
+///*
+///* Return a 160-bit BLOB which is the hash of X.
 extern "C" fn hash_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: HashContext = unsafe { core::mem::zeroed() };
@@ -701,6 +809,10 @@ extern "C" fn hash_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Implementation of the agghash(X) function.
+///*
+///* Return a 160-bit BLOB which is the hash of the concatenation
+///* of all X inputs.
 extern "C" fn agghash_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_cx: *mut HashContext = core::ptr::null_mut();
@@ -744,6 +856,7 @@ extern "C" fn agghash_final(context: *mut Sqlite3Context) -> () {
     }
 }
 
+/// Register the hash function
 extern "C" fn hash_register(db: *mut Sqlite3) -> i32 {
     let mut rc: i32 = 0;
     rc =
@@ -765,6 +878,8 @@ extern "C" fn hash_register(db: *mut Sqlite3) -> i32 {
     return rc;
 }
 
+///* Return the tail of a file pathname.  The tail is the last component
+///* of the path.  For example, the tail of "/a/b/c.d" is "c.d".
 #[unsafe(no_mangle)]
 pub extern "C" fn file_tail(mut z: *const i8) -> *const i8 {
     let mut z_tail: *const i8 = z;
@@ -783,6 +898,8 @@ pub extern "C" fn file_tail(mut z: *const i8) -> *const i8 {
     return z_tail;
 }
 
+///* Append error message text to the error file, if an error file is
+///* specified.  In any case, increment the error count.
 unsafe extern "C" fn log_error(p: &mut SQLiteRsync, z_format_1: *const i8,
     mut __va0: ...) -> () {
     if !((*p).z_err_file).is_null() {
@@ -801,6 +918,8 @@ unsafe extern "C" fn log_error(p: &mut SQLiteRsync, z_format_1: *const i8,
     { let __p = &mut (*p).n_err; let __t = *__p; *__p += 1; __t };
 }
 
+///* Append text to the debugging mesage file, if an that file is
+///* specified.
 unsafe extern "C" fn debug_message(p: &mut SQLiteRsync, z_format_1: *const i8,
     mut __va0: ...) -> () {
     if !((*p).z_debug_file).is_null() {
@@ -821,6 +940,8 @@ unsafe extern "C" fn debug_message(p: &mut SQLiteRsync, z_format_1: *const i8,
     }
 }
 
+/// Read a single big-endian 32-bit unsigned integer from the input
+///* stream.  Return 0 on success and 1 if there are any errors.
 extern "C" fn read_uint32(p: *mut SQLiteRsync, p_u_1: &mut u32) -> i32 {
     let mut buf: [u8; 4] = [0; 4];
     if unsafe {
@@ -844,6 +965,8 @@ extern "C" fn read_uint32(p: *mut SQLiteRsync, p_u_1: &mut u32) -> i32 {
     }
 }
 
+/// Write a single big-endian 32-bit unsigned integer to the output stream.
+///* Return 0 on success and 1 if there are any errors.
 extern "C" fn write_uint32(p: *mut SQLiteRsync, mut x: u32) -> i32 {
     let mut buf: [u8; 4] = [0; 4];
     buf[3 as usize] = (x & 255 as u32) as u8;
@@ -882,6 +1005,7 @@ extern "C" fn write_uint32(p: *mut SQLiteRsync, mut x: u32) -> i32 {
     return 0;
 }
 
+/// Read a single byte from the wire.
 #[unsafe(no_mangle)]
 pub extern "C" fn read_byte(p: &mut SQLiteRsync) -> i32 {
     let c: i32 = unsafe { fgetc((*p).p_in) };
@@ -891,6 +1015,7 @@ pub extern "C" fn read_byte(p: &mut SQLiteRsync) -> i32 {
     return c;
 }
 
+/// Write a single byte into the wire.
 #[unsafe(no_mangle)]
 pub extern "C" fn write_byte(p: &mut SQLiteRsync, c: i32) -> () {
     if !((*p).p_log).is_null() { unsafe { fputc(c, (*p).p_log) }; }
@@ -898,6 +1023,7 @@ pub extern "C" fn write_byte(p: &mut SQLiteRsync, c: i32) -> () {
     { let __p = &mut (*p).n_out; let __t = *__p; *__p += 1; __t };
 }
 
+/// Read a power of two encoded as a single byte.
 #[unsafe(no_mangle)]
 pub extern "C" fn read_pow2(p: *mut SQLiteRsync) -> i32 {
     let x: i32 = read_byte(unsafe { &mut *p });
@@ -912,6 +1038,7 @@ pub extern "C" fn read_pow2(p: *mut SQLiteRsync) -> i32 {
     return 1 << x;
 }
 
+/// Write a power-of-two value onto the wire as a single byte.
 #[unsafe(no_mangle)]
 pub extern "C" fn write_pow2(p: *mut SQLiteRsync, mut c: i32) -> () {
     let mut n: i32 = 0;
@@ -933,6 +1060,7 @@ pub extern "C" fn write_pow2(p: *mut SQLiteRsync, mut c: i32) -> () {
     write_byte(unsafe { &mut *p }, n);
 }
 
+/// Read an array of bytes from the wire.
 #[unsafe(no_mangle)]
 pub extern "C" fn read_bytes(p: *mut SQLiteRsync, p_data_1: &mut [u8]) -> () {
     if unsafe {
@@ -949,6 +1077,7 @@ pub extern "C" fn read_bytes(p: *mut SQLiteRsync, p_data_1: &mut [u8]) -> () {
     }
 }
 
+/// Write an array of bytes onto the wire.
 #[unsafe(no_mangle)]
 pub extern "C" fn write_bytes(p: *mut SQLiteRsync, p_data_1: &[u8]) -> () {
     if !(unsafe { (*p).p_log }).is_null() {
@@ -977,6 +1106,10 @@ pub extern "C" fn write_bytes(p: *mut SQLiteRsync, p_data_1: &[u8]) -> () {
     }
 }
 
+/// Report an error.
+///*
+///* If this happens on the remote side, we send back a *_ERROR
+///* message.  On the local side, the error message goes to stderr.
 unsafe extern "C" fn report_error(p: *mut SQLiteRsync, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -1017,6 +1150,10 @@ unsafe extern "C" fn report_error(p: *mut SQLiteRsync, z_format_1: *const i8,
     }
 }
 
+/// Send an informational message.
+///*
+///* If this happens on the remote side, we send back a *_MSG 
+///* message.  On the local side, the message goes to stdout.
 unsafe extern "C" fn info_msg(p: *mut SQLiteRsync, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -1048,6 +1185,7 @@ unsafe extern "C" fn info_msg(p: *mut SQLiteRsync, z_format_1: *const i8,
     unsafe { sqlite3_free(z_msg as *mut ()) };
 }
 
+/// Receive and report an error message coming from the other side.
 extern "C" fn read_and_display_message(p: *mut SQLiteRsync, c: i32) -> () {
     unsafe {
         let mut n: u32 = 0 as u32;
@@ -1090,6 +1228,8 @@ extern "C" fn read_and_display_message(p: *mut SQLiteRsync, c: i32) -> () {
     }
 }
 
+/// Construct a new prepared statement.  Report an error and return NULL
+///* if anything goes wrong.
 extern "C" fn prepare_stmt_va(p: *mut SQLiteRsync, z_format_1: *mut i8,
     ap: *mut i8) -> *mut Sqlite3Stmt {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1137,6 +1277,15 @@ unsafe extern "C" fn prepare_stmt(p: *mut SQLiteRsync, z_format_1: *mut i8,
     return p_stmt;
 }
 
+/// Run a single SQL statement.  Report an error if something goes
+///* wrong.
+///*
+///* As a special case, if the statement starts with "ATTACH" (but not
+///* "Attach") and if the error message is about an incorrect encoding,
+///* then do not report the error, but instead set the wrongEncoding flag.
+///* This is a kludgy work-around to the problem of attaching a database
+///* with a non-UTF8 encoding to the empty :memory: database that is
+///* opened on the replica.
 unsafe extern "C" fn run_sql(p: *mut SQLiteRsync, z_sql_1: *mut i8,
     mut __va0: ...) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1173,6 +1322,7 @@ unsafe extern "C" fn run_sql(p: *mut SQLiteRsync, z_sql_1: *mut i8,
     }
 }
 
+/// Run an SQL statement that returns a single unsigned 32-bit integer result
 unsafe extern "C" fn run_sql_return_u_int(p: *mut SQLiteRsync,
     p_res_1: &mut u32, z_sql_1: *mut i8, mut __va0: ...) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1203,6 +1353,8 @@ unsafe extern "C" fn run_sql_return_u_int(p: *mut SQLiteRsync,
     return res;
 }
 
+/// Run an SQL statement that returns a single TEXT value that is no more
+///* than 99 bytes in length.
 unsafe extern "C" fn run_sql_return_text(p: *mut SQLiteRsync,
     p_res_1: *mut i8, z_sql_1: *mut i8, mut __va0: ...) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1243,6 +1395,7 @@ unsafe extern "C" fn run_sql_return_text(p: *mut SQLiteRsync,
     return res;
 }
 
+/// Close the database connection associated with p
 extern "C" fn close_db(p: &mut SQLiteRsync) -> () {
     if !((*p).db).is_null() {
         unsafe { sqlite3_close((*p).db) };
@@ -1250,18 +1403,65 @@ extern "C" fn close_db(p: &mut SQLiteRsync) -> () {
     }
 }
 
+///* Run the origin-side protocol.
+///*
+///* Begin by sending the ORIGIN_BEGIN message with two arguments,
+///* nPage, and szPage.  Then enter a loop responding to message from
+///* the replica:
+///*
+///*    REPLICA_BEGIN  iProtocol
+///*
+///*         An optional message sent by the replica in response to the
+///*         prior ORIGIN_BEGIN with a counter-proposal for the protocol
+///*         level.  If seen, try to reduce the protocol level to what is
+///*         requested and send a new ORGIN_BEGIN.
+///*
+///*    REPLICA_ERROR  size  text
+///*
+///*         Report an error from the replica and quit
+///*
+///*    REPLICA_END
+///*
+///*         The replica is terminating.  Stop processing now.
+///*
+///*    REPLICA_HASH  hash
+///*
+///*         The argument is the 20-byte SHA1 hash for the next page or
+///*         block of pages.  Hashes appear in sequential order with no gaps,
+///*         unless there is an intervening REPLICA_CONFIG message.
+///*
+///*    REPLICA_CONFIG   pgno   cnt
+///*
+///*         Set counters used by REPLICA_HASH.  The next hash will start
+///*         on page pgno and all subsequent hashes will cover cnt pages
+///*         each.  Note that for a multi-page hash, the hash value is
+///*         actually a hash of the individual page hashes.
+///*
+///*    REPLICA_READY
+///*
+///*         The replica has sent all the hashes that it intends to send.
+///*         This side (the origin) can now start responding with page
+///*         content for pages that do not have a matching hash or with
+///*         ORIGIN_DETAIL messages with requests for more detail.
+#[allow(unused_doc_comments)]
 extern "C" fn origin_side(p: *mut SQLiteRsync) -> () {
     let mut rc: i32 = 0;
     let mut c: i32 = 0;
     let mut n_page: u32 = 0 as u32;
     let mut i_hash: u32 = 1 as u32;
+    /// Pgno for next hash to receive
     let mut n_hash: u32 = 1 as u32;
+    /// Number of pages per hash received
     let mut mx_hash: u32 = 0 as u32;
+    /// Maximum hash value received
     let mut lock_byte_page: u32 = 0 as u32;
     let mut sz_pg: u32 = 0 as u32;
     let mut p_ck_hash: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Verify hash on a single page
     let mut p_ck_hash_n: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Verify a multi-page hash
     let mut p_ins_hash: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Record a bad hash
     let mut buf: [i8; 200] = [0; 200];
     unsafe { (*p).is_replica = 0 as u8 };
     if unsafe { (*p).b_comm_check } != 0 {
@@ -1275,11 +1475,13 @@ extern "C" fn origin_side(p: *mut SQLiteRsync) -> () {
         write_byte(unsafe { &mut *p }, 66);
         unsafe { fflush(unsafe { (*p).p_out }) };
     } else {
-        rc =
+
+        /// Open the ORIGIN database.
+        (rc =
             unsafe {
                 sqlite3_open_v2(unsafe { (*p).z_origin },
                     unsafe { &mut (*p).db }, 2, core::ptr::null())
-            };
+            });
         if rc != 0 {
             unsafe {
                 report_error(p,
@@ -1317,6 +1519,8 @@ extern "C" fn origin_side(p: *mut SQLiteRsync) -> () {
                 c"PRAGMA page_size".as_ptr() as *mut i8)
         };
         if unsafe { (*p).n_err } == 0 {
+
+            /// Send the ORIGIN_BEGIN message
             write_byte(unsafe { &mut *p }, 65);
             write_byte(unsafe { &mut *p }, unsafe { (*p).i_protocol } as i32);
             write_pow2(p, sz_pg as i32);
@@ -1341,6 +1545,10 @@ extern "C" fn origin_side(p: *mut SQLiteRsync) -> () {
             match c {
                 97 => {
                     {
+                        /// This message is only sent if the replica received an origin-protocol
+                        ///* that is larger than what it knows about.  The replica sends back
+                        ///* a counter-proposal of an earlier protocol which the origin can
+                        ///* accept by resending a new ORIGIN_BEGIN.
                         let new_protocol: u8 = read_byte(unsafe { &mut *p }) as u8;
                         if !(unsafe { (*p).z_debug_file }).is_null() {
                             unsafe {
@@ -2850,6 +3058,18 @@ extern "C" fn origin_side(p: *mut SQLiteRsync) -> () {
     close_db(unsafe { &mut *p });
 }
 
+///* Send a REPLICA_HASH message for each entry in the sendHash table.
+///* The sendHash table looks like this:
+///*
+///*   CREATE TABLE sendHash(
+///*      fpg INTEGER PRIMARY KEY,   -- Page number of the hash
+///*      npg INT                    -- Number of pages in this hash
+///*   );
+///*
+///* If iHash is page number for the next page that the origin will
+///* be expecting, and nHash is the number of pages that the origin will
+///* be expecting in the hash that follows.  Send a REPLICA_CONFIG message
+///* if either of these values if not correct.
 extern "C" fn send_hash_messages(p: *mut SQLiteRsync, mut i_hash_1: u32,
     mut n_hash_1: u32) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -2930,9 +3150,14 @@ extern "C" fn send_hash_messages(p: *mut SQLiteRsync, mut i_hash_1: u32,
     }
 }
 
+///* Make entries in the sendHash table to send hashes for
+///* npg (mnemonic: Number of PaGes) pages starting with fpg
+///* (mnemonic: First PaGe).
+#[allow(unused_doc_comments)]
 extern "C" fn subdivide_hash_range(p: *mut SQLiteRsync, fpg: u32, npg: u32)
     -> () {
     let mut n_chunk: u32 = 0 as u32;
+    /// How many pages to request per hash
     let mut i_end: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if npg <= 30 as u32 {
         n_chunk = 1 as u32;
@@ -2949,11 +3174,60 @@ extern "C" fn subdivide_hash_range(p: *mut SQLiteRsync, fpg: u32, npg: u32)
     };
 }
 
+///* Run the replica-side protocol.  The protocol is passive in the sense
+///* that it only response to message from the origin side.
+///*
+///*    ORIGIN_BEGIN  idProtocol szPage nPage
+///*
+///*         The origin is reporting the protocol version number, the size of
+///*         each page in the origin database (sent as a single-byte power-of-2),
+///*         and the number of pages in the origin database.
+///*         This procedure checks compatibility, and if everything is ok,
+///*         it starts sending hashes back to the origin using REPLICA_HASH
+///*         and/or REPLICA_CONFIG message, followed by a single REPLICA_READY.
+///*         REPLICA_CONFIG is only sent if the protocol is 2 or greater.
+///*
+///*    ORIGIN_ERROR  size  text
+///*
+///*         Report an error and quit.
+///*
+///*    ORIGIN_DETAIL  pgno  cnt
+///*
+///*         The origin reports that a multi-page hash starting at pgno and
+///*         spanning cnt pages failed to match.  The origin is requesting
+///*         details (more REPLICA_HASH message with a smaller cnt).  The
+///*         replica must wait on ORIGIN_READY before sending its reply.
+///*
+///*    ORIGIN_READY
+///*
+///*         After sending one or more ORIGIN_DETAIL messages, the ORIGIN_READY
+///*         is sent by the origin to indicate that it has finished sending
+///*         requests for detail and is ready for the replicate to reply
+///*         with a new round of REPLICA_CONFIG and REPLICA_HASH messages.
+///*
+///*    ORIGIN_PAGE  pgno  content
+///*
+///*         Once the origin believes it knows exactly which pages need to be
+///*         updated in the replica, it starts sending those pages using these
+///*         messages.  These messages will only appear immediately after
+///*         REPLICA_READY.  The origin never mixes ORIGIN_DETAIL and
+///*         ORIGIN_PAGE messages in the same batch.
+///*
+///*    ORIGIN_TXN   pgno
+///*
+///*         Close the update transaction.  The total database size is pgno
+///*         pages.
+///*
+///*    ORIGIN_END
+///*
+///*         Expect no more transmissions from the origin.
+#[allow(unused_doc_comments)]
 extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
     let mut c: i32 = 0;
     let mut p_ins: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut sz_o_page: u32 = 0 as u32;
     let mut e_j_mode: i8 = 0 as i8;
+    /// Journal mode prior to sync
     let mut buf: [i8; 65536] = [0; 65536];
     unsafe { (*p).is_replica = 1 as u8 };
     if unsafe { (*p).b_comm_check } != 0 {
@@ -2996,6 +3270,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         }
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if i_protocol as i32 > unsafe { (*p).i_protocol } as i32 {
+
+                            /// If the protocol version on the origin side is larger, send back
+                            ///* a REPLICA_BEGIN message with the protocol version number of the
+                            ///* replica side.  This gives the origin an opportunity to resend
+                            ///* a new ORIGIN_BEGIN with a reduced protocol version.
                             write_byte(unsafe { &mut *p }, 97);
                             write_byte(unsafe { &mut *p },
                                 unsafe { (*p).i_protocol } as i32);
@@ -3173,6 +3452,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -3233,8 +3514,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -3292,6 +3576,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         }
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if i_protocol as i32 > unsafe { (*p).i_protocol } as i32 {
+
+                            /// If the protocol version on the origin side is larger, send back
+                            ///* a REPLICA_BEGIN message with the protocol version number of the
+                            ///* replica side.  This gives the origin an opportunity to resend
+                            ///* a new ORIGIN_BEGIN with a reduced protocol version.
                             write_byte(unsafe { &mut *p }, 97);
                             write_byte(unsafe { &mut *p },
                                 unsafe { (*p).i_protocol } as i32);
@@ -3469,6 +3758,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -3529,8 +3820,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -3587,6 +3881,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         }
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if i_protocol as i32 > unsafe { (*p).i_protocol } as i32 {
+
+                            /// If the protocol version on the origin side is larger, send back
+                            ///* a REPLICA_BEGIN message with the protocol version number of the
+                            ///* replica side.  This gives the origin an opportunity to resend
+                            ///* a new ORIGIN_BEGIN with a reduced protocol version.
                             write_byte(unsafe { &mut *p }, 97);
                             write_byte(unsafe { &mut *p },
                                 unsafe { (*p).i_protocol } as i32);
@@ -3764,6 +4063,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -3824,8 +4125,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -3899,6 +4203,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -3959,8 +4265,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -4019,6 +4328,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -4079,8 +4390,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -4129,6 +4443,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                             };
                         }
                         if p_ins == core::ptr::null_mut() {
+
+                            /// Nothing has changed
                             unsafe { run_sql(p, c"COMMIT".as_ptr() as *mut i8) };
                         } else if unsafe { (*p).n_err } != 0 {
                             unsafe { run_sql(p, c"ROLLBACK".as_ptr() as *mut i8) };
@@ -4189,8 +4505,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -4261,8 +4580,11 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
                         if unsafe { (*p).n_err } != 0 { break '__s14; }
                         if pgno == 1 as u32 && e_j_mode as i32 == 2 &&
                                 buf[18 as usize] as i32 == 1 {
-                            buf[18 as usize] =
-                                { buf[19 as usize] = 2 as i8; buf[19 as usize] };
+
+                            /// Do not switch the replica out of WAL mode if it started in 
+                            ///* WAL mode
+                            (buf[18 as usize] =
+                                { buf[19 as usize] = 2 as i8; buf[19 as usize] });
                         }
                         {
                             let __p = unsafe { &mut (*p).n_page_sent };
@@ -4316,6 +4638,8 @@ extern "C" fn replica_side(p: *mut SQLiteRsync) -> () {
     close_db(unsafe { &mut *p });
 }
 
+///* The argument might be -vvv...vv with any number of "v"s.  Return
+///* the number of "v"s.  Return 0 if the argument is not a -vvv...v.
 extern "C" fn num_vs(mut z: *const i8) -> i32 {
     let mut n: i32 = 0;
     if unsafe { *z.offset(0 as isize) } as i32 != '-' as i32 { return 0; }
@@ -4346,6 +4670,8 @@ extern "C" fn num_vs(mut z: *const i8) -> i32 {
     return 0;
 }
 
+///* Get the argument to an --option.  Throw an error and die if no argument
+///* is available.
 extern "C" fn cmdline_option_value(argc: i32, argv: *const *const i8, i: i32)
     -> *const i8 {
     unsafe {
@@ -4362,6 +4688,7 @@ extern "C" fn cmdline_option_value(argc: i32, argv: *const *const i8, i: i32)
     }
 }
 
+///* Return the current time in milliseconds since the Julian epoch.
 #[unsafe(no_mangle)]
 pub extern "C" fn current_time() -> Sqlite3Int64 {
     let mut now: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -4378,6 +4705,15 @@ pub extern "C" fn current_time() -> Sqlite3Int64 {
     return now;
 }
 
+///* Input string zIn might be in any of these formats:
+///*
+///*    (1) PATH
+///*    (2) HOST:PATH
+///*    (3) USER@HOST:PATH
+///*
+///* For format 1, return NULL.  For formats 2 and 3, return
+///* a pointer to the ':' character that separates the hostname
+///* from the path.
 extern "C" fn host_separator(mut z_in_1: *const i8) -> *mut i8 {
     let z_path: *mut i8 = unsafe { strchr(z_in_1, ':' as i32) };
     if z_path == core::ptr::null_mut() { return core::ptr::null_mut(); }
@@ -4398,6 +4734,31 @@ extern "C" fn host_separator(mut z_in_1: *const i8) -> *mut i8 {
     return z_path;
 }
 
+///* Parse command-line arguments.  Dispatch subroutines to do the
+///* requested work.
+///*
+///* Input formats:
+///*
+///*  (1)    sqlite3_rsync  FILENAME1  USER@HOST:FILENAME2
+///*
+///*  (2)    sqlite3_rsync  USER@HOST:FILENAME1  FILENAME2
+///*
+///*  (3)    sqlite3_rsync --origin FILENAME1
+///*
+///*  (4)    sqlite3_rsync --replica FILENAME2
+///*
+///* The user types (1) or (2).  SSH launches (3) or (4).
+///*
+///* If (1) is seen then popen2 is used launch (4) on the remote and
+///* originSide() is called locally.
+///*
+///* If (2) is seen, then popen2() is used to launch (3) on the remote
+///* and replicaSide() is run locally.
+///*
+///* If (3) is seen, call originSide() on stdin and stdout.
+///*
+///q** If (4) is seen, call replicaSide() on stdin and stdout.
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     -> Result<(), i32> {
     unsafe {
@@ -4539,6 +4900,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
                     if unsafe {
                                 strcmp(z, c"-logfile".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
+                        /// DEBUG OPTION:  --logfile FILENAME
+                        ///* Cause all local output traffic to be duplicated in FILENAME
                         let z_log: *const i8 =
                             cmdline_option_value(argc, argv,
                                 { let __p = &mut i; *__p += 1; *__p });
@@ -4560,47 +4923,69 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
                     if unsafe {
                                 strcmp(z, c"-errorfile".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
-                        ctx.z_err_file =
+
+                        /// DEBUG OPTION:  --errorfile FILENAME
+                        ///* Error messages on the local side are written into FILENAME
+                        (ctx.z_err_file =
                             cmdline_option_value(argc, argv,
-                                { let __p = &mut i; *__p += 1; *__p });
+                                { let __p = &mut i; *__p += 1; *__p }));
                         break '__c17;
                     }
                     if unsafe {
                                 strcmp(z,
                                     c"-remote-errorfile".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
-                        z_remote_err_file =
+
+                        /// DEBUG OPTION:  --remote-errorfile FILENAME
+                        ///* Error messages on the remote side are written into FILENAME on
+                        ///* the remote side.
+                        (z_remote_err_file =
                             cmdline_option_value(argc, argv,
-                                { let __p = &mut i; *__p += 1; *__p });
+                                { let __p = &mut i; *__p += 1; *__p }));
                         break '__c17;
                     }
                     if unsafe {
                                 strcmp(z, c"-debugfile".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
-                        ctx.z_debug_file =
+
+                        /// DEBUG OPTION:  --debugfile FILENAME
+                        ///* Debugging messages on the local side are written into FILENAME
+                        (ctx.z_debug_file =
                             cmdline_option_value(argc, argv,
-                                { let __p = &mut i; *__p += 1; *__p });
+                                { let __p = &mut i; *__p += 1; *__p }));
                         break '__c17;
                     }
                     if unsafe {
                                 strcmp(z,
                                     c"-remote-debugfile".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
-                        z_remote_debug_file =
+
+                        /// DEBUG OPTION:  --remote-debugfile FILENAME
+                        ///* Error messages on the remote side are written into FILENAME on
+                        ///* the remote side.
+                        (z_remote_debug_file =
                             cmdline_option_value(argc, argv,
-                                { let __p = &mut i; *__p += 1; *__p });
+                                { let __p = &mut i; *__p += 1; *__p }));
                         break '__c17;
                     }
                     if unsafe {
                                 strcmp(z, c"-commcheck".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
-                        ctx.b_comm_check = 1 as u8;
+
+                        /// DEBUG ONLY */
+                        ///      /* Run a communication check with the remote side.  Do not attempt
+                        ///* to exchange any database connection
+                        (ctx.b_comm_check = 1 as u8);
                         break '__c17;
                     }
                     if unsafe {
                                 strcmp(z,
                                     c"-arg-escape-check".as_ptr() as *mut i8 as *const i8)
                             } == 0 {
+                        /// DEBUG ONLY */
+                        ///      /* Test the append_escaped_arg() routine by using it to render a
+                        ///* copy of the input command-line, assuming all arguments except
+                        ///* this one are filenames.
                         let p_str: *mut Sqlite3Str =
                             unsafe { sqlite3_str_new(core::ptr::null_mut()) };
                         let mut k: i32 = 0;
@@ -4777,6 +5162,7 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
             }
         } else if { z_div = host_separator(ctx.z_replica); z_div } !=
                 core::ptr::null_mut() {
+            /// Local ORIGIN and remote REPLICA
             let mut i_retry_1: i32 = 0;
             unsafe {
                 *{
@@ -4873,6 +5259,7 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
                 }
             }
         } else {
+            /// Local ORIGIN and REPLICA
             let p_str_3: *mut Sqlite3Str =
                 unsafe { sqlite3_str_new(core::ptr::null_mut()) };
             append_escaped_arg(p_str_3, unsafe { *argv.offset(0 as isize) },

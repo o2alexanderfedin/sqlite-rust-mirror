@@ -1,10 +1,21 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
+/// There is a pair (an array of size 2) of the following objects for
+///* each database file being logged.  The first contains the filename
+///* and is used to log I/O with the main database.  The second has
+///* a NULL filename and is used to log I/O for the journal.  Both
+///* out pointers are the same.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VLogLog {
@@ -33,6 +44,7 @@ struct VLogFile {
 
 extern "C" fn vlog_time() -> Sqlite3Uint64 { return 0 as Sqlite3Uint64; }
 
+///* Write a message to the log file
 extern "C" fn vlog_log_print(p_log_1: *const VLogLog, t_start_1: Sqlite3Int64,
     t_elapse_1: Sqlite3Int64, z_op_1: *const i8, i_arg1_1: Sqlite3Int64,
     i_arg2_1: Sqlite3Int64, z_arg3_1: *const i8, i_res_1: i32) -> () {
@@ -74,6 +86,7 @@ extern "C" fn vlog_log_print(p_log_1: *const VLogLog, t_start_1: Sqlite3Int64,
     };
 }
 
+///* Close a VLogLog object
 extern "C" fn vlog_log_close(p: *mut VLogLog) -> () {
     if !(p).is_null() {
         let mut p_mutex: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -101,6 +114,7 @@ extern "C" fn vlog_log_close(p: *mut VLogLog) -> () {
     }
 }
 
+///* Methods for VLogFile
 extern "C" fn vlog_close(p_file: *mut Sqlite3File) -> i32 {
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut t_elapse: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -126,6 +140,13 @@ extern "C" fn vlog_close(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Compute signature for a block of content.
+///*
+///* For blocks of 16 or fewer bytes, the signature is just a hex dump of
+///* the entire block.
+///*
+///* For blocks of more than 16 bytes, the signature is a hex dump of the
+///* first 8 bytes followed by a 64-bit has of the entire block.
 extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     let mut s0: u32 = 0 as u32;
     let mut s1: u32 = 0 as u32;
@@ -191,6 +212,7 @@ extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     }
 }
 
+///* Convert a big-endian 32-bit integer into a native integer
 extern "C" fn big_to_native(x: *const u8) -> i32 {
     return ((unsafe { *x.offset(0 as isize) } as i32) << 24) +
                     ((unsafe { *x.offset(1 as isize) } as i32) << 16) +
@@ -198,6 +220,7 @@ extern "C" fn big_to_native(x: *const u8) -> i32 {
             unsafe { *x.offset(3 as isize) } as i32;
 }
 
+///* Read data from an vlog-file.
 extern "C" fn vlog_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -258,6 +281,7 @@ extern "C" fn vlog_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     return rc;
 }
 
+///* Write data to an vlog-file.
 extern "C" fn vlog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -315,6 +339,7 @@ extern "C" fn vlog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     return rc;
 }
 
+///* Truncate an vlog-file.
 extern "C" fn vlog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let mut rc: i32 = 0;
@@ -338,6 +363,7 @@ extern "C" fn vlog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     return rc;
 }
 
+///* Sync an vlog-file.
 extern "C" fn vlog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -360,6 +386,7 @@ extern "C" fn vlog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     return rc;
 }
 
+///* Return the current file-size of an vlog-file.
 extern "C" fn vlog_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -383,6 +410,7 @@ extern "C" fn vlog_file_size(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* Lock an vlog-file.
 extern "C" fn vlog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -405,6 +433,7 @@ extern "C" fn vlog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Unlock an vlog-file.
 extern "C" fn vlog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -425,6 +454,7 @@ extern "C" fn vlog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Check if another file-handle holds a RESERVED lock on an vlog-file.
 extern "C" fn vlog_check_reserved_lock(p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -449,6 +479,7 @@ extern "C" fn vlog_check_reserved_lock(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* File control method. For custom operations on an vlog-file.
 extern "C" fn vlog_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let p: *const VLogFile = p_file as *mut VLogFile as *const VLogFile;
@@ -503,6 +534,7 @@ extern "C" fn vlog_file_control(p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for an vlog-file.
 extern "C" fn vlog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -525,6 +557,7 @@ extern "C" fn vlog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Return the device characteristic flags supported by an vlog-file.
 extern "C" fn vlog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t_start: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -547,8 +580,10 @@ extern "C" fn vlog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* List of all active log connections.  Protected by the master mutex.
 static mut all_logs: *mut VLogLog = core::ptr::null_mut();
 
+///* Open a VLogLog object on the given file
 extern "C" fn vlog_log_open(z_filename_1: *const i8) -> *mut VLogLog {
     unsafe {
         let mut n_name: i32 = unsafe { strlen(z_filename_1) } as i32;
@@ -701,6 +736,7 @@ static mut vlog_io_methods: Sqlite3IoMethods =
         x_unfetch: None,
     };
 
+///* Methods for VLogVfs
 extern "C" fn vlog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -750,6 +786,9 @@ extern "C" fn vlog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     }
 }
 
+///* Delete the file located at zPath. If the dirSync argument is true,
+///* ensure the file-system modifications are synced to disk before
+///* returning.
 extern "C" fn vlog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -775,6 +814,8 @@ extern "C" fn vlog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Test for access permissions. Return true if the requested permission
+///* is available, or false otherwise.
 extern "C" fn vlog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -801,6 +842,9 @@ extern "C" fn vlog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Populate buffer zOut with the full canonical pathname corresponding
+///* to the pathname in zPath. zOut is guaranteed to point to a buffer
+///* of at least (INST_MAX_PATHNAME+1) bytes.
 extern "C" fn vlog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -813,6 +857,7 @@ extern "C" fn vlog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
         };
 }
 
+///* Open the dynamic library located at zPath and return a handle.
 extern "C" fn vlog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -824,6 +869,9 @@ extern "C" fn vlog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
         };
 }
 
+///* Populate the buffer zErrMsg (size nByte bytes) with a human readable
+///* utf-8 string describing the most recent error encountered associated 
+///* with dynamic libraries.
 extern "C" fn vlog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -835,6 +883,7 @@ extern "C" fn vlog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     };
 }
 
+///* Return a pointer to the symbol zSymbol in the dynamic library pHandle.
 extern "C" fn vlog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -846,6 +895,7 @@ extern "C" fn vlog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
         };
 }
 
+///* Close the dynamic library handle pHandle.
 extern "C" fn vlog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
     unsafe {
         (unsafe {
@@ -856,6 +906,8 @@ extern "C" fn vlog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ()) -> () {
     };
 }
 
+///* Populate the buffer pointed to by zBufOut with nByte bytes of 
+///* random data.
 extern "C" fn vlog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -868,6 +920,8 @@ extern "C" fn vlog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
         };
 }
 
+///* Sleep for nMicro microseconds. Return the number of microseconds 
+///* actually slept.
 extern "C" fn vlog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -878,6 +932,7 @@ extern "C" fn vlog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
         };
 }
 
+///* Return the current time as a Julian Day number in *pTimeOut.
 extern "C" fn vlog_current_time(p_vfs: *mut Sqlite3Vfs, p_time_out: *mut f64)
     -> i32 {
     return unsafe {
@@ -940,6 +995,7 @@ static mut vlog_vfs: VLogVfs =
         p_vfs: core::ptr::null_mut(),
     };
 
+///* Register debugvfs as the default VFS for this process.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_vfslog(z_arg_1: *const i8) -> i32 {
     unsafe {

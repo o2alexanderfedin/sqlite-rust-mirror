@@ -1,3 +1,11 @@
+//!* This program checks for formatting problems in source code:
+//!*
+//!*    *  Any use of tab characters
+//!*    *  White space at the end of a line
+//!*    *  Blank lines at the end of a file
+//!*
+//!* Any violations are reported.
+
 extern "C" fn check_spacing(z_file_1: *const i8, flags: u32) -> () {
     let in_: *mut FILE =
         unsafe { fopen(z_file_1, c"rb".as_ptr() as *mut i8 as *const i8) };

@@ -1,5 +1,18 @@
 use super::*;
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3IndexInfo,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3Stmt, Sqlite3Value, Sqlite3Vfs,
+};
+use crate::sqlite_int_h::{Sqlite3, Sqlite3Str};
 
+///* The following structure holds pointers to all of the SQLite API
+///* routines.
+///*
+///* WARNING:  In order to maintain backwards compatibility, add new
+///* interfaces to the end of this structure only.  If you insert new
+///* interfaces in the middle of this structure, then older different
+///* versions of SQLite will not be able to load each other's shared
+///* libraries!
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3ApiRoutines {
@@ -562,6 +575,8 @@ pub(crate) struct Sqlite3ApiRoutines {
         *mut Sqlite3Str, i32) -> ()>,
 }
 
+///* This is the function signature used for all extension entry points.  It
+///* is also defined in the file "loadext.c".
 pub(crate) type Sqlite3LoadextEntry =
     unsafe extern "C" fn(*mut Sqlite3, *mut *mut i8,
         *const Sqlite3ApiRoutines) -> i32;

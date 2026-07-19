@@ -1,5 +1,18 @@
 use super::*;
+use crate::btree_h::{BtCursor, Btree};
+use crate::pager_h::Pgno;
+use crate::sqlite3_h::Sqlite3VtabCursor;
+use crate::sqlite_int_h::{
+    FuncDef, Index, KeyInfo, LogEst, Parse, Sqlite3, Table, UnpackedRecord,
+    VList, YDbMask, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp};
 
+///* An instance of the virtual machine.  This structure contains the complete
+///* state of the virtual machine.
+///*
+///* The "sqlite3_stmt" structure pointer that is returned by sqlite3_prepare()
+///* is really a pointer to an instance of this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Vdbe {
@@ -51,6 +64,9 @@ pub(crate) struct Vdbe {
     pub(crate) p_aux_data: *mut AuxData,
 }
 
+///* Internally, the vdbe manipulates nearly all SQL values as Mem
+///* structures. Each Mem struct may cache multiple representations (string,
+///* integer etc.) of the same value.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Value {
@@ -77,6 +93,17 @@ pub(crate) union MemValue {
     pub(crate) p_def: *mut FuncDef,
 }
 
+///* The "context" argument for an installable function.  A pointer to an
+///* instance of this structure is the first argument to the routines used
+///* implement the SQL functions.
+///*
+///* There is a typedef for this structure in sqlite.h.  So all routines,
+///* even the public interface to SQLite, can use a pointer to this structure.
+///* But this file is the only place where the internal details of this
+///* structure are known.
+///*
+///* This structure is defined inside of vdbeInt.h because it uses substructures
+///* (Mem) which are only defined there.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Sqlite3Context {
@@ -122,6 +149,7 @@ pub(crate) struct VdbeCursor {
     pub(crate) a_type: [u32; 0],
 }
 
+///* Boolean values
 pub(crate) type Bool = u32;
 
 #[repr(C)]
@@ -139,12 +167,17 @@ pub(crate) union VdbeCursorU1 {
     pub(crate) p_sorter: *mut VdbeSorter,
 }
 
+/// Opaque type used by code in vdbesort.c
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeSorter {
     pub(crate) _opaque: [u8; 0],
 }
 
+///* Large TEXT or BLOB values can be slow to load, so we want to avoid
+///* loading them more than once.  For that reason, large TEXT and BLOB values
+///* can be stored in a cache defined by this object, and attached to the
+///* VdbeCursor using the pCache field.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeTxtBlbCache {
@@ -155,6 +188,9 @@ pub(crate) struct VdbeTxtBlbCache {
     pub(crate) col_cache_ctr: u32,
 }
 
+///* SQL is translated into a sequence of instructions to be
+///* executed by a virtual machine.  Each instruction is an instance
+///* of the following structure.
 pub(crate) type Op = VdbeOp;
 
 #[repr(C)]
@@ -179,6 +215,11 @@ pub(crate) struct VdbeFrame {
     pub(crate) n_db_change: i64,
 }
 
+///* Each auxiliary data pointer stored by a user defined function
+///* implementation calling sqlite3_set_auxdata() is stored in an instance
+///* of this structure. All such structures associated with a single VM
+///* are stored in a linked list headed at Vdbe.pAuxData. All are destroyed
+///* when the VM is halted (if not before).
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct AuxData {
@@ -196,6 +237,8 @@ pub(crate) struct ValueList {
     pub(crate) p_out: *mut Sqlite3Value,
 }
 
+///* Structure used to store the context required by the
+///* sqlite3_preupdate_*() API functions.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PreUpdate {

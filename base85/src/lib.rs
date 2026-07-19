@@ -1,10 +1,91 @@
+//!* 2022-11-16
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This is a utility for converting binary to base85 or vice-versa.
+//!* It can be built as a standalone program or an SQLite3 extension.
+//!*
+//!* Much like base64 representations, base85 can be sent through a
+//!* sane USASCII channel unmolested. It also plays nicely in CSV or
+//!* written as TCL brace-enclosed literals or SQL string literals.
+//!* It is not suited for unmodified use in XML-like documents.
+//!*
+//!* The encoding used resembles Ascii85, but was devised by the author
+//!* (Larry Brasfield) before Mozilla, Adobe, ZMODEM or other Ascii85
+//!* variant sources existed, in the 1984 timeframe on a VAX mainframe.
+//!* Further, this is an independent implementation of a base85 system.
+//!* Hence, the author has rightfully put this into the public domain.
+//!*
+//!* Base85 numerals are taken from the set of 7-bit USASCII codes,
+//!* excluding control characters and Space ! " ' ( ) { | } ~ Del
+//!* in code order representing digit values 0 to 84 (base 10.)
+//!*
+//!* Groups of 4 bytes, interpreted as big-endian 32-bit values,
+//!* are represented as 5-digit base85 numbers with MS to LS digit
+//!* order. Groups of 1-3 bytes are represented with 2-4 digits,
+//!* still big-endian but 8-24 bit values. (Using big-endian yields
+//!* the simplest transition to byte groups smaller than 4 bytes.
+//!* These byte groups can also be considered base-256 numbers.)
+//!* Groups of 0 bytes are represented with 0 digits and vice-versa.
+//!* No pad characters are used; Encoded base85 numeral sequence
+//!* (aka "group") length maps 1-to-1 to the decoded binary length.
+//!*
+//!* Any character not in the base85 numeral set delimits groups.
+//!* When base85 is streamed or stored in containers of indefinite
+//!* size, newline is used to separate it into sub-sequences of no
+//!* more than 80 digits so that fgets() can be used to read it.
+//!*
+//!* Length limitations are not imposed except that the runtime
+//!* SQLite string or blob length limits are respected. Otherwise,
+//!* any length binary sequence can be represented and recovered.
+//!* Base85 sequences can be concatenated by separating them with
+//!* a non-base85 character; the conversion to binary will then
+//!* be the concatenation of the represented binary sequences.
+//!
+//!* The standalone program either converts base85 on stdin to create
+//!* a binary file or converts a binary file to base85 on stdout.
+//!* Read or make it blurt its help for invocation details.
+//!*
+//!* The SQLite3 extension creates a function, base85(x), which will
+//!* either convert text base85 to a blob or a blob to text base85
+//!* and return the result (or throw an error for other types.)
+//!* Unless built with OMIT_BASE85_CHECKER defined, it also creates a
+//!* function, is_base85(t), which returns 1 iff the text t contains
+//!* nothing other than base85 numerals and whitespace, or 0 otherwise.
+//!*
+//!* To build the extension:
+//!* Set shell variable SQDIR=<your favorite SQLite checkout directory>
+//!* and variable OPTS to -DOMIT_BASE85_CHECKER if is_base85() unwanted.
+//!* *Nix: gcc -O2 -shared -I$SQDIR $OPTS -fPIC -o base85.so base85.c
+//!* OSX: gcc -O2 -dynamiclib -fPIC -I$SQDIR $OPTS -o base85.dylib base85.c
+//!* Win32: gcc -O2 -shared -I%SQDIR% %OPTS% -o base85.dll base85.c
+//!* Win32: cl /Os -I%SQDIR% %OPTS% base85.c -link -dll -out:base85.dll
+//!*
+//!* To build the standalone program, define PP symbol BASE85_STANDALONE. Eg.
+//!* *Nix or OSX: gcc -O2 -DBASE85_STANDALONE base85.c -o base85
+//!* Win32: gcc -O2 -DBASE85_STANDALONE -o base85.exe base85.c
+//!* Win32: cl /Os /MD -DBASE85_STANDALONE base85.c
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+/// Provide digitValue to b85Numeral offset as a function of above class.
 static mut b85_c_offset: [u8; 5] =
     [0 as u8, '#' as i32 as u8, 0 as u8, ('*' as i32 - 4) as u8, 0 as u8];
 
@@ -46,6 +127,9 @@ extern "C" fn putcs(mut pc: *mut i8, mut s: *const i8) -> *mut i8 {
     return pc;
 }
 
+/// Encode a byte buffer into base85 text. If pSep!=0, it's a C string
+///* to be appended to encoded groups to limit their length to B85_DARK_MAX
+///* or to terminate the last group (to aid concatenation.)
 extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8, p_sep_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -135,6 +219,7 @@ extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Decode base85 text into a byte buffer.
 extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -274,6 +359,7 @@ extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// Say whether input char sequence is all (base85 and/or whitespace).
 extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut len; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -299,6 +385,7 @@ extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     return 1;
 }
 
+/// This function does the work for the SQLite is_base85(t) UDF.
 extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     if !(na == 1) as i32 as i64 != 0 {
@@ -337,6 +424,7 @@ extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     }
 }
 
+/// This function does the work for the SQLite base85(x) UDF.
 extern "C" fn base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;

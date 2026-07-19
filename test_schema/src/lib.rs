@@ -1,15 +1,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
 
+/// A schema table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SchemaVtab {
@@ -17,6 +24,7 @@ struct SchemaVtab {
     db: *mut Sqlite3,
 }
 
+/// A schema table cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SchemaCursor {
@@ -27,6 +35,7 @@ struct SchemaCursor {
     rowid: i32,
 }
 
+///* Table destructor for the schema module.
 extern "C" fn schema_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe {
         unsafe {
@@ -36,6 +45,7 @@ extern "C" fn schema_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     }
 }
 
+///* Table constructor for the schema module.
 extern "C" fn schema_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -67,6 +77,7 @@ extern "C" fn schema_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
 }
 
+///* Open a new cursor on the schema table.
 extern "C" fn schema_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -90,6 +101,7 @@ extern "C" fn schema_open(p_v_tab_1: *mut Sqlite3Vtab,
     }
 }
 
+///* Close a schema table cursor.
 extern "C" fn schema_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p_cur: *mut SchemaCursor = cur as *mut SchemaCursor;
@@ -115,6 +127,7 @@ extern "C" fn schema_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+///* Retrieve a column of data.
 extern "C" fn schema_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -165,6 +178,7 @@ extern "C" fn schema_column(cur: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Retrieve the current rowid.
 extern "C" fn schema_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SchemaCursor =
@@ -190,12 +204,18 @@ extern "C" fn schema_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     return if !(unsafe { (*p_cur).p_db_list }).is_null() { 0 } else { 1 };
 }
 
+///* Advance the cursor to the next row.
+#[allow(unused_doc_comments)]
 extern "C" fn schema_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut p_cur: *mut SchemaCursor = core::ptr::null_mut();
         let mut p_vtab: *const SchemaVtab = core::ptr::null();
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// Set zSql to the SQL to pull the list of tables from the 
+        ///* sqlite_schema (or sqlite_temp_schema) table of the database
+        ///* identified by the row pointed to by the SQL statement pCur->pDbList
+        ///* (iterating through a "PRAGMA database_list;" statement).
         let mut p_db_list: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -405,10 +425,20 @@ extern "C" fn schema_next(cur: *mut Sqlite3VtabCursor) -> i32 {
                 }
             }
         }
+
+        /// Set zSql to the SQL to pull the list of tables from the 
+        ///* sqlite_schema (or sqlite_temp_schema) table of the database
+        ///* identified by the row pointed to by the SQL statement pCur->pDbList
+        ///* (iterating through a "PRAGMA database_list;" statement).
+        /// Set zSql to the SQL to the table_info pragma for the table currently
+        ///* identified by the rows pointed to by statements pCur->pDbList and
+        ///* pCur->pTableList.
+        /// TODO: Handle rc
         unreachable!();
     }
 }
 
+///* Reset a schema table cursor.
 extern "C" fn schema_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -435,11 +465,14 @@ extern "C" fn schema_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Analyse the WHERE condition.
 extern "C" fn schema_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     return 0;
 }
 
+///* A virtual table module that merely echos method calls into TCL
+///* variables.
 static mut schema_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

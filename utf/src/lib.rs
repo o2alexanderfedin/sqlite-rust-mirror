@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -479,6 +497,10 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* Write a single UTF8 character whose value is v into the
+///* buffer starting at zOut.  zOut must be sized to hold at
+///* least four bytes.  Return the number of bytes needed
+///* to encode the new character.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_append_one_utf8_character(z_out: *mut i8, v: u32)
     -> i32 {
@@ -530,6 +552,10 @@ pub extern "C" fn sqlite3_append_one_utf8_character(z_out: *mut i8, v: u32)
     return 4;
 }
 
+///* zIn is a UTF-16 encoded unicode string at least nByte bytes long.
+///* Return the number of bytes in the first nChar unicode characters
+///* in pZ.  nChar must be non-negative.  Surrogate pairs count as a single
+///* character.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_utf16_byte_len(z_in: *const (), n_byte: i32,
     n_char: i32) -> i32 {
@@ -567,6 +593,11 @@ pub extern "C" fn sqlite3_utf16_byte_len(z_in: *const (), n_byte: i32,
             (2 == 2) as i32;
 }
 
+///* pZ is a UTF-8 encoded unicode string. If nByte is less than zero,
+///* return the number of unicode characters in pZ up to (but not including)
+///* the first 0x00 byte. If nByte is not less than zero, return the
+///* number of unicode characters in the first nByte of pZ (or up to 
+///* the first 0x00, whichever comes first).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_utf8_char_len(z_in: *const i8, n_byte: i32) -> i32 {
     let mut r: i32 = 0;
@@ -601,6 +632,8 @@ pub extern "C" fn sqlite3_utf8_char_len(z_in: *const i8, n_byte: i32) -> i32 {
     return r;
 }
 
+///* This lookup table is used to help decode the first byte of
+///* a multi-byte UTF8 character.
 static sqlite3_utf8_trans1: [u8; 64] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -614,9 +647,13 @@ static sqlite3_utf8_trans1: [u8; 64] =
             0 as u8, 1 as u8, 0 as u8, 0 as u8];
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_utf8_read(pz: &mut *const u8) -> u32 {
     let mut c: u32 = 0 as u32;
-    c =
+
+    /// Same as READ_UTF8() above but without the zTerm parameter.
+    ///* For this routine, we assume the UTF8 string is always zero-terminated.
+    (c =
         unsafe {
                 *{
                         let __p = &mut *pz;
@@ -624,7 +661,7 @@ pub extern "C" fn sqlite3_utf8_read(pz: &mut *const u8) -> u32 {
                         *__p = unsafe { (*__p).offset(1) };
                         __t
                     }
-            } as u32;
+            } as u32);
     if c >= 192 as u32 {
         c = sqlite3_utf8_trans1[(c - 192 as u32) as usize] as u32;
         while unsafe { **pz } as i32 & 192 == 128 {
@@ -648,6 +685,16 @@ pub extern "C" fn sqlite3_utf8_read(pz: &mut *const u8) -> u32 {
     return c;
 }
 
+///* Read a single UTF8 character out of buffer z[], but reading no
+///* more than n characters from the buffer.  z[] is not zero-terminated.
+///*
+///* Return the number of bytes used to construct the character.
+///*
+///* Invalid UTF8 might generate a strange result.  No effort is made
+///* to detect invalid UTF8.
+///*
+///* At most 4 bytes will be read out of z[].  The return value will always
+///* be between 1 and 4.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_utf8_read_limited(z: *const u8, mut n: i32,
     pi_out: &mut u32) -> i32 {
@@ -669,6 +716,11 @@ pub extern "C" fn sqlite3_utf8_read_limited(z: *const u8, mut n: i32,
     return i;
 }
 
+///* Convert a UTF-16 string in the native encoding into a UTF-8 string.
+///* Memory to hold the UTF-8 string is obtained from sqlite3_malloc and must
+///* be freed by the calling function.
+///*
+///* NULL is returned if there is an allocation error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_utf16to8(db: *mut Sqlite3, z: *const (),
     n_byte_1: i32, enc: u8) -> *mut i8 {
@@ -695,19 +747,49 @@ pub extern "C" fn sqlite3_utf16to8(db: *mut Sqlite3, z: *const (),
     }
 }
 
+///* This routine transforms the internal text encoding used by pMem to
+///* desiredEnc. It is an error if the string is already of the desired
+///* encoding, or if *pMem does not contain a string value.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_mem_translate(p_mem_1: *mut Mem,
     desired_enc_1: u8) -> i32 {
     unsafe {
         let mut len: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Maximum length of output string in bytes
         let mut z_out: *mut u8 = core::ptr::null_mut();
+        /// Output buffer
         let mut z_in: *mut u8 = core::ptr::null_mut();
+        /// Input iterator
         let mut z_term: *mut u8 = core::ptr::null_mut();
+        /// End of input
         let mut z: *mut u8 = core::ptr::null_mut();
+        /// Output iterator
         let mut c: u32 = 0 as u32;
+        /// If the translation is between UTF-16 little and big endian, then 
+        ///* all that is required is to swap the byte order. This case is handled
+        ///* differently from the others.
         let mut temp: u8 = 0 as u8;
         let mut rc: i32 = 0;
+        /// Set len to the maximum number of bytes required in the output buffer.
+        /// When converting from UTF-16, the maximum growth results from
+        ///* translating a 2-byte character to a 4-byte UTF-8 character.
+        ///* A single byte is required for the output string
+        ///* nul-terminator.
+        /// When converting from UTF-8 to UTF-16 the maximum growth is caused
+        ///* when a 1-byte UTF-8 character is translated into a 2-byte UTF-16
+        ///* character. Two bytes are required in the output buffer for the
+        ///* nul-terminator.
+        /// Set zIn to point at the start of the input buffer and zTerm to point 1
+        ///* byte past the end.
+        ///*
+        ///* Variable zOut is set to point at the output buffer, space obtained
+        ///* from sqlite3_malloc().
+        /// UTF-8 -> UTF-16 Little-endian
+        /// UTF-8 -> UTF-16 Big-endian
+        /// UTF-16 Little-endian -> UTF-8
         let mut c2: i32 = 0;
+        /// UTF-16 Big-endian -> UTF-8
         let mut c2__1: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -1534,10 +1616,44 @@ pub extern "C" fn sqlite3_vdbe_mem_translate(p_mem_1: *mut Mem,
                 }
             }
         }
+
+        /// Maximum length of output string in bytes
+        /// Output buffer
+        /// Input iterator
+        /// End of input
+        /// Output iterator
+        /// If the translation is between UTF-16 little and big endian, then 
+        ///* all that is required is to swap the byte order. This case is handled
+        ///* differently from the others.
+        /// Set len to the maximum number of bytes required in the output buffer.
+        /// When converting from UTF-16, the maximum growth results from
+        ///* translating a 2-byte character to a 4-byte UTF-8 character.
+        ///* A single byte is required for the output string
+        ///* nul-terminator.
+        /// When converting from UTF-8 to UTF-16 the maximum growth is caused
+        ///* when a 1-byte UTF-8 character is translated into a 2-byte UTF-16
+        ///* character. Two bytes are required in the output buffer for the
+        ///* nul-terminator.
+        /// Set zIn to point at the start of the input buffer and zTerm to point 1
+        ///* byte past the end.
+        ///*
+        ///* Variable zOut is set to point at the output buffer, space obtained
+        ///* from sqlite3_malloc().
+        /// UTF-8 -> UTF-16 Little-endian
+        /// UTF-8 -> UTF-16 Big-endian
+        /// UTF-16 Little-endian -> UTF-8
+        /// UTF-16 Big-endian -> UTF-8
         unreachable!();
     }
 }
 
+///* This routine checks for a byte-order mark at the beginning of the 
+///* UTF-16 string stored in *pMem. If one is present, it is removed and
+///* the encoding of the Mem adjusted. This routine does not do any
+///* byte-swapping, it just sets Mem.enc appropriately.
+///*
+///* The allocation (static, dynamic etc.) and encoding of the Mem may be
+///* changed by this function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_mem_handle_bom(p_mem_1: *mut Mem) -> i32 {
     unsafe {

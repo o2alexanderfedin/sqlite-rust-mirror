@@ -2,10 +2,33 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* nKeyVal:
+///*   The number of values that make up the 'key' for the current pCheck
+///*   statement.
+///*
+///* rc:
+///*   Error code returned by most recent sqlite3_intck_step() or 
+///*   sqlite3_intck_unlock() call. This is set to SQLITE_DONE when
+///*   the integrity-check operation is finished.
+///*
+///* zErr:
+///*   If the object has entered the error state, this is the error message.
+///*   Is freed using sqlite3_free() when the object is deleted.
+///*
+///* zTestSql:
+///*   The value returned by the most recent call to sqlite3_intck_testsql().
+///*   Each call to testsql() frees the previous zTestSql value (using
+///*   sqlite3_free()) and replaces it with the new value it will return.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Intck {
@@ -22,6 +45,12 @@ struct Sqlite3Intck {
     z_test_sql: *mut i8,
 }
 
+///* Return the size in bytes of the first token in nul-terminated buffer z.
+///* For the purposes of this call, a token is either:
+///*
+///*   *  a quoted SQL string,
+///   *  a contiguous series of ascii alphabet characters, or
+///   *  any other single byte.
 extern "C" fn intck_get_token(z: *const i8) -> i32 {
     let c: i8 = unsafe { *z.offset(0 as isize) } as i8;
     let mut i_ret: i32 = 1;
@@ -58,11 +87,25 @@ extern "C" fn intck_get_token(z: *const i8) -> i32 {
     return i_ret;
 }
 
+///* Return true if argument c is an ascii whitespace character.
 extern "C" fn intck_is_space(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                     c as i32 == '\n' as i32 || c as i32 == '\r' as i32) as i32;
 }
 
+///* Argument z points to the text of a CREATE INDEX statement. This function
+///* identifies the part of the text that contains either the index WHERE 
+///* clause (if iCol<0) or the iCol'th column of the index.
+///*
+///* If (iCol<0), the identified fragment does not include the "WHERE" keyword,
+///* only the expression that follows it. If (iCol>=0) then the identified
+///* fragment does not include any trailing sort-order keywords - "ASC" or 
+///* "DESC".
+///*
+///* If the CREATE INDEX statement does not contain the requested field or
+///* clause, NULL is returned and (*pnByte) is set to 0. Otherwise, a pointer to
+///* the identified fragment is returned and output parameter (*pnByte) set
+///* to its size in bytes.
 extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     pn_byte_1: &mut i32) -> *const i8 {
     let mut i_off: i32 = 0;
@@ -173,6 +216,9 @@ extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     return z_ret;
 }
 
+///* User-defined SQL function wrapper for intckParseCreateIndex():
+///*
+///*     SELECT parse_create_index(<sql>, <icol>);
 extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
     n_val_1: i32, ap_val_1: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const i8 =
@@ -202,6 +248,10 @@ extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
     };
 }
 
+///* Close and release all resources associated with a handle opened by an
+///* earlier call to sqlite3_intck_open(). The results of using an
+///* integrity-check handle after it has been passed to this function are
+///* undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
     if !(p).is_null() {
@@ -220,6 +270,16 @@ pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
     }
 }
 
+///* Open a new incremental integrity-check object. If successful, populate
+///* output variable (*ppOut) with the new object handle and return SQLITE_OK.
+///* Or, if an error occurs, set (*ppOut) to NULL and return an SQLite error
+///* code (e.g. SQLITE_NOMEM).
+///*
+///* The integrity-check will be conducted on database zDb (which must be "main",
+///* "temp", or the name of an attached database) of database handle db. Once
+///* this function has been called successfully, the caller should not use 
+///* database handle db until the integrity-check object has been destroyed
+///* using sqlite3_intck_close().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     pp_out: &mut *mut Sqlite3Intck) -> i32 {
@@ -267,6 +327,8 @@ pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     return rc;
 }
 
+///* Some error has occurred while using database p->db. Save the error message
+///* and error code currently held by the database handle in p->rc and p->zErr.
 extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
     (*p).rc = unsafe { sqlite3_errcode((*p).db) };
     unsafe { sqlite3_free((*p).z_err as *mut ()) };
@@ -277,6 +339,12 @@ extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
         };
 }
 
+///* If the handle passed as the first argument is already in the error state,
+///* then this function is a no-op (returns NULL immediately). Otherwise, if an
+///* error occurs within this function, it leaves an error in said handle.
+///*
+///* Otherwise, this function attempts to prepare SQL statement zSql and
+///* return the resulting statement handle to the user.
 extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -302,6 +370,14 @@ extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     return p_ret;
 }
 
+///* If the handle passed as the first argument is already in the error state,
+///* then this function is a no-op (returns NULL immediately). Otherwise, if an
+///* error occurs within this function, it leaves an error in said handle.
+///*
+///* Otherwise, this function treats argument zFmt as a printf() style format
+///* string. It formats it according to the trailing arguments and then 
+///* attempts to prepare the results and return the resulting prepared
+///* statement.
 unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -318,6 +394,8 @@ unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     return p_ret;
 }
 
+///* A wrapper around sqlite3_mprintf() that uses the sqlite3_intck error
+///* code convention.
 unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -334,6 +412,9 @@ unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     return z_ret;
 }
 
+///* Finalize SQL statement pStmt. If an error occurs and the handle passed
+///* as the first argument does not already contain an error, store the
+///* error in the handle.
 extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
@@ -342,6 +423,9 @@ extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     }
 }
 
+///* Find the next database object (table or index) to check. If successful,
+///* set sqlite3_intck.zObj to point to a nul-terminated buffer containing
+///* the object's name before returning.
 extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let z_prev: *mut i8 = unsafe { (*p).z_obj };
@@ -401,12 +485,16 @@ extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     unsafe { sqlite3_free(z_prev as *mut ()) };
 }
 
+///* If there is already an error in handle p, return it. Otherwise, call
+///* sqlite3_step() on the statement handle and return that value.
 extern "C" fn intck_step(p: &Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> i32 {
     if (*p).rc != 0 { return (*p).rc; }
     return unsafe { sqlite3_step(p_stmt_1) };
 }
 
+///* Return true if sqlite3_intck.db has automatic indexes enabled, false
+///* otherwise.
 extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     let mut b_ret: i32 = 0;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -420,6 +508,9 @@ extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     return b_ret;
 }
 
+///* Execute SQL statement zSql. There is no way to obtain any results 
+///* returned by the statement. This function uses the sqlite3_intck error
+///* code convention.
 extern "C" fn intck_exec(p: *mut Sqlite3Intck, z_sql_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt = intck_prepare(p, z_sql_1);
@@ -427,6 +518,7 @@ extern "C" fn intck_exec(p: *mut Sqlite3Intck, z_sql_1: *const i8) -> () {
     intck_finalize(p, p_stmt);
 }
 
+///* Return true if zObj is an index, or false otherwise.
 extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     -> i32 {
     let mut b_ret: i32 = 0;
@@ -444,6 +536,14 @@ extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     return b_ret;
 }
 
+///* Return a pointer to a nul-terminated buffer containing the SQL statement
+///* used to check database object zObj (a table or index) for corruption.
+///* If parameter zPrev is not NULL, then it must be a string containing the
+///* vector key required to restart the check where it left off last time.
+///* If pnKeyVal is not NULL, then (*pnKeyVal) is set to the number of
+///* columns in the vector key value for the specified object.
+///*
+///* This function uses the sqlite3_intck error code convention.
 extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     z_prev_1: *const i8, pn_key_val_1: *mut i32) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -501,6 +601,23 @@ extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     return z_ret;
 }
 
+///* Do the next step of the integrity-check operation specified by the handle
+///* passed as the only argument. This function returns SQLITE_DONE if the 
+///* integrity-check operation is finished, or an SQLite error code if
+///* an error occurs, or SQLITE_OK if no error occurs but the integrity-check
+///* is not finished. It is not considered an error if database corruption
+///* is encountered.
+///*
+///* Following a successful call to sqlite3_intck_step() (one that returns
+///* SQLITE_OK), sqlite3_intck_message() returns a non-NULL value if 
+///* corruption was detected in the db.
+///*
+///* If an error occurs and a value other than SQLITE_OK or SQLITE_DONE is
+///* returned, then the integrity-check handle is placed in an error state.
+///* In this state all subsequent calls to sqlite3_intck_step() or 
+///* sqlite3_intck_unlock() will immediately return the same error. The 
+///* sqlite3_intck_error() method may be used to obtain an English language 
+///* error message in this case.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 {
@@ -571,6 +688,12 @@ pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     return unsafe { (*p).rc };
 }
 
+///* If the previous call to sqlite3_intck_step() encountered corruption 
+///* within the database, then this function returns a pointer to a buffer
+///* containing a nul-terminated string describing the corruption in 
+///* English. If the previous call to sqlite3_intck_step() did not encounter
+///* corruption, or if there was no previous call, this function returns 
+///* NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     if !((*p).p_check == core::ptr::null_mut() ||
@@ -590,6 +713,10 @@ pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     return core::ptr::null();
 }
 
+///* This is used by sqlite3_intck_unlock() to save the vector key value 
+///* required to restart the current pCheck query as a nul-terminated string 
+///* in p->zKey.
+#[allow(unused_doc_comments)]
 extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     let mut ii: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -622,6 +749,8 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
         z_dir = unsafe { sqlite3_column_text(p_xinfo, 0) } as *const i8;
     }
     if z_dir == core::ptr::null() {
+        /// Object is a table, not an index. This is the easy case,as there are 
+        ///* no DESC columns or NULL values in a primary key.
         let mut z_sep: *const i8 =
             c"SELECT \'(\' || ".as_ptr() as *mut i8 as *const i8;
         {
@@ -647,6 +776,8 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
                     c"%z || \')\'".as_ptr() as *mut i8 as *const i8, z_sql)
             };
     } else {
+
+        /// Object is an index.
         if !(unsafe { (*p).n_key_val } > 1) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"intckSaveKey".as_ptr() as *const i8,
@@ -793,6 +924,16 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     intck_finalize(p, p_xinfo);
 }
 
+///* Close any read-transaction opened by an earlier call to 
+///* sqlite3_intck_step(). Any subsequent call to sqlite3_intck_step() will
+///* open a new transaction. Return SQLITE_OK if successful, or an SQLite error
+///* code otherwise.
+///*
+///* If an error occurs, then the integrity-check handle is placed in an error
+///* state. In this state all subsequent calls to sqlite3_intck_step() or 
+///* sqlite3_intck_unlock() will immediately return the same error. The 
+///* sqlite3_intck_error() method may be used to obtain an English language 
+///* error message in this case.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 && !(unsafe { (*p).p_check }).is_null() {
@@ -812,6 +953,16 @@ pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     return unsafe { (*p).rc };
 }
 
+///* If an error has occurred in an earlier call to sqlite3_intck_step()
+///* or sqlite3_intck_unlock(), then this method returns the associated 
+///* SQLite error code. Additionally, if pzErr is not NULL, then (*pzErr)
+///* may be set to point to a nul-terminated string containing an English
+///* language error message. Or, if no error message is available, to
+///* NULL.
+///*
+///* If no error has occurred within sqlite3_intck_step() or
+///* sqlite_intck_unlock() calls on the handle passed as the first argument, 
+///* then SQLITE_OK is returned and (*pzErr) set to NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_error(p: &Sqlite3Intck,
     pz_err: *mut *const i8) -> i32 {
@@ -819,6 +970,10 @@ pub extern "C" fn sqlite3_intck_error(p: &Sqlite3Intck,
     return if (*p).rc == 101 { 0 } else { (*p).rc };
 }
 
+///* This API is used for testing only. It returns the full-text of an SQL
+///* statement used to test object zObj, which may be a table or index.
+///* The returned buffer is valid until the next call to either this function
+///* or sqlite3_intck_close() on the same sqlite3_intck handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_test_sql(p: *mut Sqlite3Intck,
     z_obj: *const i8) -> *const i8 {

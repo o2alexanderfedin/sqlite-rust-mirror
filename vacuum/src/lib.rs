@@ -2,21 +2,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -480,7 +498,36 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* The VACUUM command is used to clean up the database,
+///* collapse free space, etc.  It is modelled after the VACUUM command
+///* in PostgreSQL.  The VACUUM command works as follows:
+///*
+///*   (1)  Create a new transient database file
+///*   (2)  Copy all content from the database being vacuumed into
+///*        the new transient database file
+///*   (3)  Copy content from the transient database back into the
+///*        original database.
+///*
+///* The transient database requires temporary disk space approximately
+///* equal to the size of the original database.  The copy operation of
+///* step (3) requires additional temporary disk space approximately equal
+///* to the size of the original database for the rollback journal.
+///* Hence, temporary disk space that is approximately 2x the size of the
+///* original database is required.  Every page of the database is written
+///* approximately 3 times:  Once for step (2) and twice for step (3).
+///* Two writes per page are required in step (3) because the original
+///* database content must be written into the rollback journal prior to
+///* overwriting the database with the vacuumed content.
+///*
+///* Only 1x temporary space and only 1x writes would be required if
+///* the copy of step (3) were replaced by deleting the original database
+///* and renaming the transient database as the original.  But that will
+///* not work if other processes are attached to the original database.
+///* And a power loss in between deleting the original and renaming the
+///* transient would cause the database file to appear to be deleted
+///* following reboot.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vacuum(p_parse_1: *mut Parse,
     mut p_nm_1: *mut Token, p_into_1: *mut Expr) -> () {
     '__b0: loop {
@@ -490,11 +537,14 @@ pub extern "C" fn sqlite3_vacuum(p_parse_1: *mut Parse,
             if v == core::ptr::null_mut() { break '__b0; }
             if unsafe { (*p_parse_1).n_err } != 0 { break '__b0; }
             if !(p_nm_1).is_null() {
-                i_db =
+
+                /// Default behavior:  Report an error if the argument to VACUUM is
+                ///* not recognized
+                (i_db =
                     unsafe {
                         sqlite3_two_part_name(p_parse_1, p_nm_1, p_nm_1,
                             &mut p_nm_1)
-                    };
+                    });
                 if i_db < 0 { break '__b0; }
             }
             if i_db != 1 {
@@ -521,19 +571,33 @@ pub extern "C" fn sqlite3_vacuum(p_parse_1: *mut Parse,
         }
         if !(false) { break '__b0; }
     }
+
+    /// Default behavior:  Report an error if the argument to VACUUM is
+    ///* not recognized
     unsafe { sqlite3_expr_delete(unsafe { (*p_parse_1).db }, p_into_1) };
     return;
 }
 
+///* Execute zSql on database db.
+///*
+///* If zSql returns rows, then each row will have exactly one
+///* column.  (This will only happen if zSql begins with "SELECT".)
+///* Take each row of result and call execSql() again recursively.
+///*
+///* The execSqlF() routine does the same thing, except it accepts
+///* a format string as its third argument
+#[allow(unused_doc_comments)]
 extern "C" fn exec_sql(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     z_sql_1: *const i8) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut rc: i32 = 0;
-    rc =
+
+    /// printf("SQL: [%s]\n", zSql); fflush(stdout);
+    (rc =
         unsafe {
             sqlite3_prepare_v2(db, z_sql_1, -1, &mut p_stmt,
                 core::ptr::null_mut())
-        };
+        });
     if rc != 0 { return rc; }
     while 100 == { rc = unsafe { sqlite3_step(p_stmt) }; rc } {
         let z_sub_sql: *const i8 =
@@ -578,32 +642,95 @@ unsafe extern "C" fn exec_sql_f(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     return rc;
 }
 
+///* This routine implements the OP_Vacuum opcode of the VDBE.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_run_vacuum(pz_err_msg_1: *mut *mut i8,
     db: *mut Sqlite3, i_db_1: i32, p_out_1: *mut Sqlite3Value) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code from service routines
         let mut p_main: *mut Btree = core::ptr::null_mut();
+        /// The database being vacuumed
         let mut p_temp: *mut Btree = core::ptr::null_mut();
+        /// The temporary database we vacuum into
         let mut saved_m_db_flags: u32 = 0 as u32;
+        /// Saved value of db->mDbFlags
         let mut saved_flags: u64 = 0 as u64;
+        /// Saved value of db->flags
         let mut saved_n_change: i64 = 0 as i64;
+        /// Saved value of db->nChange
         let mut saved_n_total_change: i64 = 0 as i64;
+        /// Saved value of db->nTotalChange
         let mut saved_open_flags: u32 = 0 as u32;
+        /// Saved value of db->openFlags
         let mut saved_m_trace: u8 = 0 as u8;
+        /// Saved trace settings
         let mut p_db: *mut Db = core::ptr::null_mut();
+        /// Database to detach at end of vacuum
         let mut is_mem_db: i32 = 0;
+        /// True if vacuuming a :memory: database
         let mut n_res: i32 = 0;
+        /// Bytes of reserved space at the end of each page
         let mut n_db: i32 = 0;
+        /// Number of attached databases
         let mut z_db_main: *const i8 = core::ptr::null();
+        /// Schema name of database to vacuum
         let mut z_out: *const i8 = core::ptr::null();
+        /// Name of output file
         let mut pgflags: u32 = 0 as u32;
+        /// sync flags for output db
         let mut i_random: u64 = 0 as u64;
+        /// Random value used for zDbVacuum[]
         let mut z_db_vacuum: [i8; 42] = [0; 42];
+        /// Name of the ATTACH-ed database used for vacuum
+        /// IMP: R-12218-18073
+        /// IMP: R-15610-35227
+        /// Save the current value of the database flags so that it can be 
+        ///* restored before returning. Then set the writable-schema flag, and
+        ///* disable CHECK and foreign key constraints.
+        /// Attach the temporary database as 'vacuum_XXXXXX'. The synchronous pragma
+        ///* can be set to 'off' for this file, as it is not recovered if a crash
+        ///* occurs anyway. The integrity of the database is maintained by a
+        ///* (possibly synchronous) transaction opened on the main database before
+        ///* sqlite3BtreeCopyFile() is called.
+        ///*
+        ///* An optimization would be to use a non-journaled pager.
+        ///* (Later:) I tried setting "PRAGMA vacuum_XXXXXX.journal_mode=OFF" but
+        ///* that actually made the VACUUM run slower.  Very little journalling
+        ///* actually occurs when doing a vacuum since the vacuum_db is initially
+        ///* empty.  Only the journal header is written.  Apparently it takes more
+        ///* time to parse and run the PRAGMA to turn journalling off than it does
+        ///* to write the journal header file.
         let mut id: *mut Sqlite3File = core::ptr::null_mut();
         let mut sz: i64 = 0 as i64;
         let mut z_filename: *const i8 = core::ptr::null();
+        /// For a VACUUM INTO, the pager-flags are set to the same values as
+        ///* they are for the database being vacuumed, except that PAGER_CACHESPILL
+        ///* is always set.
+        /// If the VACUUM INTO target file is a URI filename and if the
+        ///* "reserve=N" query parameter is present, reset the reserve to the
+        ///* amount specified, if the amount is within range
         let mut n_new: i32 = 0;
+        /// Begin a transaction and take an exclusive lock on the main database
+        ///* file. This is done before the sqlite3BtreeGetPageSize(pMain) call below,
+        ///* to ensure that we do not try to change the page-size on a WAL database.
+        /// Do not attempt to change the page size for a WAL database
+        /// Query the schema of the main database. Create a mirror schema
+        ///* in the temporary database.
+        /// force new CREATE statements into vacuum_db
+        /// Loop through the tables in the main database. For each, do
+        ///* an "INSERT INTO vacuum_db.xxx SELECT * FROM main.xxx;" to copy
+        ///* the contents to the temporary database.
+        /// Copy the triggers, views, and virtual tables from the main database
+        ///* over to the temporary database.  None of these objects has any
+        ///* associated storage, so all we have to do is copy their entries
+        ///* from the schema table.
+        /// At this point, there is a write transaction open on both the 
+        ///* vacuum database and the main database. Assuming no error occurs,
+        ///* both transactions are closed by this block - the main database
+        ///* transaction by sqlite3BtreeCopyFile() and the other by an explicit
+        ///* call to sqlite3BtreeCommit().
         let mut meta: u32 = 0 as u32;
         let mut i: i32 = 0;
         let mut __state: i32 = 0;
@@ -1168,6 +1295,90 @@ pub extern "C" fn sqlite3_run_vacuum(pz_err_msg_1: *mut *mut i8,
                 }
             }
         }
+
+        /// Return code from service routines
+        /// The database being vacuumed
+        /// The temporary database we vacuum into
+        /// Saved value of db->mDbFlags
+        /// Saved value of db->flags
+        /// Saved value of db->nChange
+        /// Saved value of db->nTotalChange
+        /// Saved value of db->openFlags
+        /// Saved trace settings
+        /// Database to detach at end of vacuum
+        /// True if vacuuming a :memory: database
+        /// Bytes of reserved space at the end of each page
+        /// Number of attached databases
+        /// Schema name of database to vacuum
+        /// Name of output file
+        /// sync flags for output db
+        /// Random value used for zDbVacuum[]
+        /// Name of the ATTACH-ed database used for vacuum
+        /// IMP: R-12218-18073
+        /// IMP: R-15610-35227
+        /// Save the current value of the database flags so that it can be 
+        ///* restored before returning. Then set the writable-schema flag, and
+        ///* disable CHECK and foreign key constraints.
+        /// Attach the temporary database as 'vacuum_XXXXXX'. The synchronous pragma
+        ///* can be set to 'off' for this file, as it is not recovered if a crash
+        ///* occurs anyway. The integrity of the database is maintained by a
+        ///* (possibly synchronous) transaction opened on the main database before
+        ///* sqlite3BtreeCopyFile() is called.
+        ///*
+        ///* An optimization would be to use a non-journaled pager.
+        ///* (Later:) I tried setting "PRAGMA vacuum_XXXXXX.journal_mode=OFF" but
+        ///* that actually made the VACUUM run slower.  Very little journalling
+        ///* actually occurs when doing a vacuum since the vacuum_db is initially
+        ///* empty.  Only the journal header is written.  Apparently it takes more
+        ///* time to parse and run the PRAGMA to turn journalling off than it does
+        ///* to write the journal header file.
+        /// For a VACUUM INTO, the pager-flags are set to the same values as
+        ///* they are for the database being vacuumed, except that PAGER_CACHESPILL
+        ///* is always set.
+        /// If the VACUUM INTO target file is a URI filename and if the
+        ///* "reserve=N" query parameter is present, reset the reserve to the
+        ///* amount specified, if the amount is within range
+        /// Begin a transaction and take an exclusive lock on the main database
+        ///* file. This is done before the sqlite3BtreeGetPageSize(pMain) call below,
+        ///* to ensure that we do not try to change the page-size on a WAL database.
+        /// Do not attempt to change the page size for a WAL database
+        /// Query the schema of the main database. Create a mirror schema
+        ///* in the temporary database.
+        /// force new CREATE statements into vacuum_db
+        /// Loop through the tables in the main database. For each, do
+        ///* an "INSERT INTO vacuum_db.xxx SELECT * FROM main.xxx;" to copy
+        ///* the contents to the temporary database.
+        /// Copy the triggers, views, and virtual tables from the main database
+        ///* over to the temporary database.  None of these objects has any
+        ///* associated storage, so all we have to do is copy their entries
+        ///* from the schema table.
+        /// At this point, there is a write transaction open on both the 
+        ///* vacuum database and the main database. Assuming no error occurs,
+        ///* both transactions are closed by this block - the main database
+        ///* transaction by sqlite3BtreeCopyFile() and the other by an explicit
+        ///* call to sqlite3BtreeCommit().
+        /// This array determines which meta meta values are preserved in the
+        ///* vacuum.  Even entries are the meta value number and odd entries
+        ///* are an increment to apply to the meta value after the vacuum.
+        ///* The increment is used to increase the schema cookie so that other
+        ///* connections to the same database will know to reread the schema.
+        /// Add one to the old schema cookie
+        /// Preserve the default page cache size
+        /// Preserve the text encoding
+        /// Preserve the user version
+        /// Preserve the application id
+        /// Copy Btree meta values
+        /// GetMeta() and UpdateMeta() cannot fail in this context because
+        ///* we already have page 1 loaded into cache and marked dirty.
+        /// Restore the original value of db->flags
+        /// Currently there is an SQL level transaction open on the vacuum
+        ///* database. No locks are held on any other files (since the main file
+        ///* was committed at the btree level). So it safe to end the transaction
+        ///* by manually setting the autoCommit flag to true and detaching the
+        ///* vacuum database. The vacuum_db journal file is deleted when the pager
+        ///* is closed by the DETACH.
+        /// This both clears the schemas and reduces the size of the db->aDb[]
+        ///* array.
         unreachable!();
     }
 }

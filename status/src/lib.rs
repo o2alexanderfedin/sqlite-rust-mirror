@@ -1,21 +1,53 @@
+//!* 2008 June 18
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This module implements the sqlite3_status() interface and related
+//!* functionality.
+//!* Variables in which to record status information.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    LookasideSlot, Module, NameContext, OnOrUsing, Parse, RowSet,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 impl Vdbe {
     fn expired(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0x3u32) as i32 }
@@ -492,11 +524,15 @@ static mut sqlite3_stat: Sqlite3StatType =
         mx_value: [0 as i64, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
 
+///* Elements of sqlite3Stat[] are protected by either the memory allocator
+///* mutex, or by the pcache1 mutex.  The following array determines which.
 static stat_mutex: [i8; 10] =
     [0 as i8, 1 as i8, 1 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 1 as i8,
             0 as i8, 0 as i8];
 
+///* Query status information.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_status64(op: i32, p_current: &mut Sqlite3Int64,
     p_highwater: &mut Sqlite3Int64, reset_flag: i32) -> i32 {
     unsafe {
@@ -521,10 +557,36 @@ pub extern "C" fn sqlite3_status64(op: i32, p_current: &mut Sqlite3Int64,
         }
         unsafe { sqlite3_mutex_leave(p_mutex) };
         { let _ = p_mutex; };
+
+        /// Prevent warning when SQLITE_THREADSAFE=0
         return 0;
     }
 }
 
+///* CAPI3REF: SQLite Runtime Status
+///*
+///* ^These interfaces are used to retrieve runtime status information
+///* about the performance of SQLite, and optionally to reset various
+///* highwater marks.  ^The first argument is an integer code for
+///* the specific parameter to measure.  ^(Recognized integer codes
+///* are of the form [status parameters | SQLITE_STATUS_...].)^
+///* ^The current value of the parameter is returned into *pCurrent.
+///* ^The highest recorded value is returned in *pHighwater.  ^If the
+///* resetFlag is true, then the highest record value is reset after
+///* *pHighwater is written.  ^(Some parameters do not record the highest
+///* value.  For those parameters
+///* nothing is written into *pHighwater and the resetFlag is ignored.)^
+///* ^(Other parameters record only the highwater mark and not the current
+///* value.  For these latter parameters nothing is written into *pCurrent.)^
+///*
+///* ^The sqlite3_status() and sqlite3_status64() routines return
+///* SQLITE_OK on success and a non-zero [error code] on failure.
+///*
+///* If either the current value or the highwater mark is too large to
+///* be represented by a 32-bit integer, then the values returned by
+///* sqlite3_status() are undefined.
+///*
+///* See also: [sqlite3_db_status()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status(op: i32, p_current: &mut i32,
     p_highwater: &mut i32, reset_flag: i32) -> i32 {
@@ -536,6 +598,7 @@ pub extern "C" fn sqlite3_status(op: i32, p_current: &mut i32,
     return rc;
 }
 
+///* Return the number of LookasideSlot elements on the linked list
 extern "C" fn count_lookaside_slots(mut p: *const LookasideSlot) -> u32 {
     let mut cnt: u32 = 0 as u32;
     while !(p).is_null() {
@@ -545,7 +608,9 @@ extern "C" fn count_lookaside_slots(mut p: *const LookasideSlot) -> u32 {
     return cnt;
 }
 
+///* Count the number of slots of lookaside memory that are outstanding
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_lookaside_used(db: &Sqlite3,
     p_highwater_1: *mut i32) -> i32 {
     let mut n_init: u32 =
@@ -558,6 +623,8 @@ pub extern "C" fn sqlite3_lookaside_used(db: &Sqlite3,
     n_free +=
         count_lookaside_slots((*db).lookaside.p_small_free as
                 *const LookasideSlot);
+
+    /// SQLITE_OMIT_TWOSIZE_LOOKASIDE
     { let _ = 0; };
     if !(p_highwater_1).is_null() {
         unsafe { *p_highwater_1 = ((*db).lookaside.n_slot - n_init) as i32 };
@@ -565,13 +632,17 @@ pub extern "C" fn sqlite3_lookaside_used(db: &Sqlite3,
     return ((*db).lookaside.n_slot - (n_init + n_free)) as i32;
 }
 
+///* Query status information for a single database connection
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
     p_current_1: &mut Sqlite3Int64, p_highwtr_1: &mut Sqlite3Int64,
     reset_flag_1: i32) -> i32 {
     unsafe {
         unsafe {
             let mut rc: i32 = 0;
+
+            /// Return code
             unsafe { sqlite3_mutex_enter(unsafe { (*db).mutex }) };
             '__s1:
                 {
@@ -663,7 +734,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -755,7 +829,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -778,7 +855,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -812,7 +891,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -847,10 +930,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -904,7 +989,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -996,7 +1084,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -1019,7 +1110,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -1053,7 +1146,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -1088,10 +1185,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -1145,7 +1244,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -1237,7 +1339,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -1260,7 +1365,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -1294,7 +1401,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -1329,10 +1440,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -1386,7 +1499,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -1478,7 +1594,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -1501,7 +1620,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -1535,7 +1656,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -1570,10 +1695,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -1613,7 +1740,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -1705,7 +1835,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -1728,7 +1861,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -1762,7 +1897,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -1797,10 +1936,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -1840,7 +1981,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -1932,7 +2076,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -1955,7 +2102,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -1989,7 +2138,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2024,10 +2177,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2035,7 +2190,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                     2 => {
                         {
                             let mut i: i32 = 0;
+                            /// Used to iterate through schemas
                             let mut n_byte_1: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { sqlite3_btree_enter_all(db) };
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_1 };
                             { let _ = 0; };
@@ -2127,7 +2285,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -2150,7 +2311,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -2184,7 +2347,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2219,10 +2386,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2230,7 +2399,10 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                     3 => {
                         {
                             let mut p_vdbe: *mut Vdbe = core::ptr::null_mut();
+                            /// Used to iterate through VMs
                             let mut n_byte_2: i32 = 0;
+
+                            /// Used to accumulate return value
                             unsafe { (*db).pn_bytes_freed = &mut n_byte_2 };
                             { let _ = 0; };
                             unsafe {
@@ -2253,7 +2425,9 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                             };
                             unsafe { (*db).pn_bytes_freed = core::ptr::null_mut() };
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_byte_2 as Sqlite3Int64;
+
+                            /// IMP: R-64479-57858
+                            (*p_current_1 = n_byte_2 as Sqlite3Int64);
                             break '__s1;
                         }
                         op = 9 + 1;
@@ -2287,7 +2461,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2322,10 +2500,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2362,7 +2542,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2397,10 +2581,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2436,7 +2622,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2471,10 +2661,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2510,7 +2702,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2545,10 +2741,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2584,7 +2782,11 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                                 }
                             }
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 = n_ret as Sqlite3Int64;
+
+                            /// IMP: R-42420-56072 */
+                            ///                       /* IMP: R-54100-20147 */
+                            ///                       /* IMP: R-29431-39229
+                            (*p_current_1 = n_ret as Sqlite3Int64);
                             break '__s1;
                         }
                         {
@@ -2619,10 +2821,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2660,10 +2864,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                         }
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2671,10 +2877,12 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
                     10 => {
                         {
                             *p_highwtr_1 = 0 as Sqlite3Int64;
-                            *p_current_1 =
+
+                            /// IMP: R-11967-56545
+                            (*p_current_1 =
                                 (unsafe { (*db).n_deferred_imm_cons } > 0 as i64 ||
                                         unsafe { (*db).n_deferred_cons } > 0 as i64) as
-                                    Sqlite3Int64;
+                                    Sqlite3Int64);
                             break '__s1;
                         }
                         { rc = 1; }
@@ -2688,6 +2896,35 @@ pub extern "C" fn sqlite3_db_status64(db: *mut Sqlite3, mut op: i32,
     }
 }
 
+///* CAPI3REF: Database Connection Status
+///* METHOD: sqlite3
+///*
+///* ^This interface is used to retrieve runtime status information
+///* about a single [database connection].  ^The first argument is the
+///* database connection object to be interrogated.  ^The second argument
+///* is an integer constant, taken from the set of
+///* [SQLITE_DBSTATUS options], that
+///* determines the parameter to interrogate.  The set of
+///* [SQLITE_DBSTATUS options] is likely
+///* to grow in future releases of SQLite.
+///*
+///* ^The current value of the requested parameter is written into *pCur
+///* and the highest instantaneous value is written into *pHiwtr.  ^If
+///* the resetFlg is true, then the highest instantaneous value is
+///* reset back down to the current value.
+///*
+///* ^The sqlite3_db_status() routine returns SQLITE_OK on success and a
+///* non-zero [error code] on failure.
+///*
+///* ^The sqlite3_db_status64(D,O,C,H,R) routine works exactly the same
+///* way as sqlite3_db_status(D,O,C,H,R) routine except that the C and H
+///* parameters are pointer to 64-bit integers (type: sqlite3_int64) instead
+///* of pointers to 32-bit integers, which allows larger status values
+///* to be returned.  If a status value exceeds 2,147,483,647 then
+///* sqlite3_db_status() will truncate the value whereas sqlite3_db_status64()
+///* will return the full value.
+///*
+///* See also: [sqlite3_status()] and [sqlite3_stmt_status()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_status(db: *mut Sqlite3, op: i32,
     p_current_1: &mut i32, p_highwtr_1: &mut i32, reset_flag_1: i32) -> i32 {
@@ -2702,6 +2939,8 @@ pub extern "C" fn sqlite3_db_status(db: *mut Sqlite3, op: i32,
     return rc;
 }
 
+///* Return the current value of a status parameter.  The caller must
+///* be holding the appropriate mutex.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_value(op: i32) -> Sqlite3Int64 {
     unsafe {
@@ -2712,6 +2951,15 @@ pub extern "C" fn sqlite3_status_value(op: i32) -> Sqlite3Int64 {
     }
 }
 
+///* Add N to the value of a status record.  The caller must hold the
+///* appropriate mutex.  (Locking is checked by assert()).
+///*
+///* The StatusUp() routine can accept positive or negative values for N.
+///* The value of N is added to the current status value and the high-water
+///* mark is adjusted if necessary.
+///*
+///* The StatusDown() routine lowers the current value by N.  The highwater
+///* mark is unchanged.  N must be non-negative for StatusDown().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_up(op: i32, n: i32) -> () {
     unsafe {
@@ -2738,6 +2986,8 @@ pub extern "C" fn sqlite3_status_down(op: i32, n: i32) -> () {
     }
 }
 
+///* Adjust the highwater mark if necessary.
+///* The caller must hold the appropriate mutex.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_status_highwater(op: i32, x: i32) -> () {
     unsafe {

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinPthreadT = *mut OpaquePthreadT;
 
@@ -426,6 +441,7 @@ extern "C" fn test_barrier() -> () {
     unsafe { sqlite3_mutex_leave(p_mutex) };
 }
 
+///* The main loop for a thread.  Threads use busy waiting.
 extern "C" fn test_thread_main(p_arg_1: *mut ()) -> *mut () {
     let p: *mut Thread = p_arg_1 as *mut Thread;
     if !(unsafe { (*p).db }).is_null() {
@@ -495,6 +511,9 @@ extern "C" fn test_thread_main(p_arg_1: *mut ()) -> *mut () {
     return core::ptr::null_mut();
 }
 
+///* Get a thread ID which is an upper case letter.  Return the index.
+///* If the argument is not a valid thread ID put an error message in
+///* the interpreter and return -1.
 extern "C" fn parse_thread_id(interp: *mut TclInterp, z_arg_1: *const i8)
     -> i32 {
     if z_arg_1 == core::ptr::null() ||
@@ -513,6 +532,10 @@ extern "C" fn parse_thread_id(interp: *mut TclInterp, z_arg_1: *const i8)
     return unsafe { *z_arg_1.offset(0 as isize) } as i32 - 'A' as i32;
 }
 
+///* Usage:    thread_create NAME  FILENAME
+///*
+///* NAME should be an upper case letter.  Start the thread running with
+///* an open connection to the given database.
 extern "C" fn tcl_thread_create(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -569,12 +592,16 @@ extern "C" fn tcl_thread_create(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Wait for a thread to reach its idle state.
 extern "C" fn test_thread_wait(p: &Thread) -> () {
     test_barrier();
     while (*p).opnum > (*p).completed { unsafe { sched_yield() }; }
     test_barrier();
 }
 
+///* Usage:  thread_wait ID
+///*
+///* Wait on thread ID to reach its idle state.
 extern "C" fn tcl_thread_wait(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -602,6 +629,7 @@ extern "C" fn tcl_thread_wait(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Stop a thread.
 extern "C" fn test_stop_thread(p: *mut Thread) -> () {
     test_thread_wait(unsafe { &*p });
     unsafe { (*p).x_op = None };
@@ -614,6 +642,10 @@ extern "C" fn test_stop_thread(p: *mut Thread) -> () {
     unsafe { (*p).busy = 0 };
 }
 
+///* Usage:  thread_halt ID
+///*
+///* Cause a thread to shut itself down.  Wait for the shutdown to be
+///* completed.  If ID is "*" then stop all threads.
 extern "C" fn tcl_thread_halt(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -662,6 +694,10 @@ extern "C" fn tcl_thread_halt(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_argc  ID
+///*
+///* Wait on the most recent thread_step to complete, then return the
+///* number of columns in the result set.
 extern "C" fn tcl_thread_argc(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -700,6 +736,10 @@ extern "C" fn tcl_thread_argc(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_argv  ID   N
+///*
+///* Wait on the most recent thread_step to complete, then return the
+///* value of the N-th columns in the result set.
 extern "C" fn tcl_thread_argv(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -746,6 +786,10 @@ extern "C" fn tcl_thread_argv(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_colname  ID   N
+///*
+///* Wait on the most recent thread_step to complete, then return the
+///* name of the N-th columns in the result set.
 extern "C" fn tcl_thread_colname(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -792,6 +836,10 @@ extern "C" fn tcl_thread_colname(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_result  ID
+///*
+///* Wait on the most recent operation to complete, then return the
+///* result code from that operation.
 extern "C" fn tcl_thread_result(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -822,6 +870,10 @@ extern "C" fn tcl_thread_result(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_error  ID
+///*
+///* Wait on the most recent operation to complete, then return the
+///* error string.
 extern "C" fn tcl_thread_error(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -853,6 +905,7 @@ extern "C" fn tcl_thread_error(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* This procedure runs in the thread to compile an SQL statement.
 extern "C" fn do_compile(p: *mut Thread) -> () {
     if unsafe { (*p).db } == core::ptr::null_mut() {
         unsafe {
@@ -882,6 +935,9 @@ extern "C" fn do_compile(p: *mut Thread) -> () {
     };
 }
 
+///* Usage: thread_compile ID SQL
+///*
+///* Compile a new virtual machine.
 extern "C" fn tcl_thread_compile(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -923,6 +979,7 @@ extern "C" fn tcl_thread_compile(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* This procedure runs in the thread to step the virtual machine.
 extern "C" fn do_step(p: *mut Thread) -> () {
     let mut i: i32 = 0;
     if unsafe { (*p).p_stmt } == core::ptr::null_mut() {
@@ -980,6 +1037,9 @@ extern "C" fn do_step(p: *mut Thread) -> () {
     }
 }
 
+///* Usage: thread_step ID
+///*
+///* Advance the virtual machine by one step
 extern "C" fn tcl_thread_step(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1015,6 +1075,7 @@ extern "C" fn tcl_thread_step(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* This procedure runs in the thread to finalize a virtual machine.
 extern "C" fn do_finalize(p: *mut Thread) -> () {
     if unsafe { (*p).p_stmt } == core::ptr::null_mut() {
         unsafe {
@@ -1034,6 +1095,9 @@ extern "C" fn do_finalize(p: *mut Thread) -> () {
     unsafe { (*p).p_stmt = core::ptr::null_mut() };
 }
 
+///* Usage: thread_finalize ID
+///*
+///* Finalize the virtual machine.
 extern "C" fn tcl_thread_finalize(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1071,6 +1135,9 @@ extern "C" fn tcl_thread_finalize(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_swap ID ID
+///*
+///* Interchange the sqlite* pointer between two threads.
 extern "C" fn tcl_thread_swap(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1113,6 +1180,10 @@ extern "C" fn tcl_thread_swap(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_stmt_get ID
+///*
+///* Return the database stmt pointer for the given thread.  Then
+///* remove the pointer from the thread itself.
 extern "C" fn tcl_thread_stmt_get(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1151,6 +1222,8 @@ extern "C" fn tcl_thread_stmt_get(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_db_put ID DB
+///*
 extern "C" fn tcl_thread_db_put(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1185,6 +1258,11 @@ extern "C" fn tcl_thread_db_put(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Usage: thread_db_get ID
+///*
+///* Return the database connection pointer for the given thread.  Then
+///* remove the pointer from the thread itself.  Afterwards, the thread
+///* can be stopped and the connection can be used by the main thread.
 extern "C" fn tcl_thread_db_get(not_used_1: *mut (), interp: *mut TclInterp,
     argc: i32, argv: *mut *const i8) -> i32 {
     unsafe {
@@ -1223,6 +1301,7 @@ extern "C" fn tcl_thread_db_get(not_used_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* Register commands with the TCL interpreter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest4_init(interp: *mut TclInterp) -> i32 {
     unsafe {

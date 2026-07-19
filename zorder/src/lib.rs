@@ -1,10 +1,51 @@
+//!* 2018-02-09
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* SQL functions for z-order (Morton code) transformations.
+//!*
+//!*      zorder(X0,X0,..,xN)      Generate an N+1 dimension Morton code
+//!*
+//!*      unzorder(Z,N,I)          Extract the I-th dimension from N-dimensional
+//!*                               Morton code Z.
+//!*
+//!* Compiling:
+//!*
+//!*   (linux)    gcc -fPIC -shared zorder.c -o zorder.so
+//!*   (mac)      clang -fPIC -dynamiclib zorder.c -o zorder.dylib
+//!*   (windows)  cl zorder.c -link -dll -out:zorder.dll
+//!*
+//!* Usage example:
+//!*
+//!*     .load ./zorder
+//!*     SELECT zorder(1,2,3,4);
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* Functions:     zorder(X0,X1,....)
+///*
+///* Convert integers X0, X1, ... into morton code.  There must be at least
+///* two arguments.  There may be no more than 24 arguments.
+///*
+///* The output is a signed 64-bit integer.  If any argument is too large
+///* to be successfully encoded into a morton code, an error is raised.
 extern "C" fn zorder_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -75,6 +116,10 @@ extern "C" fn zorder_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Function:     unzorder(Z,N,K)
+///*
+///* Assuming that Z is an N-dimensional Morton code, extract the K-th
+///* dimension.  K is between 0 and N-1.  N must be between 2 and 24.
 extern "C" fn unzorder_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -121,17 +166,20 @@ extern "C" fn unzorder_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_zorder_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"zorder".as_ptr() as *mut i8 as *const i8, -1, 1,
                 core::ptr::null_mut(), Some(zorder_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

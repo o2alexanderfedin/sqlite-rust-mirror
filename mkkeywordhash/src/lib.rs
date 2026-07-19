@@ -1,5 +1,6 @@
 type DarwinSizeT = u64;
 
+///* A header comment placed at the beginning of generated code.
 static z_hdr: [i8; 565] =
     [47 as i8, 42 as i8, 42 as i8, 42 as i8, 42 as i8, 42 as i8, 32 as i8,
             84 as i8, 104 as i8, 105 as i8, 115 as i8, 32 as i8, 102 as i8,
@@ -115,6 +116,7 @@ struct Keyword {
     z_orig_name: [i8; 20],
 }
 
+///* These are the keywords
 static mut a_keyword_table: [Keyword; 148] =
     [Keyword {
                 z_name: c"ABORT".as_ptr() as *mut i8,
@@ -2485,10 +2487,12 @@ static mut a_keyword_table: [Keyword; 148] =
                 z_orig_name: unsafe { core::mem::zeroed() },
             }];
 
+/// Number of keywords
 static mut n_keyword: i32 =
     (core::mem::size_of::<[Keyword; 148]>() as u64 /
             core::mem::size_of::<Keyword>() as u64) as i32;
 
+///* Comparision function for two Keyword records
 extern "C" fn keyword_compare1(a: *const (), b: *const ()) -> i32 {
     let p_a: *const Keyword = a as *mut Keyword as *const Keyword;
     let p_b: *const Keyword = b as *mut Keyword as *const Keyword;
@@ -2549,6 +2553,7 @@ extern "C" fn keyword_compare3(a: *const (), b: *const ()) -> i32 {
     return n;
 }
 
+///* Return a KeywordTable entry with the given id
 extern "C" fn find_by_id(id: i32) -> *mut Keyword {
     unsafe {
         let mut i: i32 = 0;
@@ -2567,6 +2572,8 @@ extern "C" fn find_by_id(id: i32) -> *mut Keyword {
     }
 }
 
+///* If aKeyword[*pFrom-1].iNext has a higher priority that aKeyword[*pFrom-1]
+///* itself, then swap them.
 extern "C" fn reorder(p_from_1: &mut i32) -> () {
     unsafe {
         let i: i32 = *p_from_1 - 1;
@@ -2587,6 +2594,9 @@ extern "C" fn reorder(p_from_1: &mut i32) -> () {
     }
 }
 
+///* This routine does the work.  The generated code is printed on standard
+///* output.
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -2600,6 +2610,7 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         let mut n_char: i32 = 0;
         let mut total_len: i32 = 0;
         let mut a_kw_hash: [i32; 1000] = [0; 1000];
+        /// 1000 is much bigger than nKeyword
         let mut z_kw_text: [i8; 2000] = [0; 2000];
         {
             i = { j = 0; j };
@@ -2662,6 +2673,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Sort the table from shortest to longest keyword
         unsafe {
             qsort(&raw mut a_keyword_table[0 as usize] as *mut Keyword as
                     *mut (), n_keyword as u64,
@@ -2767,12 +2780,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Sort the table into reverse order by length
         unsafe {
             qsort(&raw mut a_keyword_table[0 as usize] as *mut Keyword as
                     *mut (), n_keyword as u64,
                 core::mem::size_of::<Keyword>() as u64, keyword_compare2)
         };
-        n_char = 0;
+
+        /// Fill in the offset for all entries
+        (n_char = 0);
         {
             i = 0;
             '__b9: loop {
@@ -2858,12 +2875,17 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Sort the table by offset
         unsafe {
             qsort(&raw mut a_keyword_table[0 as usize] as *mut Keyword as
                     *mut (), n_keyword as u64,
                 core::mem::size_of::<Keyword>() as u64, keyword_compare3)
         };
-        best_size = n_keyword;
+
+        /// Figure out how big to make the hash table in order to minimize the
+        ///* number of collisions
+        (best_size = n_keyword);
         best_count = n_keyword * n_keyword;
         {
             i = n_keyword / 2;
@@ -2936,6 +2958,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Begin generating code
         unsafe {
             printf(c"%s".as_ptr() as *mut i8 as *const i8,
                 &raw const z_hdr[0 as usize] as *const i8)

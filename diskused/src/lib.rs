@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -18,6 +24,12 @@ struct DiskUsed {
     z_schema: *const i8,
 }
 
+///* Free all resources that the DiskUsed object references and
+///* reset the DiskUsed object.
+///*
+///* Call this routine multiple times on the same DiskUsed object
+///* is a harmless no-op, as long as the memory for the object itself
+///* has not been freed.
 extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
     if !(unsafe { (*p).z_su }).is_null() {
         let z_sql: *mut i8 =
@@ -40,6 +52,8 @@ extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
     };
 }
 
+///* Report an error using formatted text.  If zFormat==NULL then report
+///* an OOM error.
 unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -61,6 +75,7 @@ unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     diskused_reset(p);
 }
 
+///* Prepare and return an SQL statement.
 extern "C" fn diskused_v_prep(p: *mut DiskUsed, z_fmt_1: *const i8,
     ap: *mut i8) -> *mut Sqlite3Stmt {
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -101,6 +116,12 @@ unsafe extern "C" fn diskused_prepare(p: *mut DiskUsed, z_format_1: *const i8,
     return p_stmt;
 }
 
+///* If rc is something other than SQLITE_DONE or SQLITE_OK, then report
+///* an error and return true.
+///*
+///* If rc is SQLITE_DONE or SQLITE_OK, then return false.
+///*
+///* The prepared statement is closed in either case.
 extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     p_stmt_1: *mut Sqlite3Stmt) -> i32 {
     if rc == 101 { rc = 0; }
@@ -118,6 +139,7 @@ extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     return rc;
 }
 
+///* Run SQL.  Return the number of errors.
 unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -144,6 +166,9 @@ unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     return rc;
 }
 
+///* Run an SQL query that returns an integer.  Write that integer
+///* into *piRes.  Return the number of errors.
+#[allow(unused_doc_comments)]
 unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     pi_res_1: &mut Sqlite3Int64, z_format_1: *const i8, mut __va0: ...)
     -> i32 {
@@ -162,6 +187,8 @@ unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
         rc = 0;
     } else {
         if !(unsafe { (*p).db }).is_null() {
+
+            /// p->db is NULL if there was some prior error
             unsafe {
                 diskused_error(p,
                     c"SQL run-time error: %s\nOriginal SQL: %s".as_ptr() as
@@ -176,6 +203,11 @@ unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     return rc;
 }
 
+///* Add to the output a title line that contains the text determined
+///* by the format string.  If the output is initially empty, begin
+///* the title line with "/" so that it forms the beginning of a C-style
+///* comment.  Otherwise begin with a new-line.  Always finish with a
+///* newline.
 unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_first: *mut i8 = core::ptr::null_mut();
@@ -210,6 +242,9 @@ unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
     }
 }
 
+///* Add an output line that begins with the zDesc text extended out to
+///* 50 columns with "." characters, and followed by whatever text is
+///* described by zFormat.
 unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut z_txt: *mut i8 = core::ptr::null_mut();
@@ -241,6 +276,9 @@ unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
     }
 }
 
+///* Write a percentage into the output.  The number written should show
+///* two or three significant digits, with the decimal point being the fourth
+///* character.
 extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
     let mut z_num: [i8; 100] = [0; 100];
     let mut z_dp: *const i8 = core::ptr::null();
@@ -291,27 +329,52 @@ extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
     };
 }
 
+///* Create a subreport on a subset of tables and/or indexes.
+///*
+///* The title if the subreport is given by zTitle.  zWhere is
+///* a boolean expression that can go in the WHERE clause to select
+///* the relevant rows of the s.zSU table.
+#[allow(unused_doc_comments)]
 extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     z_where_1: *mut i8, pgsz: Sqlite3Int64, n_page_1: Sqlite3Int64) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Statement to query p->zSU
     let mut nentry: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of btree entires
     let mut payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Payload in bytes
     let mut ovfl_payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// overflow payload in bytes
     let mut mx_payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// largest individual payload
     let mut ovfl_cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number entries using overflow
     let mut leaf_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Leaf pages
     let mut int_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// internal pages
     let mut ovfl_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// overflow pages
     let mut leaf_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on leaf pages
     let mut int_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on internal pages
     let mut ovfl_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on overflow pages
     let mut int_cell: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// B-tree entries on internal pages
     let mut depth: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// btree depth
     let mut cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of s.zSU entries that match
     let mut storage: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total bytes
     let mut total_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total page count
     let mut total_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total unused bytes
     let mut total_meta: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total metadata
     let mut rc: i32 = 0;
     if z_title_1 == core::ptr::null_mut() ||
             z_where_1 == core::ptr::null_mut() {
@@ -498,6 +561,11 @@ extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     return diskused_stmt_finish(p, rc, p_stmt);
 }
 
+///* SQL Function:   diskused(SCHEMA)
+///*
+///* Analyze the database schema named in the argument.  Return text
+///* containing the space utilization stats.
+#[allow(unused_doc_comments)]
 extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut rc: i32 = 0;
@@ -570,20 +638,26 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { diskused_error(&mut s, core::ptr::null()) };
         return;
     }
-    rc =
+
+    /// The s.zSU table contains the data used for the analysis.
+    ///* The table name contains 128-bits of randomness to avoid
+    ///* collisions with preexisting tables in temp.
+    (rc =
         unsafe {
             diskused_sql(&mut s,
                 c"CREATE TABLE temp.%s(\n   name text,                -- A table or index\n   tblname text,             -- Table that owns name\n   is_index boolean,         -- TRUE if it is an index\n   is_without_rowid boolean, -- TRUE if WITHOUT ROWID table\n   nentry int,               -- Number of entries in the BTree\n   leaf_entries int,         -- Number of leaf entries\n   depth int,                -- Depth of the b-tree\n   payload int,              -- Total data stored in this table/index\n   ovfl_payload int,         -- Total data stored on overflow pages\n   ovfl_cnt int,             -- Number of entries that use overflow\n   mx_payload int,           -- Maximum payload size\n   int_pages int,            -- Interior pages used\n   leaf_pages int,           -- Leaf pages used\n   ovfl_pages int,           -- Overflow pages used\n   int_unused int,           -- Unused bytes on interior pages\n   leaf_unused int,          -- Unused bytes on primary pages\n   ovfl_unused int,          -- Unused bytes on overflow pages\n   int_entries int           -- Btree cells on internal pages\n);".as_ptr()
                         as *mut i8 as *const i8, s.z_su)
-        };
+        });
     if rc != 0 { return; }
-    rc =
+
+    /// Populate the s.zSU table
+    (rc =
         unsafe {
             diskused_sql(&mut s,
                 c"WITH\n  allidx(idxname) AS (\n    SELECT name FROM \"%w\".sqlite_schema WHERE type=\'index\'\n  ),\n  allobj(allname,tblname,isidx,isworowid) AS (\n    SELECT \'sqlite_schema\',\n           \'sqlite_schema\',\n           0,\n           0\n    UNION ALL\n    SELECT name,\n           tbl_name,\n           type=\'index\',\n           EXISTS(SELECT 1\n                    FROM pragma_index_list(sqlite_schema.name,%Q)\n                   WHERE pragma_index_list.origin=\'pk\'\n                     AND pragma_index_list.name NOT IN allidx)\n      FROM \"%w\".sqlite_schema\n  )\nINSERT INTO temp.%s\n  SELECT\n    allname,\n    tblname,\n    isidx,\n    isworowid,\n    sum(ncell),\n    sum((pagetype=\'leaf\')*ncell),\n    max((length(if(path GLOB \'*+*\',\'\',path))+3)/4),\n    sum(payload),\n    sum((pagetype=\'overflow\')*payload),\n    sum(path GLOB \'*+000000\'),\n    max(mx_payload),\n    sum(pagetype=\'internal\'),\n    sum(pagetype=\'leaf\'),\n    sum(pagetype=\'overflow\'),\n    sum((pagetype=\'internal\')*unused),\n    sum((pagetype=\'leaf\')*unused),\n    sum((pagetype=\'overflow\')*unused),\n    sum(if(pagetype=\'internal\',ncell))\n  FROM allobj CROSS JOIN dbstat(%Q) \n  WHERE dbstat.name=allobj.allname\n  GROUP BY allname;\n".as_ptr()
                         as *mut i8 as *const i8, s.z_schema, s.z_schema, s.z_schema,
                 s.z_su, s.z_schema)
-        };
+        });
     if rc != 0 { return; }
     n_page = 0 as Sqlite3Int64;
     rc =
@@ -594,6 +668,8 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         };
     if rc != 0 { return; }
     if n_page <= 0 as i64 {
+
+        /// Very brief reply for an empty database
         diskused_reset(&mut s);
         unsafe {
             sqlite3_result_text(context,
@@ -601,6 +677,8 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
+
+    /// Begin generating the report
     unsafe {
         diskused_title(&mut s,
             c"Database storage utilization report".as_ptr() as *mut i8 as
@@ -941,6 +1019,9 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
     if diskused_stmt_finish(&mut s, rc, p_stmt) != 0 { return; }
+
+    /// Append SQL statements that will recreate the raw data used for
+    ///* the analysis.
     unsafe {
         diskused_title(&mut s,
             c"Raw data used to generate this report".as_ptr() as *mut i8 as
@@ -1022,17 +1103,20 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_diskused_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"diskused".as_ptr() as *mut i8 as *const i8, 1, 1 | 524288,
                 core::ptr::null_mut(), Some(diskused_func), None, None)
-        };
+        });
     return rc;
 }
 

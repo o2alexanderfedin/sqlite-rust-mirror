@@ -1,10 +1,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* Show a usage message on stderr then quit.
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -16,6 +23,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
     }
 }
 
+///* Read the content of a disk file into an in-memory buffer
 extern "C" fn fuzz_read_file(z_filename_1: *const i8, p_sz_1: &mut i32,
     pp_buf_1: &mut *mut ()) -> () {
     unsafe {
@@ -66,6 +74,9 @@ extern "C" fn fuzz_read_file(z_filename_1: *const i8, p_sz_1: &mut i32,
     }
 }
 
+/// 
+///* Write the contents of buffer pBuf, size nBuf bytes, into file zFilename
+///* on disk. zFilename, if it already exists, is clobbered.
 extern "C" fn fuzz_write_file(z_filename_1: *const i8, p_buf_1: &mut [u8])
     -> () {
     unsafe {
@@ -99,6 +110,14 @@ extern "C" fn fuzz_write_file(z_filename_1: *const i8, p_buf_1: &mut [u8])
 
 extern "C" fn fuzz_corrupt() -> i32 { return 11; }
 
+///**********************************************************************
+///* The following block is a copy of the implementation of SQLite function
+///* sqlite3_randomness. This version has two important differences:
+///*
+///*   1. It always uses the same seed. So the sequence of random data output
+///*      is the same for every run of the program.
+///*
+///*   2. It is not threadsafe.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3PrngType {
@@ -161,6 +180,8 @@ static mut sqlite3_prng: Sqlite3PrngType =
                 82 as u8, 247 as u8],
     };
 
+/// 
+///* Generate and return single random byte
 extern "C" fn fuzz_random_byte() -> u8 {
     unsafe {
         let mut t: u8 = 0 as u8;
@@ -175,6 +196,7 @@ extern "C" fn fuzz_random_byte() -> u8 {
     }
 }
 
+///* Return N random bytes.
 extern "C" fn fuzz_random_blob(mut z_buf_1: &mut [u8]) -> () {
     let mut i: i32 = 0;
     {
@@ -190,6 +212,7 @@ extern "C" fn fuzz_random_blob(mut z_buf_1: &mut [u8]) -> () {
     }
 }
 
+///* Return a random integer between 0 and nRange (not inclusive).
 extern "C" fn fuzz_random_int(n_range_1: u32) -> u32 {
     let mut ret: u32 = 0 as u32;
     if !(n_range_1 > 0 as u32) as i32 as i64 != 0 {
@@ -249,6 +272,8 @@ extern "C" fn fuzz_random_seed(i_seed_1: u32) -> () {
     }
 }
 
+/// 
+///* Object containing partially parsed changeset.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChangeset {
@@ -261,6 +286,9 @@ struct FuzzChangeset {
     n_update: i32,
 }
 
+/// 
+///* There is one object of this type for each change-group (table header)
+///* in the input changeset.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChangesetGroup {
@@ -272,6 +300,7 @@ struct FuzzChangesetGroup {
     n_change: i32,
 }
 
+///* Description of a fuzz change to be applied to a changeset.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzChange {
@@ -285,6 +314,7 @@ struct FuzzChange {
     i_current: i32,
 }
 
+///* Allocate and return nByte bytes of zeroed memory.
 extern "C" fn fuzz_malloc(n_byte_1: Sqlite3Int64) -> *mut () {
     let p_ret: *mut () =
         unsafe { sqlite3_malloc64(n_byte_1 as Sqlite3Uint64) };
@@ -292,8 +322,14 @@ extern "C" fn fuzz_malloc(n_byte_1: Sqlite3Int64) -> *mut () {
     return p_ret;
 }
 
+///* Free the buffer indicated by the first argument. This function is used
+///* to free buffers allocated by fuzzMalloc().
 extern "C" fn fuzz_free(p: *mut ()) -> () { unsafe { sqlite3_free(p) }; }
 
+///* Argument p points to a buffer containing an SQLite varint that, assuming the
+///* input is not corrupt, may be between 0 and 0x7FFFFFFF, inclusive. Before
+///* returning, this function sets (*pnVal) to the value of that varint, and
+///* returns the number of bytes of space that it takes up.
 extern "C" fn fuzz_get_varint(p: *const u8, pn_val_1: &mut i32) -> i32 {
     let mut i: i32 = 0;
     let mut n_val: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -319,6 +355,9 @@ extern "C" fn fuzz_get_varint(p: *const u8, pn_val_1: &mut i32) -> i32 {
     return i;
 }
 
+///* Write value nVal into the buffer indicated by argument p as an SQLite
+///* varint. nVal is guaranteed to be between 0 and (2^21-1), inclusive.
+///* Return the number of bytes written to buffer p.
 extern "C" fn fuzz_put_varint(p: *mut u8, n_val_1: i32) -> i32 {
     if !(n_val_1 > 0 && n_val_1 < 2097152) as i32 as i64 != 0 {
         unsafe {
@@ -342,6 +381,8 @@ extern "C" fn fuzz_put_varint(p: *mut u8, n_val_1: i32) -> i32 {
     return 3;
 }
 
+///* Read a 64-bit big-endian integer value from buffer aRec[]. Return
+///* the value read.
 extern "C" fn fuzz_get_i64(a_rec_1: *const u8) -> i64 {
     return (((unsafe { *a_rec_1.offset(0 as isize) } as u64) << 56) +
                                         ((unsafe { *a_rec_1.offset(1 as isize) } as u64) << 48) +
@@ -354,6 +395,7 @@ extern "C" fn fuzz_get_i64(a_rec_1: *const u8) -> i64 {
             i64;
 }
 
+///* Write value iVal to buffer aRec[] as an unsigned 64-bit big-endian integer.
 extern "C" fn fuzz_put_u64(a_rec_1: *mut u8, i_val_1: u64) -> () {
     unsafe {
         *a_rec_1.offset(0 as isize) = (i_val_1 >> 56 & 255 as u64) as u8
@@ -379,6 +421,9 @@ extern "C" fn fuzz_put_u64(a_rec_1: *mut u8, i_val_1: u64) -> () {
     unsafe { *a_rec_1.offset(7 as isize) = (i_val_1 & 255 as u64) as u8 };
 }
 
+///* Parse a single table-header from the input. Allocate a new change-group
+///* object with the results. Return SQLITE_OK if successful, or an error code
+///* otherwise.
 extern "C" fn fuzz_parse_header(p_parse_1: &FuzzChangeset,
     pp_hdr_1: &mut *mut u8, p_end_1: *mut u8,
     pp_grp_1: &mut *mut FuzzChangesetGroup) -> i32 {
@@ -438,6 +483,12 @@ extern "C" fn fuzz_parse_header(p_parse_1: &FuzzChangeset,
     return rc;
 }
 
+///* Argument p points to a buffer containing a single changeset-record value. 
+///* This function attempts to determine the size of the value in bytes. If
+///* successful, it sets (*pSz) to the size and returns SQLITE_OK. Or, if the
+///* buffer does not contain a valid value, SQLITE_CORRUPT is returned and
+///* the final value of (*pSz) is undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
     let e_type: u8 = unsafe { *p.offset(0 as isize) };
     '__s3:
@@ -449,6 +500,7 @@ extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
             2 => { *p_sz_1 = 9; }
             3 => {
                 {
+                    /// blob
                     let mut n_txt: i32 = 0;
                     let mut sz: i32 = 0;
                     sz =
@@ -461,6 +513,7 @@ extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
             }
             4 => {
                 {
+                    /// blob
                     let mut n_txt: i32 = 0;
                     let mut sz: i32 = 0;
                     sz =
@@ -477,6 +530,17 @@ extern "C" fn fuzz_change_size(p: *mut u8, p_sz_1: &mut i32) -> i32 {
     return 0;
 }
 
+///* When this function is called, (*ppRec) points to the start of a 
+///* record in a changeset being parsed. This function adds entries
+///* to the pParse->apVal[] array for all values and advances (*ppRec) 
+///* to one byte past the end of the record. Argument pEnd points to
+///* one byte past the end of the input changeset.
+///*
+///* Argument bPkOnly is true if the record being parsed is part of
+///* a DELETE record in a patchset. In this case, all non-primary-key
+///* fields have been omitted from the record.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
 extern "C" fn fuzz_parse_record(pp_rec_1: &mut *mut u8, p_end_1: *mut u8,
     p_parse_1: &mut FuzzChangeset, b_pk_only_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -536,6 +600,12 @@ extern "C" fn fuzz_parse_record(pp_rec_1: &mut *mut u8, p_end_1: *mut u8,
     return rc;
 }
 
+///* Parse the array of changes starting at (*ppData) and add entries for
+///* all values to the pParse->apVal[] array. Argument pEnd points to one byte
+///* past the end of the input changeset. If successful, set (*ppData) to point
+///* to one byte past the end of the change array and return SQLITE_OK.
+///* Otherwise, return an SQLite error code. The final value of (*ppData) is
+///* undefined in this case.
 extern "C" fn fuzz_parse_changes(pp_data_1: &mut *mut u8, p_end_1: *mut u8,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let c_hdr: u8 =
@@ -607,6 +677,11 @@ extern "C" fn fuzz_parse_changes(pp_data_1: &mut *mut u8, p_end_1: *mut u8,
     return rc;
 }
 
+///* Parse the changeset stored in buffer pChangeset (nChangeset bytes in
+///* size). If successful, write the results into (*pParse) and return
+///* SQLITE_OK. Or, if an error occurs, return an SQLite error code. The
+///* final state of (*pParse) is undefined in this case.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_parse_changeset(p_changeset_1: *mut u8, n_changeset_1: i32,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let p_end: *mut u8 =
@@ -626,9 +701,11 @@ extern "C" fn fuzz_parse_changeset(p_changeset_1: *mut u8, n_changeset_1: i32,
     }
     while rc == 0 && p < p_end {
         let mut p_grp: *mut FuzzChangesetGroup = core::ptr::null_mut();
-        rc =
+
+        /// Read a table-header from the changeset
+        (rc =
             fuzz_parse_header(unsafe { &*p_parse_1 }, &mut p, p_end,
-                &mut p_grp);
+                &mut p_grp));
         if !((rc == 0) as i32 == (p_grp != core::ptr::null_mut()) as i32) as
                         i32 as i64 != 0 {
             unsafe {
@@ -667,6 +744,17 @@ extern "C" fn fuzz_parse_changeset(p_changeset_1: *mut u8, n_changeset_1: i32,
     return rc;
 }
 
+///* When this function is called, (*ppRec) points to the first byte of
+///* a record that is part of change-group pGrp. This function attempts
+///* to output a human-readable version of the record to stdout and advance
+///* (*ppRec) to point to the first byte past the end of the record before
+///* returning. If successful, SQLITE_OK is returned. Otherwise, an SQLite
+///* error code.
+///*
+///* If parameter bPkOnly is non-zero, then all non-primary-key fields have
+///* been omitted from the record. This occurs for records that are part
+///* of DELETE changes in patchsets.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
     pp_rec_1: &mut *mut u8, b_pk_only_1: i32) -> i32 {
     let rc: i32 = 0;
@@ -699,6 +787,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                             }
                             1 => {
                                 {
+                                    /// integer
                                     let mut i_val: Sqlite3Int64 = 0 as Sqlite3Int64;
                                     i_val = fuzz_get_i64(p as *const u8);
                                     unsafe {
@@ -713,6 +802,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                                     break '__s8;
                                 }
                                 {
+                                    /// real
                                     let mut i_val_1: Sqlite3Int64 = 0 as Sqlite3Int64;
                                     let mut f_val: f64 = 0.0;
                                     i_val_1 = fuzz_get_i64(p as *const u8);
@@ -732,6 +822,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                                     break '__s8;
                                 }
                                 {
+                                    /// blob
                                     let mut n_txt: i32 = 0;
                                     {
                                         let __n = fuzz_get_varint(p as *const u8, &mut n_txt);
@@ -792,6 +883,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                             }
                             2 => {
                                 {
+                                    /// real
                                     let mut i_val_1: Sqlite3Int64 = 0 as Sqlite3Int64;
                                     let mut f_val: f64 = 0.0;
                                     i_val_1 = fuzz_get_i64(p as *const u8);
@@ -811,6 +903,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                                     break '__s8;
                                 }
                                 {
+                                    /// blob
                                     let mut n_txt: i32 = 0;
                                     {
                                         let __n = fuzz_get_varint(p as *const u8, &mut n_txt);
@@ -871,6 +964,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                             }
                             3 => {
                                 {
+                                    /// blob
                                     let mut n_txt: i32 = 0;
                                     {
                                         let __n = fuzz_get_varint(p as *const u8, &mut n_txt);
@@ -931,6 +1025,7 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
                             }
                             4 => {
                                 {
+                                    /// blob
                                     let mut n_txt: i32 = 0;
                                     {
                                         let __n = fuzz_get_varint(p as *const u8, &mut n_txt);
@@ -1009,10 +1104,15 @@ extern "C" fn fuzz_print_record(p_grp_1: &FuzzChangesetGroup,
     return rc;
 }
 
+///* Print a human-readable version of the table-header and all changes in the
+///* change-group passed as the second argument.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_print_group(p_parse_1: *const FuzzChangeset,
     p_grp_1: *mut FuzzChangesetGroup) -> () {
     let mut i: i32 = 0;
     let mut p: *mut u8 = core::ptr::null_mut();
+
+    /// The table header
     unsafe {
         printf(c"TABLE:  %s nCol=%d aPK=".as_ptr() as *mut i8 as *const i8,
             unsafe { (*p_grp_1).z_tab }, unsafe { (*p_grp_1).n_col })
@@ -1033,7 +1133,9 @@ extern "C" fn fuzz_print_group(p_parse_1: *const FuzzChangeset,
         }
     }
     unsafe { printf(c"\n".as_ptr() as *mut i8 as *const i8) };
-    p = unsafe { (*p_grp_1).a_change };
+
+    /// The array of changes
+    (p = unsafe { (*p_grp_1).a_change });
     {
         i = 0;
         '__b11: loop {
@@ -1071,6 +1173,15 @@ extern "C" fn fuzz_print_group(p_parse_1: *const FuzzChangeset,
     }
 }
 
+///* Initialize the object passed as the second parameter with details
+///* of the change that will be attempted (type of change, to which part of the
+///* changeset it applies etc.). If successful, return SQLITE_OK. Or, if an
+///* error occurs, return an SQLite error code. 
+///*
+///* If a negative value is returned, then the selected change would have
+///* produced a non-well-formed changeset. In this case the caller should
+///* call this function again.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
     p_change_1: *mut FuzzChange) -> i32 {
     let mut i_sub: i32 = 0;
@@ -1196,6 +1307,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                 match unsafe { (*p_change_1).a_sub[0 as usize] } {
                     1 => {
                         {
+                            /// integer
                             let i_val: u64 = fuzz_random_u64();
                             fuzz_put_u64(unsafe {
                                     &mut (*p_change_1).a_sub[1 as usize]
@@ -1203,6 +1315,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                             break '__s14;
                         }
                         {
+                            /// real
                             let mut i_val1: u64 = fuzz_random_u64();
                             let i_val2: u64 = fuzz_random_u64();
                             let mut d: f64 = i_val1 as f64 / i_val2 as f64;
@@ -1216,6 +1329,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                             break '__s14;
                         }
                         {
+                            /// blob
                             let n_byte: i32 = fuzz_random_int(48 as u32) as i32;
                             unsafe { (*p_change_1).a_sub[1 as usize] = n_byte as u8 };
                             fuzz_random_blob(unsafe {
@@ -1248,6 +1362,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                     }
                     2 => {
                         {
+                            /// real
                             let mut i_val1: u64 = fuzz_random_u64();
                             let i_val2: u64 = fuzz_random_u64();
                             let mut d: f64 = i_val1 as f64 / i_val2 as f64;
@@ -1261,6 +1376,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                             break '__s14;
                         }
                         {
+                            /// blob
                             let n_byte: i32 = fuzz_random_int(48 as u32) as i32;
                             unsafe { (*p_change_1).a_sub[1 as usize] = n_byte as u8 };
                             fuzz_random_blob(unsafe {
@@ -1293,6 +1409,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                     }
                     3 => {
                         {
+                            /// blob
                             let n_byte: i32 = fuzz_random_int(48 as u32) as i32;
                             unsafe { (*p_change_1).a_sub[1 as usize] = n_byte as u8 };
                             fuzz_random_blob(unsafe {
@@ -1325,6 +1442,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                     }
                     4 => {
                         {
+                            /// blob
                             let n_byte: i32 = fuzz_random_int(48 as u32) as i32;
                             unsafe { (*p_change_1).a_sub[1 as usize] = n_byte as u8 };
                             fuzz_random_blob(unsafe {
@@ -1379,6 +1497,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                     }
                     3 => {
                         {
+                            /// blob
                             let mut n_byte_1: i32 = 0;
                             let i_first: i32 =
                                 1 +
@@ -1394,6 +1513,7 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
                     }
                     4 => {
                         {
+                            /// blob
                             let mut n_byte_1: i32 = 0;
                             let i_first: i32 =
                                 1 +
@@ -1425,6 +1545,9 @@ extern "C" fn fuzz_select_change(p_parse_1: &FuzzChangeset,
     return 0;
 }
 
+///* Copy a single change from the input to the output changeset, making
+///* any modifications specified by (*pFuzz).
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_copy_change(p_parse_1: &FuzzChangeset, i_grp_1: i32,
     p_fuzz_1: &mut FuzzChange, pp: &mut *mut u8, pp_out_1: &mut *mut u8)
     -> i32 {
@@ -1514,6 +1637,10 @@ extern "C" fn fuzz_copy_change(p_parse_1: &FuzzChangeset, i_grp_1: i32,
             }
         }
     }
+
+    /// Copy the change type and indirect flag. If the fuzz mode is
+    ///* FUZZ_CHANGE_INDIRECT, and the current change is the one selected for
+    ///* fuzzing, invert the indirect flag.
     unsafe {
         *{
                     let __p = &mut p_out;
@@ -1787,6 +1914,12 @@ extern "C" fn fuzz_copy_change(p_parse_1: &FuzzChangeset, i_grp_1: i32,
     return 0;
 }
 
+///* Fuzz the changeset parsed into object pParse and write the results 
+///* to file zOut on disk. Argument pBuf points to a buffer that is guaranteed
+///* to be large enough to hold the fuzzed changeset.
+///*
+///* Return SQLITE_OK if successful, or an SQLite error code if an error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
     p_parse_1: *mut FuzzChangeset) -> i32 {
     let mut change: FuzzChange = unsafe { core::mem::zeroed() };
@@ -1838,6 +1971,8 @@ extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
                                                 } as i32;
                                     }
                                 }
+
+                                /// Output a table header
                                 unsafe {
                                     *{
                                                     let __p = &mut p_out;
@@ -1925,7 +2060,9 @@ extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
                                     let __p = &mut p_out;
                                     *__p = unsafe { (*__p).offset(__n as isize) };
                                 };
-                                p_saved = p_out;
+
+                                /// Output the change array.
+                                (p_saved = p_out);
                                 {
                                     i = 0;
                                     '__b31: loop {
@@ -1968,15 +2105,23 @@ extern "C" fn fuzz_do_one_fuzz(z_out_1: *const i8, p_buf_1: *mut u8,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut n_repeat: i32 = 0;
+    /// Number of output files
     let mut i_seed: i32 = 0;
+    /// Value of PRNG seed
     let mut z_input: *const i8 = core::ptr::null();
+    /// Name of input file
     let mut p_changeset: *mut () = core::ptr::null_mut();
+    /// Input changeset
     let mut n_changeset: i32 = 0;
+    /// Size of input changeset in bytes
     let mut i: i32 = 0;
+    /// Current output file
     let mut changeset: FuzzChangeset = unsafe { core::mem::zeroed() };
+    /// Partially parsed changeset
     let mut rc: i32 = 0;
     let mut p_buf: *mut u8 = core::ptr::null_mut();
     if argc != 4 && argc != 2 {

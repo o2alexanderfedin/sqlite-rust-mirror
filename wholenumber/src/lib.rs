@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -15,6 +21,7 @@ struct WholenumberCursor {
     mx_value: Sqlite3Int64,
 }
 
+/// Methods for the wholenumber module
 extern "C" fn wholenumber_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -43,11 +50,14 @@ extern "C" fn wholenumber_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     return 0;
 }
 
+/// Note that for this virtual table, the xCreate and xConnect
+///* methods are identical.
 extern "C" fn wholenumber_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Open a new wholenumber cursor.
 extern "C" fn wholenumber_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut WholenumberCursor = core::ptr::null_mut();
@@ -65,11 +75,13 @@ extern "C" fn wholenumber_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a wholenumber cursor.
 extern "C" fn wholenumber_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a cursor to its next row of output
 extern "C" fn wholenumber_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut WholenumberCursor = cur as *mut WholenumberCursor;
     {
@@ -81,6 +93,7 @@ extern "C" fn wholenumber_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return the value associated with a wholenumber.
 extern "C" fn wholenumber_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const WholenumberCursor =
@@ -89,6 +102,7 @@ extern "C" fn wholenumber_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* The rowid.
 extern "C" fn wholenumber_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const WholenumberCursor =
@@ -97,6 +111,8 @@ extern "C" fn wholenumber_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* When the wholenumber_cursor.rLimit value is 0 or less, that is a signal
+///* that the cursor has nothing more to output.
 extern "C" fn wholenumber_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const WholenumberCursor =
         cur as *mut WholenumberCursor as *const WholenumberCursor;
@@ -104,6 +120,22 @@ extern "C" fn wholenumber_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
                 unsafe { (*p_cur).i_value } == 0 as i64) as i32;
 }
 
+///* Called to "rewind" a cursor back to the beginning so that
+///* it starts its output over again.  Always called at least once
+///* prior to any wholenumberColumn, wholenumberRowid, or wholenumberEof call.
+///*
+///*    idxNum   Constraints
+///*    ------   ---------------------
+///*      0      (none)
+///*      1      value > $argv0
+///*      2      value >= $argv0
+///*      4      value < $argv0
+///*      8      value <= $argv0
+///*
+///*      5      value > $argv0 AND value < $argv1
+///*      6      value >= $argv0 AND value < $argv1
+///*      9      value > $argv0 AND value <= $argv1
+///*     10      value >= $argv0 AND value <= $argv1
 extern "C" fn wholenumber_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -143,6 +175,14 @@ extern "C" fn wholenumber_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Search for terms of these forms:
+///*
+///*  (1)  value > $value
+///*  (2)  value >= $value
+///*  (4)  value < $value
+///*  (8)  value <= $value
+///*
+///* idxNum is an ORed combination of 1 or 2 with 4 or 8.
 extern "C" fn wholenumber_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -237,6 +277,8 @@ extern "C" fn wholenumber_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* A virtual table module that provides read-only access to a
+///* Tcl global variable namespace.
 static mut wholenumber_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

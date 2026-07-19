@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -13,8 +19,10 @@ type DarwinPidT = Int32T;
 
 type PidT = DarwinPidT;
 
+///* Forward declaration of objects used by this utility
 type TmstmpVfs = Sqlite3Vfs;
 
+/// An open WAL or DB file
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TmstmpFile {
@@ -35,6 +43,7 @@ struct TmstmpFile {
     p_sub_vfs: *mut Sqlite3Vfs,
 }
 
+/// Information for the tmstmp log file.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TmstmpLog {
@@ -44,6 +53,7 @@ struct TmstmpLog {
     a: [u8; 96],
 }
 
+/// Free a TmstmpLog object
 extern "C" fn tmstmp_log_free(p_log_1: *mut TmstmpLog) -> () {
     if p_log_1 == core::ptr::null_mut() { return; }
     if !(unsafe { (*p_log_1).log }).is_null() {
@@ -53,6 +63,8 @@ extern "C" fn tmstmp_log_free(p_log_1: *mut TmstmpLog) -> () {
     unsafe { sqlite3_free(p_log_1 as *mut ()) };
 }
 
+/// Flush log content.  Open the file if necessary. Return the
+///* number of errors.
 extern "C" fn tmstmp_log_flush(p: &mut TmstmpFile) -> i32 {
     let p_log: *mut TmstmpLog = (*p).p_log;
     if !(p_log != core::ptr::null_mut()) as i32 as i64 != 0 {
@@ -89,6 +101,7 @@ extern "C" fn tmstmp_log_flush(p: &mut TmstmpFile) -> i32 {
     return 0;
 }
 
+///* Write a 6-byte millisecond timestamp into aOut[]
 extern "C" fn tmstmp_put_ts(p: &TmstmpFile, a_out_1: *mut u8) -> () {
     let mut tm: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     unsafe {
@@ -117,6 +130,7 @@ extern "C" fn tmstmp_put_ts(p: &TmstmpFile, a_out_1: *mut u8) -> () {
     };
 }
 
+/// Write a 32-bit integer as big-ending into a[]
 extern "C" fn tmstmp_put_u32(v: u32, a: *mut u8) -> () {
     unsafe { *a.offset(0 as isize) = (v >> 24 & 255 as u32) as u8 };
     unsafe { *a.offset(1 as isize) = (v >> 16 & 255 as u32) as u8 };
@@ -124,6 +138,7 @@ extern "C" fn tmstmp_put_u32(v: u32, a: *mut u8) -> () {
     unsafe { *a.offset(3 as isize) = (v & 255 as u32) as u8 };
 }
 
+///* Write a record onto the event log
 extern "C" fn tmstmp_event(mut p: *mut TmstmpFile, op: u8, a1: u8, a2: u32,
     a3: u32, p_ts_1: *const u8) -> () {
     let mut a: *mut u8 = core::ptr::null_mut();
@@ -172,6 +187,7 @@ extern "C" fn tmstmp_event(mut p: *mut TmstmpFile, op: u8, a1: u8, a2: u32,
     }
 }
 
+///* Methods for TmstmpFile
 extern "C" fn tmstmp_close(mut p_file: *mut Sqlite3File) -> i32 {
     let p: *mut TmstmpFile = p_file as *mut TmstmpFile;
     if unsafe { (*p).has_correct_reserve } != 0 {
@@ -205,6 +221,7 @@ extern "C" fn tmstmp_close(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Read bytes from a file
 extern "C" fn tmstmp_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -255,6 +272,7 @@ extern "C" fn tmstmp_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     return rc;
 }
 
+///* Read a 32-bit big-endian unsigned integer and return it.
 extern "C" fn tmstmp_get_u32(a: *const u8) -> u32 {
     return (((unsafe { *a.offset(0 as isize) } as i32) << 24) +
                         ((unsafe { *a.offset(1 as isize) } as i32) << 16) +
@@ -262,6 +280,8 @@ extern "C" fn tmstmp_get_u32(a: *const u8) -> u32 {
                 unsafe { *a.offset(3 as isize) } as i32) as u32;
 }
 
+///* Write data to a tmstmp-file.
+#[allow(unused_doc_comments)]
 extern "C" fn tmstmp_write(p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let p: *mut TmstmpFile = p_file as *mut TmstmpFile;
@@ -271,6 +291,7 @@ extern "C" fn tmstmp_write(p_file: *mut Sqlite3File, z_buf: *const (),
     if (unsafe { (*p).has_correct_reserve } == 0) as i32 != 0
         {} else if unsafe { (*p).is_wal } != 0 {
         if i_amt == 24 {
+            /// A frame header
             let mut x: u32 = 0 as u32;
             unsafe {
                 (*p).i_frame =
@@ -343,6 +364,7 @@ extern "C" fn tmstmp_write(p_file: *mut Sqlite3File, z_buf: *const (),
             (i_ofst / unsafe { (*p).pgsz } as SqliteInt64 + 1 as SqliteInt64)
                 as u32, unsafe { (*p).i_frame }, core::ptr::null());
     } else if unsafe { (*p).p_partner } == core::ptr::null_mut() {
+        /// Writing into a database in rollback mode
         let mut s: *mut u8 =
             unsafe {
                 unsafe {
@@ -371,6 +393,7 @@ extern "C" fn tmstmp_write(p_file: *mut Sqlite3File, z_buf: *const (),
         };
 }
 
+///* Truncate a tmstmp-file.
 extern "C" fn tmstmp_truncate(mut p_file: *mut Sqlite3File,
     size: Sqlite3Int64) -> i32 {
     p_file =
@@ -383,6 +406,7 @@ extern "C" fn tmstmp_truncate(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* Sync a tmstmp-file.
 extern "C" fn tmstmp_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut TmstmpFile).offset(1 as isize) } as
@@ -394,6 +418,7 @@ extern "C" fn tmstmp_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
         };
 }
 
+///* Return the current file-size of a tmstmp-file.
 extern "C" fn tmstmp_file_size(mut p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let p: *mut TmstmpFile = p_file as *mut TmstmpFile;
@@ -407,6 +432,7 @@ extern "C" fn tmstmp_file_size(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* Lock a tmstmp-file.
 extern "C" fn tmstmp_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut TmstmpFile).offset(1 as isize) } as
@@ -418,6 +444,7 @@ extern "C" fn tmstmp_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Unlock a tmstmp-file.
 extern "C" fn tmstmp_unlock(mut p_file: *mut Sqlite3File, e_lock: i32)
     -> i32 {
     p_file =
@@ -430,6 +457,7 @@ extern "C" fn tmstmp_unlock(mut p_file: *mut Sqlite3File, e_lock: i32)
         };
 }
 
+///* Check if another file-handle holds a RESERVED lock on a tmstmp-file.
 extern "C" fn tmstmp_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -444,6 +472,7 @@ extern "C" fn tmstmp_check_reserved_lock(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* File control method. For custom operations on a tmstmp-file.
 extern "C" fn tmstmp_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -609,6 +638,7 @@ extern "C" fn tmstmp_file_control(mut p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for a tmstmp-file.
 extern "C" fn tmstmp_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut TmstmpFile).offset(1 as isize) } as
@@ -620,6 +650,7 @@ extern "C" fn tmstmp_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Return the device characteristic flags supported by a tmstmp-file.
 extern "C" fn tmstmp_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     let mut devchar: i32 = 0;
@@ -637,6 +668,7 @@ extern "C" fn tmstmp_device_characteristics(mut p_file: *mut Sqlite3File)
     return devchar & !32768;
 }
 
+/// Create a shared memory file mapping
 extern "C" fn tmstmp_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32,
     pgsz: i32, b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -649,6 +681,7 @@ extern "C" fn tmstmp_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32,
         };
 }
 
+/// Perform locking on a shared-memory segment
 extern "C" fn tmstmp_shm_lock(mut p_file: *mut Sqlite3File, offset: i32,
     n: i32, flags: i32) -> i32 {
     p_file =
@@ -661,6 +694,7 @@ extern "C" fn tmstmp_shm_lock(mut p_file: *mut Sqlite3File, offset: i32,
         };
 }
 
+/// Memory barrier operation on shared memory
 extern "C" fn tmstmp_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut TmstmpFile).offset(1 as isize) } as
@@ -672,6 +706,7 @@ extern "C" fn tmstmp_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     };
 }
 
+/// Unmap a shared memory segment
 extern "C" fn tmstmp_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -684,6 +719,7 @@ extern "C" fn tmstmp_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
         };
 }
 
+/// Fetch a page of a memory-mapped file
 extern "C" fn tmstmp_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -696,6 +732,7 @@ extern "C" fn tmstmp_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
         };
 }
 
+/// Release a memory-mapped page
 extern "C" fn tmstmp_unfetch(mut p_file: *mut Sqlite3File,
     i_ofst: Sqlite3Int64, p_page: *mut ()) -> i32 {
     p_file =
@@ -731,6 +768,8 @@ static tmstmp_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(tmstmp_unfetch),
     };
 
+///* Methods for TmstmpVfs
+#[allow(unused_doc_comments)]
 extern "C" fn tmstmp_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -742,6 +781,9 @@ extern "C" fn tmstmp_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
             let mut p_sub_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
             p_sub_vfs = unsafe { (*p_vfs).p_app_data } as *mut Sqlite3Vfs;
             if flags & (256 | 524288) == 0 {
+
+                /// If the file is not a persistent database or a WAL file, then
+                ///* bypass the timestamp logic all together
                 return unsafe {
                         (unsafe {
                                 (*p_sub_vfs).x_open.unwrap()
@@ -790,22 +832,40 @@ extern "C" fn tmstmp_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
                 let mut pid: u32 = 0 as u32;
                 let mut p_log: *mut TmstmpLog = core::ptr::null_mut();
                 let mut r1: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+                /// Milliseconds since 1970-01-01
                 let mut days: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+                /// Days since 1970-01-01
                 let mut sod: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+                /// Start of date specified by r1
                 let mut z: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+                /// Days since 0000-03-01
                 let mut era: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+                /// 400-year era
                 let mut h: i32 = 0;
+                /// hour
                 let mut m: i32 = 0;
+                /// minute
                 let mut s: i32 = 0;
+                /// second
                 let mut f: i32 = 0;
+                /// millisecond
                 let mut y: i32 = 0;
+                /// year
                 let mut m: i32 = 0;
+                /// month
                 let mut d: i32 = 0;
+                /// day
                 let mut y: i32 = 0;
+                /// year assuming March is first month
                 let mut doe: u32 = 0 as u32;
+                /// day of 400-year era
                 let mut yoe: u32 = 0 as u32;
+                /// year of 400-year era
                 let mut doy: u32 = 0 as u32;
+                /// day of year
                 let mut mp: u32 = 0 as u32;
+
+                /// month with March==0
                 unsafe { (*p).is_db = 1 as u8 };
                 r1 = 0 as Sqlite3Uint64;
                 p_log =
@@ -885,6 +945,7 @@ extern "C" fn tmstmp_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     return rc;
 }
 
+///* All VFS interfaces other than xOpen are passed down into the Sub-VFS.
 extern "C" fn tmstmp_delete(p: *mut Sqlite3Vfs, z_name: *const i8,
     sync_dir: i32) -> i32 {
     let p_sub: *mut Sqlite3Vfs =
@@ -1046,6 +1107,7 @@ static mut tmstmp_vfs: Sqlite3Vfs =
         x_next_system_call: Some(tmstmp_next_system_call),
     };
 
+///* Register the tmstmp VFS as the default VFS for the system.
 extern "C" fn tmstmp_register_vfs() -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1063,14 +1125,24 @@ extern "C" fn tmstmp_register_vfs() -> i32 {
     }
 }
 
+/// 
+///* This routine is called by sqlite3_load_extension() when the
+///* extension is first loaded.
+///*
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_tmstmpvfs_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
+
+    /// not used
     { let _ = db; };
-    rc = tmstmp_register_vfs();
+
+    /// not used
+    /// not used
+    (rc = tmstmp_register_vfs());
     if rc == 0 { rc = 0 | 1 << 8; }
     return rc;
 }

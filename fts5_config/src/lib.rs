@@ -2,13 +2,24 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Storage, Fts5Table, Fts5Termset, Fts5Token,
+    Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -17,11 +28,25 @@ extern "C" fn fts5_isopenquote(x: i8) -> i32 {
                     x as i32 == '[' as i32 || x as i32 == '`' as i32) as i32;
 }
 
+///* The first character of the string pointed to by argument z is guaranteed
+///* to be an open-quote character (see function fts5_isopenquote()).
+///*
+///* This function searches for the corresponding close-quote character within
+///* the string and, if found, dequotes the string in place and adds a new
+///* nul-terminator byte.
+///*
+///* If the close-quote is found, the value returned is the byte offset of
+///* the character immediately following it. Or, if the close-quote is not 
+///* found, -1 is returned. If -1 is returned, the buffer is left in an 
+///* undefined state.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_dequote(z: *mut i8) -> i32 {
     let mut q: i8 = 0 as i8;
     let mut i_in: i32 = 1;
     let mut i_out: i32 = 0;
     q = unsafe { *z.offset(0 as isize) };
+
+    /// Set stack variable q to the close-quote character
     if !(q as i32 == '[' as i32 || q as i32 == '\'' as i32 ||
                                 q as i32 == '\"' as i32 || q as i32 == '`' as i32) as i32 as
                 i64 != 0 {
@@ -36,10 +61,16 @@ extern "C" fn fts5_dequote(z: *mut i8) -> i32 {
     while unsafe { *z.offset(i_in as isize) } != 0 {
         if unsafe { *z.offset(i_in as isize) } as i32 == q as i32 {
             if unsafe { *z.offset((i_in + 1) as isize) } as i32 != q as i32 {
+
+                /// Character iIn was the close quote.
                 { let __p = &mut i_in; let __t = *__p; *__p += 1; __t };
                 break;
             } else {
-                i_in += 2;
+
+                /// Character iIn and iIn+1 form an escaped quote character. Skip
+                ///* the input cursor past both and copy a single quote character 
+                ///* to the output buffer.
+                (i_in += 2);
                 unsafe {
                     *z.offset({
                                         let __p = &mut i_out;
@@ -72,6 +103,9 @@ extern "C" fn fts5_dequote(z: *mut i8) -> i32 {
     return i_in;
 }
 
+///* Argument pIn points to a character that is part of a nul-terminated 
+///* string. Return a pointer to the first character following *pIn in 
+///* the string that is not a "bareword" character.
 extern "C" fn fts5_config_skip_bareword(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     while unsafe { sqlite3_fts5_is_bareword(unsafe { *p }) } != 0 {
@@ -86,6 +120,19 @@ extern "C" fn fts5_config_skip_bareword(p_in_1: *const i8) -> *const i8 {
     return p;
 }
 
+///* Gobble up the first bareword or quoted word from the input buffer zIn.
+///* Return a pointer to the character immediately following the last in
+///* the gobbled word if successful, or a NULL pointer otherwise (failed
+///* to find close-quote character).
+///*
+///* Before returning, set pzOut to point to a new buffer containing a
+///* nul-terminated, dequoted copy of the gobbled word. If the word was
+///* quoted, *pbQuoted is also set to 1 before returning.
+///*
+///* If *pRc is other than SQLITE_OK when this function is called, it is
+///* a no-op (NULL is returned). Otherwise, if an OOM occurs within this
+///* function, *pRc is set to SQLITE_NOMEM before returning. *pRc is *not*
+///* set if a parse error (failed to find close quote) occurs.
 extern "C" fn fts5_config_gobble_word(p_rc_1: &mut i32, z_in_1: *const i8,
     pz_out_1: &mut *mut i8, pb_quoted_1: &mut i32) -> *const i8 {
     let mut z_ret: *const i8 = core::ptr::null();
@@ -134,6 +181,9 @@ extern "C" fn fts5_iswhitespace(x: i8) -> i32 {
     return (x as i32 == ' ' as i32) as i32;
 }
 
+///* Argument pIn points to a character that is part of a nul-terminated 
+///* string. Return a pointer to the first character following *pIn in 
+///* the string that is not a white-space character.
 extern "C" fn fts5_config_skip_whitespace(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     if !(p).is_null() {
@@ -319,9 +369,23 @@ extern "C" fn fts5_config_skip_literal(p_in_1: *const i8) -> *const i8 {
     return p;
 }
 
+///* Convert an SQL-style quoted string into a normal string by removing
+///* the quote characters.  The conversion is done in-place.  If the
+///* input does not begin with a quote character, then this routine
+///* is a no-op.
+///*
+///* Examples:
+///*
+///*     "abc"   becomes   abc
+///*     'xyz'   becomes   xyz
+///*     [pqr]   becomes   pqr
+///*     `mno`   becomes   mno
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_dequote(z: *mut i8) -> () {
     let mut quote: i8 = 0 as i8;
+
+    /// Quote character (if any )
     if !(0 == fts5_iswhitespace(unsafe { *z.offset(0 as isize) })) as i32 as
                 i64 != 0 {
         unsafe {
@@ -377,6 +441,13 @@ extern "C" fn fts5_config_set_enum(a_enum_1: *const Fts5Enum,
     return if i_val < 0 { 1 } else { 0 };
 }
 
+///* Parse a "special" CREATE VIRTUAL TABLE directive and update
+///* configuration object pConfig as appropriate.
+///*
+///* If successful, object pConfig is updated and SQLITE_OK returned. If
+///* an error occurs, an SQLite error code is returned and an error message
+///* may be left in *pzErr. It is the responsibility of the caller to
+///* eventually free any such error message using sqlite3_free().
 extern "C" fn fts5_config_parse_special(p_config_1: &mut Fts5Config,
     z_cmd_1: *const i8, z_arg_1: *const i8, pz_err_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -796,6 +867,7 @@ extern "C" fn fts5_config_parse_column(p: &mut Fts5Config, z_col_1: *mut i8,
     return rc;
 }
 
+///* Populate the Fts5Config.zContentExprlist string.
 extern "C" fn fts5_config_make_exprlist(p: &mut Fts5Config) -> i32 {
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
@@ -880,6 +952,7 @@ extern "C" fn fts5_config_make_exprlist(p: &mut Fts5Config) -> i32 {
     return rc;
 }
 
+///* Free the configuration object passed as the only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_free(p_config: *mut Fts5Config) -> () {
     if !(p_config).is_null() {
@@ -937,16 +1010,31 @@ pub extern "C" fn sqlite3_fts5_config_free(p_config: *mut Fts5Config) -> () {
     }
 }
 
+///* Arguments nArg/azArg contain the string arguments passed to the xCreate
+///* or xConnect method of the virtual table. This function attempts to 
+///* allocate an instance of Fts5Config containing the results of parsing
+///* those arguments.
+///*
+///* If successful, SQLITE_OK is returned and *ppOut is set to point to the
+///* new Fts5Config object. If an error occurs, an SQLite error code is 
+///* returned, *ppOut is set to NULL and an error message may be left in
+///* *pzErr. It is the responsibility of the caller to eventually free any 
+///* such error message using sqlite3_free().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_config_parse(p_global: *mut Fts5Global,
     db: *mut Sqlite3, n_arg: i32, az_arg: *mut *const i8,
     pp_out: &mut *mut Fts5Config, pz_err: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_ret: *mut Fts5Config = core::ptr::null_mut();
+    /// New object to return
     let mut i: i32 = 0;
     let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut b_unindexed: i32 = 0;
-    *pp_out =
+
+    /// True if there are one or more UNINDEXED
+    (*pp_out =
         {
             p_ret =
                 unsafe {
@@ -954,7 +1042,7 @@ pub extern "C" fn sqlite3_fts5_config_parse(p_global: *mut Fts5Global,
                                 Sqlite3Uint64)
                     } as *mut Fts5Config;
             p_ret
-        };
+        });
     if p_ret == core::ptr::null_mut() { return 7; }
     unsafe {
         memset(p_ret as *mut (), 0, core::mem::size_of::<Fts5Config>() as u64)
@@ -1195,6 +1283,9 @@ pub extern "C" fn sqlite3_fts5_config_parse(p_global: *mut Fts5Global,
     return rc;
 }
 
+///* Call sqlite3_declare_vtab() based on the contents of the configuration
+///* object passed as the only argument. Return SQLITE_OK if successful, or
+///* an SQLite error code if an error occurs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_declare_vtab(p_config: &Fts5Config)
     -> i32 {
@@ -1252,6 +1343,27 @@ pub extern "C" fn sqlite3_fts5_config_declare_vtab(p_config: &Fts5Config)
     return rc;
 }
 
+///* Tokenize the text passed via the second and third arguments.
+///*
+///* The callback is invoked once for each token in the input text. The
+///* arguments passed to it are, in order:
+///*
+///*     void *pCtx          // Copy of 4th argument to sqlite3Fts5Tokenize()
+///*     const char *pToken  // Pointer to buffer containing token
+///*     int nToken          // Size of token in bytes
+///*     int iStart          // Byte offset of start of token within input text
+///*     int iEnd            // Byte offset of end of token within input text
+///*     int iPos            // Position of token in input (first token is 0)
+///*
+///* If the callback returns a non-zero value the tokenization is abandoned
+///* and no further callbacks are issued. 
+///*
+///* This function returns SQLITE_OK if successful or an SQLite error code
+///* if an error occurs. If the tokenization was abandoned early because
+///* the callback returned SQLITE_DONE, this is not an error and this function
+///* still returns SQLITE_OK. Or, if the tokenization was abandoned early
+///* because the callback returned another non-zero value, it is assumed
+///* to be an SQLite error code and returned to the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_tokenize(p_config: *mut Fts5Config, flags: i32,
     p_text: *const i8, n_text: i32, p_ctx: *mut (),
@@ -1297,6 +1409,10 @@ pub extern "C" fn sqlite3_fts5_tokenize(p_config: *mut Fts5Config, flags: i32,
     return rc;
 }
 
+///* Argument pIn points to the first character in what is expected to be
+///* a comma-separated list of SQL literals followed by a ')' character.
+///* If it actually is this, return a pointer to the ')'. Otherwise, return
+///* NULL to indicate a parse error.
 extern "C" fn fts5_config_skip_args(p_in_1: *const i8) -> *const i8 {
     let mut p: *const i8 = p_in_1;
     loop {
@@ -1320,6 +1436,13 @@ extern "C" fn fts5_config_skip_args(p_in_1: *const i8) -> *const i8 {
     return p;
 }
 
+///* Parameter zIn contains a rank() function specification. The format of 
+///* this is:
+///*
+///*   + Bareword (function name)
+///*   + Open parenthesis - "("
+///*   + Zero or more SQL literals in a comma separated list
+///*   + Close parenthesis - ")"
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_parse_rank(z_in: *const i8,
     pz_rank: &mut *mut i8, pz_rank_args: &mut *mut i8) -> i32 {
@@ -1401,6 +1524,7 @@ pub extern "C" fn sqlite3_fts5_config_parse_rank(z_in: *const i8,
     return rc;
 }
 
+/// Set the value of a single config attribute
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_config_set_value(p_config: &mut Fts5Config,
     z_key: *const i8, p_val: *mut Sqlite3Value, pb_badkey: &mut i32) -> i32 {
@@ -1534,10 +1658,15 @@ pub extern "C" fn sqlite3_fts5_config_set_value(p_config: &mut Fts5Config,
     return rc;
 }
 
+///* Set (*pConfig->pzErrmsg) to point to an sqlite3_malloc()ed buffer 
+///* containing the error message created using printf() style formatting
+///* string zFmt and its trailing arguments.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub unsafe extern "C" fn sqlite3_fts5_config_errmsg(p_config: &Fts5Config,
     z_fmt: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
+    /// ... printf arguments
     let mut z_msg: *mut i8 = core::ptr::null_mut();
     unsafe { ap = core::mem::transmute_copy(&__va0) };
     z_msg = unsafe { sqlite3_vmprintf(z_fmt, ap) };
@@ -1555,7 +1684,9 @@ pub unsafe extern "C" fn sqlite3_fts5_config_errmsg(p_config: &Fts5Config,
     ();
 }
 
+/// Load the contents of the %_config table
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_config_load(p_config: *mut Fts5Config,
     i_cookie: i32) -> i32 {
     let z_select: *const i8 =
@@ -1564,6 +1695,8 @@ pub extern "C" fn sqlite3_fts5_config_load(p_config: *mut Fts5Config,
     let mut p: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut rc: i32 = 0;
     let mut i_version: i32 = 0;
+
+    /// Set default values
     unsafe { (*p_config).pgsz = 4050 };
     unsafe { (*p_config).n_automerge = 4 };
     unsafe { (*p_config).n_usermerge = 4 };

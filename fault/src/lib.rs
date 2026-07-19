@@ -1,19 +1,58 @@
+//!* 2008 Jan 22
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This file contains code to support the concept of "benign" 
+//!* malloc failures (when the xMalloc() or xRealloc() method of the
+//!* sqlite3_mem_methods structure fails to allocate a block of memory
+//!* and returns 0). 
+//!*
+//!* Most malloc failures are non-benign. After they occur, SQLite
+//!* abandons the current operation and returns an error code (usually
+//!* SQLITE_NOMEM) to the user. However, sometimes a fault is not necessarily
+//!* fatal. For example, if a malloc fails while resizing a hash table, this 
+//!* is completely recoverable simply by not carrying out the resize. The 
+//!* hash table will continue to function normally.  So a malloc failure 
+//!* during a hash table resize is a benign fault.
+//!* Global variables.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -401,6 +440,8 @@ struct BenignMallocHooks {
 static mut sqlite3_hooks: BenignMallocHooks =
     BenignMallocHooks { x_benign_begin: None, x_benign_end: None };
 
+///* Register hooks to call when sqlite3BeginBenignMalloc() and
+///* sqlite3EndBenignMalloc() are called, respectively.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_benign_malloc_hooks(x_benign_begin:
         Option<unsafe extern "C" fn() -> ()>,
@@ -411,6 +452,9 @@ pub extern "C" fn sqlite3_benign_malloc_hooks(x_benign_begin:
     }
 }
 
+///* This (sqlite3EndBenignMalloc()) is called by SQLite code to indicate that
+///* subsequent malloc failures are benign. A call to sqlite3EndBenignMalloc()
+///* indicates that subsequent malloc failures are non-benign.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_begin_benign_malloc() -> () {
     unsafe {

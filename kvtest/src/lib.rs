@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -80,6 +86,66 @@ struct Stat {
     st_qspare: [i64; 2],
 }
 
+///* 2016-12-28
+///*
+///* The author disclaims copyright to this source code.  In place of
+///* a legal notice, here is a blessing:
+///*
+///*    May you do good and not evil.
+///*    May you find forgiveness for yourself and forgive others.
+///*    May you share freely, never taking more than you give.
+///*
+///************************************************************************
+///*
+///* This file implements "key-value" performance test for SQLite.  The
+///* purpose is to compare the speed of SQLite for accessing large BLOBs
+///* versus reading those same BLOB values out of individual files in the
+///* filesystem.
+///*
+///* Run "kvtest" with no arguments for on-line help, or see comments below.
+///*
+///* HOW TO COMPILE:
+///*
+///* (1) Gather this source file and a recent SQLite3 amalgamation with its
+///*     header into the working directory.  You should have:
+///*
+///*          kvtest.c       >--- this file
+///*          sqlite3.c      \___ SQLite
+///*          sqlite3.h      /    amlagamation & header
+///*
+///* (2) Run you compiler against the two C source code files.
+///*
+///*    (a) On linux or mac:
+///*
+///*        OPTS="-DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION"
+///*        gcc -Os -I. $OPTS kvtest.c sqlite3.c -o kvtest
+///*
+///*             The $OPTS options can be omitted.  The $OPTS merely omit
+///*             the need to link against -ldl and -lpthread, or whatever
+///*             the equivalent libraries are called on your system.
+///*
+///*    (b) Windows with MSVC:
+///*
+///*        cl -I. kvtest.c sqlite3.c
+///*
+///* USAGE:
+///*
+///* (1) Create a test database by running "kvtest init" with appropriate
+///*     options.  See the help message for available options.
+///*
+///* (2) Construct the corresponding pile-of-files database on disk using
+///*     the "kvtest export" command.
+///*
+///* (3) Run tests using "kvtest run" against either the SQLite database or
+///*     the pile-of-files database and with appropriate options.
+///*
+///* For example:
+///*
+///*       ./kvtest init x1.db --count 100000 --size 10000
+///*       mkdir x1
+///*       ./kvtest export x1.db x1
+///*       ./kvtest run x1.db --count 10000 --max-id 1000000
+///*       ./kvtest run x1 --count 10000 --max-id 1000000
 static z_help: [i8; 2265] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
             107 as i8, 118 as i8, 116 as i8, 101 as i8, 115 as i8, 116 as i8,
@@ -460,6 +526,7 @@ static z_help: [i8; 2265] =
             101 as i8, 32 as i8, 116 as i8, 101 as i8, 115 as i8, 116 as i8,
             10 as i8, 0 as i8];
 
+///* Show the help text and quit.
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -470,6 +537,7 @@ extern "C" fn show_help() -> () {
     }
 }
 
+///* Show an error message an quit.
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -485,6 +553,8 @@ unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -498,6 +568,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: i32 = 0;
@@ -610,6 +681,8 @@ extern "C" fn path_type(z_path_1: *const i8) -> i32 {
     return 99;
 }
 
+///* Return the size of a file in bytes.  Or return -1 if the
+///* named object is not a regular file or does not exist.
 extern "C" fn file_size(z_path_1: *const i8) -> Sqlite3Int64 {
     let mut x: Stat = unsafe { core::mem::zeroed() };
     let mut rc: i32 = 0;
@@ -624,6 +697,9 @@ extern "C" fn file_size(z_path_1: *const i8) -> Sqlite3Int64 {
     return x.st_size;
 }
 
+///* A Pseudo-random number generator with a fixed seed.  Use this so
+///* that the same sequence of "random" numbers are generated on each
+///* run, for repeatability.
 extern "C" fn rand_int() -> u32 {
     unsafe {
         x_1 = x_1 >> 1 ^ 1 as u32 + !(x_1 & 1 as u32) & 3489660929u32;
@@ -632,6 +708,7 @@ extern "C" fn rand_int() -> u32 {
     }
 }
 
+///* Do database initialization.
 extern "C" fn init_main(argc: i32, argv: *const *mut i8) -> i32 {
     let mut z_db: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -801,6 +878,7 @@ extern "C" fn init_main(argc: i32, argv: *const *mut i8) -> i32 {
     return 0;
 }
 
+///* Analyze an existing database file.  Report its content.
 extern "C" fn stat_main(argc: i32, argv: *const *mut i8) -> i32 {
     unsafe {
         let mut z_db: *mut i8 = core::ptr::null_mut();
@@ -1019,6 +1097,10 @@ extern "C" fn stat_main(argc: i32, argv: *const *mut i8) -> i32 {
     }
 }
 
+///*      remember(V,PTR)
+///*
+///* Return the integer value V.  Also save the value of V in a
+///* C-language variable whose address is PTR.
 extern "C" fn remember_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1036,10 +1118,12 @@ extern "C" fn remember_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int64(p_ctx_1, v) };
 }
 
+///* Make sure a directory named zDir exists.
 extern "C" fn kvtest_mkdir(z_dir_1: *const i8) -> () {
     { let _ = unsafe { mkdir(z_dir_1, 493 as ModeT) }; };
 }
 
+///* Export the kv table to individual files in the filesystem
 extern "C" fn export_main(argc: i32, argv: *const *mut i8) -> i32 {
     unsafe {
         let mut z_db: *mut i8 = core::ptr::null_mut();
@@ -1214,13 +1298,32 @@ extern "C" fn export_main(argc: i32, argv: *const *mut i8) -> i32 {
     }
 }
 
+///* Read the content of file zName into memory obtained from sqlite3_malloc64()
+///* and return a pointer to the buffer. The caller is responsible for freeing 
+///* the memory. 
+///*
+///* If parameter pnByte is not NULL, (*pnByte) is set to the number of bytes
+///* read.
+///*
+///* For convenience, a nul-terminator byte is always appended to the data read
+///* from the file before the buffer is returned. This byte is not included in
+///* the final value of (*pnByte), if applicable.
+///*
+///* NULL is returned if any error is encountered. The final value of *pnByte
+///* is undefined in this case.
+#[allow(unused_doc_comments)]
 extern "C" fn read_file(z_name_1: *const i8, pn_byte_1: *mut Sqlite3Int64)
     -> *mut u8 {
     let mut in_: *mut FILE = core::ptr::null_mut();
+    /// FILE from which to read content of zName
     let mut n_in: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of zName in bytes
     let mut n_read: u64 = 0 as u64;
+    /// Number of bytes actually read
     let mut p_buf: *mut u8 = core::ptr::null_mut();
-    n_in = file_size(z_name_1);
+
+    /// Content read from disk
+    (n_in = file_size(z_name_1));
     if n_in < 0 as i64 { return core::ptr::null_mut(); }
     in_ = unsafe { fopen(z_name_1, c"rb".as_ptr() as *mut i8 as *const i8) };
     if in_ == core::ptr::null_mut() { return core::ptr::null_mut(); }
@@ -1236,14 +1339,23 @@ extern "C" fn read_file(z_name_1: *const i8, pn_byte_1: *mut Sqlite3Int64)
     return p_buf;
 }
 
+///* Overwrite a file with randomness.  Do not change the size of the
+///* file.
+#[allow(unused_doc_comments)]
 extern "C" fn update_file(z_name_1: *const i8, pn_byte_1: &mut Sqlite3Int64,
     do_fsync_1: i32) -> () {
     let mut out: *mut FILE = core::ptr::null_mut();
+    /// FILE from which to read content of zName
     let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of zName in bytes
     let mut n_written: u64 = 0 as u64;
+    /// Number of bytes actually read
     let mut p_buf: *mut u8 = core::ptr::null_mut();
+    /// Content to store on disk
     let z_mode: *const i8 = c"wb".as_ptr() as *mut i8 as *const i8;
-    sz = file_size(z_name_1);
+
+    /// Mode for fopen()
+    (sz = file_size(z_name_1));
     if sz < 0 as i64 {
         unsafe {
             fatal_error(c"No such file: \"%s\"".as_ptr() as *mut i8 as
@@ -1280,6 +1392,8 @@ extern "C" fn update_file(z_name_1: *const i8, pn_byte_1: &mut Sqlite3Int64,
     unsafe { sqlite3_free(p_buf as *mut ()) };
 }
 
+///* Return the current time in milliseconds since the beginning of
+///* the Julian epoch.
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1306,6 +1420,7 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
     }
 }
 
+///* Display memory stats.
 extern "C" fn display_stats(db: *mut Sqlite3, b_reset_1: i32) -> i32 {
     unsafe {
         let mut i_cur: i32 = 0;
@@ -1389,37 +1504,70 @@ extern "C" fn display_stats(db: *mut Sqlite3, b_reset_1: i32) -> i32 {
     }
 }
 
+///* Run a performance test
+#[allow(unused_doc_comments)]
 extern "C" fn run_main(argc: i32, argv: *const *mut i8) -> i32 {
     let mut e_type: i32 = 0;
+    /// Is zDb a database or a directory?
     let mut z_db: *mut i8 = core::ptr::null_mut();
+    /// Database or directory name
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: i32 = 0;
+    /// Return code from SQLite calls
     let mut n_count: i32 = 1000;
+    /// Number of blob fetch operations
     let mut n_extra: i32 = 0;
+    /// Extra cycles
     let mut i_key: i32 = 1;
+    /// Next blob key
     let mut i_max: i32 = 0;
+    /// Largest allowed key
     let mut i_pagesize: i32 = 0;
+    /// Database page size
     let mut i_cache: i32 = 1000;
+    /// Database cache size in kibibytes
     let mut b_blob_api: i32 = 0;
+    /// Use the incremental blob I/O API
     let mut b_stats: i32 = 0;
+    /// Print stats before exiting
     let mut e_order: i32 = 1;
+    /// Access order
     let mut is_update_test: i32 = 0;
+    /// Do in-place updates rather than reads
     let mut do_integrity_ck: i32 = 0;
+    /// Run PRAGMA integrity_check after the test
     let mut no_sync: i32 = 0;
+    /// Disable synchronous mode
     let mut do_fsync: i32 = 0;
+    /// Update disk files synchronously
     let mut do_multi_trans: i32 = 0;
+    /// Each operation in its own transaction
     let mut no_checkpoint: i32 = 0;
+    /// Omit the checkpoint in WAL mode
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
+    /// Database connection
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Prepared statement for SQL access
     let mut p_blob: *mut Sqlite3Blob = core::ptr::null_mut();
+    /// Handle for incremental Blob I/O
     let mut tm_start: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Start time
     let mut tm_elapsed: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Elapsed time
     let mut mmap_size: i32 = 0;
+    /// --mmap N argument
     let mut n_data: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Bytes of data
     let mut n_total: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total data read
     let mut p_data: *mut u8 = core::ptr::null_mut();
+    /// Content of the blob
     let mut n_alloc: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Space allocated for pData[]
     let mut z_j_mode: *const i8 = core::ptr::null();
+
+    /// Journal mode
     if !(unsafe {
                                 strcmp(unsafe { *argv.offset(1 as isize) } as *const i8,
                                     c"run".as_ptr() as *mut i8 as *const i8)
@@ -1673,6 +1821,8 @@ extern "C" fn run_main(argc: i32, argv: *const *mut i8) -> i32 {
         }
     }
     if e_type == 3 {
+
+        /// Recover any prior crashes prior to starting the timer
         unsafe { sqlite3_open(z_db as *const i8, &mut db) };
         unsafe {
             sqlite3_exec(db,
@@ -1799,6 +1949,7 @@ extern "C" fn run_main(argc: i32, argv: *const *mut i8) -> i32 {
             if !(i < n_count) { break '__b9; }
             '__c9: loop {
                 if e_type == 1 || e_type == 2 {
+                    /// CASE 1: Reading or writing blobs out of separate files
                     let mut z_key: *mut i8 = core::ptr::null_mut();
                     if e_type == 1 {
                         z_key =

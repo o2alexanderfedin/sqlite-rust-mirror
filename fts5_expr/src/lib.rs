@@ -2,16 +2,27 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5PoslistReader, Fts5PoslistWriter, Fts5Storage,
+    Fts5Table, Fts5Termset, Fts5Token, Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///***********************************************************************
+///* Interface to code in fts5_expr.c.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Expr {
@@ -23,6 +34,23 @@ struct Fts5Expr {
     ap_expr_phrase: *mut *mut Fts5ExprPhrase,
 }
 
+///* eType:
+///*   Expression node type. Usually one of:
+///*
+///*       FTS5_AND                 (nChild, apChild valid)
+///*       FTS5_OR                  (nChild, apChild valid)
+///*       FTS5_NOT                 (nChild, apChild valid)
+///*       FTS5_STRING              (pNear valid)
+///*       FTS5_TERM                (pNear valid)
+///*
+///*   An expression node with eType==0 may also exist. It always matches zero
+///*   rows. This is created when a phrase containing no tokens is parsed.
+///*   e.g. "".
+///*
+///* iHeight:
+///*   Distance from this node to furthest leaf. This is always 0 for nodes
+///*   of type FTS5_STRING and FTS5_TERM. For all other nodes it is one 
+///*   greater than the largest child value.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprNode {
@@ -38,6 +66,8 @@ struct Fts5ExprNode {
     ap_child: [*mut Fts5ExprNode; 0],
 }
 
+///* One or more phrases that must appear within a certain token distance of
+///* each other within each matching document.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprNearset {
@@ -47,6 +77,8 @@ struct Fts5ExprNearset {
     ap_phrase: [*mut Fts5ExprPhrase; 0],
 }
 
+///* A phrase. One or more terms that must appear in a contiguous sequence
+///* within a document for it to match.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprPhrase {
@@ -56,6 +88,8 @@ struct Fts5ExprPhrase {
     a_term: [Fts5ExprTerm; 0],
 }
 
+///* An instance of the following structure represents a single search term
+///* or term prefix.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5ExprTerm {
@@ -68,6 +102,7 @@ struct Fts5ExprTerm {
     p_synonym: *mut Fts5ExprTerm,
 }
 
+///* Parse context.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Parse {
@@ -89,6 +124,10 @@ extern "C" fn fts5_expr_isspace(t: i8) -> i32 {
                     t as i32 == '\n' as i32 || t as i32 == '\r' as i32) as i32;
 }
 
+///****************************************
+///* The fts5_expr.c API above this point is used by the other hand-written
+///* C code in this module. The interfaces below this point are called by
+///* the parser code in fts5parse.y.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_parse_error(p_parse: &mut Fts5Parse,
     z_fmt: *const i8, mut __va0: ...) -> () {
@@ -108,6 +147,7 @@ pub unsafe extern "C" fn sqlite3_fts5_parse_error(p_parse: &mut Fts5Parse,
     ();
 }
 
+///* Read the first token from the nul-terminated string at *pz.
 extern "C" fn fts5_expr_get_token(p_parse_1: *mut Fts5Parse,
     pz: &mut *const i8, p_token_1: &mut Fts5Token) -> i32 {
     let mut z: *const i8 = *pz;
@@ -340,10 +380,14 @@ extern "C" fn assert_expr_depth_ok(rc: i32, p: &Fts5ExprNode) -> () {
     }
 }
 
+///* Remove from colset pColset any columns that are not also in colset pMerge.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_merge_colset(p_colset_1: &mut Fts5Colset,
     p_merge_1: &Fts5Colset) -> () {
     let mut i_in: i32 = 0;
+    /// Next input in pColset
     let mut i_merge: i32 = 0;
+    /// Next input in pMerge
     let mut i_out: i32 = 0;
     while i_in < (*p_colset_1).n_col && i_merge < (*p_merge_1).n_col {
         let i_diff: i32 =
@@ -378,6 +422,12 @@ extern "C" fn fts5_merge_colset(p_colset_1: &mut Fts5Colset,
     (*p_colset_1).n_col = i_out;
 }
 
+///* If argument pOrig is NULL, or if (*pRc) is set to anything other than
+///* SQLITE_OK when this function is called, NULL is returned. 
+///*
+///* Otherwise, a copy of (*pOrig) is made into memory obtained from
+///* sqlite3Fts5MallocZero() and a pointer to it returned. If the allocation
+///* fails, (*pRc) is set to SQLITE_NOMEM and NULL is returned.
 extern "C" fn fts5_clone_colset(p_rc_1: *mut i32, p_orig_1: *const Fts5Colset)
     -> *mut Fts5Colset {
     let mut p_ret: *mut Fts5Colset = core::ptr::null_mut();
@@ -398,6 +448,10 @@ extern "C" fn fts5_clone_colset(p_rc_1: *mut i32, p_orig_1: *const Fts5Colset)
     return p_ret;
 }
 
+///* Recursively apply colset pColset to expression node pNode and all of
+///* its decendents. If (*ppFree) is not NULL, it contains a spare copy
+///* of pColset. This function may use the spare copy and set (*ppFree) to
+///* zero, or it may create copies of pColset using fts5CloneColset().
 extern "C" fn fts5_parse_set_colset(p_parse_1: *mut Fts5Parse,
     p_node_1: &mut Fts5ExprNode, p_colset_1: *mut Fts5Colset,
     pp_free_1: *mut *mut Fts5Colset) -> () {
@@ -465,6 +519,7 @@ extern "C" fn fts5_parse_set_colset(p_parse_1: *mut Fts5Parse,
     }
 }
 
+///* Apply colset pColset to expression node pExpr and all of its descendents.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_set_colset(p_parse: *mut Fts5Parse,
     p_expr: *mut Fts5ExprNode, p_colset: *mut Fts5Colset) -> () {
@@ -482,6 +537,7 @@ pub extern "C" fn sqlite3_fts5_parse_set_colset(p_parse: *mut Fts5Parse,
     unsafe { sqlite3_free(p_free as *mut ()) };
 }
 
+///* Free the phrase object passed as the only argument.
 extern "C" fn fts5_expr_phrase_free(p_phrase_1: *mut Fts5ExprPhrase) -> () {
     if !(p_phrase_1).is_null() {
         let mut i: i32 = 0;
@@ -539,6 +595,7 @@ extern "C" fn fts5_expr_phrase_free(p_phrase_1: *mut Fts5ExprPhrase) -> () {
     }
 }
 
+///* Free the phrase object passed as the second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_nearset_free(p_near:
         *mut Fts5ExprNearset) -> () {
@@ -563,6 +620,7 @@ pub extern "C" fn sqlite3_fts5_parse_nearset_free(p_near:
     }
 }
 
+///* Free the expression node object passed as the only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_node_free(p: *mut Fts5ExprNode) -> () {
     if !(p).is_null() {
@@ -586,7 +644,9 @@ pub extern "C" fn sqlite3_fts5_parse_node_free(p: *mut Fts5ExprNode) -> () {
     }
 }
 
+/// Parse a MATCH expression.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_expr_new(p_config: *mut Fts5Config,
     b_phrase_to_and: i32, i_col: i32, z_expr: *const i8,
     pp_new: &mut *mut Fts5Expr, pz_err: &mut *mut i8) -> i32 {
@@ -594,6 +654,7 @@ pub extern "C" fn sqlite3_fts5_expr_new(p_config: *mut Fts5Config,
     let mut token: Fts5Token = unsafe { core::mem::zeroed() };
     let mut z: *const i8 = z_expr;
     let mut t: i32 = 0;
+    /// Next token type
     let mut p_engine: *mut () = core::ptr::null_mut();
     let mut p_new: *mut Fts5Expr = core::ptr::null_mut();
     *pp_new = core::ptr::null_mut();
@@ -681,6 +742,8 @@ pub extern "C" fn sqlite3_fts5_expr_new(p_config: *mut Fts5Config,
     return s_parse.rc;
 }
 
+///* Assuming that buffer z is at least nByte bytes in size and contains a
+///* valid utf-8 string, return the number of characters in the string.
 extern "C" fn fts5_expr_count_char(z: &[i8]) -> i32 {
     let mut n_ret: i32 = 0;
     let mut ii: i32 = 0;
@@ -700,6 +763,12 @@ extern "C" fn fts5_expr_count_char(z: &[i8]) -> i32 {
     return n_ret;
 }
 
+///* This function is only called when using the special 'trigram' tokenizer.
+///* Argument zText contains the text of a LIKE or GLOB pattern matched
+///* against column iCol. This function creates and compiles an FTS5 MATCH
+///* expression that will match a superset of the rows matched by the LIKE or
+///* GLOB. If successful, SQLITE_OK is returned. Otherwise, an SQLite error
+///* code.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_pattern(p_config: *mut Fts5Config,
     b_glob: i32, mut i_col: i32, z_text: *const i8, pp: *mut *mut Fts5Expr)
@@ -834,6 +903,13 @@ pub extern "C" fn sqlite3_fts5_expr_pattern(p_config: *mut Fts5Config,
     return rc;
 }
 
+///* Initialize all term iterators in the pNear object. If any term is found
+///* to match no documents at all, return immediately without initializing any
+///* further iterators.
+///*
+///* If an error occurs, return an SQLite error code. Otherwise, return
+///* SQLITE_OK. It is not considered an error if some term matches zero
+///* documents.
 extern "C" fn fts5_expr_near_init_all(p_expr_1: &Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> i32 {
     let p_near: *const Fts5ExprNearset =
@@ -949,6 +1025,8 @@ extern "C" fn fts5_expr_set_eof(p_node_1: &mut Fts5ExprNode) -> () {
     }
 }
 
+///* Argument pTerm must be a synonym iterator. Return the current rowid
+///* that it points to.
 extern "C" fn fts5_expr_synonym_rowid(p_term_1: *mut Fts5ExprTerm,
     b_desc_1: i32, pb_eof_1: *mut i32) -> i64 {
     let mut i_ret: i64 = 0 as i64;
@@ -1034,6 +1112,13 @@ extern "C" fn fts5_expr_synonym_advanceto(p_term_1: *mut Fts5ExprTerm,
     return b_eof;
 }
 
+///* Advance iterator pIter until it points to a value equal to or laster
+///* than the initial value of *piLast. If this means the iterator points
+///* to a value laster than *piLast, update *piLast to the new lastest value.
+///*
+///* If the iterator reaches EOF, set *pbEof to true before returning. If
+///* an error occurs, set *pRc to an error code. If either *pbEof or *pRc
+///* are set, return a non-zero value. Otherwise, return zero.
 extern "C" fn fts5_expr_advanceto(p_iter_1: *mut Fts5IndexIter, b_desc_1: i32,
     pi_last_1: &mut i64, p_rc_1: &mut i32, pb_eof_1: &mut i32) -> i32 {
     let i_last: i64 = *pi_last_1;
@@ -1063,6 +1148,7 @@ extern "C" fn fts5_expr_advanceto(p_iter_1: *mut Fts5IndexIter, b_desc_1: i32,
     return 0;
 }
 
+///* Argument pTerm must be a synonym iterator.
 extern "C" fn fts5_expr_synonym_list(p_term_1: *mut Fts5ExprTerm,
     i_rowid_1: i64, p_buf_1: *mut Fts5Buffer, pa: &mut *mut u8, pn: &mut i32)
     -> i32 {
@@ -1297,6 +1383,16 @@ extern "C" fn fts5_expr_synonym_list(p_term_1: *mut Fts5ExprTerm,
     unreachable!();
 }
 
+///* All individual term iterators in pPhrase are guaranteed to be valid and
+///* pointing to the same rowid when this function is called. This function 
+///* checks if the current rowid really is a match, and if so populates
+///* the pPhrase->poslist buffer accordingly. Output parameter *pbMatch
+///* is set to true if this is really a match, or false otherwise.
+///*
+///* SQLITE_OK is returned if an error occurs, or an SQLite error code 
+///* otherwise. It is not considered an error code if the current rowid is 
+///* not a match.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_phrase_is_match(p_node_1: &Fts5ExprNode,
     p_phrase_1: &mut Fts5ExprPhrase, pb_match_1: &mut i32) -> i32 {
     let mut writer: Fts5PoslistWriter = unsafe { core::mem::zeroed() };
@@ -1305,7 +1401,10 @@ extern "C" fn fts5_expr_phrase_is_match(p_node_1: &Fts5ExprNode,
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
     let mut b_first: i32 = 0;
+    /// If the aStatic[] array is not large enough, allocate a large array
+    ///* using sqlite3_malloc(). This approach could be improved upon.
     let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Initialize a term iterator for each term in the phrase
     let mut p_term: *mut Fts5ExprTerm = core::ptr::null_mut();
     let mut n: i32 = 0;
     let mut b_flag: i32 = 0;
@@ -1580,6 +1679,11 @@ extern "C" fn fts5_expr_phrase_is_match(p_node_1: &Fts5ExprNode,
             }
         }
     }
+
+    /// If the aStatic[] array is not large enough, allocate a large array
+    ///* using sqlite3_malloc(). This approach could be improved upon.
+    /// Initialize a term iterator for each term in the phrase
+    /// Append position iPos to the output
     unreachable!();
 }
 
@@ -1624,6 +1728,22 @@ extern "C" fn fts5_lookahead_reader_init(a: *const u8, n: i32,
     return fts5_lookahead_reader_next(unsafe { &mut *p });
 }
 
+///* The near-set object passed as the first argument contains more than
+///* one phrase. All phrases currently point to the same row. The
+///* Fts5ExprPhrase.poslist buffers are populated accordingly. This function
+///* tests if the current row contains instances of each phrase sufficiently
+///* close together to meet the NEAR constraint. Non-zero is returned if it
+///* does, or zero otherwise.
+///*
+///* If in/out parameter (*pRc) is set to other than SQLITE_OK when this
+///* function is called, it is a no-op. Or, if an error (e.g. SQLITE_NOMEM)
+///* occurs within this function (*pRc) is set accordingly before returning.
+///* The return value is undefined in both these cases.
+///* 
+///* If no error occurs and non-zero (a match) is returned, the position-list
+///* of each phrase object is edited to contain only those entries that
+///* meet the constraint before returning.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_near_is_match(p_rc_1: &mut i32,
     p_near_1: &Fts5ExprNearset) -> i32 {
     let mut a_static: [Fts5NearTrimmer; 4] = unsafe { core::mem::zeroed() };
@@ -1632,12 +1752,25 @@ extern "C" fn fts5_expr_near_is_match(p_rc_1: &mut i32,
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
     let mut b_match: i32 = 0;
+    /// If the aStatic[] array is not large enough, allocate a large array
+    ///* using sqlite3_malloc(). This approach could be improved upon.
     let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Initialize a lookahead iterator for each phrase. After passing the
+    ///* buffer and buffer size to the lookaside-reader init function, zero
+    ///* the phrase poslist buffer. The new poslist for the phrase (containing
+    ///* the same entries as the original with some entries removed on account 
+    ///* of the NEAR constraint) is written over the original even as it is
+    ///* being read. This is safe as the entries for the new poslist are a
+    ///* subset of the old, so it is not possible for data yet to be read to
+    ///* be overwritten.
     let mut p_poslist: *mut Fts5Buffer = core::ptr::null_mut();
     let mut i_adv: i32 = 0;
     let mut i_min: i64 = 0 as i64;
     let mut i_max: i64 = 0 as i64;
+    /// This block advances the phrase iterators until they point to a set of
+    ///* entries that together comprise a match.
     let mut p_pos: *mut Fts5LookaheadReader = core::ptr::null_mut();
+    /// Add an entry to each output position list
     let mut i_pos: i64 = 0 as i64;
     let mut p_writer: *mut Fts5PoslistWriter = core::ptr::null_mut();
     let mut b_ret: i32 = 0;
@@ -1878,6 +2011,20 @@ extern "C" fn fts5_expr_near_is_match(p_rc_1: &mut i32,
             }
         }
     }
+
+    /// If the aStatic[] array is not large enough, allocate a large array
+    ///* using sqlite3_malloc(). This approach could be improved upon.
+    /// Initialize a lookahead iterator for each phrase. After passing the
+    ///* buffer and buffer size to the lookaside-reader init function, zero
+    ///* the phrase poslist buffer. The new poslist for the phrase (containing
+    ///* the same entries as the original with some entries removed on account 
+    ///* of the NEAR constraint) is written over the original even as it is
+    ///* being read. This is safe as the entries for the new poslist are a
+    ///* subset of the old, so it is not possible for data yet to be read to
+    ///* be overwritten.
+    /// This block advances the phrase iterators until they point to a set of
+    ///* entries that together comprise a match.
+    /// Add an entry to each output position list
     unreachable!();
 }
 
@@ -1975,6 +2122,16 @@ extern "C" fn fts5_expr_near_test(p_rc_1: *mut i32, p_expr_1: &Fts5Expr,
     }
 }
 
+///* All individual term iterators in pNear are guaranteed to be valid when
+///* this function is called. This function checks if all term iterators
+///* point to the same rowid, and if not, advances them until they do.
+///* If an EOF is reached before this happens, *pbEof is set to true before
+///* returning.
+///*
+///* SQLITE_OK is returned if an error occurs, or an SQLite error code 
+///* otherwise. It is not considered an error code if an iterator reaches
+///* EOF.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_node_test_string(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let p_near: *const Fts5ExprNearset =
@@ -1986,10 +2143,15 @@ extern "C" fn fts5_expr_node_test_string(p_expr_1: *mut Fts5Expr,
         };
     let mut rc: i32 = 0;
     let mut i_last: i64 = 0 as i64;
+    /// Lastest rowid any iterator points to
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    /// Phrase and token index, respectively
     let mut b_match: i32 = 0;
+    /// True if all terms are at the same rowid
     let b_desc: i32 = unsafe { (*p_expr_1).b_desc } as i32;
+
+    /// Check that this node should not be FTS5_TERM
     if !(unsafe { (*p_near).n_phrase } > 1 ||
                                     unsafe {
                                             (*unsafe {
@@ -2119,8 +2281,14 @@ extern "C" fn fts5_expr_node_test_string(p_expr_1: *mut Fts5Expr,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_node_test_term(p_expr_1: &Fts5Expr,
     p_node_1: &mut Fts5ExprNode) -> i32 {
+    /// As this "NEAR" object is actually a single phrase that consists 
+    ///* of a single term only, grab pointers into the poslist managed by the
+    ///* fts5_index.c iterator object. This is much faster than synthesizing 
+    ///* a new poslist the way we have to for more complicated phrase or NEAR
+    ///* expressions.
     let p_phrase: *mut Fts5ExprPhrase =
         unsafe {
             *(unsafe { (*(*p_node_1).p_near).ap_phrase.as_ptr() } as
@@ -2169,6 +2337,14 @@ extern "C" fn fts5_expr_node_test_term(p_expr_1: &Fts5Expr,
     return 0;
 }
 
+///* If pExpr is an ASC iterator, this function returns a value with the
+///* same sign as:
+///*
+///*   (iLhs - iRhs)
+///*
+///* Otherwise, if this is a DESC iterator, the opposite is returned:
+///*
+///*   (iRhs - iLhs)
 extern "C" fn fts5_rowid_cmp(p_expr_1: &Fts5Expr, i_lhs_1: i64, i_rhs_1: i64)
     -> i32 {
     if !((*p_expr_1).b_desc == 0 || (*p_expr_1).b_desc == 1) as i32 as i64 !=
@@ -2231,6 +2407,8 @@ extern "C" fn fts5_expr_node_zero_poslist(p_node_1: &Fts5ExprNode) -> () {
     }
 }
 
+///* Argument pNode is an FTS5_AND node.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_node_test_and(p_expr_1: *mut Fts5Expr,
     p_and_1: *mut Fts5ExprNode) -> i32 {
     let mut i_child: i32 = 0;
@@ -2264,17 +2442,24 @@ extern "C" fn fts5_expr_node_test_and(p_expr_1: *mut Fts5Expr,
                             fts5_rowid_cmp(unsafe { &*p_expr_1 }, i_last,
                                 unsafe { (*p_child).i_rowid });
                         if cmp > 0 {
-                            rc =
+
+                            /// Advance pChild until it points to iLast or laster
+                            (rc =
                                 unsafe {
                                     (unsafe {
                                             (*p_child).x_next.unwrap()
                                         })(p_expr_1, p_child, 1, i_last)
-                                };
+                                });
                             if rc != 0 {
                                 unsafe { (*p_and_1).b_nomatch = 0 };
                                 return rc;
                             }
                         }
+
+                        /// If the child node is now at EOF, so is the parent AND node. Otherwise,
+                        ///* the child node is guaranteed to have advanced at least as far as
+                        ///* rowid iLast. So if it is not at exactly iLast, pChild->iRowid is the
+                        ///* new lastest rowid seen so far.
                         if !(unsafe { (*p_child).b_eof } != 0 ||
                                                 fts5_rowid_cmp(unsafe { &*p_expr_1 }, i_last,
                                                         unsafe { (*p_child).i_rowid }) <= 0) as i32 as i64 != 0 {
@@ -2313,6 +2498,16 @@ extern "C" fn fts5_expr_node_test_and(p_expr_1: *mut Fts5Expr,
     return 0;
 }
 
+///* Compare the values currently indicated by the two nodes as follows:
+///*
+///*    res = (*p1) - (*p2)
+///*
+///* Nodes that point to values that come later in the iteration order are
+///* considered to be larger. Nodes at EOF are the largest of all.
+///*
+///* This means that if the iteration order is ASC, then numerically larger
+///* rowids are considered larger. Or if it is the default DESC, numerically
+///* smaller rowids are larger.
 extern "C" fn fts5_node_compare(p_expr_1: *mut Fts5Expr, p1: &Fts5ExprNode,
     p2: &Fts5ExprNode) -> i32 {
     if (*p2).b_eof != 0 { return -1; }
@@ -2409,6 +2604,9 @@ extern "C" fn fts5_expr_node_test_not(p_expr_1: *mut Fts5Expr,
     return rc;
 }
 
+///* If pNode currently points to a match, this function returns SQLITE_OK
+///* without modifying it. Otherwise, pNode is advanced until it does point
+///* to a match or EOF is reached.
 extern "C" fn fts5_expr_node_test(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let mut rc: i32 = 0;
@@ -2546,6 +2744,12 @@ extern "C" fn fts5_expr_node_test(p_expr_1: *mut Fts5Expr,
     return rc;
 }
 
+///* Set node pNode, which is part of expression pExpr, to point to the first
+///* match. If there are no matches, set the Node.bEof flag to indicate EOF.
+///*
+///* Return an SQLite error code if an error occurs, or SQLITE_OK otherwise.
+///* It is not an error if there are no matches.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_node_first(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode) -> i32 {
     let mut rc: i32 = 0;
@@ -2553,9 +2757,11 @@ extern "C" fn fts5_expr_node_first(p_expr_1: *mut Fts5Expr,
     unsafe { (*p_node_1).b_nomatch = 0 };
     if unsafe { (*p_node_1).e_type } == 4 ||
             unsafe { (*p_node_1).e_type } == 9 {
-        rc =
+
+        /// Initialize all term iterators in the NEAR object.
+        (rc =
             fts5_expr_near_init_all(unsafe { &*p_expr_1 },
-                unsafe { &mut *p_node_1 });
+                unsafe { &mut *p_node_1 }));
     } else if !unsafe { (*p_node_1).x_next.is_some() } as i32 != 0 {
         unsafe { (*p_node_1).b_eof = 1 };
     } else {
@@ -2642,11 +2848,21 @@ extern "C" fn fts5_expr_node_first(p_expr_1: *mut Fts5Expr,
     return rc;
 }
 
+///* for(rc = sqlite3Fts5ExprFirst(pExpr, pIdx, bDesc);
+///*     rc==SQLITE_OK && 0==sqlite3Fts5ExprEof(pExpr);
+///*     rc = sqlite3Fts5ExprNext(pExpr)
+///* ){
+///*   // The document with rowid iRowid matches the expression!
+///*   i64 iRowid = sqlite3Fts5ExprRowid(pExpr);
+///* }
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_expr_first(p: *mut Fts5Expr,
     p_idx: *mut Fts5Index, i_first: i64, i_last: i64, b_desc: i32) -> i32 {
     let p_root: *mut Fts5ExprNode = unsafe { (*p).p_root };
     let mut rc: i32 = 0;
+
+    /// Return code
     unsafe { (*p).p_index = p_idx };
     unsafe { (*p).b_desc = b_desc };
     rc = fts5_expr_node_first(p, p_root);
@@ -2678,6 +2894,10 @@ pub extern "C" fn sqlite3_fts5_expr_first(p: *mut Fts5Expr,
     return rc;
 }
 
+///* Move to the next document 
+///*
+///* Return SQLITE_OK if successful, or an SQLite error code otherwise. It
+///* is not considered an error if the query does not match any documents.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_next(p: *mut Fts5Expr, i_last: i64)
     -> i32 {
@@ -2729,6 +2949,7 @@ pub extern "C" fn sqlite3_fts5_expr_rowid(p: &Fts5Expr) -> i64 {
     return unsafe { (*(*p).p_root).i_rowid };
 }
 
+///* Free the expression object passed as the only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_free(p: *mut Fts5Expr) -> () {
     if !(p).is_null() {
@@ -2738,6 +2959,7 @@ pub extern "C" fn sqlite3_fts5_expr_free(p: *mut Fts5Expr) -> () {
     }
 }
 
+///* xNext() method for a node of type FTS5_TERM.
 extern "C" fn fts5_expr_node_next_term(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let mut rc: i32 = 0;
@@ -2772,6 +2994,12 @@ extern "C" fn fts5_expr_node_next_term(p_expr_1: *mut Fts5Expr,
     return rc;
 }
 
+///* Advance the first term iterator in the first phrase of pNear. Set output
+///* variable *pbEof to true if it reaches EOF or if an error occurs.
+///*
+///* Return SQLITE_OK if successful, or an SQLite error code if an error
+///* occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_expr_node_next_string(p_expr_1: *mut Fts5Expr,
     p_node_1: *mut Fts5ExprNode, b_from_valid_1: i32, i_from_1: i64) -> i32 {
     let p_term: *mut Fts5ExprTerm =
@@ -2789,6 +3017,7 @@ extern "C" fn fts5_expr_node_next_string(p_expr_1: *mut Fts5Expr,
     if !(unsafe { (*p_term).p_synonym }).is_null() {
         let mut b_eof: i32 = 1;
         let mut p: *const Fts5ExprTerm = core::ptr::null();
+        /// Find the firstest rowid any synonym points to.
         let i_rowid: i64 =
             fts5_expr_synonym_rowid(p_term, unsafe { (*p_expr_1).b_desc },
                 core::ptr::null_mut());
@@ -2823,6 +3052,9 @@ extern "C" fn fts5_expr_node_next_string(p_expr_1: *mut Fts5Expr,
                 p = unsafe { (*p).p_synonym };
             }
         }
+
+        /// Set the EOF flag if either all synonym iterators are at EOF or an
+        ///* error has occurred.
         unsafe { (*p_node_1).b_eof = (rc != 0 || b_eof != 0) as i32 };
     } else {
         let p_iter: *mut Fts5IndexIter = unsafe { (*p_term).p_iter };
@@ -3078,12 +3310,19 @@ extern "C" fn parse_grow_phrase_array(p_parse_1: &mut Fts5Parse) -> i32 {
     return 0;
 }
 
+///* Free the phrase object passed as the only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_phrase_free(p_phrase:
         *mut Fts5ExprPhrase) -> () {
     fts5_expr_phrase_free(p_phrase);
 }
 
+///* If argument pNear is NULL, then a new Fts5ExprNearset object is allocated
+///* and populated with pPhrase. Or, if pNear is not NULL, phrase pPhrase is
+///* appended to it and the results returned.
+///*
+///* If an OOM error occurs, both the pNear and pPhrase objects are freed and
+///* NULL returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_nearset(p_parse: *mut Fts5Parse,
     p_near: *mut Fts5ExprNearset, mut p_phrase: *mut Fts5ExprPhrase)
@@ -3230,6 +3469,15 @@ pub extern "C" fn sqlite3_fts5_parse_nearset(p_parse: *mut Fts5Parse,
     return p_ret;
 }
 
+///* This function is used when parsing LIKE or GLOB patterns against
+///* trigram indexes that specify either detail=column or detail=none.
+///* It converts a phrase:
+///*
+///*     abc + def + ghi
+///*
+///* into an AND tree:
+///*
+///*     abc AND def AND ghi
 extern "C" fn fts5_parse_phrase_to_and(p_parse_1: *mut Fts5Parse,
     p_near_1: *mut Fts5ExprNearset) -> *mut Fts5ExprNode {
     let n_term: i32 =
@@ -3355,6 +3603,7 @@ extern "C" fn fts5_parse_phrase_to_and(p_parse_1: *mut Fts5Parse,
     return p_ret;
 }
 
+///* Add pSub as a child of p.
 extern "C" fn fts5_expr_add_children(p: &mut Fts5ExprNode,
     p_sub_1: *mut Fts5ExprNode) -> () {
     let mut ii: i32 = (*p).n_child;
@@ -3411,7 +3660,10 @@ extern "C" fn fts5_expr_add_children(p: &mut Fts5ExprNode,
     }
 }
 
+///* Allocate and return a new expression object. If anything goes wrong (i.e.
+///* OOM error), leave an error code in pParse and return NULL.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_parse_node(p_parse: *mut Fts5Parse,
     e_type: i32, mut p_left: *mut Fts5ExprNode,
     mut p_right: *mut Fts5ExprNode, mut p_near: *mut Fts5ExprNearset)
@@ -3419,7 +3671,10 @@ pub extern "C" fn sqlite3_fts5_parse_node(p_parse: *mut Fts5Parse,
     let mut p_ret: *mut Fts5ExprNode = core::ptr::null_mut();
     if unsafe { (*p_parse).rc } == 0 {
         let mut n_child: i32 = 0;
+        /// Number of children of returned node
         let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
+
+        /// Bytes of space to allocate for this node
         if !(e_type != 9 && (p_near).is_null() as i32 != 0 ||
                                 e_type == 9 && (p_left).is_null() as i32 != 0 &&
                                     (p_right).is_null() as i32 != 0) as i32 as i64 != 0 {
@@ -3636,16 +3891,28 @@ pub extern "C" fn sqlite3_fts5_expr_and(pp1: &mut *mut Fts5Expr,
     return s_parse.rc;
 }
 
+/// Called during startup to register a UDF with SQLite
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_expr_init(p_global: *mut Fts5Global,
     db: *mut Sqlite3) -> i32 {
     let rc: i32 = 0;
     { { let _ = p_global; }; { let _ = db; } };
+
+    /// Avoid warnings indicating that sqlite3Fts5ParserTrace() and
+    ///* sqlite3Fts5ParserFallback() are unused
     { let _ = sqlite3_fts5_parser_trace; };
+
+    /// Avoid warnings indicating that sqlite3Fts5ParserTrace() and
+    ///* sqlite3Fts5ParserFallback() are unused
     { let _ = sqlite3_fts5_parser_fallback; };
+
+    /// Avoid warnings indicating that sqlite3Fts5ParserTrace() and
+    ///* sqlite3Fts5ParserFallback() are unused
     return rc;
 }
 
+///* Return the number of phrases in expression pExpr.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_count(p_expr: *mut Fts5Expr)
     -> i32 {
@@ -3654,6 +3921,7 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_count(p_expr: *mut Fts5Expr)
         } else { 0 };
 }
 
+///* Return the number of terms in the iPhrase'th phrase in pExpr.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_size(p_expr: &Fts5Expr,
     i_phrase: i32) -> i32 {
@@ -3665,6 +3933,8 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_size(p_expr: &Fts5Expr,
         };
 }
 
+///* This function is used to access the current position list for phrase
+///* iPhrase.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_poslist(p_expr: &Fts5Expr, i_phrase: i32,
     pa: &mut *const u8) -> i32 {
@@ -3691,6 +3961,13 @@ struct Fts5PoslistPopulator {
     b_miss: i32,
 }
 
+///* Clear the position lists associated with all phrases in the expression
+///* passed as the first argument. Argument bLive is true if the expression
+///* might be pointing to a real entry, otherwise it has just been reset.
+///*
+///* At present this function is only used for detail=col and detail=none
+///* fts5 tables. This implies that all phrases must be at most 1 token
+///* in size, as phrase matches are not supported without detail=full.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_clear_poslists(p_expr: &Fts5Expr,
     b_live: i32) -> *mut Fts5PoslistPopulator {
@@ -3761,6 +4038,7 @@ struct Fts5ExprCtx {
     i_off: i64,
 }
 
+///* TODO: Make this more efficient!
 extern "C" fn fts5_expr_colset_test(p_colset_1: &Fts5Colset, i_col_1: i32)
     -> i32 {
     let mut i: i32 = 0;
@@ -3783,6 +4061,9 @@ extern "C" fn fts5_expr_colset_test(p_colset_1: &Fts5Colset, i_col_1: i32)
     return 0;
 }
 
+///* pToken is a buffer nToken bytes in size that may or may not contain
+///* an embedded 0x00 byte. If it does, return the number of bytes in
+///* the buffer before the 0x00. If it does not, return nToken.
 extern "C" fn fts5_query_term(p_token_1: &[i8]) -> i32 {
     let mut ii: i32 = 0;
     {
@@ -4363,6 +4644,7 @@ struct TokenCtx {
     rc: i32,
 }
 
+///* Callback for tokenizing terms used by ParseTerm().
 extern "C" fn fts5_parse_tokenize(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -4502,12 +4784,18 @@ extern "C" fn fts5_parse_tokenize(p_context_1: *mut (), tflags: i32,
     return rc;
 }
 
+///* Create a new FTS5 expression by cloning phrase iPhrase of the
+///* expression passed as the second argument.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
     i_phrase: i32, pp_new: &mut *mut Fts5Expr) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_orig: *mut Fts5ExprPhrase = core::ptr::null_mut();
+    /// The phrase extracted from pExpr
     let mut p_new: *mut Fts5Expr = core::ptr::null_mut();
+    /// Expression to return via *ppNew
     let mut s_ctx: TokenCtx =
         TokenCtx {
             p_phrase: core::ptr::null_mut(),
@@ -4604,7 +4892,9 @@ pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
     if rc == 0 {
         if unsafe { (*p_orig).n_term } != 0 {
             let mut i: i32 = 0;
-            s_ctx.p_config = unsafe { (*p_expr).p_config };
+
+            /// Used to iterate through phrase terms
+            (s_ctx.p_config = unsafe { (*p_expr).p_config });
             {
                 i = 0;
                 '__b61: loop {
@@ -4657,13 +4947,16 @@ pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
                 }
             }
         } else {
-            s_ctx.p_phrase =
+
+            /// This happens when parsing a token or quoted phrase that contains
+            ///* no token characters at all. (e.g ... MATCH '""').
+            (s_ctx.p_phrase =
                 unsafe {
                         sqlite3_fts5_malloc_zero(&mut rc,
                             (core::mem::offset_of!(Fts5ExprPhrase, a_term) as u64 +
                                     1 as u64 * core::mem::size_of::<Fts5ExprTerm>() as u64) as
                                 Sqlite3Int64)
-                    } as *mut Fts5ExprPhrase;
+                    } as *mut Fts5ExprPhrase);
         }
     }
     if rc == 0 &&
@@ -4681,6 +4974,8 @@ pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
                         0
                     }
                 } != 0 {
+
+        /// All the allocations succeeded. Put the expression object together.
         unsafe { (*p_new).p_index = unsafe { (*p_expr).p_index } };
         unsafe { (*p_new).p_config = unsafe { (*p_expr).p_config } };
         unsafe { (*p_new).n_phrase = 1 };
@@ -4730,6 +5025,7 @@ pub extern "C" fn sqlite3_fts5_expr_clone_phrase(p_expr: *mut Fts5Expr,
     return rc;
 }
 
+///* This function is only called for detail=columns tables.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_phrase_collist(p_expr: &Fts5Expr,
     i_phrase: i32, pp_collist: *mut *const u8, pn_collist: *mut i32) -> i32 {
@@ -4801,6 +5097,7 @@ pub extern "C" fn sqlite3_fts5_expr_phrase_collist(p_expr: &Fts5Expr,
     return rc;
 }
 
+///* Does the work of the fts5_api.xQueryToken() API method.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_query_token(p_expr: &Fts5Expr,
     i_phrase: i32, i_token: i32, pp_out: &mut *const i8, pn_out: &mut i32)
@@ -4822,6 +5119,7 @@ pub extern "C" fn sqlite3_fts5_expr_query_token(p_expr: &Fts5Expr,
     return 0;
 }
 
+///* Does the work of the fts5_api.xInstToken() API method.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_inst_token(p_expr: &Fts5Expr,
     i_rowid: i64, i_phrase: i32, i_col: i32, i_off: i32, i_token: i32,
@@ -4853,6 +5151,8 @@ pub extern "C" fn sqlite3_fts5_expr_inst_token(p_expr: &Fts5Expr,
     return rc;
 }
 
+///* Clear the token mappings for all Fts5IndexIter objects managed by 
+///* the expression passed as the only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_expr_clear_tokens(p_expr: &Fts5Expr) -> () {
     let mut ii: i32 = 0;
@@ -5056,13 +5356,19 @@ extern "C" fn fts5_parse_string_from_token(p_token_1: &Fts5Token,
     return rc;
 }
 
+///* This function is called by the parser to process a string token. The
+///* string may or may not be quoted. In any case it is tokenized and a
+///* phrase object consisting of all tokens returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_parse_term(p_parse: *mut Fts5Parse,
     p_append: *mut Fts5ExprPhrase, p_token: *mut Fts5Token, b_prefix: i32)
     -> *mut Fts5ExprPhrase {
     let p_config: *mut Fts5Config = unsafe { (*p_parse).p_config };
     let mut s_ctx: TokenCtx = unsafe { core::mem::zeroed() };
+    /// Context object passed to callback
     let mut rc: i32 = 0;
+    /// Tokenize return code
     let mut z: *mut i8 = core::ptr::null_mut();
     unsafe {
         memset(&raw mut s_ctx as *mut (), 0,
@@ -5101,13 +5407,16 @@ pub extern "C" fn sqlite3_fts5_parse_term(p_parse: *mut Fts5Parse,
             };
         }
         if s_ctx.p_phrase == core::ptr::null_mut() {
-            s_ctx.p_phrase =
+
+            /// This happens when parsing a token or quoted phrase that contains
+            ///* no token characters at all. (e.g ... MATCH '""').
+            (s_ctx.p_phrase =
                 unsafe {
                         sqlite3_fts5_malloc_zero(unsafe { &mut (*p_parse).rc },
                             (core::mem::offset_of!(Fts5ExprPhrase, a_term) as u64 +
                                     1 as u64 * core::mem::size_of::<Fts5ExprTerm>() as u64) as
                                 Sqlite3Int64)
-                    } as *mut Fts5ExprPhrase;
+                    } as *mut Fts5ExprPhrase);
         } else if unsafe { (*s_ctx.p_phrase).n_term } != 0 {
             unsafe {
                 (*(unsafe { (*s_ctx.p_phrase).a_term.as_ptr() } as
@@ -5134,6 +5443,8 @@ pub extern "C" fn sqlite3_fts5_parse_term(p_parse: *mut Fts5Parse,
     return s_ctx.p_phrase;
 }
 
+///* Set the "bFirst" flag on the first token of the phrase passed as the
+///* only argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_set_caret(p_phrase: *mut Fts5ExprPhrase)
     -> () {
@@ -5145,10 +5456,21 @@ pub extern "C" fn sqlite3_fts5_parse_set_caret(p_phrase: *mut Fts5ExprPhrase)
     }
 }
 
+///* The second argument passed to this function may be NULL, or it may be
+///* an existing Fts5Colset object. This function returns a pointer to
+///* a new colset object containing the contents of (p) with new value column
+///* number iCol appended. 
+///*
+///* If an OOM error occurs, store an error code in pParse and return NULL.
+///* The old colset object (if any) is not freed in this case.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_parse_colset(p_parse_1: &mut Fts5Parse, p: *mut Fts5Colset,
     i_col_1: i32) -> *mut Fts5Colset {
     let n_col: i32 = if !(p).is_null() { unsafe { (*p).n_col } } else { 0 };
+    /// Num. columns already in colset object
     let mut p_new: *mut Fts5Colset = core::ptr::null_mut();
+
+    /// New colset object to return
     if !((*p_parse_1).rc == 0) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"fts5ParseColset".as_ptr() as *const i8,
@@ -5240,16 +5562,19 @@ extern "C" fn fts5_parse_colset(p_parse_1: &mut Fts5Parse, p: *mut Fts5Colset,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_parse_colset(p_parse: *mut Fts5Parse,
     p_colset: *mut Fts5Colset, p: &Fts5Token) -> *mut Fts5Colset {
     let mut p_ret: *mut Fts5Colset = core::ptr::null_mut();
     let mut i_col: i32 = 0;
     let mut z: *mut i8 = core::ptr::null_mut();
-    z =
+
+    /// Dequoted copy of token p
+    (z =
         unsafe {
             sqlite3_fts5_strndup(unsafe { &mut (*p_parse).rc }, (*p).p,
                 (*p).n)
-        };
+        });
     if unsafe { (*p_parse).rc } == 0 {
         let p_config: *const Fts5Config =
             unsafe { (*p_parse).p_config } as *const Fts5Config;
@@ -5332,6 +5657,9 @@ pub extern "C" fn sqlite3_fts5_parse_set_distance(p_parse: *mut Fts5Parse,
     }
 }
 
+///* Allocate and return an Fts5Colset object specifying the inverse of
+///* the colset passed as the second argument. Free the colset passed
+///* as the second argument before returning.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_colset_invert(p_parse: &mut Fts5Parse,
     p: *mut Fts5Colset) -> *mut Fts5Colset {
@@ -5391,6 +5719,9 @@ pub extern "C" fn sqlite3_fts5_parse_finished(p_parse: &mut Fts5Parse,
     (*p_parse).p_expr = p;
 }
 
+///* Token pTok has appeared in a MATCH expression where the NEAR operator
+///* is expected. If token pTok does not contain "NEAR", store an error
+///* in the pParse object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_parse_near(p_parse: *mut Fts5Parse,
     p_tok: &Fts5Token) -> () {

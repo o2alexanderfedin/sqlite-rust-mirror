@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -21,6 +27,8 @@ struct NextCharContext {
     other_error: i32,
 }
 
+///* Append a result character if the character is not already in the
+///* result.
 extern "C" fn next_char_append(p: &mut NextCharContext, c: u32) -> () {
     let mut i: i32 = 0;
     {
@@ -59,6 +67,8 @@ extern "C" fn next_char_append(p: &mut NextCharContext, c: u32) -> () {
     };
 }
 
+///* Write a character into z[] as UTF8.  Return the number of bytes needed
+///* to hold the character
 extern "C" fn write_utf8(z: *mut u8, c: u32) -> i32 {
     if c < 128 as u32 {
         unsafe { *z.offset(0 as isize) = (c & 255 as u32) as u8 };
@@ -106,6 +116,8 @@ extern "C" fn write_utf8(z: *mut u8, c: u32) -> i32 {
     return 4;
 }
 
+///* Read a UTF8 character out of z[] and write it into *pOut.  Return
+///* the number of bytes in z[] that were used to construct the character.
 extern "C" fn read_utf8(z: *const u8, p_out_1: &mut u32) -> i32 {
     let mut c: u32 = unsafe { *z.offset(0 as isize) } as u32;
     if c < 192 as u32 {
@@ -136,6 +148,8 @@ extern "C" fn read_utf8(z: *const u8, p_out_1: &mut u32) -> i32 {
     }
 }
 
+///* The nextCharContext structure has been set up.  Add all "next" characters
+///* to the result set.
 extern "C" fn find_next_chars(p: *mut NextCharContext) -> () {
     let mut c_prev: u32 = 0 as u32;
     let mut z_prev: [u8; 8] = [0; 8];
@@ -189,6 +203,11 @@ extern "C" fn find_next_chars(p: *mut NextCharContext) -> () {
     }
 }
 
+///* next_character(A,T,F,W)
+///*
+///* Return a string composted of all next possible characters after
+///* A for elements of T.F.  If W is supplied, then it is an SQL expression
+///* that limits the elements in T.F that are considered.
 extern "C" fn next_char_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut c: NextCharContext = unsafe { core::mem::zeroed() };
@@ -322,17 +341,20 @@ extern "C" fn next_char_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_nextchar_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"next_char".as_ptr() as *mut i8 as *const i8, 3, 1 | 2097152,
                 core::ptr::null_mut(), Some(next_char_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

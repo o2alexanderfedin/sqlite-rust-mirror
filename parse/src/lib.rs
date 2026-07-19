@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+/// The state of the parser is completely contained in an instance of
+///* the following structure
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct YyParser {
@@ -403,6 +420,21 @@ struct YyParser {
     yystk0: [YyStackEntry; 50],
 }
 
+/// The following structure represents a single element of the
+///* parser's stack.  Information stored includes:
+///*
+///*   +  The state number for the parser at this level of the stack.
+///*
+///*   +  The value of the token stored at this level of the stack.
+///*      (In other words, the "major" token.)
+///*
+///*   +  The semantic value stored at this level of the stack.  This is
+///*      the information used by the action routines in the grammar.
+///*      It is sometimes called the "minor" token.
+///*
+///* After the "shift" half of a SHIFTREDUCE action, the stateno field
+///* actually contains the reduce action for the second half of the
+///* SHIFTREDUCE.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct YyStackEntry {
@@ -436,6 +468,13 @@ union YYMINORTYPE {
     yy555: *mut Select,
 }
 
+///* An instance of the following structure describes the event of a
+///* TRIGGER.  "a" is the event type, one of TK_UPDATE, TK_INSERT,
+///* TK_DELETE, or TK_INSTEAD.  If the event is of the form
+///*
+///*      UPDATE ON (a,b,c)
+///*
+///* Then the "b" IdList records the list "a,b,c".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TrigEvent {
@@ -457,6 +496,7 @@ struct FrameBound {
     p_expr: *mut Expr,
 }
 
+/// Initialize a new parser that has already been allocated.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_init(yyp_raw_parser_1: *mut (),
     p_parse_1: *mut Parse) -> () {
@@ -484,6 +524,17 @@ pub extern "C" fn sqlite3_parser_init(yyp_raw_parser_1: *mut (),
     };
 }
 
+/// 
+///* This function allocates a new parser.
+///* The only argument is a pointer to a function which works like
+///* malloc.
+///*
+///* Inputs:
+///* A pointer to the function used to allocate memory.
+///*
+///* Outputs:
+///* A pointer to a parser.  This pointer is used in subsequent calls
+///* to sqlite3Parser and sqlite3ParserFree.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_alloc(malloc_proc:
         Option<unsafe extern "C" fn(u64) -> *mut ()>, p_parse: *mut Parse)
@@ -500,6 +551,12 @@ pub extern "C" fn sqlite3_parser_alloc(malloc_proc:
     return yyp_parser as *mut ();
 }
 
+/// The following function deletes the "minor type" or semantic value
+///* associated with a symbol.  The symbol can be either a terminal
+///* or nonterminal. "yymajor" is the symbol code, and "yypminor" is
+///* a pointer to the value to be deleted.  The code used to do the 
+///* deletions is derived from the %destructor and/or %token_destructor
+///* directives of the input grammar.
 extern "C" fn yy_destructor(yyp_parser_1: &YyParser, yymajor: u16,
     yypminor: &YYMINORTYPE) -> () {
     unsafe {
@@ -919,9 +976,13 @@ extern "C" fn parser_stack_free(p_old_1: *mut (), p_parse_1: *const Parse)
     unsafe { sqlite3_free(p_old_1) };
 }
 
+///* Clear all secondary memory allocations from the parser
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_parser_finalize(p: *mut ()) -> () {
     let p_parser: *mut YyParser = p as *mut YyParser;
+    /// In-lined version of calling yy_pop_parser_stack() for each
+    ///* element left in the stack
     let mut yytos: *mut YyStackEntry = unsafe { (*p_parser).yytos };
     while yytos > unsafe { (*p_parser).yystack } {
         if unsafe { (*yytos).major } as i32 >= 206 {
@@ -943,6 +1004,13 @@ pub extern "C" fn sqlite3_parser_finalize(p: *mut ()) -> () {
     }
 }
 
+/// 
+///* Deallocate and destroy a parser.  Destructors are called for
+///* all stack elements before shutting the parser down.
+///*
+///* If the YYPARSEFREENEVERNULL macro exists (for example because it
+///* is defined in a %include section of the input grammar) then it is
+///* assumed that the input pointer is never NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_free(p: *mut (),
     free_proc: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> () {
@@ -2206,6 +2274,9 @@ static yy_default: [u16; 600] =
             1663 as u16, 1371 as u16, 1463 as u16, 1279 as u16, 1466 as u16,
             1301 as u16, 1279 as u16, 1291 as u16, 1279 as u16, 1279 as u16];
 
+///* Find the appropriate action for a parser given the terminal
+///* look-ahead token iLookAhead.
+#[allow(unused_doc_comments)]
 extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
     -> u16 {
     let mut i: i32 = 0;
@@ -2223,11 +2294,15 @@ extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
             { let _ = 0; };
             if yy_lookahead[i as usize] as i32 != i_look_ahead_1 as i32 {
                 let mut i_fallback: u16 = 0 as u16;
+
+                /// Fallback token
                 { let _ = 0; };
                 i_fallback = yy_fallback[i_look_ahead_1 as usize] as u16;
                 if i_fallback as i32 != 0 {
                     { let _ = 0; };
-                    i_look_ahead_1 = i_fallback;
+
+                    /// Fallback loop must terminate
+                    (i_look_ahead_1 = i_fallback);
                     break '__c2;
                 }
                 {
@@ -2235,9 +2310,13 @@ extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
                     { let _ = 0; };
                     if yy_lookahead[j as usize] as i32 == 102 &&
                             i_look_ahead_1 as i32 > 0 {
+
+                        /// NDEBUG
                         return yy_action[j as usize] as u16;
                     }
                 }
+
+                /// YYWILDCARD
                 return yy_default[stateno as usize] as u16;
             } else { { let _ = 0; }; return yy_action[i as usize] as u16; }
             break '__c2;
@@ -2245,6 +2324,8 @@ extern "C" fn yy_find_shift_action(mut i_look_ahead_1: u16, stateno: u16)
     }
 }
 
+/// For rule J, yyRuleInfoNRhs[J] contains the negative of the number
+///* of symbols on the right-hand side of that rule.
 static yy_rule_info_n_rhs: [i8; 412] =
     [-1 as i8, -3 as i8, -1 as i8, -3 as i8, 0 as i8, -1 as i8, -1 as i8,
             -1 as i8, -2 as i8, -2 as i8, -2 as i8, -3 as i8, -5 as i8,
@@ -2315,10 +2396,14 @@ static yy_rule_info_n_rhs: [i8; 412] =
             -1 as i8, -1 as i8, -3 as i8, -2 as i8, 0 as i8, -4 as i8,
             -2 as i8, 0 as i8, -1 as i8, -1 as i8];
 
+/// Return an integer that is the maximum allowed stack size
 extern "C" fn parser_stack_size_limit(p_parse_1: &Parse) -> i32 {
     return unsafe { (*(*p_parse_1).db).a_limit[12 as usize] };
 }
 
+/// Memory allocator for parser stack resizing.  This is a thin wrapper around
+///* sqlite3_realloc() that includes a call to sqlite3FaultSim() to facilitate
+///* testing.
 extern "C" fn parser_stack_realloc(p_old_1: *mut (),
     new_size_1: Sqlite3Uint64, p_parse_1: &Parse) -> *mut () {
     let p: *mut () =
@@ -2331,6 +2416,8 @@ extern "C" fn parser_stack_realloc(p_old_1: *mut (),
     return p;
 }
 
+///* Try to increase the size of the parser stack.  Return the number
+///* of errors.  Return 0 on success.
 extern "C" fn yy_grow_stack(p: &mut YyParser) -> i32 {
     let old_size: i32 =
         1 +
@@ -2372,6 +2459,10 @@ extern "C" fn yy_grow_stack(p: &mut YyParser) -> i32 {
     return 0;
 }
 
+///* Pop the parser's stack once.
+///*
+///* If there is a destructor routine associated with the token which
+///* is popped from the stack, then call it.
 extern "C" fn yy_pop_parser_stack(p_parser_1: *mut YyParser) -> () {
     let mut yytos: *mut YyStackEntry = core::ptr::null_mut();
     { let _ = 0; };
@@ -2387,6 +2478,8 @@ extern "C" fn yy_pop_parser_stack(p_parser_1: *mut YyParser) -> () {
         unsafe { &(*yytos).minor });
 }
 
+///* The following routine is called if the stack overflows.
+#[allow(unused_doc_comments)]
 extern "C" fn yy_stack_overflow(yyp_parser_1: *mut YyParser) -> () {
     let p_parse: *mut Parse = unsafe { (*yyp_parser_1).p_parse };
     while unsafe { (*yyp_parser_1).yytos } >
@@ -2399,9 +2492,14 @@ extern "C" fn yy_stack_overflow(yyp_parser_1: *mut YyParser) -> () {
                 c"Recursion limit".as_ptr() as *mut i8 as *const i8)
         };
     }
+
+    ///***** End %stack_overflow code *******************************************
+    /// Suppress warning about unused %extra_argument var
     unsafe { (*yyp_parser_1).p_parse = p_parse };
 }
 
+///* Disable lookaside memory allocation for objects that might be
+///* shared across database connections.
 extern "C" fn disable_lookaside(p_parse_1: &mut Parse) -> () {
     unsafe {
         let db: *mut Sqlite3 = (*p_parse_1).db;
@@ -2422,6 +2520,8 @@ extern "C" fn disable_lookaside(p_parse_1: &mut Parse) -> () {
     }
 }
 
+/// Construct a new Expr object from a single token
+#[allow(unused_doc_comments)]
 extern "C" fn token_expr(p_parse_1: *mut Parse, op: i32, mut t: Token)
     -> *mut Expr {
     unsafe {
@@ -2432,9 +2532,15 @@ extern "C" fn token_expr(p_parse_1: *mut Parse, op: i32, mut t: Token)
                             core::mem::size_of::<Expr>() as u64 + t.n as u64 + 1 as u64)
                     } as *mut Expr;
             if !(p).is_null() {
+
+                /// memset(p, 0, sizeof(Expr));
                 unsafe { (*p).op = op as u8 };
+
+                /// memset(p, 0, sizeof(Expr));
                 unsafe { (*p).aff_expr = 0 as i8 };
                 unsafe { (*p).flags = 8388608 as u32 };
+
+                /// p->iAgg = -1; // Not required
                 unsafe {
                     (*p).p_left =
                         {
@@ -2489,6 +2595,9 @@ extern "C" fn token_expr(p_parse_1: *mut Parse, op: i32, mut t: Token)
     }
 }
 
+///* For a compound SELECT statement, make sure p->pPrior->pNext==p for
+///* all elements in the list.  And make sure list length does not exceed
+///* SQLITE_LIMIT_COMPOUND_SELECT.
 extern "C" fn parser_double_link_select(p_parse_1: *mut Parse, p: *mut Select)
     -> () {
     { let _ = 0; };
@@ -2538,6 +2647,8 @@ extern "C" fn parser_double_link_select(p_parse_1: *mut Parse, p: *mut Select)
     }
 }
 
+/// Attach a With object describing the WITH clause to a Select
+///* object describing the query for which the WITH clause is a prefix.
 extern "C" fn attach_with_to_select(p_parse_1: *mut Parse,
     p_select_1: *mut Select, p_with_1: *mut With) -> *mut Select {
     if !(p_select_1).is_null() {
@@ -2549,6 +2660,7 @@ extern "C" fn attach_with_to_select(p_parse_1: *mut Parse,
     return p_select_1;
 }
 
+///* Generate a syntax error
 extern "C" fn parser_syntax_error(p_parse_1: *mut Parse, p: *mut Token)
     -> () {
     unsafe {
@@ -2557,6 +2669,8 @@ extern "C" fn parser_syntax_error(p_parse_1: *mut Parse, p: *mut Token)
     };
 }
 
+/// Create a TK_ISNULL or TK_NOTNULL expression, perhaps optimized to
+///* to TK_TRUEFALSE, if possible
 extern "C" fn sqlite3_p_expr_is_null(p_parse_1: *mut Parse, op: i32,
     p_left_1: *mut Expr) -> *mut Expr {
     let mut p: *const Expr = p_left_1 as *const Expr;
@@ -2606,6 +2720,8 @@ extern "C" fn sqlite3_p_expr_is_null(p_parse_1: *mut Parse, op: i32,
         };
 }
 
+/// Create a TK_IS or TK_ISNOT operator, perhaps optimized to
+///* TK_ISNULL or TK_NOTNULL or TK_TRUEFALSE.
 extern "C" fn sqlite3_p_expr_is(p_parse_1: *mut Parse, op: i32,
     p_left_1: *mut Expr, p_right_1: *mut Expr) -> *mut Expr {
     if !(p_right_1).is_null() && unsafe { (*p_right_1).op } as i32 == 122 {
@@ -2616,6 +2732,10 @@ extern "C" fn sqlite3_p_expr_is(p_parse_1: *mut Parse, op: i32,
     return unsafe { sqlite3_p_expr(p_parse_1, op, p_left_1, p_right_1) };
 }
 
+/// Add a single new term to an ExprList that is used to store a
+///* list of identifiers.  Report an error if the ID list contains
+///* a COLLATE clause or an ASC or DESC keyword, except ignore the
+///* error while parsing a legacy schema.
 extern "C" fn parser_add_expr_id_list_term(p_parse_1: *mut Parse,
     p_prior_1: *mut ExprList, p_id_token_1: *const Token, has_collate_1: i32,
     sort_order_1: i32) -> *mut ExprList {
@@ -2643,6 +2763,8 @@ extern "C" fn parser_add_expr_id_list_term(p_parse_1: *mut Parse,
     }
 }
 
+/// For rule J, yyRuleInfoLhs[J] contains the symbol on the left-hand side
+///* of that rule
 static yy_rule_info_lhs: [u16; 412] =
     [191 as u16, 191 as u16, 190 as u16, 192 as u16, 193 as u16, 193 as u16,
             193 as u16, 193 as u16, 192 as u16, 192 as u16, 192 as u16,
@@ -2815,6 +2937,8 @@ static yy_reduce_ofst: [i16; 424] =
             1810 as i16, 1813 as i16, 1802 as i16, 1803 as i16, 1812 as i16,
             1815 as i16, 1817 as i16, 1820 as i16];
 
+///* Find the appropriate action for a parser given the non-terminal
+///* look-ahead token iLookAhead.
 extern "C" fn yy_find_reduce_action(stateno: u16, i_look_ahead_1: u16)
     -> u16 {
     let mut i: i32 = 0;
@@ -2827,18 +2951,45 @@ extern "C" fn yy_find_reduce_action(stateno: u16, i_look_ahead_1: u16)
     return yy_action[i as usize] as u16;
 }
 
+///* Perform a reduce action and the shift that must immediately
+///* follow the reduce.
+///*
+///* The yyLookahead and yyLookaheadToken parameters provide reduce actions
+///* access to the lookahead token (if any).  The yyLookahead will be YYNOCODE
+///* if the lookahead token has already been consumed.  As this procedure is
+///* only called from one place, optimizing compilers will in-line it, which
+///* means that the extra parameters have no performance impact.
+#[allow(unused_doc_comments)]
 extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
     yy_lookahead_1: i32, yy_lookahead_token_1: Token, p_parse_1: *mut Parse)
     -> u16 {
     unsafe {
         unsafe {
             let mut yygoto: i32 = 0;
+            /// The next state
             let mut yyact: u16 = 0 as u16;
+            /// The next action
             let mut yymsp: *mut YyStackEntry = core::ptr::null_mut();
+            /// The top of the parser's stack
             let mut yysize: i32 = 0;
+
+            /// Amount to pop the stack
             { let _ = yy_lookahead_1; };
+
+            /// Amount to pop the stack
             { let _ = yy_lookahead_token_1; };
-            yymsp = (*yyp_parser_1).yytos;
+
+            /// Amount to pop the stack
+            (yymsp = (*yyp_parser_1).yytos);
+            /// Beginning here are the reduction cases.  A typical example
+            ///* follows:
+            ///*   case 0:
+            ///*  #line <lineno> <grammarfile>
+            ///*     { ... }           // User supplied code
+            ///*  #line <lineno> <thisfile>
+            ///*     break;
+            ////
+            ////********** Begin reduce actions *********************************************
             let mut yylhsminor: YYMINORTYPE = unsafe { core::mem::zeroed() };
             '__s7:
                 {
@@ -4584,6 +4735,8 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                                             unsafe { (*yymsp.offset(-2 as isize)).minor.yy454 })
                                     }
                             };
+
+                            ///A-overwrites-Y
                             unsafe {
                                 sqlite3_expr_list_set_sort_order(unsafe {
                                         (*yymsp.offset(-2 as isize)).minor.yy14
@@ -5189,8 +5342,13 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                                         unsafe { (*yymsp.offset(0 as isize)).minor.yy454 }, n)
                                 };
                             } else {
+                                /// When doing a nested parse, one can include terms in an expression
+                                ///* that look like this:   #1 #2 ...  These terms refer to registers
+                                ///* in the virtual machine.  #N is the N-th register.
                                 let mut t: Token =
                                     unsafe { (*yymsp.offset(0 as isize)).minor.yy0 };
+
+                                ///A-overwrites-X
                                 { let _ = 0; };
                                 if unsafe { (*p_parse_1).nested } as i32 == 0 {
                                     parser_syntax_error(p_parse_1, &mut t);
@@ -5833,6 +5991,17 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                         {
                             if unsafe { (*yymsp.offset(-1 as isize)).minor.yy14 } ==
                                     core::ptr::null_mut() {
+                                /// Expressions of the form
+                                ///*
+                                ///*      expr1 IN ()
+                                ///*      expr1 NOT IN ()
+                                ///*
+                                ///* simplify to constants 0 (false) and 1 (true), respectively.
+                                ///*
+                                ///* Except, do not apply this optimization if expr1 contains a function
+                                ///* because that function might be an aggregate (we don't know yet whether
+                                ///* it is or not) and if it is an aggregate, that could change the meaning
+                                ///* of the whole query.
                                 let p_b: *mut Expr =
                                     unsafe {
                                         sqlite3_expr(unsafe { (*p_parse_1).db }, 118,
@@ -6446,8 +6615,10 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                                     unsafe { (*yymsp.offset(0 as isize)).major } as i32
                             };
                             unsafe {
-                                (*yymsp.offset(0 as isize)).minor.yy286.b =
-                                    core::ptr::null_mut()
+
+                                ///A-overwrites-X
+                                ((*yymsp.offset(0 as isize)).minor.yy286.b =
+                                    core::ptr::null_mut())
                             };
                         }
                     }
@@ -6458,8 +6629,10 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                                     unsafe { (*yymsp.offset(0 as isize)).major } as i32
                             };
                             unsafe {
-                                (*yymsp.offset(0 as isize)).minor.yy286.b =
-                                    core::ptr::null_mut()
+
+                                ///A-overwrites-X
+                                ((*yymsp.offset(0 as isize)).minor.yy286.b =
+                                    core::ptr::null_mut())
                             };
                         }
                     }
@@ -7401,7 +7574,12 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
                 yy_find_reduce_action(unsafe {
                         (*yymsp.offset(yysize as isize)).stateno
                     }, yygoto as u16);
+
+            /// There are no SHIFTREDUCE actions on nonterminals because the table
+            ///* generator has simplified them to pure REDUCE actions.
             { let _ = 0; };
+
+            /// It is not possible for a REDUCE to be followed by an error
             { let _ = 0; };
             {
                 let __n = yysize + 1;
@@ -7416,6 +7594,7 @@ extern "C" fn yy_reduce(yyp_parser_1: &mut YyParser, yyruleno: u32,
     }
 }
 
+///* Perform a shift action.
 extern "C" fn yy_shift(yyp_parser_1: *mut YyParser, mut yy_new_state_1: u16,
     yy_major_1: u16, yy_minor_1: Token) -> () {
     unsafe {
@@ -7450,16 +7629,28 @@ extern "C" fn yy_shift(yyp_parser_1: *mut YyParser, mut yy_new_state_1: u16,
     }
 }
 
+///* The following is executed when the parser accepts
+#[allow(unused_doc_comments)]
 extern "C" fn yy_accept(yyp_parser_1: &mut YyParser) -> () {
     let p_parse: *mut Parse = (*yyp_parser_1).p_parse;
     { let _ = 0; };
-    (*yyp_parser_1).p_parse = p_parse;
+
+    /// Here code is inserted which will be executed whenever the
+    ///* parser accepts */
+    ////*********** Begin %parse_accept code *****************************************/
+    ////*********** End %parse_accept code ******************************************
+    /// Suppress warning about unused %extra_argument variable
+    ((*yyp_parser_1).p_parse = p_parse);
 }
 
+///* The following code executes when a syntax error first occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn yy_syntax_error(yyp_parser_1: &mut YyParser, yymajor: i32,
     mut yyminor: Token) -> () {
     unsafe {
         let p_parse: *mut Parse = (*yyp_parser_1).p_parse;
+
+        ///********* Begin %syntax_error code ***************************************
         { let _ = yymajor; };
         if unsafe { *yyminor.z.offset(0 as isize) } != 0 {
             parser_syntax_error(p_parse, &mut yyminor);
@@ -7469,21 +7660,47 @@ extern "C" fn yy_syntax_error(yyp_parser_1: &mut YyParser, yymajor: i32,
                     c"incomplete input".as_ptr() as *mut i8 as *const i8)
             };
         }
-        (*yyp_parser_1).p_parse = p_parse;
+
+        ///********* End %syntax_error code *****************************************
+        /// Suppress warning about unused %extra_argument variable
+        ((*yyp_parser_1).p_parse = p_parse);
     }
 }
 
+/// The main parser program.
+///* The first argument is a pointer to a structure obtained from
+///* "sqlite3ParserAlloc" which describes the current state of the parser.
+///* The second argument is the major token number.  The third is
+///* the minor token.  The fourth optional argument is whatever the
+///* user wants (and specified in the grammar) and is available for
+///* use by the action routines.
+///*
+///* Inputs:
+///* <ul>
+///* <li> A pointer to the parser (an opaque structure.)
+///* <li> The major token number.
+///* <li> The minor token number.
+///* <li> An option argument of a grammar-specified type.
+///* </ul>
+///*
+///* Outputs:
+///* None.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_parser(yyp: *mut (), yymajor: i32, yyminor: Token)
     -> () {
     unsafe {
         let mut yyminorunion: YYMINORTYPE = unsafe { core::mem::zeroed() };
         let mut yyact: u16 = 0 as u16;
+        /// The parser action.
         let yyp_parser: *mut YyParser = yyp as *mut YyParser;
+        /// The parser
         let p_parse: *mut Parse = unsafe { (*yyp_parser).p_parse };
         { let _ = 0; };
         yyact = unsafe { (*unsafe { (*yyp_parser).yytos }).stateno };
         loop {
+
+            /// Exit by "break"
             { let _ = 0; };
             { let _ = 0; };
             yyact = yy_find_shift_action(yymajor as u16, yyact);
@@ -7516,6 +7733,13 @@ pub extern "C" fn sqlite3_parser(yyp: *mut (), yymajor: i32, yyminor: Token)
             } else {
                 { let _ = 0; };
                 yyminorunion.yy0 = yyminor;
+
+                /// If the YYNOERRORRECOVERY macro is defined, then do not attempt to
+                ///* do any kind of error recovery.  Instead, simply invoke the syntax
+                ///* error routine and continue going as if nothing had happened.
+                ///*
+                ///* Applications can set this macro (for example inside %include) if
+                ///* they intend to abandon the parse upon the first syntax error seen.
                 yy_syntax_error(unsafe { &mut *yyp_parser }, yymajor,
                     yyminor);
                 yy_destructor(unsafe { &*yyp_parser }, yymajor as u16,
@@ -7527,6 +7751,8 @@ pub extern "C" fn sqlite3_parser(yyp: *mut (), yymajor: i32, yyminor: Token)
     }
 }
 
+///* Return the fallback token corresponding to canonical token iToken, or
+///* 0 if iToken has no fallback.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_parser_fallback(i_token: i32) -> i32 {
     { let _ = 0; };

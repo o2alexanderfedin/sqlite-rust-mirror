@@ -1,19 +1,240 @@
+//!* 2008 June 13
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This file contains definitions of global variables and constants.
+//! An array to map all upper-case characters into their corresponding
+//!* lower-case character. 
+//!*
+//!* SQLite only considers US-ASCII (or EBCDIC) characters.  We do not
+//!* handle case conversions for the UTF character set since the tables
+//!* involved are nearly as big or bigger than SQLite itself.
+//! All of the upper-to-lower conversion data is above.  The following
+//!* 18 integers are completely unrelated.  They are appended to the
+//!* sqlite3UpperToLower[] array to avoid UBSAN warnings.  Here's what is
+//!* going on:
+//!*
+//!* The SQL comparison operators (<>, =, >, <=, <, and >=) are implemented
+//!* by invoking sqlite3MemCompare(A,B) which compares values A and B and
+//!* returns negative, zero, or positive if A is less then, equal to, or
+//!* greater than B, respectively.  Then the true false results is found by
+//!* consulting sqlite3aLTb[opcode], sqlite3aEQb[opcode], or 
+//!* sqlite3aGTb[opcode] depending on whether the result of compare(A,B)
+//!* is negative, zero, or positive, where opcode is the specific opcode.
+//!* The only works because the comparison opcodes are consecutive and in
+//!* this order: NE EQ GT LE LT GE.  Various assert()s throughout the code
+//!* ensure that is the case.
+//!*
+//!* These elements must be appended to another array.  Otherwise the
+//!* index (here shown as [256-OP_Ne]) would be out-of-bounds and thus
+//!* be undefined behavior.  That's goofy, but the C-standards people thought
+//!* it was a good idea, so here we are.
+//!/
+//!/* NE  EQ  GT  LE  LT  GE
+//! aLTb[]: Use when compare(A,B) less than zero
+//! aEQb[]: Use when compare(A,B) equals zero
+//! aGTb[]: Use when compare(A,B) greater than zero
+//!* The following 256 byte lookup table is used to support SQLites built-in
+//!* equivalents to the following standard library functions:
+//!*
+//!*   isspace()                        0x01
+//!*   isalpha()                        0x02
+//!*   isdigit()                        0x04
+//!*   isalnum()                        0x06
+//!*   isxdigit()                       0x08
+//!*   toupper()                        0x20
+//!*   SQLite identifier character      0x40   $, _, or non-ascii
+//!*   Quote character                  0x80
+//!*
+//!* Bit 0x20 is set if the mapped character requires translation to upper
+//!* case. i.e. if the character is a lower-case ASCII character.
+//!* If x is a lower-case ASCII character, then its upper-case equivalent
+//!* is (x - 0x20). Therefore toupper() can be implemented as:
+//!*
+//!*   (x & ~(map[x]&0x20))
+//!*
+//!* The equivalent of tolower() is implemented using the sqlite3UpperToLower[]
+//!* array. tolower() is used more often than toupper() by SQLite.
+//!*
+//!* Bit 0x40 is set if the character is non-alphanumeric and can be used in an 
+//!* SQLite identifier.  Identifiers are alphanumerics, "_", "$", and any
+//!* non-ASCII UTF character. Hence the test for whether or not a character is
+//!* part of an identifier is 0x46.
+//! 00..07    ........
+//! 08..0f    ........
+//! 10..17    ........
+//! 18..1f    ........
+//! 20..27     !"#$%&'
+//! 28..2f    ()*+,-./
+//! 30..37    01234567
+//! 38..3f    89:;<=>?
+//! 40..47    @ABCDEFG
+//! 48..4f    HIJKLMNO
+//! 50..57    PQRSTUVW
+//! 58..5f    XYZ[\]^_
+//! 60..67    `abcdefg
+//! 68..6f    hijklmno
+//! 70..77    pqrstuvw
+//! 78..7f    xyz{|}~.
+//! 80..87    ........
+//! 88..8f    ........
+//! 90..97    ........
+//! 98..9f    ........
+//! a0..a7    ........
+//! a8..af    ........
+//! b0..b7    ........
+//! b8..bf    ........
+//! c0..c7    ........
+//! c8..cf    ........
+//! d0..d7    ........
+//! d8..df    ........
+//! e0..e7    ........
+//! e8..ef    ........
+//! f0..f7    ........
+//! f8..ff    ........
+//! EVIDENCE-OF: R-02982-34736 In order to maintain full backwards
+//!* compatibility for legacy applications, the URI filename capability is
+//!* disabled by default.
+//!*
+//!* EVIDENCE-OF: R-38799-08373 URI filenames can be enabled or disabled
+//!* using the SQLITE_USE_URI=1 or SQLITE_USE_URI=0 compile-time options.
+//!*
+//!* EVIDENCE-OF: R-43642-56306 By default, URI handling is globally
+//!* disabled. The default value may be changed by compiling with the
+//!* SQLITE_USE_URI symbol defined.
+//! EVIDENCE-OF: R-38720-18127 The default setting is determined by the
+//!* SQLITE_ALLOW_COVERING_INDEX_SCAN compile-time option, or is "on" if
+//!* that compile-time option is omitted.
+//! The minimum PMA size is set to this value multiplied by the database
+//!* page size in bytes.
+//! Statement journals spill to disk when their size exceeds the following
+//!* threshold (in bytes). 0 means that statement journals are created and
+//!* written to disk immediately (the default behavior for SQLite versions
+//!* before 3.12.0).  -1 means always keep the entire statement journal in
+//!* memory.  (The statement journal is also always held entirely in memory
+//!* if journal_mode=MEMORY or if temp_store=MEMORY, regardless of this
+//!* setting.)
+//!* The default lookaside-configuration, the format "SZ,N".  SZ is the
+//!* number of bytes in each lookaside slot (should be a multiple of 8)
+//!* and N is the number of slots.  The lookaside-configuration can be
+//!* changed as start-time using sqlite3_config(SQLITE_CONFIG_LOOKASIDE)
+//!* or at run-time for an individual database connection using
+//!* sqlite3_db_config(db, SQLITE_DBCONFIG_LOOKASIDE);
+//!*
+//!* With the two-size-lookaside enhancement, less lookaside is required.
+//!* The default configuration of 1200,40 actually provides 30 1200-byte slots
+//!* and 93 128-byte slots, which is more lookaside than is available
+//!* using the older 1200,100 configuration without two-size-lookaside.
+//! 48KB of memory
+//! The default maximum size of an in-memory database created using
+//!* sqlite3_deserialize()
+//!* The following singleton contains the global configuration for
+//!* the SQLite library.
+//! bMemstat
+//! bCoreMutex
+//! bFullMutex
+//! bOpenUri
+//! bUseCis
+//! bSmallMalloc
+//! bExtraSchemaChecks
+//! mxStrlen
+//! neverCorrupt
+//! szLookaside, nLookaside
+//! nStmtSpill
+//! m
+//! mutex
+//! pcache2
+//! pHeap
+//! nHeap
+//! mnHeap, mxHeap
+//! szMmap
+//! mxMmap
+//! pPage
+//! szPage
+//! nPage
+//! mxParserStack
+//! sharedCacheEnabled
+//! szPma */
+//!   /* All the rest should always be initialized to zero
+//! isInit
+//! inProgress
+//! isMutexInit
+//! isMallocInit
+//! isPCacheInit
+//! nRefInitMutex
+//! pInitMutex
+//! xLog
+//! pLogArg
+//! mxMemdbSize
+//! xTestCallback
+//! bLocaltimeFault
+//! xAltLocaltime
+//! iOnceResetThreshold
+//! szSorterRef
+//! iPrngSeed
+//!* Hash table for global functions - functions common to all
+//!* database connections.  After initialization, this table is
+//!* read-only.
+//!* This singleton is an sqlite3_str object that is returned if
+//!* sqlite3_malloc() fails to provide space for a real one.  This
+//!* sqlite3_str object accepts no new text and always returns
+//!* an SQLITE_NOMEM error.
+//! SQLITE_COVERAGE_TEST || SQLITE_DEBUG
+//!* The value of the "pending" byte must be 0x40000000 (1 byte past the
+//!* 1-gibabyte boundary) in a compatible database.  SQLite never uses
+//!* the database page that contains the pending byte.  It never attempts
+//!* to read or write that page.  The pending byte page is set aside
+//!* for use by the VFS layers as space for managing file locks.
+//!*
+//!* During testing, it is often desirable to move the pending byte to
+//!* a different position in the file.  This allows code that has to
+//!* deal with the pending byte to run on files that are much smaller
+//!* than 1 GiB.  The sqlite3_test_control() interface can be used to
+//!* move the pending byte.
+//!*
+//!* IMPORTANT:  Changing the pending byte to any value other than
+//!* 0x40000000 results in an incompatible database file format!
+//!* Changing the pending byte during operation will result in undefined
+//!* and incorrect behavior.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3MemMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcacheMethods2,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -390,6 +611,324 @@ impl Parse {
             (self._bitfield_1 & !(0x1u32 << 9u32)) | ((val & 0x1u32) << 9u32);
     }
 }
+
+///* Tracing flags set by SQLITE_TESTCTRL_TRACEFLAGS.
+#[unsafe(no_mangle)]
+pub static mut sqlite3_tree_trace: u32 = 0 as u32;
+
+///* Macros for "wheretrace"
+#[unsafe(no_mangle)]
+pub static mut sqlite3_where_trace: u32 = 0 as u32;
+
+///* Properties of opcodes.  The OPFLG_INITIALIZER macro is
+///* created by mkopcodeh.awk during compilation.  Data is obtained
+///* from the comments following the "case OP_xxxx:" statements in
+///* the vdbe.c file.
+#[unsafe(no_mangle)]
+pub static sqlite3_opcode_property: [u8; 192] =
+    [0 as u8, 0 as u8, 0 as u8, 0 as u8, 16 as u8, 0 as u8, 65 as u8, 0 as u8,
+            129 as u8, 1 as u8, 1 as u8, 129 as u8, 131 as u8, 131 as u8,
+            1 as u8, 1 as u8, 3 as u8, 3 as u8, 1 as u8, 18 as u8, 1 as u8,
+            201 as u8, 201 as u8, 201 as u8, 201 as u8, 1 as u8, 73 as u8,
+            73 as u8, 73 as u8, 73 as u8, 201 as u8, 73 as u8, 193 as u8,
+            1 as u8, 65 as u8, 65 as u8, 193 as u8, 1 as u8, 1 as u8,
+            65 as u8, 65 as u8, 65 as u8, 65 as u8, 38 as u8, 38 as u8,
+            65 as u8, 65 as u8, 9 as u8, 35 as u8, 11 as u8, 129 as u8,
+            3 as u8, 3 as u8, 11 as u8, 11 as u8, 11 as u8, 11 as u8,
+            11 as u8, 11 as u8, 1 as u8, 1 as u8, 3 as u8, 3 as u8, 3 as u8,
+            1 as u8, 65 as u8, 1 as u8, 0 as u8, 0 as u8, 2 as u8, 2 as u8,
+            8 as u8, 0 as u8, 16 as u8, 16 as u8, 16 as u8, 0 as u8, 16 as u8,
+            0 as u8, 16 as u8, 16 as u8, 0 as u8, 0 as u8, 16 as u8, 16 as u8,
+            0 as u8, 0 as u8, 0 as u8, 2 as u8, 2 as u8, 2 as u8, 0 as u8,
+            0 as u8, 18 as u8, 30 as u8, 32 as u8, 64 as u8, 0 as u8, 0 as u8,
+            0 as u8, 16 as u8, 16 as u8, 0 as u8, 38 as u8, 38 as u8,
+            38 as u8, 38 as u8, 38 as u8, 38 as u8, 38 as u8, 38 as u8,
+            38 as u8, 38 as u8, 64 as u8, 64 as u8, 18 as u8, 0 as u8,
+            64 as u8, 16 as u8, 64 as u8, 64 as u8, 0 as u8, 0 as u8, 0 as u8,
+            64 as u8, 0 as u8, 64 as u8, 64 as u8, 16 as u8, 16 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 64 as u8, 0 as u8,
+            80 as u8, 0 as u8, 64 as u8, 4 as u8, 4 as u8, 0 as u8, 64 as u8,
+            80 as u8, 64 as u8, 16 as u8, 0 as u8, 0 as u8, 16 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 16 as u8, 0 as u8, 0 as u8, 0 as u8,
+            6 as u8, 16 as u8, 0 as u8, 4 as u8, 26 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 64 as u8, 16 as u8, 80 as u8, 64 as u8,
+            0 as u8, 16 as u8, 16 as u8, 2 as u8, 18 as u8, 18 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8];
+
+///* Name of the default collating sequence
+#[unsafe(no_mangle)]
+pub static sqlite3_str_binary: [i8; 7] =
+    [66 as i8, 73 as i8, 78 as i8, 65 as i8, 82 as i8, 89 as i8, 0 as i8];
+
+///* Standard typenames.  These names must match the COLTYPE_* definitions.
+///* Adjust the SQLITE_N_STDTYPE value if adding or removing entries.
+///*
+///*    sqlite3StdType[]            The actual names of the datatypes.
+///*
+///*    sqlite3StdTypeLen[]         The length (in bytes) of each entry
+///*                                in sqlite3StdType[].
+///*
+///*    sqlite3StdTypeAffinity[]    The affinity associated with each entry
+///*                                in sqlite3StdType[].
+#[unsafe(no_mangle)]
+pub static sqlite3_std_type_len: [u8; 6] =
+    [3 as u8, 4 as u8, 3 as u8, 7 as u8, 4 as u8, 4 as u8];
+
+#[unsafe(no_mangle)]
+pub static sqlite3_std_type_affinity: [i8; 6] =
+    [67 as i8, 65 as i8, 68 as i8, 68 as i8, 69 as i8, 66 as i8];
+
+#[unsafe(no_mangle)]
+pub static mut sqlite3_std_type: [*const i8; 6] =
+    [c"ANY".as_ptr() as *const i8, c"BLOB".as_ptr() as *const i8,
+            c"INT".as_ptr() as *const i8, c"INTEGER".as_ptr() as *const i8,
+            c"REAL".as_ptr() as *const i8, c"TEXT".as_ptr() as *const i8];
+
+/// An array to map all upper-case characters into their corresponding
+///* lower-case character. 
+///*
+///* SQLite only considers US-ASCII (or EBCDIC) characters.  We do not
+///* handle case conversions for the UTF character set since the tables
+///* involved are nearly as big or bigger than SQLite itself.
+#[unsafe(no_mangle)]
+pub static sqlite3_upper_to_lower: [u8; 274] =
+    [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
+            8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
+            14 as u8, 15 as u8, 16 as u8, 17 as u8, 18 as u8, 19 as u8,
+            20 as u8, 21 as u8, 22 as u8, 23 as u8, 24 as u8, 25 as u8,
+            26 as u8, 27 as u8, 28 as u8, 29 as u8, 30 as u8, 31 as u8,
+            32 as u8, 33 as u8, 34 as u8, 35 as u8, 36 as u8, 37 as u8,
+            38 as u8, 39 as u8, 40 as u8, 41 as u8, 42 as u8, 43 as u8,
+            44 as u8, 45 as u8, 46 as u8, 47 as u8, 48 as u8, 49 as u8,
+            50 as u8, 51 as u8, 52 as u8, 53 as u8, 54 as u8, 55 as u8,
+            56 as u8, 57 as u8, 58 as u8, 59 as u8, 60 as u8, 61 as u8,
+            62 as u8, 63 as u8, 64 as u8, 97 as u8, 98 as u8, 99 as u8,
+            100 as u8, 101 as u8, 102 as u8, 103 as u8, 104 as u8, 105 as u8,
+            106 as u8, 107 as u8, 108 as u8, 109 as u8, 110 as u8, 111 as u8,
+            112 as u8, 113 as u8, 114 as u8, 115 as u8, 116 as u8, 117 as u8,
+            118 as u8, 119 as u8, 120 as u8, 121 as u8, 122 as u8, 91 as u8,
+            92 as u8, 93 as u8, 94 as u8, 95 as u8, 96 as u8, 97 as u8,
+            98 as u8, 99 as u8, 100 as u8, 101 as u8, 102 as u8, 103 as u8,
+            104 as u8, 105 as u8, 106 as u8, 107 as u8, 108 as u8, 109 as u8,
+            110 as u8, 111 as u8, 112 as u8, 113 as u8, 114 as u8, 115 as u8,
+            116 as u8, 117 as u8, 118 as u8, 119 as u8, 120 as u8, 121 as u8,
+            122 as u8, 123 as u8, 124 as u8, 125 as u8, 126 as u8, 127 as u8,
+            128 as u8, 129 as u8, 130 as u8, 131 as u8, 132 as u8, 133 as u8,
+            134 as u8, 135 as u8, 136 as u8, 137 as u8, 138 as u8, 139 as u8,
+            140 as u8, 141 as u8, 142 as u8, 143 as u8, 144 as u8, 145 as u8,
+            146 as u8, 147 as u8, 148 as u8, 149 as u8, 150 as u8, 151 as u8,
+            152 as u8, 153 as u8, 154 as u8, 155 as u8, 156 as u8, 157 as u8,
+            158 as u8, 159 as u8, 160 as u8, 161 as u8, 162 as u8, 163 as u8,
+            164 as u8, 165 as u8, 166 as u8, 167 as u8, 168 as u8, 169 as u8,
+            170 as u8, 171 as u8, 172 as u8, 173 as u8, 174 as u8, 175 as u8,
+            176 as u8, 177 as u8, 178 as u8, 179 as u8, 180 as u8, 181 as u8,
+            182 as u8, 183 as u8, 184 as u8, 185 as u8, 186 as u8, 187 as u8,
+            188 as u8, 189 as u8, 190 as u8, 191 as u8, 192 as u8, 193 as u8,
+            194 as u8, 195 as u8, 196 as u8, 197 as u8, 198 as u8, 199 as u8,
+            200 as u8, 201 as u8, 202 as u8, 203 as u8, 204 as u8, 205 as u8,
+            206 as u8, 207 as u8, 208 as u8, 209 as u8, 210 as u8, 211 as u8,
+            212 as u8, 213 as u8, 214 as u8, 215 as u8, 216 as u8, 217 as u8,
+            218 as u8, 219 as u8, 220 as u8, 221 as u8, 222 as u8, 223 as u8,
+            224 as u8, 225 as u8, 226 as u8, 227 as u8, 228 as u8, 229 as u8,
+            230 as u8, 231 as u8, 232 as u8, 233 as u8, 234 as u8, 235 as u8,
+            236 as u8, 237 as u8, 238 as u8, 239 as u8, 240 as u8, 241 as u8,
+            242 as u8, 243 as u8, 244 as u8, 245 as u8, 246 as u8, 247 as u8,
+            248 as u8, 249 as u8, 250 as u8, 251 as u8, 252 as u8, 253 as u8,
+            254 as u8, 255 as u8, 1 as u8, 0 as u8, 0 as u8, 1 as u8, 1 as u8,
+            0 as u8, 0 as u8, 1 as u8, 0 as u8, 1 as u8, 0 as u8, 1 as u8,
+            1 as u8, 0 as u8, 1 as u8, 0 as u8, 0 as u8, 1 as u8];
+
+#[unsafe(no_mangle)]
+pub static mut sqlite3a_l_tb: *const u8 =
+    &sqlite3_upper_to_lower[(256 - 53) as usize];
+
+#[unsafe(no_mangle)]
+pub static mut sqlite3a_e_qb: *const u8 =
+    &sqlite3_upper_to_lower[(256 + 6 - 53) as usize];
+
+#[unsafe(no_mangle)]
+pub static mut sqlite3a_g_tb: *const u8 =
+    &sqlite3_upper_to_lower[(256 + 12 - 53) as usize];
+
+///* The following 256 byte lookup table is used to support SQLites built-in
+///* equivalents to the following standard library functions:
+///*
+///*   isspace()                        0x01
+///*   isalpha()                        0x02
+///*   isdigit()                        0x04
+///*   isalnum()                        0x06
+///*   isxdigit()                       0x08
+///*   toupper()                        0x20
+///*   SQLite identifier character      0x40   $, _, or non-ascii
+///*   Quote character                  0x80
+///*
+///* Bit 0x20 is set if the mapped character requires translation to upper
+///* case. i.e. if the character is a lower-case ASCII character.
+///* If x is a lower-case ASCII character, then its upper-case equivalent
+///* is (x - 0x20). Therefore toupper() can be implemented as:
+///*
+///*   (x & ~(map[x]&0x20))
+///*
+///* The equivalent of tolower() is implemented using the sqlite3UpperToLower[]
+///* array. tolower() is used more often than toupper() by SQLite.
+///*
+///* Bit 0x40 is set if the character is non-alphanumeric and can be used in an 
+///* SQLite identifier.  Identifiers are alphanumerics, "_", "$", and any
+///* non-ASCII UTF character. Hence the test for whether or not a character is
+///* part of an identifier is 0x46.
+#[unsafe(no_mangle)]
+pub static sqlite3_ctype_map: [u8; 256] =
+    [0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 1 as u8, 0 as u8, 128 as u8, 0 as u8,
+            64 as u8, 0 as u8, 0 as u8, 128 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 12 as u8, 12 as u8,
+            12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8, 12 as u8,
+            12 as u8, 12 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 0 as u8, 10 as u8, 10 as u8, 10 as u8, 10 as u8,
+            10 as u8, 10 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
+            2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
+            2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
+            2 as u8, 128 as u8, 0 as u8, 0 as u8, 0 as u8, 64 as u8,
+            128 as u8, 42 as u8, 42 as u8, 42 as u8, 42 as u8, 42 as u8,
+            42 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8,
+            34 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8,
+            34 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8, 34 as u8,
+            34 as u8, 34 as u8, 34 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
+            0 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
+            64 as u8, 64 as u8, 64 as u8];
+
+///* The following singleton contains the global configuration for
+///* the SQLite library.
+#[unsafe(no_mangle)]
+pub static mut sqlite3Config: Sqlite3Config =
+    Sqlite3Config {
+        b_memstat: 1,
+        b_core_mutex: 1 as u8,
+        b_full_mutex: (1 == 1) as u8,
+        b_open_uri: 0 as u8,
+        b_use_cis: 1 as u8,
+        b_small_malloc: 0 as u8,
+        b_extra_schema_checks: 1 as u8,
+        mx_strlen: 2147483646,
+        never_corrupt: 0,
+        sz_lookaside: 1200,
+        n_lookaside: 40,
+        n_stmt_spill: 64 * 1024,
+        m: Sqlite3MemMethods {
+            x_malloc: None,
+            x_free: None,
+            x_realloc: None,
+            x_size: None,
+            x_roundup: None,
+            x_init: None,
+            x_shutdown: None,
+            p_app_data: core::ptr::null_mut(),
+        },
+        mutex: Sqlite3MutexMethods {
+            x_mutex_init: None,
+            x_mutex_end: None,
+            x_mutex_alloc: None,
+            x_mutex_free: None,
+            x_mutex_enter: None,
+            x_mutex_try: None,
+            x_mutex_leave: None,
+            x_mutex_held: None,
+            x_mutex_notheld: None,
+        },
+        pcache2: Sqlite3PcacheMethods2 {
+            i_version: 0,
+            p_arg: core::ptr::null_mut(),
+            x_init: None,
+            x_shutdown: None,
+            x_create: None,
+            x_cachesize: None,
+            x_pagecount: None,
+            x_fetch: None,
+            x_unpin: None,
+            x_rekey: None,
+            x_truncate: None,
+            x_destroy: None,
+            x_shrink: None,
+        },
+        p_heap: 0 as *mut (),
+        n_heap: 0,
+        mn_req: 0,
+        mx_req: 0,
+        sz_mmap: 0 as Sqlite3Int64,
+        mx_mmap: 2147418112 as Sqlite3Int64,
+        p_page: 0 as *mut (),
+        sz_page: 0,
+        n_page: 20,
+        mx_parser_stack: 0,
+        shared_cache_enabled: 0,
+        sz_pma: 250 as u32,
+        is_init: 0,
+        in_progress: 0,
+        is_mutex_init: 0,
+        is_malloc_init: 0,
+        is_p_cache_init: 0,
+        n_ref_init_mutex: 0,
+        p_init_mutex: core::ptr::null_mut(),
+        x_log: None,
+        p_log_arg: core::ptr::null_mut(),
+        mx_memdb_size: 1073741824 as Sqlite3Int64,
+        x_test_callback: None,
+        b_localtime_fault: 0,
+        x_alt_localtime: None,
+        i_once_reset_threshold: 2147483646,
+        sz_sorter_ref: 2147483647 as u32,
+        i_prng_seed: 0 as u32,
+    };
+
+///* Hash table for global functions - functions common to all
+///* database connections.  After initialization, this table is
+///* read-only.
+#[unsafe(no_mangle)]
+pub static mut sqlite3_builtin_functions: FuncDefHash =
+    unsafe { core::mem::zeroed() };
+
+///* This singleton is an sqlite3_str object that is returned if
+///* sqlite3_malloc() fails to provide space for a real one.  This
+///* sqlite3_str object accepts no new text and always returns
+///* an SQLITE_NOMEM error.
+#[unsafe(no_mangle)]
+pub static mut sqlite3_oom_str: Sqlite3Str =
+    Sqlite3Str {
+        db: core::ptr::null_mut(),
+        z_text: core::ptr::null_mut(),
+        n_alloc: 0 as u32,
+        mx_alloc: 0 as u32,
+        n_char: 0 as u32,
+        acc_error: 7 as u8,
+        printf_flags: 0 as u8,
+    };
+
+#[unsafe(no_mangle)]
+pub static mut sqlite3_pending_byte: i32 = 1073741824;
 
 extern "C" {
     fn __transpiler_isa(child: i32, ancestor: i32)

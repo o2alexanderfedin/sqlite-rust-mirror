@@ -1,19 +1,52 @@
+//!* 2007 May 7
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* 
+//!* This file contains code used for testing the SQLite system.
+//!* None of the code in this file goes into a deliverable build.
+//!* 
+//!* The focus of this file is providing the TCL testing layer
+//!* access to compile-time constants.
+//!* Macro to stringify the results of the evaluation a pre-processor
+//!* macro. i.e. so that STRINGVALUE(SQLITE_NOMEM) -> "7".
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,6 +424,10 @@ impl Parse {
     }
 }
 
+///* This routine sets entries in the global ::sqlite_options() array variable
+///* according to the compile-time configuration of the database.  Test
+///* procedures use this to determine when tests should be omitted.
+#[allow(unused_doc_comments)]
 extern "C" fn set_options(interp: *mut TclInterp) -> () {
     unsafe {
         Tcl_SetVar2(interp,
@@ -656,6 +693,8 @@ extern "C" fn set_options(interp: *mut TclInterp) -> () {
             c"autovacuum".as_ptr() as *mut i8 as *const i8,
             c"1".as_ptr() as *mut i8 as *const i8, 1)
     };
+
+    /// SQLITE_OMIT_AUTOVACUUM
     unsafe {
         Tcl_SetVar2(interp,
             c"sqlite_options".as_ptr() as *mut i8 as *const i8,
@@ -836,6 +875,8 @@ extern "C" fn set_options(interp: *mut TclInterp) -> () {
             c"incrblob".as_ptr() as *mut i8 as *const i8,
             c"1".as_ptr() as *mut i8 as *const i8, 1)
     };
+
+    /// SQLITE_OMIT_AUTOVACUUM
     unsafe {
         Tcl_SetVar2(interp,
             c"sqlite_options".as_ptr() as *mut i8 as *const i8,
@@ -1329,6 +1370,7 @@ extern "C" fn set_options(interp: *mut TclInterp) -> () {
     }
 }
 
+///* Register commands with the TCL interpreter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqliteconfig_init(interp: *mut TclInterp) -> i32 {
     set_options(interp);

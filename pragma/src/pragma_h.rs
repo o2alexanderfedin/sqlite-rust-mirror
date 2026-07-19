@@ -1,5 +1,6 @@
 use super::*;
 
+/// Definitions of all built-in pragmas
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PragmaName {
@@ -549,6 +550,9 @@ pub(crate) static mut a_pragma_name: [PragmaName; 67] =
                 i_arg: (1 | 134217728) as u64,
             }];
 
+/// Names of columns for pragmas that return multi-column result
+///* or that return single-column results where the name of the
+///* result column is different from the name of the pragma
 pub(crate) static mut prag_c_name: [*const i8; 57] =
     [c"id".as_ptr() as *const i8, c"seq".as_ptr() as *const i8,
             c"table".as_ptr() as *const i8, c"from".as_ptr() as *const i8,

@@ -1,7 +1,27 @@
+//!* 2018-12-04
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* 
+//!* This file implements a utility program used to help determine which
+//!* indexes in a database schema are used and unused, and how often specific
+//!* indexes are used.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
@@ -25,11 +45,14 @@ extern "C" fn usage(argv0: *const i8) -> () {
     unsafe { exit(1) };
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(mut argc: i32, argv: *mut *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The main database
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// a query
         let mut z_sql: *mut i8 = core::ptr::null_mut();
         let mut n_err: i32 = 0;
         let mut rc: i32 = 0;
@@ -41,6 +64,8 @@ extern "C" fn __main_inner(mut argc: i32, argv: *mut *mut i8)
         let mut n_row: i32 = 0;
         let mut i_progress: i32 = 0;
         let mut z: *const i8 = core::ptr::null();
+        /// Open the LOG database
+        /// Update the counts based on LOG
         let mut z_log: *const i8 = core::ptr::null();
         let mut p_s2: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut z_explain: *const i8 = core::ptr::null();
@@ -580,6 +605,13 @@ extern "C" fn __main_inner(mut argc: i32, argv: *mut *mut i8)
                 }
             }
         }
+
+        /// The main database
+        /// a query
+        /// Open the LOG database
+        /// Update the counts based on LOG
+        /// printf("EXPLAIN: %s\n", zExplain);
+        /// Generate the report
         unreachable!();
         return Ok(());
     }

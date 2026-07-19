@@ -1,3 +1,25 @@
+//!   Strips C- and C++-style comments from stdin, sending the results to
+//!   stdout. It assumes that its input is legal C-like code, and does
+//!   only little error handling.
+//!
+//!   It treats string literals as anything starting and ending with
+//!   matching double OR single quotes OR backticks (for use with
+//!   scripting languages which use those). It assumes that a quote
+//!   character within a string which uses the same quote type is escaped
+//!   by a backslash. It should not be used on any code which might
+//!   contain C/C++ comments inside heredocs, and similar constructs, as
+//!   it will strip those out.
+//!
+//!   Usage: $0 [--keep-first|-k] < input > output
+//!
+//!   The --keep-first (-k) flag tells it to retain the first comment in the
+//!   input stream (which is often a license or attribution block). It
+//!   may be given repeatedly, each one incrementing the number of
+//!   retained comments by one.
+//!
+//!   License: Public Domain
+//!   Author: Stephan Beal (stephan@wanderinghorse.net)
+
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -17,8 +39,13 @@ pub static mut app: AnonS0 =
     };
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn do_it_all() -> () {
     unsafe {
+        /// not in comment
+        /// slash - possibly comment prefix
+        /// in C++ comment
+        /// in C comment
         let mut ch: i32 = 0;
         let mut prev: i32 = -1;
         let out: *mut FILE = app.output;
@@ -41,6 +68,8 @@ pub extern "C" fn do_it_all() -> () {
                             S_NONE => {
                                 if '\'' as i32 == ch || '\"' as i32 == ch ||
                                         '`' as i32 == ch {
+                                    /// Read string literal...
+                                    ///             needed to properly catch comments in strings.
                                     let quote: i32 = ch as i32;
                                     let start_line: i32 = line as i32;
                                     let start_col: i32 = col as i32;
@@ -107,6 +136,18 @@ pub extern "C" fn do_it_all() -> () {
                                     break '__s1;
                                 } else if slash as i32 == ch {
                                     if '\\' as i32 == prev {
+
+                                        ///               JS regexes may contain slash-asterisks, as happened at:
+                                        ///
+                                        ///               https://github.com/emscripten-core/emscripten/issues/23412
+                                        ///
+                                        ///               Such regexes will always necessarily be preceded by a
+                                        ///               backslash, though.
+                                        ///
+                                        ///               It is hypothetically possible for a legitimate comment
+                                        ///               slash-asterisk to appear immediately before a
+                                        ///               backslash, but that seems like an even rarer corner
+                                        ///               case than the JS regex case.
                                         unsafe { fputc(ch, out) };
                                     } else { state = S_SLASH1; }
                                     break '__s1;
@@ -151,7 +192,12 @@ pub extern "C" fn do_it_all() -> () {
                                 }
                             }
                             S_CPP => {
-                                if '\n' as i32 == ch { state = S_NONE; elide = 0; }
+                                if '\n' as i32 == ch {
+
+                                    /// MARKER(("state 2 ==> 0 @ %d:%d\n", line, col));
+                                    (state = S_NONE);
+                                    elide = 0;
+                                }
                                 if (elide == 0) as i32 != 0 { unsafe { fputc(ch, out) }; }
                             }
                             S_C => {

@@ -2,15 +2,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
 
+///* The complete virtual table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Vt02Vtab {
@@ -19,6 +26,7 @@ struct Vt02Vtab {
     busy: i32,
 }
 
+///* A cursor
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Vt02Cur {
@@ -30,6 +38,7 @@ struct Vt02Cur {
     m_d: u32,
 }
 
+/// The xConnect method
 #[unsafe(no_mangle)]
 pub extern "C" fn vt02_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_v_tab_1: *mut *mut Sqlite3Vtab,
@@ -78,6 +87,7 @@ pub extern "C" fn vt02_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     }
 }
 
+/// the xDisconnect method
 #[unsafe(no_mangle)]
 pub extern "C" fn vt02_disconnect(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe {
@@ -88,6 +98,7 @@ pub extern "C" fn vt02_disconnect(p_v_tab_1: *mut Sqlite3Vtab) -> i32 {
     }
 }
 
+/// Put an error message into the zErrMsg string of the virtual table.
 unsafe extern "C" fn vt02_err_msg(p_vtab_1: &mut Sqlite3Vtab,
     z_format_1: *const i8, mut __va0: ...) -> () {
     unsafe {
@@ -106,6 +117,7 @@ unsafe extern "C" fn vt02_err_msg(p_vtab_1: &mut Sqlite3Vtab,
     }
 }
 
+/// Open a cursor for scanning
 extern "C" fn vt02_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -129,6 +141,7 @@ extern "C" fn vt02_open(p_v_tab_1: *mut Sqlite3Vtab,
     }
 }
 
+/// Close a cursor
 extern "C" fn vt02_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p_cur: *mut Vt02Cur = p_cursor_1 as *mut Vt02Cur;
@@ -139,12 +152,15 @@ extern "C" fn vt02_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+/// Return TRUE if we are at the end of the BVS and there are
+///* no more entries.
 extern "C" fn vt02_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const Vt02Cur = p_cursor_1 as *mut Vt02Cur as *const Vt02Cur;
     return (unsafe { (*p_cur).i } < unsafe { (*p_cur).i_min } ||
                 unsafe { (*p_cur).i } >= unsafe { (*p_cur).i_eof }) as i32;
 }
 
+/// Advance the cursor to the next row in the table
 extern "C" fn vt02_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut Vt02Cur = p_cursor_1 as *mut Vt02Cur;
     '__b0: loop {
@@ -167,15 +183,40 @@ extern "C" fn vt02_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+/// Rewind a cursor back to the beginning of its scan.
+///*
+///* Scanning is always increasing.
+///*
+///*   idxNum
+///*     0           unconstrained
+///*     1           X=argv[0]
+///*     2           A=argv[0]
+///*     3           A=argv[0], B=argv[1]
+///*     4           A=argv[0], B=argv[1], C=argv[2]
+///*     5           A=argv[0], B=argv[1], C=argv[2], D=argv[3]
+///*     6           A=argv[0], D IN argv[2]
+///*     7           A=argv[0], B=argv[2], D IN argv[3]
+///*     8           A=argv[0], B=argv[2], C=argv[3], D IN argv[4]
+///*    1x           increment by 10
+///*    2x           increment by 100
+///*    3x           increment by 1000
+///*   1xx           Use offset provided by argv[N]
+///*  1xxx           Output rows in reverse order
+#[allow(unused_doc_comments)]
 extern "C" fn vt02_filter(p_cursor_1: *mut Sqlite3VtabCursor,
     mut idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
     unsafe {
         let mut p_cur: *mut Vt02Cur = core::ptr::null_mut();
+        /// The vt02 cursor
         let mut b_use_offset: i32 = 0;
+        /// True to use OFFSET value
         let mut b_reverse: i32 = 0;
+        /// Output rows in reverse order
         let mut i_arg: i32 = 0;
+        /// argv[] values used so far
         let mut i_orig_idx_num: i32 = 0;
+        /// Original value for idxNum
         let mut i: i32 = 0;
         let mut e: i32 = 0;
         let mut m: i32 = 0;
@@ -632,10 +673,17 @@ extern "C" fn vt02_filter(p_cursor_1: *mut Sqlite3VtabCursor,
                 }
             }
         }
+
+        /// The vt02 cursor
+        /// True to use OFFSET value
+        /// Output rows in reverse order
+        /// argv[] values used so far
+        /// Original value for idxNum
         unreachable!();
     }
 }
 
+/// Return the Nth column of the current row.
 extern "C" fn vt02_column(p_cursor_1: *mut Sqlite3VtabCursor,
     context: *mut Sqlite3Context, n_1: i32) -> i32 {
     unsafe {
@@ -656,6 +704,7 @@ extern "C" fn vt02_column(p_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+/// Return the rowid of the current row
 extern "C" fn vt02_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut Sqlite3Int64) -> i32 {
     let p_cur: *const Vt02Cur = p_cursor_1 as *mut Vt02Cur as *const Vt02Cur;
@@ -663,6 +712,28 @@ extern "C" fn vt02_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///**********************************************************************
+///* Logging Subsystem
+///*
+///* The sqlite3BestIndexLog() routine implements a logging system for
+///* xBestIndex calls.  This code is portable to any virtual table.
+///*
+///* sqlite3BestIndexLog() is the main routine,  sqlite3RunSql() is a
+///* helper routine used for running various SQL statements as part of
+///* creating the log.
+///*
+///* These two routines should be portable to other virtual tables.  Simply
+///* extract this code and call sqlite3BestIndexLog() near the end of the
+///* xBestIndex method in cases where logging is desired.
+////
+////*
+///* Run SQL on behalf of sqlite3BestIndexLog.
+///*
+///* Construct the SQL using the zFormat string and subsequent arguments.
+///* Or if zFormat is NULL, take the SQL as the first argument after the
+///* zFormat.  In either case, the dynamically allocated SQL string is
+///* freed after it has been run.  If something goes wrong with the SQL,
+///* then an error is left in pVTab->zErrMsg.
 unsafe extern "C" fn sqlite3_run_sql(db: *mut Sqlite3,
     p_v_tab_1: &mut Sqlite3Vtab, z_format_1: *const i8, mut __va0: ...)
     -> () {
@@ -726,6 +797,24 @@ unsafe extern "C" fn sqlite3_run_sql(db: *mut Sqlite3,
     }
 }
 
+///* Record information about each xBestIndex method call in a separate
+///* table:
+///*
+///*   CREATE TEMP TABLE [log-table-name] (
+///*     bi INT,      -- BestIndex call number
+///*     vn TEXT,     -- Variable Name
+///*     ix INT,      -- Index or value
+///*     cn TEXT,     -- Column Name
+///*     op INT,      -- Opcode or argvIndex
+///*     ux INT,      -- "usable" or "omit" flag
+///*     rx BOOLEAN,  -- True if has a RHS value
+///*     rhs ANY,     -- The RHS value
+///*     cs TEXT,     -- Collating Sequence
+///*     inop BOOLEAN -- True if this is a batchable IN operator
+///*  );
+///*
+///* If an error occurs, leave an error message in pVTab->zErrMsg.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
     z_log_tab_1: *const i8, db: *mut Sqlite3, az_colname_1: *const *const i8,
     p_v_tab_1: *mut Sqlite3Vtab) -> () {
@@ -742,6 +831,8 @@ extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
                         core::ptr::null_mut(), core::ptr::null_mut(),
                         core::ptr::null_mut())
                 } != 0 {
+
+            /// The log table does not previously exist.  Create it.
             unsafe {
                 sqlite3_run_sql(db, unsafe { &mut *p_v_tab_1 },
                     c"CREATE TABLE IF NOT EXISTS temp.\"%w\"(\n bi INT,          -- BestIndex call number\n vn TEXT,         -- Variable Name\n ix INT,          -- Index or value\n cn TEXT,         -- Column Name\n op INT,          -- Opcode or argvIndex\n ux INT,          -- usable for omit flag\n rx BOOLEAN,      -- Right-hand side value is available\n rhs ANY,         -- RHS value\n cs TEXT,         -- Collating Sequence\n inop BOOLEAN     -- IN operator capable of batch reads\n);".as_ptr()
@@ -749,6 +840,10 @@ extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
             };
             i_bi = 1;
         } else {
+            /// The log table does already exist.  We assume that it has the
+            ///* correct schema and proceed to find the largest prior "bi" value.
+            ///* If the schema is wrong, errors might result.  The code is able
+            ///* to deal with this.
             let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
             let mut z_sql: *mut i8 = core::ptr::null_mut();
             z_sql =
@@ -1116,22 +1211,37 @@ extern "C" fn sqlite3_best_index_log(p_info_1: *mut Sqlite3IndexInfo,
     }
 }
 
+/// Find an estimated cost of running a query against vt02.
+#[allow(unused_doc_comments)]
 extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     p_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe {
         let mut i: i32 = 0;
+        /// Loop counter
         let mut is_eq: [i32; 5] = [0; 5];
+        /// Equality constraints on X, A, B, C, and D
         let mut is_used: [i32; 5] = [0; 5];
+        /// Other non-== cosntraints X, A, B, C, and D
         let mut argv_index: i32 = 0;
+        /// Next available argv[] slot
         let mut i_offset: i32 = -1;
+        /// Constraint for OFFSET
         let mut p_x: *mut () = core::ptr::null_mut();
+        /// idxStr value
         let mut flags: i32 = 0;
+        /// RHS value for flags=
         let mut z_log_tab: *const i8 = core::ptr::null();
+        /// RHS value for logtab=
         let mut i_flag_term: i32 = -1;
+        /// Constraint term for flags=
         let mut i_log_term: i32 = -1;
+        /// Constraint term for logtab=
         let mut i_in: i32 = -1;
+        /// Index of the IN constraint
         let mut p_self: *mut Vt02Vtab = core::ptr::null_mut();
-        p_self = p_v_tab_1 as *mut Vt02Vtab;
+
+        /// This virtual table
+        (p_self = p_v_tab_1 as *mut Vt02Vtab);
         if unsafe { (*p_self).busy } != 0 {
             unsafe {
                 vt02_err_msg(unsafe { &mut *p_v_tab_1 },
@@ -1211,6 +1321,8 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Do a second scan to actually analyze the index information
         unsafe {
             memset(&raw mut is_eq[0 as usize] as *mut i32 as *mut (), 255,
                 core::mem::size_of::<[i32; 5]>() as u64)
@@ -1260,6 +1372,8 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             }
         }
         if is_eq[0 as usize] >= 0 {
+
+            /// A constraint of X= takes priority
             unsafe { (*p_info_1).estimated_cost = 1 as f64 };
             unsafe {
                 (*unsafe {
@@ -1278,6 +1392,8 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             }
             unsafe { (*p_info_1).idx_num = 1 };
         } else if is_eq[1 as usize] < 0 {
+
+            /// If there is no X= nor A= then we have to do a full scan
             unsafe { (*p_info_1).idx_num = 0 };
             unsafe { (*p_info_1).estimated_cost = 10000 as f64 };
         } else {
@@ -1368,6 +1484,8 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
                     (unsafe { (*sqlite3_api).vtab_distinct.unwrap() })(p_info_1)
                 };
             if unsafe { (*p_info_1).idx_num } == 1 {
+
+                /// There will only be one row of output.  So it is always sorted.
                 unsafe { (*p_info_1).order_by_consumed = 1 };
             } else if unsafe {
                         (*unsafe {
@@ -1419,37 +1537,57 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
                 if e_distinct >= 2 && flags & 256 != 0 { e_distinct = 1; }
                 if e_distinct >= 2 {
                     if x == 2 as u32 {
+
+                        /// DISTINCT A
                         unsafe {
                             (*p_info_1).idx_num +=
                                 if flags & 128 != 0 { 20 } else { 30 }
                         };
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 6 as u32 {
+
+                        /// DISTINCT A,B
                         unsafe {
                             (*p_info_1).idx_num +=
                                 if flags & 128 != 0 { 10 } else { 20 }
                         };
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 14 as u32 {
+
+                        /// DISTINCT A,B,C
                         unsafe {
                             (*p_info_1).idx_num += if flags & 128 != 0 { 0 } else { 10 }
                         };
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x & 1 as u32 != 0 {
+
+                        /// DISTINCT X
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 30 as u32 {
+
+                        /// DISTINCT A,B,C,D
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     }
                 } else if e_distinct == 1 {
                     if x == 2 as u32 {
+
+                        /// GROUP BY A
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 6 as u32 {
+
+                        /// GROUP BY A,B
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 14 as u32 {
+
+                        /// GROUP BY A,B,C
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x & 1 as u32 != 0 {
+
+                        /// GROUP BY X
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     } else if x == 30 as u32 {
+
+                        /// GROUP BY A,B,C,D
                         unsafe { (*p_info_1).order_by_consumed = 1 };
                     }
                 }
@@ -1596,7 +1734,10 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             *__p -= 1;
             __t
         };
-        p_x = unsafe { (unsafe { (*sqlite3_api).malloc.unwrap() })(800) };
+
+        /// Try to do a memory allocation solely for the purpose of causing
+        ///* an error under OOM testing loops
+        (p_x = unsafe { (unsafe { (*sqlite3_api).malloc.unwrap() })(800) });
         if p_x == core::ptr::null_mut() { return 7; }
         unsafe { (unsafe { (*sqlite3_api).free.unwrap() })(p_x) };
         return if unsafe { (*p_v_tab_1).z_err_msg } != core::ptr::null_mut() {
@@ -1605,6 +1746,8 @@ extern "C" fn vt02_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     }
 }
 
+/// This is the sqlite3_module definition for the the virtual table defined
+///* by this include file.
 static vt02_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 2,

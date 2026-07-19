@@ -1,10 +1,30 @@
+//!* 2013-05-15
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* This SQLite extension implements a rot13() function and a rot13
+//!* collating sequence.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* Perform rot13 encoding on a single ASCII character.
 extern "C" fn rot13(mut c: u8) -> u8 {
     if c as i32 >= 'a' as i32 && c as i32 <= 'z' as i32 {
         c += 13 as u8;
@@ -16,6 +36,11 @@ extern "C" fn rot13(mut c: u8) -> u8 {
     return c;
 }
 
+///* Implementation of the rot13() function.
+///*
+///* Rotate ASCII alphabetic characters by 13 character positions.  
+///* Non-ASCII characters are unchanged.  rot13(rot13(X)) should always
+///* equal X.
 extern "C" fn rot13func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_in: *const u8 = core::ptr::null();
@@ -81,6 +106,13 @@ extern "C" fn rot13func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_free(z_to_free as *mut ()) };
 }
 
+///* Implement the rot13 collating sequence so that if
+///*
+///*      x=y COLLATE rot13
+///*
+///* Then 
+///*
+///*      rot13(x)=rot13(y) COLLATE binary
 extern "C" fn rot13_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const i8 = p_key1_1 as *const i8;
@@ -105,18 +137,21 @@ extern "C" fn rot13_coll_func(not_used_1: *mut (), n_key1_1: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_rot_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"rot13".as_ptr() as *mut i8 as *const i8, 1,
                 1 | 2097152 | 2048, core::ptr::null_mut(), Some(rot13func),
                 None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

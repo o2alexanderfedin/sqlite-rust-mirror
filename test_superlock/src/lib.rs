@@ -1,10 +1,18 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* A structure to collect a busy-handler callback and argument and a count
+///* of the number of times it has been invoked.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SuperlockBusy {
@@ -13,6 +21,9 @@ struct SuperlockBusy {
     n_busy: i32,
 }
 
+///* An instance of the following structure is allocated for each active
+///* superlock. The opaque handle returned by sqlite3demo_superlock() is
+///* actually a pointer to an instance of this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Superlock {
@@ -20,6 +31,9 @@ struct Superlock {
     b_wal: i32,
 }
 
+///* The pCtx pointer passed to this function is actually a pointer to a
+///* SuperlockBusy structure. Invoke the busy-handler function encapsulated
+///* by the structure and return the result.
 extern "C" fn superlock_busy_handler(p_ctx_1: *mut (), unused_1: i32) -> i32 {
     let p_busy: *mut SuperlockBusy = p_ctx_1 as *mut SuperlockBusy;
     if !unsafe { (*p_busy).x_busy.is_some() } as i32 != 0 { return 0; }
@@ -36,15 +50,26 @@ extern "C" fn superlock_busy_handler(p_ctx_1: *mut (), unused_1: i32) -> i32 {
         };
 }
 
+///* This function is used to determine if the main database file for 
+///* connection db is open in WAL mode or not. If no error occurs and the
+///* database file is in WAL mode, set *pbWal to true and return SQLITE_OK.
+///* If it is not in WAL mode, set *pbWal to false.
+///*
+///* If an error occurs, return an SQLite error code. The value of *pbWal
+///* is undefined in this case.
+#[allow(unused_doc_comments)]
 extern "C" fn superlock_is_wal(p_lock_1: &mut Superlock) -> i32 {
     let mut rc: i32 = 0;
+    /// Return Code
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
-    rc =
+
+    /// Compiled PRAGMA journal_mode statement
+    (rc =
         unsafe {
             sqlite3_prepare((*p_lock_1).db,
                 c"PRAGMA main.journal_mode".as_ptr() as *mut i8 as *const i8,
                 -1, &mut p_stmt, core::ptr::null_mut())
-        };
+        });
     if rc != 0 { return rc; }
     (*p_lock_1).b_wal = 0;
     if 100 == unsafe { sqlite3_step(p_stmt) } {
@@ -61,6 +86,10 @@ extern "C" fn superlock_is_wal(p_lock_1: &mut Superlock) -> i32 {
     return unsafe { sqlite3_finalize(p_stmt) };
 }
 
+///* Obtain an exclusive shm-lock on nByte bytes starting at offset idx
+///* of the file fd. If the lock cannot be obtained immediately, invoke
+///* the busy-handler until either it is obtained or the busy-handler
+///* callback returns 0.
 extern "C" fn superlock_shm_lock(fd: *mut Sqlite3File, idx: i32,
     n_byte_1: i32, p_busy_1: *mut SuperlockBusy) -> i32 {
     let mut rc: i32 = 0;
@@ -80,36 +109,63 @@ extern "C" fn superlock_shm_lock(fd: *mut Sqlite3File, idx: i32,
     return rc;
 }
 
+///* Obtain the extra locks on the database file required for WAL databases.
+///* Invoke the supplied busy-handler as required.
+#[allow(unused_doc_comments)]
 extern "C" fn superlock_wal_lock(db: *mut Sqlite3,
     p_busy_1: *mut SuperlockBusy) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut fd: *mut Sqlite3File = core::ptr::null_mut();
+    /// Main database file handle
     let mut p: *mut () = core::ptr::null_mut();
-    rc =
+
+    /// Pointer to first page of shared memory
+    /// Obtain a pointer to the sqlite3_file object open on the main db file.
+    (rc =
         unsafe {
             sqlite3_file_control(db, c"main".as_ptr() as *mut i8 as *const i8,
                 7, &raw mut fd as *mut ())
-        };
+        });
     if rc != 0 { return rc; }
-    rc = superlock_shm_lock(fd, 2, 1, p_busy_1);
+
+    /// Obtain the "recovery" lock. Normally, this lock is only obtained by
+    ///* clients running database recovery.
+    (rc = superlock_shm_lock(fd, 2, 1, p_busy_1));
     if rc != 0 { return rc; }
-    rc =
+
+    /// Zero the start of the first shared-memory page. This means that any
+    ///* clients that open read or write transactions from this point on will
+    ///* have to run recovery before proceeding. Since they need the "recovery"
+    ///* lock that this process is holding to do that, no new read or write
+    ///* transactions may now be opened. Nor can a checkpoint be run, for the
+    ///* same reason.
+    (rc =
         unsafe {
             (unsafe {
                     (*unsafe { (*fd).p_methods }).x_shm_map.unwrap()
                 })(fd, 0, 32 * 1024, 1, &mut p)
-        };
+        });
     if rc != 0 { return rc; }
     unsafe { memset(p as *mut (), 0, 32 as u64) };
-    rc = superlock_shm_lock(fd, 3, 8 - 3, p_busy_1);
+
+    /// Obtain exclusive locks on all the "read-lock" slots. Once these locks
+    ///* are held, it is guaranteed that there are no active reader, writer or 
+    ///* checkpointer clients.
+    (rc = superlock_shm_lock(fd, 3, 8 - 3, p_busy_1));
     return rc;
 }
 
+///* Release a superlock held on a database file. The argument passed to 
+///* this function must have been obtained from a successful call to
+///* sqlite3demo_superlock().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3demo_superunlock(p_lock_1: *mut ()) -> () {
     let p: *mut Superlock = p_lock_1 as *mut Superlock;
     if unsafe { (*p).b_wal } != 0 {
         let mut rc: i32 = 0;
+        /// Return code
         let flags: i32 = 1 | 8;
         let mut fd: *mut Sqlite3File = core::ptr::null_mut();
         rc =
@@ -135,7 +191,21 @@ pub extern "C" fn sqlite3demo_superunlock(p_lock_1: *mut ()) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
 
+///* Obtain a superlock on the database file identified by zPath, using the
+///* locking primitives provided by VFS zVfs. If successful, SQLITE_OK is
+///* returned and output variable *ppLock is populated with an opaque handle
+///* that may be used with sqlite3demo_superunlock() to release the lock.
+///*
+///* If an error occurs, *ppLock is set to 0 and an SQLite error code 
+///* (e.g. SQLITE_BUSY) is returned.
+///*
+///* If a required lock cannot be obtained immediately and the xBusy parameter
+///* to this function is not NULL, then xBusy is invoked in the same way
+///* as a busy-handler registered with SQLite (using sqlite3_busy_handler())
+///* until either the lock can be obtained or the busy-handler function returns
+///* 0 (indicating "give up").
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3demo_superlock(z_path_1: *const i8,
     z_vfs_1: *const i8,
     x_busy_1: Option<unsafe extern "C" fn(*mut (), i32) -> i32>,
@@ -146,7 +216,9 @@ pub extern "C" fn sqlite3demo_superlock(z_path_1: *const i8,
             p_busy_arg: core::ptr::null_mut(),
             n_busy: 0,
         };
+    /// Busy handler wrapper object
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_lock: *mut Superlock = core::ptr::null_mut();
     p_lock =
         unsafe { sqlite3_malloc(core::mem::size_of::<Superlock>() as i32) } as
@@ -155,11 +227,13 @@ pub extern "C" fn sqlite3demo_superlock(z_path_1: *const i8,
     unsafe {
         memset(p_lock as *mut (), 0, core::mem::size_of::<Superlock>() as u64)
     };
-    rc =
+
+    /// Open a database handle on the file to superlock.
+    (rc =
         unsafe {
             sqlite3_open_v2(z_path_1, unsafe { &mut (*p_lock).db }, 2 | 4,
                 z_vfs_1)
-        };
+        });
     if rc == 0 {
         busy.x_busy = x_busy_1;
         busy.p_busy_arg = p_busy_arg_1;

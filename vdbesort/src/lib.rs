@@ -1,21 +1,38 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+};
 
 type DarwinSizeT = u64;
 
@@ -457,6 +474,13 @@ impl VdbeCursor {
     }
 }
 
+///* Main sorter structure. A single instance of this is allocated for each
+///* sorter cursor created by the VDBE.
+///*
+///* mxKeysize:
+///*   As records are added to the sorter by calls to sqlite3VdbeSorterWrite(),
+///*   this variable is updated so as to be set to the size on disk of the
+///*   largest record in the sorter.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VdbeSorter {
@@ -480,6 +504,13 @@ struct VdbeSorter {
     a_task: [SortSubtask; 0],
 }
 
+///* An instance of the following object is used to read records out of a
+///* PMA, in sorted order.  The next key to be read is cached in nKey/aKey.
+///* aKey might point into aMap or into aBuffer.  If neither of those locations
+///* contain a contiguous representation of the key, then aAlloc is allocated
+///* and the key is copied into aAlloc and aKey is made to point to aAlloc.
+///*
+///* pFd==0 at EOF.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PmaReader {
@@ -496,6 +527,36 @@ struct PmaReader {
     p_incr: *mut IncrMerger,
 }
 
+///* Normally, a PmaReader object iterates through an existing PMA stored
+///* within a temp file. However, if the PmaReader.pIncr variable points to
+///* an object of the following type, it may be used to iterate/merge through
+///* multiple PMAs simultaneously.
+///*
+///* There are two types of IncrMerger object - single (bUseThread==0) and
+///* multi-threaded (bUseThread==1).
+///*
+///* A multi-threaded IncrMerger object uses two temporary files - aFile[0]
+///* and aFile[1]. Neither file is allowed to grow to more than mxSz bytes in
+///* size. When the IncrMerger is initialized, it reads enough data from
+///* pMerger to populate aFile[0]. It then sets variables within the
+///* corresponding PmaReader object to read from that file and kicks off
+///* a background thread to populate aFile[1] with the next mxSz bytes of
+///* sorted record data from pMerger.
+///*
+///* When the PmaReader reaches the end of aFile[0], it blocks until the
+///* background thread has finished populating aFile[1]. It then exchanges
+///* the contents of the aFile[0] and aFile[1] variables within this structure,
+///* sets the PmaReader fields to read from the new aFile[0] and kicks off
+///* another background thread to populate the new aFile[1]. And so on, until
+///* the contents of pMerger are exhausted.
+///*
+///* A single-threaded IncrMerger does not open any temporary files of its
+///* own. Instead, it has exclusive access to mxSz bytes of space beginning
+///* at offset iStartOff of file pTask->file2. And instead of using a
+///* background thread to prepare data for the PmaReader, with a single
+///* threaded IncrMerger the allocate part of pTask->file2 is "refilled" with
+///* keys from pMerger by the calling thread whenever the PmaReader runs out
+///* of data.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IncrMerger {
@@ -524,6 +585,12 @@ struct SortSubtask {
     n_spill: u64,
 }
 
+///* An in-memory list of objects to be sorted.
+///*
+///* If aMemory==0 then each object is allocated separately and the objects
+///* are connected using SorterRecord.u.pNext.  If aMemory!=0 then all objects
+///* are stored in the aMemory[] bulk memory, one right after the other, and
+///* are connected using SorterRecord.u.iNext.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterList {
@@ -532,6 +599,22 @@ struct SorterList {
     sz_pma: i64,
 }
 
+///* This object is the header on a single record while that record is being
+///* held in memory and prior to being written out as part of a PMA.
+///*
+///* How the linked list is connected depends on how memory is being managed
+///* by this module. If using a separate allocation for each in-memory record
+///* (VdbeSorter.list.aMemory==0), then the list is always connected using the
+///* SorterRecord.u.pNext pointers.
+///*
+///* Or, if using the single large allocation method (VdbeSorter.list.aMemory!=0),
+///* then while records are being accumulated the list is linked using the
+///* SorterRecord.u.iNext offset. This is because the aMemory[] array may
+///* be sqlite3Realloc()ed while records are being accumulated. Once the VM
+///* has finished passing records to the sorter, or when the in-memory buffer
+///* is full, the list is sorted. As part of the sorting process, it is
+///* converted to use the SorterRecord.u.pNext pointers. See function
+///* vdbeSorterSort() for details.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterRecord {
@@ -546,10 +629,41 @@ union SorterRecordU0 {
     i_next: i32,
 }
 
+///* This object represents a single thread of control in a sort operation.
+///* Exactly VdbeSorter.nTask instances of this object are allocated
+///* as part of each VdbeSorter object. Instances are never allocated any
+///* other way. VdbeSorter.nTask is set to the number of worker threads allowed
+///* (see SQLITE_CONFIG_WORKER_THREADS) plus one (the main thread).  Thus for
+///* single-threaded operation, there is exactly one instance of this object
+///* and for multi-threaded operation there are two or more instances.
+///*
+///* Essentially, this structure contains all those fields of the VdbeSorter
+///* structure for which each thread requires a separate instance. For example,
+///* each thread requeries its own UnpackedRecord object to unpack records in
+///* as part of comparison operations.
+///*
+///* Before a background thread is launched, variable bDone is set to 0. Then,
+///* right before it exits, the thread itself sets bDone to 1. This is used for
+///* two purposes:
+///*
+///*   1. When flushing the contents of memory to a level-0 PMA on disk, to
+///*      attempt to select a SortSubtask for which there is not already an
+///*      active background thread (since doing so causes the main thread
+///*      to block until it finishes).
+///*
+///*   2. If SQLITE_DEBUG_SORTER_THREADS is defined, to determine if a call
+///*      to sqlite3ThreadJoin() is likely to block. Cases that are likely to
+///*      block provoke debugging output.
+///*
+///* In both cases, the effects of the main thread seeing (bDone==0) even
+///* after the thread has finished are not dire. So we don't worry about
+///* memory barriers and such here.
 type SorterCompare =
     unsafe extern "C" fn(*mut SortSubtask, *mut i32, *const (), i32,
         *const (), i32) -> i32;
 
+///* A container for a temp file handle and the current amount of data
+///* stored in the file.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SorterFile {
@@ -557,6 +671,68 @@ struct SorterFile {
     i_eof: i64,
 }
 
+///* The MergeEngine object is used to combine two or more smaller PMAs into
+///* one big PMA using a merge operation.  Separate PMAs all need to be
+///* combined into one big PMA in order to be able to step through the sorted
+///* records in order.
+///*
+///* The aReadr[] array contains a PmaReader object for each of the PMAs being
+///* merged.  An aReadr[] object either points to a valid key or else is at EOF.
+///* ("EOF" means "End Of File".  When aReadr[] is at EOF there is no more data.)
+///* For the purposes of the paragraphs below, we assume that the array is
+///* actually N elements in size, where N is the smallest power of 2 greater
+///* to or equal to the number of PMAs being merged. The extra aReadr[] elements
+///* are treated as if they are empty (always at EOF).
+///*
+///* The aTree[] array is also N elements in size. The value of N is stored in
+///* the MergeEngine.nTree variable.
+///*
+///* The final (N/2) elements of aTree[] contain the results of comparing
+///* pairs of PMA keys together. Element i contains the result of
+///* comparing aReadr[2*i-N] and aReadr[2*i-N+1]. Whichever key is smaller, the
+///* aTree element is set to the index of it.
+///*
+///* For the purposes of this comparison, EOF is considered greater than any
+///* other key value. If the keys are equal (only possible with two EOF
+///* values), it doesn't matter which index is stored.
+///*
+///* The (N/4) elements of aTree[] that precede the final (N/2) described
+///* above contains the index of the smallest of each block of 4 PmaReaders
+///* And so on. So that aTree[1] contains the index of the PmaReader that
+///* currently points to the smallest key value. aTree[0] is unused.
+///*
+///* Example:
+///*
+///*     aReadr[0] -> Banana
+///*     aReadr[1] -> Feijoa
+///*     aReadr[2] -> Elderberry
+///*     aReadr[3] -> Currant
+///*     aReadr[4] -> Grapefruit
+///*     aReadr[5] -> Apple
+///*     aReadr[6] -> Durian
+///*     aReadr[7] -> EOF
+///*
+///*     aTree[] = { X, 5   0, 5    0, 3, 5, 6 }
+///*
+///* The current element is "Apple" (the value of the key indicated by
+///* PmaReader 5). When the Next() operation is invoked, PmaReader 5 will
+///* be advanced to the next key in its segment. Say the next key is
+///* "Eggplant":
+///*
+///*     aReadr[5] -> Eggplant
+///*
+///* The contents of aTree[] are updated first by comparing the new PmaReader
+///* 5 key to the current key of PmaReader 4 (still "Grapefruit"). The PmaReader
+///* 5 value is still smaller, so aTree[6] is set to 5. And so on up the tree.
+///* The value of PmaReader 6 - "Durian" - is now smaller than that of PmaReader
+///* 5, so aTree[3] is set to 6. Key 0 is smaller than key 6 (Banana<Durian),
+///* so the value written into element 1 of the array is 0. As follows:
+///*
+///*     aTree[] = { X, 0   0, 6    0, 3, 5, 6 }
+///*
+///* In other words, each time we advance to the next sorter element, log2(N)
+///* key comparison operations are required, where N is the number of segments
+///* being merged (rounded up to the next power of 2).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MergeEngine {
@@ -590,23 +766,50 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* Initialize the temporary index cursor just opened as a sorter cursor.
+///*
+///* Usually, the sorter module uses the value of (pCsr->pKeyInfo->nKeyField)
+///* to determine the number of fields that should be compared from the
+///* records being sorted. However, if the value passed as argument nField
+///* is non-zero and the sorter is able to guarantee a stable sort, nField
+///* is used instead. This is used when sorting records for a CREATE INDEX
+///* statement. In this case, keys are always delivered to the sorter in
+///* order of the primary key, which happens to be make up the final part
+///* of the records being sorted. So if the sort is stable, there is never
+///* any reason to compare PK fields and they can be ignored for a small
+///* performance boost.
+///*
+///* The sorter can guarantee a stable sort when running in single-threaded
+///* mode, but not in multi-threaded mode.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
     p_csr_1: &mut VdbeCursor) -> i32 {
     unsafe {
         unsafe {
             let mut pgsz: i32 = 0;
+            /// Page size of main database
             let mut i: i32 = 0;
+            /// Used to iterate through aTask[]
             let mut p_sorter: *mut VdbeSorter = core::ptr::null_mut();
+            /// The new sorter
             let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
+            /// Copy of pCsr->pKeyInfo with db==0
             let mut sz_key_info: i32 = 0;
+            /// Size of pCsr->pKeyInfo in bytes
             let mut sz: i64 = 0 as i64;
+            /// Size of pSorter in bytes
             let mut rc: i32 = 0;
             let mut n_worker: i32 = 0;
             if unsafe { sqlite3_temp_in_memory(db as *const Sqlite3) } != 0 ||
                     sqlite3Config.b_core_mutex as i32 == 0 {
                 n_worker = 0;
             } else { n_worker = unsafe { (*db).a_limit[11 as usize] }; }
+
+            /// Do not allow the total number of threads (main thread + all workers)
+            ///* to exceed the maximum merge count
             { let _ = 0; };
             { let _ = 0; };
             { let _ = 0; };
@@ -648,6 +851,10 @@ pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
                     unsafe { (*p_key_info).n_key_field = n_field_1 as u16 };
                     { let _ = 0; };
                 }
+
+                /// It is OK that pKeyInfo reuses the aSortFlags field from pCsr->pKeyInfo,
+                ///* since the pCsr->pKeyInfo->aSortFlags[] array is invariant and lives
+                ///* longer that pSorter.
                 { let _ = 0; };
                 unsafe { sqlite3_btree_enter(p_bt) };
                 unsafe {
@@ -686,6 +893,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
                 if (unsafe { sqlite3_temp_in_memory(db as *const Sqlite3) } ==
                                 0) as i32 != 0 {
                     let mut mx_cache: i64 = 0 as i64;
+                    /// Cache size in bytes
                     let sz_pma: u32 = sqlite3Config.sz_pma;
                     unsafe {
                         (*p_sorter).mn_pma_size = (sz_pma * pgsz as u32) as i32
@@ -697,7 +905,10 @@ pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
                                             }).cache_size
                             } as i64;
                     if mx_cache < 0 as i64 {
-                        mx_cache = mx_cache * -1024 as i64;
+
+                        /// A negative cache-size value C indicates that the cache is abs(C)
+                        ///* KiB in size.
+                        (mx_cache = mx_cache * -1024 as i64);
                     } else { mx_cache = mx_cache * pgsz as i64; }
                     mx_cache =
                         if mx_cache < (1 << 29) as i64 {
@@ -742,6 +953,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_init(db: *mut Sqlite3, n_field_1: i32,
     }
 }
 
+///* Join thread pTask->thread.
 extern "C" fn vdbe_sorter_join_thread(p_task_1: &mut SortSubtask) -> i32 {
     let mut rc: i32 = 0;
     if !((*p_task_1).p_thread).is_null() {
@@ -760,6 +972,8 @@ extern "C" fn vdbe_sorter_join_thread(p_task_1: &mut SortSubtask) -> i32 {
     return rc;
 }
 
+///* Join all outstanding threads launched by SorterWrite() to create
+///* level-0 PMAs.
 extern "C" fn vdbe_sorter_join_all(p_sorter_1: &mut VdbeSorter, rcin: i32)
     -> i32 {
     let mut rc: i32 = rcin;
@@ -785,6 +999,7 @@ extern "C" fn vdbe_sorter_join_all(p_sorter_1: &mut VdbeSorter, rcin: i32)
     return rc;
 }
 
+///* Free the MergeEngine object passed as the only argument.
 extern "C" fn vdbe_merge_engine_free(p_merger_1: *mut MergeEngine) -> () {
     let mut i: i32 = 0;
     if !(p_merger_1).is_null() {
@@ -805,6 +1020,8 @@ extern "C" fn vdbe_merge_engine_free(p_merger_1: *mut MergeEngine) -> () {
     unsafe { sqlite3_free(p_merger_1 as *mut ()) };
 }
 
+///* Free all resources associated with the IncrMerger object indicated by
+///* the first argument.
 extern "C" fn vdbe_incr_free(p_incr_1: *mut IncrMerger) -> () {
     if !(p_incr_1).is_null() {
         if unsafe { (*p_incr_1).b_use_thread } != 0 {
@@ -831,6 +1048,8 @@ extern "C" fn vdbe_incr_free(p_incr_1: *mut IncrMerger) -> () {
     }
 }
 
+///* Free all memory belonging to the PmaReader object passed as the
+///* argument. All structure fields are set to zero before returning.
 extern "C" fn vdbe_pma_reader_clear(p_readr_1: *mut PmaReader) -> () {
     unsafe { sqlite3_free(unsafe { (*p_readr_1).a_alloc } as *mut ()) };
     unsafe { sqlite3_free(unsafe { (*p_readr_1).a_buffer } as *mut ()) };
@@ -847,6 +1066,7 @@ extern "C" fn vdbe_pma_reader_clear(p_readr_1: *mut PmaReader) -> () {
     };
 }
 
+///* Free the list of sorted records starting at pRecord.
 extern "C" fn vdbe_sorter_record_free(db: *mut Sqlite3,
     p_record_1: *mut SorterRecord) -> () {
     unsafe {
@@ -867,6 +1087,8 @@ extern "C" fn vdbe_sorter_record_free(db: *mut Sqlite3,
     }
 }
 
+///* Free all resources owned by the object indicated by argument pTask. All
+///* fields of *pTask are zeroed before returning.
 extern "C" fn vdbe_sort_subtask_cleanup(db: *mut Sqlite3,
     p_task_1: *mut SortSubtask) -> () {
     unsafe {
@@ -899,6 +1121,7 @@ extern "C" fn vdbe_sort_subtask_cleanup(db: *mut Sqlite3,
     }
 }
 
+///* Reset a sorting cursor back to its original empty state.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_sorter_reset(db: *mut Sqlite3,
     p_sorter_1: *mut VdbeSorter) -> () {
@@ -952,7 +1175,9 @@ pub extern "C" fn sqlite3_vdbe_sorter_reset(db: *mut Sqlite3,
     }
 }
 
+///* Free any cursor components allocated by sqlite3VdbeSorterXXX routines.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_close(db: *mut Sqlite3,
     p_csr_1: &mut VdbeCursor) -> () {
     unsafe {
@@ -960,6 +1185,8 @@ pub extern "C" fn sqlite3_vdbe_sorter_close(db: *mut Sqlite3,
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         if !(p_sorter).is_null() {
+            /// Increment db->nSpill by the total number of bytes of data written
+            ///* to temp files by this sort operation.
             let mut ii: i32 = 0;
             {
                 ii = 0;
@@ -990,6 +1217,8 @@ pub extern "C" fn sqlite3_vdbe_sorter_close(db: *mut Sqlite3,
     }
 }
 
+///* Return a pointer to a buffer owned by the sorter that contains the
+///* current key.
 extern "C" fn vdbe_sorter_rowkey(p_sorter_1: &VdbeSorter, pn_key_1: &mut i32)
     -> *mut () {
     unsafe {
@@ -1024,13 +1253,17 @@ extern "C" fn vdbe_sorter_rowkey(p_sorter_1: &VdbeSorter, pn_key_1: &mut i32)
     }
 }
 
+///* Copy the current sorter key into the memory cell pOut.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_rowkey(p_csr_1: &VdbeCursor,
     p_out_1: *mut Mem) -> i32 {
     unsafe {
         let mut p_sorter: *const VdbeSorter = core::ptr::null();
         let mut p_key: *mut () = core::ptr::null_mut();
         let mut n_key: i32 = 0;
+
+        /// Sorter key to copy into pOut
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         p_key = vdbe_sorter_rowkey(unsafe { &*p_sorter }, &mut n_key);
@@ -1051,6 +1284,7 @@ pub extern "C" fn sqlite3_vdbe_sorter_rowkey(p_csr_1: &VdbeCursor,
     }
 }
 
+///* Launch a background thread to run xTask(pIn).
 extern "C" fn vdbe_sorter_create_thread(p_task_1: &mut SortSubtask,
     x_task_1: Option<unsafe extern "C" fn(*mut ()) -> *mut ()>,
     p_in_1: *mut ()) -> i32 {
@@ -1060,6 +1294,12 @@ extern "C" fn vdbe_sorter_create_thread(p_task_1: &mut SortSubtask,
         };
 }
 
+///* An instance of this object is used for writing a PMA.
+///*
+///* The PMA is written one record at a time.  Each record is of an arbitrary
+///* size.  But I/O is more efficient if it occurs in page-sized blocks where
+///* each block is aligned on a page boundary.  This object caches writes to
+///* the PMA so that aligned, page-size blocks are written.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PmaWriter {
@@ -1073,6 +1313,7 @@ struct PmaWriter {
     n_pma_spill: u64,
 }
 
+///* Initialize a PMA-writer object.
 extern "C" fn vdbe_pma_writer_init(p_fd_1: *mut Sqlite3File,
     p: *mut PmaWriter, n_buf_1: i32, i_start_1: i64) -> () {
     unsafe {
@@ -1101,6 +1342,8 @@ extern "C" fn vdbe_pma_writer_init(p_fd_1: *mut Sqlite3File,
     }
 }
 
+///* Write nData bytes of data to the PMA. Return SQLITE_OK
+///* if successful, or an SQLite error code if an error occurs.
 extern "C" fn vdbe_pma_write_blob(p: &mut PmaWriter, mut p_data_1: &mut [u8])
     -> () {
     let mut n_rem: i32 = p_data_1.len() as i32;
@@ -1135,6 +1378,8 @@ extern "C" fn vdbe_pma_write_blob(p: &mut PmaWriter, mut p_data_1: &mut [u8])
     }
 }
 
+///* Write value iVal encoded as a varint to the PMA. Return
+///* SQLITE_OK if successful, or an SQLite error code if an error occurs.
 extern "C" fn vdbe_pma_write_varint(p: *mut PmaWriter, i_val_1: u64) -> () {
     let mut n_byte: i32 = 0;
     let mut a_byte: [u8; 10] = [0; 10];
@@ -1146,24 +1391,39 @@ extern "C" fn vdbe_pma_write_varint(p: *mut PmaWriter, i_val_1: u64) -> () {
     vdbe_pma_write_blob(unsafe { &mut *p }, &mut a_byte[..n_byte as usize]);
 }
 
+///* Advance the MergeEngine to its next entry.
+///* Set *pbEof to true there is no next entry because
+///* the MergeEngine has reached the end of all its inputs.
+///*
+///* Return SQLITE_OK if successful or an error code if an error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_merge_engine_step(p_merger_1: &MergeEngine,
     pb_eof_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
     let i_prev: i32 = unsafe { *(*p_merger_1).a_tree.offset(1 as isize) };
+    /// Index of PmaReader to advance
     let p_task: *mut SortSubtask = (*p_merger_1).p_task;
-    rc =
+
+    /// Advance the current PmaReader
+    (rc =
         vdbe_pma_reader_next(unsafe {
                 &mut *(*p_merger_1).a_readr.offset(i_prev as isize)
-            });
+            }));
     if rc == 0 {
         let mut i: i32 = 0;
+        /// Index of aTree[] to recalculate
         let mut p_readr1: *mut PmaReader = core::ptr::null_mut();
+        /// First PmaReader to compare
         let mut p_readr2: *mut PmaReader = core::ptr::null_mut();
+        /// Second PmaReader to compare
         let mut b_cached: i32 = 0;
-        p_readr1 =
+
+        /// Find the first two PmaReaders to compare. The one that was just
+        ///* advanced (iPrev) and the one next to it in the array.
+        (p_readr1 =
             unsafe {
                 (*p_merger_1).a_readr.offset((i_prev & 65534) as isize)
-            };
+            });
         p_readr2 =
             unsafe { (*p_merger_1).a_readr.offset((i_prev | 1) as isize) };
         {
@@ -1171,6 +1431,7 @@ extern "C" fn vdbe_merge_engine_step(p_merger_1: &MergeEngine,
             '__b7: loop {
                 if !(i > 0) { break '__b7; }
                 '__c7: loop {
+                    /// Compare pReadr1 and pReadr2. Store the result in variable iRes.
                     let mut i_res: i32 = 0;
                     if unsafe { (*p_readr1).p_fd } == core::ptr::null_mut() {
                         i_res = 1;
@@ -1235,6 +1496,14 @@ extern "C" fn vdbe_merge_engine_step(p_merger_1: &MergeEngine,
         } else { rc };
 }
 
+///* Flush any buffered data to disk and clean up the PMA-writer object.
+///* The results of using the PMA-writer after this call are undefined.
+///* Return SQLITE_OK if flushing the buffered data succeeds or is not
+///* required. Otherwise, return an SQLite error code.
+///*
+///* Before returning, set *piEof to the offset immediately following the
+///* last byte written to the file. Also, increment (*pnSpill) by the total
+///* number of bytes written to the file.
 extern "C" fn vdbe_pma_writer_finish(p: *mut PmaWriter, pi_eof_1: &mut i64,
     pn_spill_1: &mut u64) -> i32 {
     let mut rc: i32 = 0;
@@ -1271,6 +1540,10 @@ extern "C" fn vdbe_pma_writer_finish(p: *mut PmaWriter, pi_eof_1: &mut i64,
     return rc;
 }
 
+///* Read keys from pIncr->pMerger and populate pIncr->aFile[1]. The format
+///* of the data stored in aFile[1] is the same as that used by regular PMAs,
+///* except that the number-of-bytes varint is omitted from the start.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_incr_populate(p_incr_1: &mut IncrMerger) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1302,6 +1575,8 @@ extern "C" fn vdbe_incr_populate(p_incr_1: &mut IncrMerger) -> i32 {
                     i_start + (*p_incr_1).mx_sz as i64 {
                 break;
             }
+
+            /// Write the next key to the output.
             vdbe_pma_write_varint(&mut writer, n_key as u64);
             vdbe_pma_write_blob(&mut writer,
                 unsafe {
@@ -1326,6 +1601,8 @@ extern "C" fn vdbe_incr_populate(p_incr_1: &mut IncrMerger) -> i32 {
     }
 }
 
+///* The main routine for background threads that populate aFile[1] of
+///* multi-threaded IncrMerger objects.
 extern "C" fn vdbe_incr_populate_thread(p_ctx_1: *mut ()) -> *mut () {
     let p_incr: *mut IncrMerger = p_ctx_1 as *mut IncrMerger;
     let p_ret: *mut () =
@@ -1334,6 +1611,7 @@ extern "C" fn vdbe_incr_populate_thread(p_ctx_1: *mut ()) -> *mut () {
     return p_ret;
 }
 
+///* Launch a background thread to populate aFile[1] of pIncr.
 extern "C" fn vdbe_incr_bg_populate(p_incr_1: *mut IncrMerger) -> i32 {
     let p: *mut () = p_incr_1 as *mut ();
     { let _ = 0; };
@@ -1342,6 +1620,21 @@ extern "C" fn vdbe_incr_bg_populate(p_incr_1: *mut IncrMerger) -> i32 {
             }, Some(vdbe_incr_populate_thread), p);
 }
 
+///* This function is called when the PmaReader corresponding to pIncr has
+///* finished reading the contents of aFile[0]. Its purpose is to "refill"
+///* aFile[0] such that the PmaReader should start rereading it from the
+///* beginning.
+///*
+///* For single-threaded objects, this is accomplished by literally reading
+///* keys from pIncr->pMerger and repopulating aFile[0].
+///*
+///* For multi-threaded objects, all that is required is to wait until the
+///* background thread is finished (if it is not already) and then swap
+///* aFile[0] and aFile[1] in place. If the contents of pMerger have not
+///* been exhausted, this function also launches a new background thread
+///* to populate the new aFile[1].
+///*
+///* SQLITE_OK is returned on success, or an SQLite error code otherwise.
 extern "C" fn vdbe_incr_swap(p_incr_1: *mut IncrMerger) -> i32 {
     let mut rc: i32 = 0;
     if unsafe { (*p_incr_1).b_use_thread } != 0 {
@@ -1377,6 +1670,13 @@ extern "C" fn vdbe_incr_swap(p_incr_1: *mut IncrMerger) -> i32 {
     return rc;
 }
 
+///* Attempt to memory map file pFile. If successful, set *pp to point to the
+///* new mapping and return SQLITE_OK. If the mapping is not attempted
+///* (because the file is too large or the VFS layer is configured not to use
+///* mmap), return SQLITE_OK and set *pp to NULL.
+///*
+///* Or, if an error occurs, return an SQLite error code. The final value of
+///* *pp is undefined in this case.
 extern "C" fn vdbe_sorter_map_file(p_task_1: &SortSubtask,
     p_file_1: &SorterFile, pp: *mut *mut u8) -> i32 {
     unsafe {
@@ -1399,6 +1699,9 @@ extern "C" fn vdbe_sorter_map_file(p_task_1: &SortSubtask,
     }
 }
 
+///* Attach PmaReader pReadr to file pFile (if it is not already attached to
+///* that file) and seek it to offset iOff within the file.  Return SQLITE_OK
+///* if successful, or an SQLite error code if an error occurs.
 extern "C" fn vdbe_pma_reader_seek(p_task_1: *mut SortSubtask,
     p_readr_1: &mut PmaReader, p_file_1: *mut SorterFile, i_off_1: i64)
     -> i32 {
@@ -1449,9 +1752,18 @@ extern "C" fn vdbe_pma_reader_seek(p_task_1: *mut SortSubtask,
     }
 }
 
+///* Read the next nByte bytes of data from the PMA p.
+///* If successful, set *ppOut to point to a buffer containing the data
+///* and return SQLITE_OK. Otherwise, if an error occurs, return an SQLite
+///* error code.
+///*
+///* The buffer returned in *ppOut is only valid until the
+///* next call to this function.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
     pp_out_1: &mut *mut u8) -> i32 {
     let mut i_buf: i32 = 0;
+    /// Offset within buffer to read from
     let mut n_avail: i32 = 0;
     if !(unsafe { (*p).a_map }).is_null() {
         *pp_out_1 =
@@ -1464,10 +1776,16 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
         return 0;
     }
     { let _ = 0; };
-    i_buf =
-        (unsafe { (*p).i_read_off } % unsafe { (*p).n_buffer } as i64) as i32;
+
+    /// If there is no more data to be read from the buffer, read the next
+    ///* p->nBuffer bytes of data from the file into it. Or, if there are less
+    ///* than p->nBuffer bytes remaining in the PMA, read all remaining data.
+    (i_buf =
+        (unsafe { (*p).i_read_off } % unsafe { (*p).n_buffer } as i64) as
+            i32);
     if i_buf == 0 {
         let mut n_read: i32 = 0;
+        /// Bytes to read from disk
         let mut rc: i32 = 0;
         if unsafe { (*p).i_eof } - unsafe { (*p).i_read_off } >
                 unsafe { (*p).n_buffer } as i64 {
@@ -1477,21 +1795,30 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
                 (unsafe { (*p).i_eof } - unsafe { (*p).i_read_off }) as i32;
         }
         { let _ = 0; };
-        rc =
+
+        /// Readr data from the file. Return early if an error occurs.
+        (rc =
             unsafe {
                 sqlite3_os_read(unsafe { (*p).p_fd },
                     unsafe { (*p).a_buffer } as *mut (), n_read,
                     unsafe { (*p).i_read_off })
-            };
+            });
         { let _ = 0; };
         if rc != 0 { return rc; }
     }
     n_avail = unsafe { (*p).n_buffer } - i_buf;
     if n_byte_1 <= n_avail {
-        *pp_out_1 =
-            unsafe { unsafe { (*p).a_buffer.offset(i_buf as isize) } };
+
+        /// The requested data is available in the in-memory buffer. In this
+        ///* case there is no need to make a copy of the data, just return a
+        ///* pointer into the buffer to the caller.
+        (*pp_out_1 =
+            unsafe { unsafe { (*p).a_buffer.offset(i_buf as isize) } });
         unsafe { (*p).i_read_off += n_byte_1 as i64 };
     } else {
+        /// The requested data is not all available in the in-memory buffer.
+        ///* In this case, allocate space at p->aAlloc[] to copy the requested
+        ///* range into. Then return a copy of pointer p->aAlloc to the caller.
         let mut n_rem: i32 = 0;
         if unsafe { (*p).n_alloc } < n_byte_1 {
             let mut a_new: *mut u8 = core::ptr::null_mut();
@@ -1515,6 +1842,9 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
             unsafe { (*p).n_alloc = n_new as i32 };
             unsafe { (*p).a_alloc = a_new };
         }
+
+        /// Copy as much data as is available in the buffer into the start of
+        ///* p->aAlloc[].
         unsafe {
             memcpy(unsafe { (*p).a_alloc } as *mut (),
                 unsafe {
@@ -1525,9 +1855,13 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
         n_rem = n_byte_1 - n_avail;
         while n_rem > 0 {
             let mut rc: i32 = 0;
+            /// vdbePmaReadBlob() return code
             let mut n_copy: i32 = 0;
+            /// Number of bytes to copy
             let mut a_next: *mut u8 = core::ptr::null_mut();
-            n_copy = n_rem;
+
+            /// Pointer to buffer to copy data from
+            (n_copy = n_rem);
             if n_rem > unsafe { (*p).n_buffer } {
                 n_copy = unsafe { (*p).n_buffer };
             }
@@ -1549,6 +1883,8 @@ extern "C" fn vdbe_pma_read_blob(p: *mut PmaReader, n_byte_1: i32,
     return 0;
 }
 
+///* Read a varint from the stream of data accessed by p. Set *pnOut to
+///* the value read.
 extern "C" fn vdbe_pma_read_varint(p: *mut PmaReader, pn_out_1: *mut u64)
     -> i32 {
     let mut i_buf: i32 = 0;
@@ -1606,8 +1942,12 @@ extern "C" fn vdbe_pma_read_varint(p: *mut PmaReader, pn_out_1: *mut u64)
     return 0;
 }
 
+///* Advance PmaReader pReadr to the next key in its PMA. Return SQLITE_OK if
+///* no error occurs, or an SQLite error code if one does.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_pma_reader_next(p_readr_1: *mut PmaReader) -> i32 {
     let mut rc: i32 = 0;
+    /// Return Code
     let mut n_rec: u64 = 0 as u64;
     if unsafe { (*p_readr_1).i_read_off } >= unsafe { (*p_readr_1).i_eof } {
         let p_incr: *mut IncrMerger = unsafe { (*p_readr_1).p_incr };
@@ -1623,7 +1963,12 @@ extern "C" fn vdbe_pma_reader_next(p_readr_1: *mut PmaReader) -> i32 {
                 b_eof = 0;
             }
         }
-        if b_eof != 0 { vdbe_pma_reader_clear(p_readr_1); return rc; }
+        if b_eof != 0 {
+
+            /// This is an EOF condition
+            vdbe_pma_reader_clear(p_readr_1);
+            return rc;
+        }
     }
     if rc == 0 { rc = vdbe_pma_read_varint(p_readr_1, &mut n_rec); }
     if rc == 0 {
@@ -1635,12 +1980,20 @@ extern "C" fn vdbe_pma_reader_next(p_readr_1: *mut PmaReader) -> i32 {
     return rc;
 }
 
+///* Advance to the next element in the sorter.  Return value:
+///*
+///*    SQLITE_OK     success
+///*    SQLITE_DONE   end of data
+///*    otherwise     some kind of error.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_next(db: *mut Sqlite3,
     p_csr_1: &VdbeCursor) -> i32 {
     unsafe {
         let mut p_sorter: *mut VdbeSorter = core::ptr::null_mut();
         let mut rc: i32 = 0;
+
+        /// Return code
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         { let _ = 0; };
@@ -1684,6 +2037,9 @@ pub extern "C" fn sqlite3_vdbe_sorter_next(db: *mut Sqlite3,
     }
 }
 
+///* If it has not already been allocated, allocate the UnpackedRecord
+///* structure at pTask->pUnpacked. Return SQLITE_OK if successful (or
+///* if no allocation was required), or SQLITE_NOMEM otherwise.
 extern "C" fn vdbe_sort_alloc_unpacked(p_task_1: &mut SortSubtask) -> i32 {
     unsafe {
         if (*p_task_1).p_unpacked == core::ptr::null_mut() {
@@ -1706,6 +2062,9 @@ extern "C" fn vdbe_sort_alloc_unpacked(p_task_1: &mut SortSubtask) -> i32 {
     }
 }
 
+///* A version of vdbeSorterCompare() that assumes that it has already been
+///* determined that the first field of key1 is equal to the first field of
+///* key2.
 extern "C" fn vdbe_sorter_compare_tail(p_task_1: &SortSubtask,
     pb_key2_cached_1: &mut i32, p_key1_1: &[u8], p_key2_1: &[u8]) -> i32 {
     let r2: *mut UnpackedRecord = (*p_task_1).p_unpacked;
@@ -1722,6 +2081,9 @@ extern "C" fn vdbe_sorter_compare_tail(p_task_1: &SortSubtask,
         };
 }
 
+///* A specially optimized version of vdbeSorterCompare() that assumes that
+///* the first field of each key is an INTEGER value.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_compare_int(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1729,12 +2091,18 @@ extern "C" fn vdbe_sorter_compare_int(p_task_1: *mut SortSubtask,
         let p1: *const u8 = p_key1_1 as *const u8;
         let p2: *const u8 = p_key2_1 as *const u8;
         let s1: i32 = unsafe { *p1.offset(1 as isize) } as i32;
+        /// Left hand serial type
         let s2: i32 = unsafe { *p2.offset(1 as isize) } as i32;
+        /// Right hand serial type
         let v1: *const u8 =
             unsafe { &*p1.add(unsafe { *p1.offset(0 as isize) } as usize) };
+        /// Pointer to value 1
         let v2: *const u8 =
             unsafe { &*p2.add(unsafe { *p2.offset(0 as isize) } as usize) };
+        /// Pointer to value 2
         let mut res: i32 = 0;
+
+        /// Return value
         { let _ = 0; };
         { let _ = 0; };
         if s1 as i32 == s2 {
@@ -1820,6 +2188,10 @@ extern "C" fn vdbe_sorter_compare_int(p_task_1: *mut SortSubtask,
     }
 }
 
+///* A specially optimized version of vdbeSorterCompare() that assumes that
+///* the first field of each key is a TEXT value and that the collation
+///* sequence to compare them with is BINARY.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_compare_text(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1828,8 +2200,10 @@ extern "C" fn vdbe_sorter_compare_text(p_task_1: *mut SortSubtask,
         let p2: *const u8 = p_key2_1 as *const u8;
         let v1: *const u8 =
             unsafe { &*p1.add(unsafe { *p1.offset(0 as isize) } as usize) };
+        /// Pointer to value 1
         let v2: *const u8 =
             unsafe { &*p2.add(unsafe { *p2.offset(0 as isize) } as usize) };
+        /// Pointer to value 2
         let mut n1: i32 = 0;
         let mut n2: i32 = 0;
         let mut res: i32 = 0;
@@ -1896,6 +2270,17 @@ extern "C" fn vdbe_sorter_compare_text(p_task_1: *mut SortSubtask,
     }
 }
 
+///* Compare key1 (buffer pKey1, size nKey1 bytes) with key2 (buffer pKey2,
+///* size nKey2 bytes). Use (pTask->pKeyInfo) for the collation sequences
+///* used by the comparison. Return the result of the comparison.
+///*
+///* If IN/OUT parameter *pbKey2Cached is true when this function is called,
+///* it is assumed that (pTask->pUnpacked) contains the unpacked version
+///* of key2. If it is false, (pTask->pUnpacked) is populated with the unpacked
+///* version of key2 and *pbKey2Cached set to true before returning.
+///*
+///* If an OOM error is encountered, (pTask->pUnpacked->error_rc) is set
+///* to SQLITE_NOMEM.
 extern "C" fn vdbe_sorter_compare(p_task_1: *mut SortSubtask,
     pb_key2_cached_1: *mut i32, p_key1_1: *const (), n_key1_1: i32,
     p_key2_1: *const (), n_key2_1: i32) -> i32 {
@@ -1907,6 +2292,8 @@ extern "C" fn vdbe_sorter_compare(p_task_1: *mut SortSubtask,
     return unsafe { sqlite3_vdbe_record_compare(n_key1_1, p_key1_1, r2) };
 }
 
+///* Return the SorterCompare function to compare values collected by the
+///* sorter object passed as the only argument.
 extern "C" fn vdbe_sorter_get_compare(p: &VdbeSorter)
     ->
         unsafe extern "C" fn(*mut SortSubtask, *mut i32, *const (), i32,
@@ -1917,6 +2304,7 @@ extern "C" fn vdbe_sorter_get_compare(p: &VdbeSorter)
     return vdbe_sorter_compare;
 }
 
+///* Merge the two sorted lists p1 and p2 into a single list.
 extern "C" fn vdbe_sorter_merge(p_task_1: *mut SortSubtask,
     mut p1: *mut SorterRecord, mut p2: *mut SorterRecord)
     -> *mut SorterRecord {
@@ -1965,6 +2353,10 @@ extern "C" fn vdbe_sorter_merge(p_task_1: *mut SortSubtask,
     }
 }
 
+///* Sort the linked list of records headed at pTask->pList. Return
+///* SQLITE_OK if successful, or an SQLite error code (i.e. SQLITE_NOMEM) if
+///* an error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_sort(p_task_1: *mut SortSubtask,
     p_list_1: &mut SorterList) -> i32 {
     unsafe {
@@ -2008,6 +2400,10 @@ extern "C" fn vdbe_sorter_sort(p_task_1: *mut SortSubtask,
                     if !(!(a_slot[i as usize]).is_null()) { break '__b15; }
                     '__c15: loop {
                         p = vdbe_sorter_merge(p_task_1, p, a_slot[i as usize]);
+
+                        /// ,--Each aSlot[] holds twice as much as the previous. So we cannot use
+                        ///* |  up all 64 aSlots[] with only a 64-bit address space.
+                        ///* v
                         { let _ = 0; };
                         a_slot[i as usize] = core::ptr::null_mut();
                         break '__c15;
@@ -2047,6 +2443,13 @@ extern "C" fn vdbe_sorter_sort(p_task_1: *mut SortSubtask,
     }
 }
 
+///* The first argument is a file-handle open on a temporary file. The file
+///* is guaranteed to be nByte bytes or smaller in size. This function
+///* attempts to extend the file to nByte bytes in size and to ensure that
+///* the VFS has memory mapped it.
+///*
+///* Whether or not the file does end up memory mapped of course depends on
+///* the specific VFS implementation.
 extern "C" fn vdbe_sorter_extend_file(db: &Sqlite3, p_fd_1: *mut Sqlite3File,
     mut n_byte_1: i64) -> () {
     if n_byte_1 <= (*db).n_max_sorter_mmap as i64 &&
@@ -2071,6 +2474,9 @@ extern "C" fn vdbe_sorter_extend_file(db: &Sqlite3, p_fd_1: *mut Sqlite3File,
     }
 }
 
+///* Allocate space for a file-handle and open a temporary file. If successful,
+///* set *ppFd to point to the malloc'd file-handle and return SQLITE_OK.
+///* Otherwise, set *ppFd to 0 and return an SQLite error code.
 extern "C" fn vdbe_sorter_open_temp_file(db: *mut Sqlite3, n_extend_1: i64,
     pp_fd_1: *mut *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
@@ -2094,12 +2500,26 @@ extern "C" fn vdbe_sorter_open_temp_file(db: *mut Sqlite3, n_extend_1: i64,
     return rc;
 }
 
+///* Write the current contents of in-memory linked-list pList to a level-0
+///* PMA in the temp file belonging to sub-task pTask. Return SQLITE_OK if
+///* successful, or an SQLite error code otherwise.
+///*
+///* The format of a PMA is:
+///*
+///*     * A varint. This varint contains the total number of bytes of content
+///*       in the PMA (not including the varint itself).
+///*
+///*     * One or more records packed end-to-end in order of ascending keys.
+///*       Each record consists of a varint followed by a blob of data (the
+///*       key). The varint is the number of bytes in the blob of data.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_list_to_pma(p_task_1: *mut SortSubtask,
     p_list_1: *mut SorterList) -> i32 {
     unsafe {
         let db: *mut Sqlite3 =
             unsafe { (*unsafe { (*p_task_1).p_sorter }).db };
         let mut rc: i32 = 0;
+        /// Return code
         let mut writer: PmaWriter = unsafe { core::mem::zeroed() };
         unsafe {
             memset(&raw mut writer as *mut (), 0,
@@ -2179,22 +2599,33 @@ extern "C" fn vdbe_sorter_list_to_pma(p_task_1: *mut SortSubtask,
     }
 }
 
+///* The main routine for background threads that write level-0 PMAs.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_flush_thread(p_ctx_1: *mut ()) -> *mut () {
     let p_task: *mut SortSubtask = p_ctx_1 as *mut SortSubtask;
     let mut rc: i32 = 0;
+
+    /// Return code
     { let _ = 0; };
     rc = vdbe_sorter_list_to_pma(p_task, unsafe { &mut (*p_task).list });
     unsafe { (*p_task).b_done = 1 };
     return rc as i64 as *mut ();
 }
 
+///* Flush the current contents of VdbeSorter.list to a new PMA, possibly
+///* using a background thread.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_flush_pma(p_sorter_1: &mut VdbeSorter) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut i: i32 = 0;
         let mut p_task: *mut SortSubtask = core::ptr::null_mut();
+        /// Thread context used to create new PMA
         let n_worker: i32 = (*p_sorter_1).n_task as i32 - 1;
-        (*p_sorter_1).b_use_pma = 1 as u8;
+
+        /// Set the flag to indicate that at least one PMA has been written.
+        ///* Or will be, anyhow.
+        ((*p_sorter_1).b_use_pma = 1 as u8);
         {
             i = 0;
             '__b18: loop {
@@ -2221,12 +2652,15 @@ extern "C" fn vdbe_sorter_flush_pma(p_sorter_1: &mut VdbeSorter) -> i32 {
         }
         if rc == 0 {
             if i == n_worker {
-                rc =
+
+                /// Use the foreground thread for this operation
+                (rc =
                     vdbe_sorter_list_to_pma(unsafe {
                             &mut *((*p_sorter_1).a_task.as_ptr() as
                                             *mut SortSubtask).offset(n_worker as isize)
-                        }, &mut (*p_sorter_1).list);
+                        }, &mut (*p_sorter_1).list));
             } else {
+                /// Launch a background thread for this operation
                 let mut a_mem: *mut u8 = core::ptr::null_mut();
                 let mut p_ctx: *mut () = core::ptr::null_mut();
                 { let _ = 0; };
@@ -2264,10 +2698,20 @@ extern "C" fn vdbe_sorter_flush_pma(p_sorter_1: &mut VdbeSorter) -> i32 {
     }
 }
 
+///* Allocate a new MergeEngine object capable of handling up to
+///* nReader PmaReader inputs.
+///*
+///* nReader is automatically rounded up to the next power of two.
+///* nReader may not exceed SORTER_MAX_MERGE_COUNT even after rounding up.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_merge_engine_new(n_reader_1: i32) -> *mut MergeEngine {
     let mut n: i32 = 2;
+    /// Smallest power of two >= nReader
     let mut n_byte: i64 = 0 as i64;
+    /// Total bytes of space to allocate
     let mut p_new: *mut MergeEngine = core::ptr::null_mut();
+
+    /// Pointer to allocated object to return
     { let _ = 0; };
     while n < n_reader_1 { n += n; }
     n_byte =
@@ -2300,6 +2744,14 @@ extern "C" fn vdbe_merge_engine_new(n_reader_1: i32) -> *mut MergeEngine {
     return p_new;
 }
 
+///* Return the depth of a tree comprising nPMA PMAs, assuming a fanout of
+///* SORTER_MAX_MERGE_COUNT. The returned value does not include leaf nodes.
+///*
+///* i.e.
+///*
+///*   nPMA<=16    -> TreeDepth() == 0
+///*   nPMA<=256   -> TreeDepth() == 1
+///*   nPMA<=65536 -> TreeDepth() == 2
 extern "C" fn vdbe_sorter_tree_depth(n_pma_1: i32) -> i32 {
     let mut n_depth: i32 = 0;
     let mut n_div: i64 = 16 as i64;
@@ -2310,6 +2762,14 @@ extern "C" fn vdbe_sorter_tree_depth(n_pma_1: i32) -> i32 {
     return n_depth;
 }
 
+///* Initialize PmaReader pReadr to scan through the PMA stored in file pFile
+///* starting at offset iStart and ending at offset iEof-1. This function
+///* leaves the PmaReader pointing to the first key in the PMA (or EOF if the
+///* PMA is empty).
+///*
+///* If the pnByte parameter is NULL, then it is assumed that the file
+///* contains a single PMA, and that that PMA omits the initial length varint.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_pma_reader_init(p_task_1: *mut SortSubtask,
     p_file_1: *mut SorterFile, i_start_1: i64, p_readr_1: *mut PmaReader,
     pn_byte_1: &mut i64) -> i32 {
@@ -2323,7 +2783,9 @@ extern "C" fn vdbe_pma_reader_init(p_task_1: *mut SortSubtask,
             i_start_1);
     if rc == 0 {
         let mut n_byte: u64 = 0 as u64;
-        rc = vdbe_pma_read_varint(p_readr_1, &mut n_byte);
+
+        /// Size of PMA in bytes
+        (rc = vdbe_pma_read_varint(p_readr_1, &mut n_byte));
         unsafe {
             (*p_readr_1).i_eof =
                 (unsafe { (*p_readr_1).i_read_off } as u64 + n_byte) as i64
@@ -2334,10 +2796,22 @@ extern "C" fn vdbe_pma_reader_init(p_task_1: *mut SortSubtask,
     return rc;
 }
 
+///* Allocate a new MergeEngine object to merge the contents of nPMA level-0
+///* PMAs from pTask->file. If no error occurs, set *ppOut to point to
+///* the new object and return SQLITE_OK. Or, if an error does occur, set *ppOut
+///* to NULL and return an SQLite error code.
+///*
+///* When this function is called, *piOffset is set to the offset of the
+///* first PMA to read from pTask->file. Assuming no error occurs, it is
+///* set to the offset immediately following the last byte of the last
+///* PMA before returning. If an error does occur, then the final value of
+///* *piOffset is undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_merge_engine_level0(p_task_1: *mut SortSubtask,
     n_pma_1: i32, pi_offset_1: &mut i64, pp_out_1: &mut *mut MergeEngine)
     -> i32 {
     let mut p_new: *mut MergeEngine = core::ptr::null_mut();
+    /// Merge engine to return
     let mut i_off: i64 = *pi_offset_1;
     let mut i: i32 = 0;
     let mut rc: i32 = 0;
@@ -2371,6 +2845,10 @@ extern "C" fn vdbe_merge_engine_level0(p_task_1: *mut SortSubtask,
     return rc;
 }
 
+///* Allocate and return a new IncrMerger object to read data from pMerger.
+///*
+///* If an OOM condition is encountered, return NULL. In this case free the
+///* pMerger argument before returning.
 extern "C" fn vdbe_incr_merger_new(p_task_1: *mut SortSubtask,
     p_merger_1: *mut MergeEngine, pp_out_1: &mut *mut IncrMerger) -> i32 {
     unsafe {
@@ -2413,6 +2891,12 @@ extern "C" fn vdbe_incr_merger_new(p_task_1: *mut SortSubtask,
     }
 }
 
+///* pRoot is the root of an incremental merge-tree with depth nDepth (according
+///* to vdbeSorterTreeDepth()). pLeaf is the iSeq'th leaf to be added to the
+///* tree, counting from zero. This function adds pLeaf to the tree.
+///*
+///* If successful, SQLITE_OK is returned. If an error occurs, an SQLite error
+///* code is returned and pLeaf is freed.
 extern "C" fn vdbe_sorter_add_to_tree(p_task_1: *mut SortSubtask,
     n_depth_1: i32, i_seq_1: i32, p_root_1: *mut MergeEngine,
     p_leaf_1: *mut MergeEngine) -> i32 {
@@ -2468,11 +2952,25 @@ extern "C" fn vdbe_sorter_add_to_tree(p_task_1: *mut SortSubtask,
     return rc;
 }
 
+///* This function is called as part of a SorterRewind() operation on a sorter
+///* that has already written two or more level-0 PMAs to one or more temp
+///* files. It builds a tree of MergeEngine/IncrMerger/PmaReader objects that
+///* can be used to incrementally merge all PMAs on disk.
+///*
+///* If successful, SQLITE_OK is returned and *ppOut set to point to the
+///* MergeEngine object at the root of the tree before returning. Or, if an
+///* error occurs, an SQLite error code is returned and the final value
+///* of *ppOut is undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
     pp_out_1: &mut *mut MergeEngine) -> i32 {
     let mut p_main: *mut MergeEngine = core::ptr::null_mut();
     let mut rc: i32 = 0;
     let mut i_task: i32 = 0;
+
+    /// If the sorter uses more than one task, then create the top-level
+    ///* MergeEngine here. This MergeEngine will read data from exactly
+    ///* one PmaReader per sub-task.
     { let _ = 0; };
     if (*p_sorter_1).n_task as i32 > 1 {
         p_main = vdbe_merge_engine_new((*p_sorter_1).n_task as i32);
@@ -2493,6 +2991,7 @@ extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
                 { let _ = 0; };
                 if 8 == 0 || unsafe { (*p_task).n_pma } != 0 {
                     let mut p_root: *mut MergeEngine = core::ptr::null_mut();
+                    /// Root node of tree for this task
                     let n_depth: i32 =
                         vdbe_sorter_tree_depth(unsafe { (*p_task).n_pma });
                     let mut i_read_off: i64 = 0 as i64;
@@ -2513,11 +3012,14 @@ extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
                                 }
                                 '__c25: loop {
                                     let mut p_merger: *mut MergeEngine = core::ptr::null_mut();
+                                    /// New level-0 PMA merger
                                     let mut n_reader: i32 = 0;
-                                    n_reader =
+
+                                    /// Number of level-0 PMAs to merge
+                                    (n_reader =
                                         if unsafe { (*p_task).n_pma } - i < 16 {
                                             (unsafe { (*p_task).n_pma }) - i
-                                        } else { 16 };
+                                        } else { 16 });
                                     rc =
                                         vdbe_merge_engine_level0(p_task, n_reader, &mut i_read_off,
                                             &mut p_merger);
@@ -2558,11 +3060,16 @@ extern "C" fn vdbe_sorter_merge_tree_build(p_sorter_1: &mut VdbeSorter,
     return rc;
 }
 
+///* Set the "use-threads" flag on object pIncr.
 extern "C" fn vdbe_incr_merger_set_threads(p_incr_1: &mut IncrMerger) -> () {
     (*p_incr_1).b_use_thread = 1;
     unsafe { (*(*p_incr_1).p_task).file2.i_eof -= (*p_incr_1).mx_sz as i64 };
 }
 
+///* Recompute pMerger->aTree[iOut] by comparing the next keys on the
+///* two PmaReaders that feed that entry.  Neither of the PmaReaders
+///* are advanced.  This routine merely does the comparison.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_merge_engine_compare(p_merger_1: &MergeEngine,
     i_out_1: i32) -> () {
     let mut i1: i32 = 0;
@@ -2592,26 +3099,55 @@ extern "C" fn vdbe_merge_engine_compare(p_merger_1: &MergeEngine,
         let mut b_cached: i32 = 0;
         let mut res: i32 = 0;
         { let _ = 0; };
-        res =
+
+        /// from vdbeSortSubtaskMain()
+        (res =
             unsafe {
                 (unsafe {
                         (*p_task).x_compare.unwrap()
                     })(p_task, &mut b_cached,
                     unsafe { (*p1).a_key } as *const (), unsafe { (*p1).n_key },
                     unsafe { (*p2).a_key } as *const (), unsafe { (*p2).n_key })
-            };
+            });
         if res <= 0 { i_res = i1; } else { i_res = i2; }
     }
     unsafe { *(*p_merger_1).a_tree.offset(i_out_1 as isize) = i_res };
 }
 
+///* Initialize the MergeEngine object passed as the second argument. Once this
+///* function returns, the first key of merged data may be read from the
+///* MergeEngine object in the usual fashion.
+///*
+///* If argument eMode is INCRINIT_ROOT, then it is assumed that any IncrMerge
+///* objects attached to the PmaReader objects that the merger reads from have
+///* already been populated, but that they have not yet populated aFile[0] and
+///* set the PmaReader objects up to read from it. In this case all that is
+///* required is to call vdbePmaReaderNext() on each PmaReader to point it at
+///* its first key.
+///*
+///* Otherwise, if eMode is any value other than INCRINIT_ROOT, then use
+///* vdbePmaReaderIncrMergeInit() to initialize each PmaReader that feeds data
+///* to pMerger.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_merge_engine_init(p_task_1: *mut SortSubtask,
     p_merger_1: *mut MergeEngine, e_mode_1: i32) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut i: i32 = 0;
+    /// For looping over PmaReader objects
     let mut n_tree: i32 = 0;
+
+    /// Number of subtrees to merge
+    /// Failure to allocate the merge would have been detected prior to
+    ///* invoking this routine
     { let _ = 0; };
+
+    /// eMode is always INCRINIT_NORMAL in single-threaded mode
     { let _ = 0; };
+
+    /// Verify that the MergeEngine is assigned to a single thread
     { let _ = 0; };
     unsafe { (*p_merger_1).p_task = p_task_1 };
     n_tree = unsafe { (*p_merger_1).n_tree };
@@ -2621,12 +3157,20 @@ extern "C" fn vdbe_merge_engine_init(p_task_1: *mut SortSubtask,
             if !(i < n_tree) { break '__b26; }
             '__c26: loop {
                 if 8 > 0 && e_mode_1 == 2 {
-                    rc =
+
+                    /// PmaReaders should be normally initialized in order, as if they are
+                    ///* reading from the same temp file this makes for more linear file IO.
+                    ///* However, in the INCRINIT_ROOT case, if PmaReader aReadr[nTask-1] is
+                    ///* in use it will block the vdbePmaReaderNext() call while it uses
+                    ///* the main thread to fill its buffer. So calling PmaReaderNext()
+                    ///* on this PmaReader before any of the multi-threaded PmaReaders takes
+                    ///* better advantage of multi-processor hardware.
+                    (rc =
                         vdbe_pma_reader_next(unsafe {
                                 &mut *unsafe {
                                             (*p_merger_1).a_readr.offset((n_tree - i - 1) as isize)
                                         }
-                            });
+                            }));
                 } else {
                     rc =
                         unsafe {
@@ -2655,6 +3199,38 @@ extern "C" fn vdbe_merge_engine_init(p_task_1: *mut SortSubtask,
     return unsafe { (*unsafe { (*p_task_1).p_unpacked }).err_code } as i32;
 }
 
+///* The PmaReader passed as the first argument is guaranteed to be an
+///* incremental-reader (pReadr->pIncr!=0). This function serves to open
+///* and/or initialize the temp file related fields of the IncrMerge
+///* object at (pReadr->pIncr).
+///*
+///* If argument eMode is set to INCRINIT_NORMAL, then all PmaReaders
+///* in the sub-tree headed by pReadr are also initialized. Data is then
+///* loaded into the buffers belonging to pReadr and it is set to point to
+///* the first key in its range.
+///*
+///* If argument eMode is set to INCRINIT_TASK, then pReadr is guaranteed
+///* to be a multi-threaded PmaReader and this function is being called in a
+///* background thread. In this case all PmaReaders in the sub-tree are
+///* initialized as for INCRINIT_NORMAL and the aFile[1] buffer belonging to
+///* pReadr is populated. However, pReadr itself is not set up to point
+///* to its first key. A call to vdbePmaReaderNext() is still required to do
+///* that.
+///*
+///* The reason this function does not call vdbePmaReaderNext() immediately
+///* in the INCRINIT_TASK case is that vdbePmaReaderNext() assumes that it has
+///* to block on thread (pTask->thread) before accessing aFile[1]. But, since
+///* this entire function is being run by thread (pTask->thread), that will
+///* lead to the current background thread attempting to join itself.
+///*
+///* Finally, if argument eMode is set to INCRINIT_ROOT, it may be assumed
+///* that pReadr->pIncr is a multi-threaded IncrMerge objects, and that all
+///* child-trees have already been initialized using IncrInit(INCRINIT_TASK).
+///* In this case vdbePmaReaderNext() is called on all child PmaReaders and
+///* the current PmaReader set to point to the first key in its range.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
     e_mode_1: i32) -> i32 {
     unsafe {
@@ -2662,6 +3238,8 @@ extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
         let p_incr: *mut IncrMerger = unsafe { (*p_readr_1).p_incr };
         let p_task: *mut SortSubtask = unsafe { (*p_incr).p_task };
         let db: *mut Sqlite3 = unsafe { (*unsafe { (*p_task).p_sorter }).db };
+
+        /// eMode is always INCRINIT_NORMAL in single-threaded mode
         { let _ = 0; };
         rc =
             vdbe_merge_engine_init(p_task, unsafe { (*p_incr).p_merger },
@@ -2699,6 +3277,16 @@ extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
             }
         }
         if rc == 0 && unsafe { (*p_incr).b_use_thread } != 0 {
+
+            /// Use the current thread to populate aFile[1], even though this
+            ///* PmaReader is multi-threaded. If this is an INCRINIT_TASK object,
+            ///* then this function is already running in background thread
+            ///* pIncr->pTask->thread.
+            ///*
+            ///* If this is the INCRINIT_ROOT object, then it is running in the
+            ///* main VDBE thread. But that is Ok, as that thread cannot return
+            ///* control to the VDBE or proceed with anything useful until the
+            ///* first results are ready from this merger object anyway.
             { let _ = 0; };
             rc = vdbe_incr_populate(unsafe { &mut *p_incr });
         }
@@ -2709,6 +3297,8 @@ extern "C" fn vdbe_pma_reader_incr_merge_init(p_readr_1: *mut PmaReader,
     }
 }
 
+///* The main routine for vdbePmaReaderIncrMergeInit() operations run in
+///* background threads.
 extern "C" fn vdbe_pma_reader_bg_incr_init(p_ctx_1: *mut ()) -> *mut () {
     let p_reader: *mut PmaReader = p_ctx_1 as *mut PmaReader;
     let p_ret: *mut () =
@@ -2719,10 +3309,15 @@ extern "C" fn vdbe_pma_reader_bg_incr_init(p_ctx_1: *mut ()) -> *mut () {
     return p_ret;
 }
 
+///* Forward reference required as the vdbeIncrMergeInit() and
+///* vdbePmaReaderIncrInit() routines are called mutually recursively when
+///* building a merge tree.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_pma_reader_incr_init(p_readr_1: *mut PmaReader,
     e_mode_1: i32) -> i32 {
     let p_incr: *const IncrMerger =
         unsafe { (*p_readr_1).p_incr } as *const IncrMerger;
+    /// Incremental merger
     let mut rc: i32 = 0;
     if !(p_incr).is_null() {
         { let _ = 0; };
@@ -2737,9 +3332,18 @@ extern "C" fn vdbe_pma_reader_incr_init(p_readr_1: *mut PmaReader,
     return rc;
 }
 
+///* This function is called as part of an sqlite3VdbeSorterRewind() operation
+///* on a sorter that has written two or more PMAs to temporary files. It sets
+///* up either VdbeSorter.pMerger (for single threaded sorters) or pReader
+///* (for multi-threaded sorters) so that it can be used to iterate through
+///* all records stored in the sorter.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_sorter_setup_merge(p_sorter_1: *mut VdbeSorter) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code
         let p_task0: *mut SortSubtask =
             unsafe {
                 &mut *(unsafe { (*p_sorter_1).a_task.as_ptr() } as
@@ -2834,12 +3438,23 @@ extern "C" fn vdbe_sorter_setup_merge(p_sorter_1: *mut VdbeSorter) -> i32 {
                                     break '__b30;
                                 }
                                 '__c30: loop {
+                                    /// Check that:
+                                    ///*  
+                                    ///*   a) The incremental merge object is configured to use the
+                                    ///*      right task, and
+                                    ///*   b) If it is using task (nTask-1), it is configured to run
+                                    ///*      in single-threaded mode. This is important, as the
+                                    ///*      root merge (INCRINIT_ROOT) will be using the same task
+                                    ///*      object.
                                     let p: *mut PmaReader =
                                         unsafe {
                                             &mut *unsafe { (*p_main).a_readr.offset(i_task as isize) }
                                         };
                                     { let _ = 0; };
-                                    rc = vdbe_pma_reader_incr_init(p, 1);
+
+                                    /// a
+                                    /// b
+                                    (rc = vdbe_pma_reader_incr_init(p, 1));
                                     break '__c30;
                                 }
                                 { let __p = &mut i_task; let __t = *__p; *__p += 1; __t };
@@ -2862,12 +3477,18 @@ extern "C" fn vdbe_sorter_setup_merge(p_sorter_1: *mut VdbeSorter) -> i32 {
     }
 }
 
+///* Once the sorter has been populated by calls to sqlite3VdbeSorterWrite,
+///* this function is called to prepare for iterating through the records
+///* in sorted order.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_rewind(p_csr_1: &VdbeCursor,
     pb_eof_1: &mut i32) -> i32 {
     unsafe {
         let mut p_sorter: *mut VdbeSorter = core::ptr::null_mut();
         let mut rc: i32 = 0;
+
+        /// Return code
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         { let _ = 0; };
@@ -2882,26 +3503,45 @@ pub extern "C" fn sqlite3_vdbe_sorter_rewind(p_csr_1: &VdbeCursor,
             } else { *pb_eof_1 = 1; }
             return rc;
         }
+
+        /// Write the current in-memory list to a PMA. When the VdbeSorterWrite()
+        ///* function flushes the contents of memory to disk, it immediately always
+        ///* creates a new list consisting of a single key immediately afterwards.
+        ///* So the list is never empty at this point.
         { let _ = 0; };
         rc = vdbe_sorter_flush_pma(unsafe { &mut *p_sorter });
-        rc = vdbe_sorter_join_all(unsafe { &mut *p_sorter }, rc);
+
+        /// Join all threads
+        (rc = vdbe_sorter_join_all(unsafe { &mut *p_sorter }, rc));
+
+        /// Assuming no errors have occurred, set up a merger structure to
+        ///* incrementally read and merge all remaining PMAs.
         { let _ = 0; };
         if rc == 0 { rc = vdbe_sorter_setup_merge(p_sorter); *pb_eof_1 = 0; }
         return rc;
     }
 }
 
+///* Add a record to the sorter.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_write(p_csr_1: &VdbeCursor,
     p_val_1: &Mem) -> i32 {
     unsafe {
         let mut p_sorter: *mut VdbeSorter = core::ptr::null_mut();
         let mut rc: i32 = 0;
+        /// Return Code
         let mut p_new: *mut SorterRecord = core::ptr::null_mut();
+        /// New list element
         let mut b_flush: i32 = 0;
+        /// True to flush contents of memory to PMA
         let mut n_req: i64 = 0 as i64;
+        /// Bytes of memory required
         let mut n_pma: i64 = 0 as i64;
+        /// Bytes of PMA space required
         let mut t: i32 = 0;
+
+        /// serial type of first record field
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         t =
@@ -2922,9 +3562,25 @@ pub extern "C" fn sqlite3_vdbe_sorter_write(p_csr_1: &VdbeCursor,
             unsafe { (*p_sorter).type_mask &= 2 as u8 };
         } else { unsafe { (*p_sorter).type_mask = 0 as u8 }; }
         { let _ = 0; };
-        n_req =
+
+        /// Figure out whether or not the current contents of memory should be
+        ///* flushed to a PMA before continuing. If so, do so.
+        ///*
+        ///* If using the single large allocation mode (pSorter->aMemory!=0), then
+        ///* flush the contents of memory to a new PMA if (a) at least one value is
+        ///* already in memory and (b) the new value will not fit in memory.
+        ///*
+        ///* Or, if using separate allocations for each record, flush the contents
+        ///* of memory to a PMA if either of the following are true:
+        ///*
+        ///*   * The total memory allocated for the in-memory list is greater
+        ///*     than (page-size * cache-size), or
+        ///*
+        ///*   * The total memory allocated for the in-memory list is greater
+        ///*     than (page-size * 10) and sqlite3HeapNearlyFull() returns true.
+        (n_req =
             ((*p_val_1).n as u64 +
-                    core::mem::size_of::<SorterRecord>() as u64) as i64;
+                    core::mem::size_of::<SorterRecord>() as u64) as i64);
         n_pma =
             ((*p_val_1).n +
                     unsafe { sqlite3_varint_len((*p_val_1).n as u64) }) as i64;
@@ -3028,7 +3684,22 @@ pub extern "C" fn sqlite3_vdbe_sorter_write(p_csr_1: &VdbeCursor,
     }
 }
 
+///* Compare the key in memory cell pVal with the key that the sorter cursor
+///* passed as the first argument currently points to. For the purposes of
+///* the comparison, ignore the rowid field at the end of each record.
+///*
+///* If the sorter cursor key contains any NULL values, consider it to be
+///* less than pVal. Even if pVal also contains NULL values.
+///*
+///* If an error occurs, return an SQLite error code (i.e. SQLITE_NOMEM).
+///* Otherwise, set *pRes to a negative, zero or positive value if the
+///* key in pVal is smaller than, equal to or larger than the current sorter
+///* key.
+///*
+///* This routine forms the core of the OP_SorterCompare opcode, which in
+///* turn is used to verify uniqueness when constructing a UNIQUE INDEX.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_sorter_compare(p_csr_1: &VdbeCursor,
     p_val_1: &Mem, n_key_col_1: i32, p_res_1: &mut i32) -> i32 {
     unsafe {
@@ -3038,6 +3709,8 @@ pub extern "C" fn sqlite3_vdbe_sorter_compare(p_csr_1: &VdbeCursor,
         let mut i: i32 = 0;
         let mut p_key: *mut () = core::ptr::null_mut();
         let mut n_key: i32 = 0;
+
+        /// Sorter key to compare pVal with
         { let _ = 0; };
         p_sorter = (*p_csr_1).uc.p_sorter;
         r2 = unsafe { (*p_sorter).p_unpacked };

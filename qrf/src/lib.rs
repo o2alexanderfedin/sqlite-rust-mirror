@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod qrf_h;
-pub(crate) use crate::qrf_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::qrf_h::Sqlite3QrfSpec;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -69,6 +75,7 @@ struct QrfU0S1 {
     ai_indent: *mut i32,
 }
 
+///* Set an error code and error message.
 unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
     z_format_1: *const i8, mut __va0: ...) -> () {
     (*p).i_err = i_code_1;
@@ -86,6 +93,7 @@ unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
     }
 }
 
+///* Out-of-memory error.
 extern "C" fn qrf_oom(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 7,
@@ -93,10 +101,13 @@ extern "C" fn qrf_oom(p: *mut Qrf) -> () {
     };
 }
 
+///* Initialize the internal Qrf object.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_initialize(p: *mut Qrf, p_stmt_1: *mut Sqlite3Stmt,
     p_spec_1: *const Sqlite3QrfSpec, pz_err_1: *mut *mut i8) -> () {
     unsafe {
         let mut sz: u64 = 0 as u64;
+        /// Size of pSpec[], based on pSpec->iVersion
         let mut exp_mode: i32 = 0;
         let mut rc: i32 = 0;
         let mut exp_mode_1: i32 = 0;
@@ -698,6 +709,7 @@ struct QrfPerCol {
     b_num: u8,
 }
 
+///* Free all the memory allocates in the qrfColData object
 extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -724,6 +736,8 @@ extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
     };
 }
 
+///* Allocate space for more cells in the qrfColData object.
+///* Return non-zero if a memory allocation fails.
 extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     let mut az_data: *mut *mut i8 = core::ptr::null_mut();
     let mut ai_wth: *mut i32 = core::ptr::null_mut();
@@ -771,6 +785,13 @@ extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     return 0;
 }
 
+///* Data for substitute ctype.h functions.  Used for x-platform
+///* consistency and so that '_' is counted as an alphabetic
+///* character.
+///*
+///*    0x01 -  space
+///*    0x02 -  digit
+///*    0x04 -  alphabetic, including '_'
 static qrf_c_type: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 0 as i8,
@@ -810,6 +831,15 @@ static qrf_c_type: [i8; 256] =
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8];
 
+///* Determine if the string z[] can be shown as plain text.  Return true
+///* if z[] is unambiguously text.  Return false if z[] needs to be
+///* quoted.
+///*
+///* All of the following must be true in order for z[] to be relaxable:
+///*
+///*    (1) z[] does not begin or end with ' or whitespace
+///*    (2) z[] is not the same as the NULL rendering
+///*    (3) z[] does not looks like a numeric literal
 extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     let mut i: u64 = 0 as u64;
     let mut n: u64 = 0 as u64;
@@ -882,6 +912,8 @@ extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     return (unsafe { *z.add(i as usize) } as i32 != 0) as i32;
 }
 
+///* If a field contains any character identified by a 1 in the following
+///* array, then the string must be quoted for CSV.
 static qrf_csv_quote: [i8; 256] =
     [1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
@@ -921,17 +953,39 @@ static qrf_csv_quote: [i8; 256] =
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8];
 
+///* Escape the text starting at byte iStart of pStr, if needed, using the
+///* escape encoding of eEsc, which is either QRF_ESC_Ascii or QRF_ESC_Symbol.
+///* The pStr string is modified appropriately.
+///*
+///* Escaping is needed if the string contains any control characters
+///* other than \t, \n, and \r\n
+///*
+///* If no escaping is needed (the common case) then pStr is unchanged.
+///* If escaping is required, then pStr is expanded and modified to hold
+///* an escaped representation of the text.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
     i_start_1: i32) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Loop counters
     let mut n_ctrl: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of control characters to escape
     let mut z_in: *mut u8 = core::ptr::null_mut();
+    /// Text to be escaped
     let mut n_in: u32 = 0 as u32;
+    /// Bytes of text to be escaped
     let mut c: u8 = 0 as u8;
+    /// A single character of the text
     let mut z_out: *mut u8 = core::ptr::null_mut();
-    z_in = unsafe { sqlite3_str_value(p_str_1) } as *mut u8;
-    n_in = unsafe { sqlite3_str_length(p_str_1) } as u32;
+
+    /// Where to write the results
+    /// Find the text to be escaped
+    (z_in = unsafe { sqlite3_str_value(p_str_1) } as *mut u8);
+
+    /// Where to write the results
+    /// Find the text to be escaped
+    (n_in = unsafe { sqlite3_str_length(p_str_1) } as u32);
     if z_in == core::ptr::null_mut() { return; }
     {
         let __n = i_start_1;
@@ -1046,6 +1100,7 @@ extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
     }
 }
 
+///* Encode text appropriately and append it to pOut.
 extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     z_txt_1: *const i8) -> () {
     let i_start: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -2105,6 +2160,7 @@ extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Transfer any error in pStr over into p.
 extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
     let rc: i32 =
         if !(p_str_1).is_null() {
@@ -2117,6 +2173,11 @@ extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
     }
 }
 
+///* Check to see if z[] is a valid VT100 escape.  If it is, then
+///* return the number of bytes in the escape sequence.  Return 0 if
+///* z[] is not a VT100 escape.
+///*
+///* This routine assumes that z[0] is \033 (ESC).
 extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     let mut i: i32 = 0;
     if unsafe { *z.offset(1 as isize) } as i32 != '[' as i32 { return 0; }
@@ -2136,6 +2197,11 @@ extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     return i + 1;
 }
 
+///* Compute the value and length of a multi-byte UTF-8 character that
+///* begins at z[0]. Return the length.  Write the Unicode value into *pU.
+///*
+///* This routine only works for *multi-byte* UTF-8 characters.  It does
+///* not attempt to detect illegal characters.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     -> i32 {
@@ -2170,6 +2236,8 @@ pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     return 1;
 }
 
+/// Lookup table to estimate the number of columns consumed by a Unicode
+///* character.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -2481,12 +2549,27 @@ static a_qrf_u_width: [AnonS0; 303] =
             AnonS0 { w: 0 as u8, i_first: 917760 },
             AnonS0 { w: 1 as u8, i_first: 918000 }];
 
+///* Auxiliary routines contined within this module that might be useful
+///* in other contexts, and which are therefore exported.
+////
+////*
+///* Return an estimate of the width, in columns, for the single Unicode
+///* character c.  For normal characters, the answer is always 1.  But the
+///* estimate might be 0 or 2 for zero-width and double-width characters.
+///*
+///* Different devices display unicode using different widths.  So
+///* it is impossible to know that true display width with 100% accuracy.
+///* Inaccuracies in the width estimates might cause columns to be misaligned.
+///* Unfortunately, there is nothing we can do about that.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     let mut i_first: i32 = 0;
     let mut i_last: i32 = 0;
     if c < 768 { return 1; }
-    i_first = 0;
+
+    /// The general case
+    (i_first = 0);
     i_last =
         (core::mem::size_of::<[AnonS0; 303]>() as u64 / 8 - 1 as u64) as i32;
     while i_first < i_last - 1 {
@@ -2504,6 +2587,13 @@ pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     return a_qrf_u_width[i_last as usize].w as i32;
 }
 
+///* Adjust the input string zIn[] such that it is no more than N display
+///* characters wide.  If it is wider than that, then truncate and add
+///* ellipsis.  Or if zIn[] contains a \r or \n, truncate at that point,
+///* adding ellipsis.  Embedded tabs in zIn[] are converted into ordinary
+///* spaces.
+///*
+///* Return this display width of the modified title string.
 extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     let mut z: *mut u8 = z_in_1 as *mut u8;
     let mut n: i32 = 0;
@@ -2574,6 +2664,15 @@ extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     return n;
 }
 
+///* Return the display width of the longest line of text
+///* in the (possibly) multi-line input string zIn[0..nByte].
+///* zIn[] is not necessarily zero-terminated.  Take
+///* into account tab characters, zero- and double-width
+///* characters, CR and NL, and VT100 escape codes.
+///*
+///* Write the number of newlines into *pnNL.  So, *pnNL will
+///* return 0 if everything fits on one line, or positive it
+///* it will need to be split.
 extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     pn_nl_1: *mut i32) -> i32 {
     let mut z: *const u8 = core::ptr::null();
@@ -2637,11 +2736,19 @@ extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     return n;
 }
 
+///* Do a quick sanity check to see aBlob[0..nBlob-1] is valid JSONB
+///* return true if it is and false if it is not.
+///*
+///* False positives are possible, but not false negatives.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
     -> i32 {
     let mut x: u8 = 0 as u8;
+    /// Payload size half-byte
     let mut i: i32 = 0;
+    /// Loop counter
     let mut n: i32 = 0;
+    /// Bytes in the payload size integer
     let mut sz: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if n_blob_1 == 0 { return 0; }
     x = (unsafe { *a_blob_1.offset(0 as isize) } as i32 >> 4) as u8;
@@ -2667,6 +2774,15 @@ extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
                 n_blob_1 as Sqlite3Uint64) as i32;
 }
 
+///* The current iCol-th column of p->pStmt is known to be a BLOB.  Check
+///* to see if that BLOB is really a JSONB blob.  If it is, then translate
+///* it into a text JSON representation and return a pointer to that text JSON.
+///* If the BLOB is not JSONB, then return a NULL pointer.
+///*
+///* The memory used to hold the JSON text is managed internally by the
+///* "p" object and is overwritten and/or deallocated upon the next call
+///* to this routine (with the same p argument) or when the p object is
+///* finailized.
 extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
     let mut n_byte: i32 = 0;
     let mut p_blob: *const () = core::ptr::null();
@@ -2707,6 +2823,8 @@ extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
     } else { return core::ptr::null(); }
 }
 
+///* If xWrite is defined, send all content of pOut to xWrite and
+///* reset pOut.
 extern "C" fn qrf_write(p: *mut Qrf) -> () {
     let mut n: i32 = 0;
     if unsafe { (*p).spec.x_write.is_some() } &&
@@ -2731,6 +2849,7 @@ extern "C" fn qrf_write(p: *mut Qrf) -> () {
     }
 }
 
+///* Render value pVal into pOut
 extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     i_col_1: i32) -> () {
     let i_start_len: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -5335,6 +5454,7 @@ extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Load into pData the default alignment for the body of a table.
 extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -5375,18 +5495,33 @@ extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
     }
 }
 
+///* If the single column in pData->a[] with pData->n entries can be
+///* laid out as nCol columns with a 2-space gap between each such
+///* that all columns fit within nSW, then return a pointer to an array
+///* of integers which is the width of each column from left to right.
+///*
+///* If the layout is not possible, return a NULL pointer.
+///*
+///* Space to hold the returned array is from sqlite_malloc64().
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     n_col_1: i32, n_sw_1: i32) -> *mut i32 {
     let mut i: i32 = 0;
+    /// Loop counter
     let mut nr: i32 = 0;
+    /// Number of rows
     let mut w: i32 = 0;
+    /// Width of the current column
     let mut t: i64 = 0 as i64;
+    /// Total width of all columns
     let mut aw: *mut i32 = core::ptr::null_mut();
-    aw =
+
+    /// Array of individual column widths
+    (aw =
         unsafe {
                 sqlite3_malloc64(core::mem::size_of::<i32>() as u64 *
                         n_col_1 as u64)
-            } as *mut i32;
+            } as *mut i32);
     if aw == core::ptr::null_mut() {
         qrf_oom(p);
         return core::ptr::null_mut();
@@ -5433,6 +5568,9 @@ extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     return aw;
 }
 
+///* The output is single-column and the bSplitColumn flag is set.
+///* Check to see if the single-column output can be split into multiple
+///* columns that appear side-by-side.  Adjust pData appropriately.
 extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
     let mut n_col: i32 = 1;
     let mut aw: *mut i32 = core::ptr::null_mut();
@@ -5615,14 +5753,22 @@ extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
     }
 }
 
+///* Adjust the layout for the screen width restriction
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     -> () {
     let mut sep_w: i32 = 0;
+    /// Width of all box separators and margins
     let mut sum_w: i32 = 0;
+    /// Total width of data area over all columns
     let mut target_w: i32 = 0;
+    /// Desired total data area
     let mut i: i32 = 0;
+    /// Loop counters
     let mut n_col: i32 = 0;
-    (*p_data_1).n_margin = 2 as u8;
+
+    /// Number of columns
+    ((*p_data_1).n_margin = 2 as u8);
     if (*p).spec.n_screen_width as i32 == 0 { return; }
     if (*p).spec.e_style as i32 == 2 {
         sep_w = (*p_data_1).n_col * 2 - 2;
@@ -5650,7 +5796,9 @@ extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     if (*p).spec.n_screen_width as i64 >= sum_w as i64 + sep_w as i64 {
         return;
     }
-    (*p_data_1).n_margin = 0 as u8;
+
+    /// First thing to do is reduce the separation between columns
+    ((*p_data_1).n_margin = 0 as u8);
     if (*p).spec.e_style as i32 == 2 {
         sep_w = (*p_data_1).n_col - 1;
     } else {
@@ -5692,6 +5840,9 @@ extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     }
 }
 
+/// Draw horizontal line N characters long using unicode box
+///* characters
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
     -> () {
     let az_dash: [*const i8; 2] =
@@ -5699,6 +5850,7 @@ extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
                     as *const i8,
                 c"\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}".as_ptr()
                     as *const i8];
+    ///  0       1      2     3      4        5      6      7      8      9
     let n_dash: i32 = 30 as i32;
     let mut nn: i64 = 3 as i64 * n_1 as i64;
     while nn > n_dash as i64 {
@@ -5712,6 +5864,7 @@ extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
     };
 }
 
+///* Draw a horizontal separator for a QRF_STYLE_Box table.
 extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     z_sep1_1: *const i8, z_sep2_1: *const i8, z_sep3_1: *const i8,
     b_dbl_1: i32) -> () {
@@ -5748,6 +5901,7 @@ extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     };
 }
 
+///* Print a markdown or table-style row separator using ascii-art
 extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     mut c_sep_1: i8) -> () {
     let mut i: i32 = 0;
@@ -5794,11 +5948,24 @@ extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     };
 }
 
+///* (*pz)[] is a line of text that is to be displayed the box or table or
+///* similar tabular formats.  z[] contain newlines or might be too wide
+///* to fit in the columns so will need to be split into multiple line.
+///*
+///* This routine determines:
+///*
+///*    *  How many bytes of z[] should be shown on the current line.
+///*    *  How many character positions those bytes will cover.
+///*    *  The byte offset to the start of the next line.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     pn_this_1: &mut i32, pn_wide_1: &mut i32, pi_next_1: &mut i32) -> () {
     let mut i: i32 = 0;
+    /// Input bytes consumed
     let mut k: i32 = 0;
+    /// Bytes in a VT100 code
     let mut n: i32 = 0;
+    /// Output column number
     let z: *const u8 = z_in_1 as *const u8;
     let mut c: u8 = 0 as u8;
     if unsafe { *z.offset(0 as isize) } as i32 == 0 {
@@ -5928,6 +6095,9 @@ extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     *pi_next_1 = i;
 }
 
+///* Append nVal bytes of text from zVal onto the end of pOut.
+///* Convert tab characters in zVal to the appropriate number of
+///* spaces.
 extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     z_val_1: *const i8, mut n_val_1: i32) -> () {
     let mut i: i32 = 0;
@@ -6009,11 +6179,18 @@ extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     unsafe { sqlite3_str_append(p_out_1, z as *const i8, i) };
 }
 
+///* Output horizontally justified text into pOut.  The text is the
+///* first nVal bytes of zVal.  Include nWS bytes of whitespace, either
+///* split between both sides, or on the left, or on the right, depending
+///* on eAlign.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
     n_val_1: i32, n_ws_1: i32) -> () {
     let mut e_align: u8 = ((*p_col_1).e as i32 & 3) as u8;
     if e_align as i32 == 0 && (*p_col_1).b_num != 0 { e_align = 3 as u8; }
     if e_align as i32 == 2 {
+
+        /// Center the text
         unsafe {
             sqlite3_str_appendchar(p_out_1, n_ws_1 / 2, ' ' as i32 as i8)
         };
@@ -6023,14 +6200,19 @@ extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
                 ' ' as i32 as i8)
         };
     } else if e_align as i32 == 3 {
+
+        /// Right justify the text
         unsafe { sqlite3_str_appendchar(p_out_1, n_ws_1, ' ' as i32 as i8) };
         qrf_append_with_tabs(p_out_1, (*p_col_1).z as *const i8, n_val_1);
     } else {
+
+        /// Left justify the text
         qrf_append_with_tabs(p_out_1, (*p_col_1).z as *const i8, n_val_1);
         unsafe { sqlite3_str_appendchar(p_out_1, n_ws_1, ' ' as i32 as i8) };
     }
 }
 
+/// Trim spaces of the end if pOut
 extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     let mut n_byte: i32 = unsafe { sqlite3_str_length(p_out_1) };
     let z_out: *const i8 = unsafe { sqlite3_str_value(p_out_1) } as *const i8;
@@ -6042,23 +6224,41 @@ extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     unsafe { sqlite3_str_truncate(p_out_1, n_byte) };
 }
 
+///* Columnar modes require that the entire query be evaluated first, with
+///* results written into memory, so that we can compute appropriate column
+///* widths.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Loop counters
     let mut col_sep: *const i8 = core::ptr::null();
+    /// Column separator text
     let mut row_sep: *const i8 = core::ptr::null();
+    /// Row terminator text
     let mut row_start: *const i8 = core::ptr::null();
+    /// Row start text
     let mut sz_col_sep: i32 = 0;
     let mut sz_row_sep: i32 = 0;
     let mut sz_row_start: i32 = 0;
+    /// Size in bytes of previous 3
     let mut rc: i32 = 0;
+    /// Result code
     let mut n_column: i32 = unsafe { (*p).n_col };
+    /// Number of columns
     let mut b_ww: i32 = 0;
+    /// True to do word-wrap
     let mut p_str: *mut Sqlite3Str = core::ptr::null_mut();
+    /// Temporary rendering
     let mut data: QrfColData = unsafe { core::mem::zeroed() };
+    /// Columnar layout data
     let mut b_r_trim: i32 = 0;
-    rc = unsafe { sqlite3_step(unsafe { (*p).p_stmt }) };
+
+    /// Trim trailing space
+    (rc = unsafe { sqlite3_step(unsafe { (*p).p_stmt }) });
     if rc != 100 || n_column == 0 { return; }
+
+    /// Initialize the data container
     unsafe {
         memset(&raw mut data as *mut (), 0,
             core::mem::size_of::<QrfColData>() as u64)
@@ -6277,7 +6477,12 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                 } else if (data.b_multi_row as i32 == 0 || w == 1) &&
                         unsafe { (*data.a.offset(i as isize)).mx_w } > w {
                     data.b_multi_row = 1 as u8;
-                    if w == 1 { w = 2; }
+                    if w == 1 {
+
+                        /// If aiWth[j] is 2 or more, then there might be a double-wide
+                        ///* character somewhere.  So make the column width at least 2.
+                        (w = 2);
+                    }
                 }
                 unsafe { (*data.a.offset(i as isize)).w = w };
                 break '__c58;
@@ -6291,9 +6496,17 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                 unsafe { (*p).spec.b_titles } as i32 == 1 &&
             unsafe { (*p).spec.n_screen_width } as i32 >
                 unsafe { (*data.a.offset(0 as isize)).w } + 3 {
+
+        /// Attempt to convert single-column tables into multi-column by
+        ///* verticle wrapping, if the screen is wide enough and if the
+        ///* bSplitColumn flag is set.
         qrf_split_column(&mut data, p);
         n_column = data.n_col;
-    } else { qrf_restrict_screen_width(&mut data, unsafe { &*p }); }
+    } else {
+
+        /// Adjust the column widths due to screen width restrictions
+        qrf_restrict_screen_width(&mut data, unsafe { &*p });
+    }
     '__s59:
         {
         match unsafe { (*p).spec.e_style } {
@@ -6486,6 +6699,8 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                     }
                 }
                 if b_more != 0 {
+
+                    /// This row was terminated by nLineLimit.  Show ellipsis.
                     unsafe {
                         sqlite3_str_append(unsafe { (*p).p_out }, row_start,
                             sz_row_start)
@@ -6789,6 +7004,10 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     return;
 }
 
+///* Parameter azArray points to a zero-terminated array of strings. zStr
+///* points to a single nul-terminated string. Return non-zero if zStr
+///* is equal, according to strcmp(), to any of the strings in the array.
+///* Otherwise, return zero.
 extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     az_array_1: *const *const i8) -> i32 {
     let mut i: i32 = 0;
@@ -6814,6 +7033,10 @@ extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     return 0;
 }
 
+///* Store string zUtf to pOut as w characters.  If w is negative,
+///* then right-justify the text.  W is the width in display characters, not
+///* in bytes.  Double-width unicode characters count as two characters.
+///* VT100 escape sequences count as zero.  And so forth.
 extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
     mut w: i32, z_utf_1: *const i8) -> () {
     let mut a: *const u8 = z_utf_1 as *const u8;
@@ -6866,6 +7089,10 @@ extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Return an estimate of the number of display columns used by the
+///* string in the argument.  The width of individual characters is
+///* determined as for sqlite3_qrf_wcwidth().  VT100 escape code sequences
+///* are assigned a width of zero.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     let mut z: *const u8 = z_in as *const u8;
@@ -6910,13 +7137,41 @@ pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     return n;
 }
 
+///* Print out an EXPLAIN with indentation.  This is a two-pass algorithm.
+///*
+///* On the first pass, we compute aiIndent[iOp] which is the amount of
+///* indentation to apply to the iOp-th opcode.  The output actually occurs
+///* on the second pass.
+///*
+///* The indenting rules are:
+///*
+///*     * For each "Next", "Prev", "VNext" or "VPrev" instruction, indent
+///*       all opcodes that occur between the p2 jump destination and the opcode
+///*       itself by 2 spaces.
+///*
+///*     * Do the previous for "Return" instructions for when P2 is positive.
+///*       See tag-20220407a in wherecode.c and vdbe.c.
+///*
+///*     * For each "Goto", if the jump destination is earlier in the program
+///*       and ends on one of:
+///*          Yield  SeekGt  SeekLt  RowSetRead  Rewind
+///*       or if the P1 parameter is one instead of zero,
+///*       then indent all opcodes between the earlier instruction
+///*       and "Goto" by 2 spaces.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     let mut ab_yield: *mut i32 = core::ptr::null_mut();
+    /// abYield[iOp] is rue if opcode iOp is an OP_Yield
     let mut ai_indent: *mut i32 = core::ptr::null_mut();
+    /// Indent the iOp-th opcode by aiIndent[iOp]
     let mut n_alloc: i64 = 0 as i64;
+    /// Allocated size of aiIndent[], abYield
     let mut n_indent: i32 = 0;
+    /// Number of entries in aiIndent[]
     let mut i_op: i32 = 0;
+    /// Opcode number
     let mut i: i32 = 0;
+    /// Column loop counter
     let mut az_next: [*const i8; 7] =
         [c"Next".as_ptr() as *const i8, c"Prev".as_ptr() as *const i8,
                 c"VPrev".as_ptr() as *const i8,
@@ -6930,6 +7185,11 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
                 c"Rewind".as_ptr() as *const i8, core::ptr::null()];
     let mut az_goto: [*const i8; 2] =
         [c"Goto".as_ptr() as *const i8, core::ptr::null()];
+
+    /// The caller guarantees that the leftmost 4 columns of the statement
+    ///* passed to this function are equivalent to the leftmost 4 columns
+    ///* of EXPLAIN statement output. In practice the statement may be
+    ///* an EXPLAIN, or it may be a query on the bytecode() virtual table.
     if !(unsafe { sqlite3_column_count(unsafe { (*p).p_stmt }) } >= 4) as i32
                 as i64 != 0 {
         unsafe {
@@ -7008,6 +7268,10 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
                     unsafe { sqlite3_column_int(unsafe { (*p).p_stmt }, 2) };
                 let p2: i32 =
                     unsafe { sqlite3_column_int(unsafe { (*p).p_stmt }, 3) };
+                /// Assuming that p2 is an instruction address, set variable p2op to the
+                ///* index of that instruction in the aiIndent[] array. p2 and p2op may be
+                ///* different if the current instruction is part of a sub-program generated
+                ///* by an SQL trigger or foreign key.
                 let p2op: i32 = p2 + (i_op - i_addr);
                 if i_op as i64 >= n_alloc {
                     n_alloc += 100 as i64;
@@ -7075,6 +7339,8 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
         }
     }
     unsafe { sqlite3_free(ab_yield as *mut ()) };
+
+    /// Second pass.  Actually generate output
     unsafe { sqlite3_reset(unsafe { (*p).p_stmt }) };
     if unsafe { (*p).i_err } == 0 {
         let mut a_width: *const i32 =
@@ -7224,6 +7490,12 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     unsafe { sqlite3_free(ai_indent as *mut ()) };
 }
 
+///* Do a "scanstatus vm" style EXPLAIN listing on p->pStmt.
+///*
+///* p->pStmt is probably not an EXPLAIN query.  Instead, construct a
+///* new query that is a bytecode() rendering of p->pStmt with extra
+///* columns for the "scanstatus vm" outputs, and run the results of
+///* that new query through the normal EXPLAIN formatting.
 extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
     unsafe {
         let p_orig_stmt: *mut Sqlite3Stmt = unsafe { (*p).p_stmt };
@@ -7255,6 +7527,7 @@ extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
     }
 }
 
+///* Generate ".scanstatus est" style of EQP output.
 extern "C" fn qrf_eqp_stats(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 1,
@@ -7262,6 +7535,9 @@ extern "C" fn qrf_eqp_stats(p: *mut Qrf) -> () {
     };
 }
 
+///* Helper function for QRF_STYLE_Json and QRF_STYLE_JObject.
+///* The initial "{" for a JSON object that will contain row content
+///* has been output.  Now output all the content.
 extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     let mut i: i32 = 0;
     let mut n_item: i32 = 0;
@@ -7294,6 +7570,12 @@ extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     qrf_write(p);
 }
 
+///* Attempt to determine if identifier zName needs to be quoted, either
+///* because it contains non-alphanumeric characters, or because it is an
+///* SQLite keyword.  Be conservative in this estimate:  When in doubt assume
+///* that quoting is required.
+///*
+///* Return 1 if quoting is required.  Return 0 if no quoting is required.
 extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let z: *const u8 = z_name_1 as *const u8;
@@ -7319,6 +7601,8 @@ extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     return (unsafe { sqlite3_keyword_check(z_name_1, i) } != 0) as i32;
 }
 
+///* Free and reset the EXPLAIN QUERY PLAN data that has been collected
+///* in p->u.pGraph.
 extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7342,6 +7626,11 @@ extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
     }
 }
 
+///* Render the 64-bit value N in a more human-readable format into
+///* pOut.
+///*
+///*   +  Only show the first three significant digits.
+///*   +  Append suffixes K, M, G, T, P, and E for 1e3, 1e6, ... 1e18
 extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
     let mut i: i32 = 0;
     if n_1 < 0 as i64 {
@@ -7414,6 +7703,8 @@ extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
     }
 }
 
+/// Return the next EXPLAIN QUERY PLAN line with iEqpId that occurs after
+///* pOld, or return the first such line if pOld is NULL
 extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
     p_old_1: *const QrfEQPGraphRow) -> *mut QrfEQPGraphRow {
     unsafe {
@@ -7429,6 +7720,8 @@ extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
     }
 }
 
+/// Render a single level of the graph that has iEqpId as its parent.  Called
+///* recursively to render sublevels.
 extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7485,6 +7778,7 @@ extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
     }
 }
 
+///* Display and reset the EXPLAIN QUERY PLAN data
 extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7581,6 +7875,7 @@ extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
     }
 }
 
+///* Add a new entry to the EXPLAIN QUERY PLAN data
 extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
     z_text_1: *const i8) -> () {
     unsafe {
@@ -7629,6 +7924,10 @@ extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
     }
 }
 
+///* Render a single row of output for non-columnar styles - any
+///* style that lets us render row by row as the content is received
+///* from the query.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -7636,7 +7935,11 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
             {
             match unsafe { (*p).spec.e_style } {
                 14 => {
-                    { break '__s85; }
+                    {
+
+                        /// No-op
+                        break '__s85;
+                    }
                     {
                         if unsafe { (*p).n_row } == 0 as i64 {
                             unsafe {
@@ -8049,7 +8352,11 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
                     }
                 }
                 3 => {
-                    { break '__s85; }
+                    {
+
+                        /// No-op
+                        break '__s85;
+                    }
                     {
                         if unsafe { (*p).n_row } == 0 as i64 {
                             unsafe {
@@ -10344,6 +10651,7 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
     }
 }
 
+///* Reset the prepared statement.
 extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
     let rc: i32 = unsafe { sqlite3_reset(unsafe { (*p).p_stmt }) };
     if rc != 0 && unsafe { (*p).i_err } == 0 {
@@ -10355,6 +10663,7 @@ extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
     }
 }
 
+///* Finish rendering the results
 extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
     unsafe {
         '__s95:
@@ -10711,7 +11020,9 @@ extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
     }
 }
 
+///* Interfaces
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
     p_spec: *const Sqlite3QrfSpec, pz_err: *mut *mut i8) -> i32 {
     let mut qrf: Qrf = unsafe { core::mem::zeroed() };
@@ -10723,7 +11034,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
         {
         match qrf.spec.e_style {
             1 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10736,7 +11053,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             2 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10749,7 +11072,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             13 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10762,7 +11091,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             19 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }

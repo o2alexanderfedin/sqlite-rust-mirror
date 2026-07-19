@@ -1,8 +1,75 @@
 #![feature(c_variadic)]
+//!* This C program extracts all "words" from an input document and adds them
+//!* to an SQLite database.  A "word" is any contiguous sequence of alphabetic
+//!* characters.  All digits, punctuation, and whitespace characters are 
+//!* word separators.  The database stores a single entry for each distinct
+//!* word together with a count of the number of occurrences of that word.
+//!* A fresh database is created automatically on each run.
+//!*
+//!*     wordcount DATABASE INPUTFILE
+//!*
+//!* The INPUTFILE name can be omitted, in which case input it taken from
+//!* standard input.
+//!*
+//!* Option:
+//!*
+//!*
+//!* Modes:
+//!*
+//!* Insert mode means:
+//!*    (1) INSERT OR IGNORE INTO wordcount VALUES($new,1)
+//!*    (2) UPDATE wordcount SET cnt=cnt+1 WHERE word=$new -- if (1) is a noop
+//!*
+//!* Update mode means:
+//!*    (1) INSERT OR IGNORE INTO wordcount VALUES($new,0)
+//!*    (2) UPDATE wordcount SET cnt=cnt+1 WHERE word=$new
+//!*
+//!* Replace mode means:
+//!*    (1) REPLACE INTO wordcount
+//!*        VALUES($new,ifnull((SELECT cnt FROM wordcount WHERE word=$new),0)+1);
+//!*
+//!* Upsert mode means:
+//!*    (1) INSERT INTO wordcount VALUES($new,1)
+//!*            ON CONFLICT(word) DO UPDATE SET cnt=cnt+1
+//!*
+//!* Select mode means:
+//!*    (1) SELECT 1 FROM wordcount WHERE word=$new
+//!*    (2) INSERT INTO wordcount VALUES($new,1) -- if (1) returns nothing
+//!*    (3) UPDATE wordcount SET cnt=cnt+1 WHERE word=$new  --if (1) return TRUE
+//!*
+//!* Delete mode means:
+//!*    (1) DELETE FROM wordcount WHERE word=$new
+//!*
+//!* Query mode means:
+//!*    (1) SELECT cnt FROM wordcount WHERE word=$new
+//!*
+//!* Note that delete mode and query mode are only useful for preexisting
+//!* databases.  The wordcount table is created using IF NOT EXISTS so this
+//!* utility can be run multiple times on the same database file.  The
+//!* --without-rowid, --nocase, and --pagesize parameters are only effective
+//!* when creating a new database and are harmless no-ops on preexisting
+//!* databases.
+//!*
+//!*****************************************************************************
+//!*
+//!* Compile as follows:
+//!*
+//!*    gcc -I. wordcount.c sqlite3.c -ldl -lpthreads
+//!*
+//!* Or:
+//!*
+//!*    gcc -I. -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION \
+//!*        wordcount.c sqlite3.c
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 static z_help: [i8; 1078] =
     [85 as i8, 115 as i8, 97 as i8, 103 as i8, 101 as i8, 58 as i8, 32 as i8,
@@ -186,9 +253,11 @@ static z_help: [i8; 1078] =
             32 as i8, 119 as i8, 111 as i8, 114 as i8, 100 as i8, 115 as i8,
             46 as i8, 10 as i8, 0 as i8];
 
+/// Output tag
 #[unsafe(no_mangle)]
 pub static mut z_tag: *mut i8 = c"--".as_ptr() as *mut i8;
 
+/// Return the current wall-clock time
 extern "C" fn real_time() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -215,6 +284,7 @@ extern "C" fn real_time() -> Sqlite3Int64 {
     }
 }
 
+/// Print an error message and exit
 unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     unsafe {
         let mut ap: *mut i8 = core::ptr::null_mut();
@@ -225,6 +295,7 @@ unsafe extern "C" fn fatal_error(z_msg_1: *const i8, mut __va0: ...) -> () {
     }
 }
 
+/// Print a usage message and quit
 extern "C" fn usage() -> () {
     unsafe {
         printf(c"%s".as_ptr() as *mut i8 as *const i8,
@@ -233,10 +304,13 @@ extern "C" fn usage() -> () {
     unsafe { exit(0) };
 }
 
+/// The sqlite3_trace() callback function
 extern "C" fn trace_callback(not_used_1: *mut (), z_sql_1: *const i8) -> () {
     unsafe { printf(c"%s;\n".as_ptr() as *mut i8 as *const i8, z_sql_1) };
 }
 
+/// An sqlite3_exec() callback that prints results on standard output,
+///* each column separated by a single space.
 extern "C" fn print_result(not_used_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az_nm_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -263,6 +337,7 @@ extern "C" fn print_result(not_used_1: *mut (), n_arg_1: i32,
     }
 }
 
+///* Add one character to a hash
 extern "C" fn add_char_to_hash(a: *mut u32, x: u8) -> () {
     if unsafe { *a.offset(0 as isize) } < 4 as u32 {
         unsafe {
@@ -314,6 +389,7 @@ extern "C" fn add_char_to_hash(a: *mut u32, x: u8) -> () {
     }
 }
 
+///* Compute the final hash value.
 extern "C" fn final_hash(a: *mut u32, z: *mut i8) -> () {
     unsafe {
         *a.offset(3 as isize) +=
@@ -333,6 +409,7 @@ extern "C" fn final_hash(a: *mut u32, z: *mut i8) -> () {
     };
 }
 
+///* Implementation of a checksum() aggregate SQL function
 extern "C" fn checksum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_val: *const u8 = core::ptr::null();
@@ -400,6 +477,7 @@ extern "C" fn checksum_finalize(context: *mut Sqlite3Context) -> () {
     }
 }
 
+/// Mode names
 static mut az_mode: [*const i8; 7] =
     [c"--insert".as_ptr() as *const i8, c"--replace".as_ptr() as *const i8,
             c"--upsert".as_ptr() as *const i8,
@@ -408,6 +486,8 @@ static mut az_mode: [*const i8; 7] =
             c"--delete".as_ptr() as *const i8,
             c"--query".as_ptr() as *const i8];
 
+///* Determine if another iteration of the test is required.  Return true
+///* if so.  Return zero if all iterations have finished.
 extern "C" fn all_loop(i_mode_1: i32, pi_loop_cnt_1: &mut i32,
     pi_mode2_1: &mut i32, p_use_without_rowid_1: &mut i32) -> i32 {
     let mut i: i32 = 0;
@@ -424,42 +504,74 @@ extern "C" fn all_loop(i_mode_1: i32, pi_loop_cnt_1: &mut i32,
     return 1;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut z_file_to_read: *const i8 = core::ptr::null();
+        /// Input file.  NULL for stdin
         let mut z_db_name: *const i8 = core::ptr::null();
+        /// Name of the database file to create
         let mut use_without_rowid: i32 = 0;
+        /// True for --without-rowid
         let mut i_mode: i32 = 0;
+        /// One of MODE_xxxxx
         let mut i_mode2: i32 = 0;
+        /// Mode to use for current --all iteration
         let mut i_loop_cnt: i32 = 0;
+        /// Which iteration when running --all
         let mut use_nocase: i32 = 0;
+        /// True for --nocase
         let mut do_trace: i32 = 0;
+        /// True for --trace
         let mut show_stats: i32 = 0;
+        /// True for --stats
         let mut show_summary: i32 = 0;
+        /// True for --summary
         let mut show_timer: i32 = 0;
+        /// True for --timer
         let mut cache_size: i32 = 0;
+        /// Desired cache size.  0 means default
         let mut page_size: i32 = 0;
+        /// Desired page size.  0 means default
         let mut commit_interval: i32 = 0;
+        /// How often to commit.  0 means never
         let mut no_sync: i32 = 0;
+        /// True for --nosync
         let mut z_j_mode: *const i8 = core::ptr::null();
+        /// Journal mode
         let mut n_op: i32 = 0;
+        /// Operation counter
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The SQLite database connection
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// Constructed SQL statement
         let mut p_insert: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The INSERT statement
         let mut p_update: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The UPDATE statement
         let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The SELECT statement
         let mut p_delete: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The DELETE statement
         let mut in_: *mut FILE = core::ptr::null_mut();
+        /// The open input file
         let mut rc: i32 = 0;
+        /// Return code from an SQLite interface
         let mut i_cur: i32 = 0;
         let mut i_hiwtr: i32 = 0;
+        /// Statistics values, current and "highwater"
         let mut p_timer: *mut FILE = __stderrp;
+        /// Output channel for the timer
         let mut sum_cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Sum in QUERY mode
         let mut start_time: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Time of start
         let mut total_time: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Total time
         let mut z_input: [i8; 2000] = [0; 2000];
         {
             i = 1;
@@ -1010,6 +1122,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                                 }
                             }
                             i = j - 1;
+
+                            /// Increment the operation counter.  Do a COMMIT if it is time.
                             { let __p = &mut n_op; let __t = *__p; *__p += 1; __t };
                             if commit_interval > 0 && n_op % commit_interval == 0 {
                                 unsafe {

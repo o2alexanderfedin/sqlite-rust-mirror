@@ -2,21 +2,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, PrintfArguments, RowSet,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinIntptrT = i64;
 
@@ -482,6 +500,7 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* A structure defining how to do GLOB-style comparisons.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CompareInfo {
@@ -491,15 +510,56 @@ struct CompareInfo {
     no_case: u8,
 }
 
+///* Compare two UTF-8 strings for equality where the first string is
+///* a GLOB or LIKE expression.  Return values:
+///*
+///*    SQLITE_MATCH:            Match
+///*    SQLITE_NOMATCH:          No match
+///*    SQLITE_NOWILDCARDMATCH:  No match in spite of having * or % wildcards.
+///*
+///* Globbing rules:
+///*
+///*      '*'       Matches any sequence of zero or more characters.
+///*
+///*      '?'       Matches exactly one character.
+///*
+///*     [...]      Matches one character from the enclosed list of
+///*                characters.
+///*
+///*     [^...]     Matches one character not in the enclosed list.
+///*
+///* With the [...] and [^...] matching, a ']' character can be included
+///* in the list by making it the first character after '[' or '^'.  A
+///* range of characters can be specified using '-'.  Example:
+///* "[a-z]" matches any single lower-case letter.  To match a '-', make
+///* it the last character in the list.
+///*
+///* Like matching rules:
+///*
+///*      '%'       Matches any sequence of zero or more characters
+///*
+///**     '_'       Matches any one character
+///*
+///*      Ec        Where E is the "esc" character and c is any other
+///*                character, including '%', '_', and esc, match exactly c.
+///*
+///* The comments within this routine usually assume glob matching.
+///*
+///* This routine is usually quick, but can be N**2 in the worst case.
+#[allow(unused_doc_comments)]
 extern "C" fn pattern_compare(mut z_pattern_1: *const u8,
     mut z_string_1: *const u8, p_info_1: *const CompareInfo,
     match_other_1: u32) -> i32 {
     unsafe {
         let mut c: u32 = 0 as u32;
         let mut c2: u32 = 0 as u32;
+        /// Next pattern and input string chars
         let match_one: u32 = unsafe { (*p_info_1).match_one } as u32;
+        /// "?" or "_"
         let match_all: u32 = unsafe { (*p_info_1).match_all } as u32;
+        /// "*" or "%"
         let no_case: u8 = unsafe { (*p_info_1).no_case } as u8;
+        /// True if uppercase==lowercase
         let mut z_escaped: *const u8 = core::ptr::null();
         while {
                     c =
@@ -544,6 +604,9 @@ extern "C" fn pattern_compare(mut z_pattern_1: *const u8,
                         c = unsafe { sqlite3_utf8_read(&mut z_pattern_1) };
                         if c == 0 as u32 { return 2; }
                     } else {
+
+                        /// "[...]" immediately follows the "*".  We have to do a slow
+                        ///* recursive search in this case, but it is an unusual case.
                         { let _ = 0; };
                         while unsafe { *z_string_1 } != 0 {
                             let b_match: i32 =
@@ -720,6 +783,19 @@ static glob_info: CompareInfo =
         no_case: 0 as u8,
     };
 
+///* CAPI3REF: String Globbing
+///
+///* ^The [sqlite3_strglob(P,X)] interface returns zero if and only if
+///* string X matches the [GLOB] pattern P.
+///* ^The definition of [GLOB] pattern matching used in
+///* [sqlite3_strglob(P,X)] is the same as for the "X GLOB P" operator in the
+///* SQL dialect understood by SQLite.  ^The [sqlite3_strglob(P,X)] function
+///* is case sensitive.
+///*
+///* Note that this routine returns zero on a match and non-zero if the strings
+///* do not match, the same as [sqlite3_stricmp()] and [sqlite3_strnicmp()].
+///*
+///* See also: [sqlite3_strlike()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_strglob(z_glob_pattern: *const i8,
     z_string: *const i8) -> i32 {
@@ -734,6 +810,8 @@ pub extern "C" fn sqlite3_strglob(z_glob_pattern: *const i8,
     }
 }
 
+/// The correct SQL-92 behavior is for the LIKE operator to ignore
+///* case.  Thus  'a' LIKE 'A' would be true.
 static like_info_norm: CompareInfo =
     CompareInfo {
         match_all: '%' as i32 as u8,
@@ -742,6 +820,25 @@ static like_info_norm: CompareInfo =
         no_case: 1 as u8,
     };
 
+///* CAPI3REF: String LIKE Matching
+///
+///* ^The [sqlite3_strlike(P,X,E)] interface returns zero if and only if
+///* string X matches the [LIKE] pattern P with escape character E.
+///* ^The definition of [LIKE] pattern matching used in
+///* [sqlite3_strlike(P,X,E)] is the same as for the "X LIKE P ESCAPE E"
+///* operator in the SQL dialect understood by SQLite.  ^For "X LIKE P" without
+///* the ESCAPE clause, set the E parameter of [sqlite3_strlike(P,X,E)] to 0.
+///* ^As with the LIKE operator, the [sqlite3_strlike(P,X,E)] function is case
+///* insensitive - equivalent upper and lower case ASCII characters match
+///* one another.
+///*
+///* ^The [sqlite3_strlike(P,X,E)] function matches Unicode characters, though
+///* only ASCII characters are case folded.
+///*
+///* Note that this routine returns zero on a match and non-zero if the strings
+///* do not match, the same as [sqlite3_stricmp()] and [sqlite3_strnicmp()].
+///*
+///* See also: [sqlite3_strglob()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_strlike(z_pattern: *const i8, z_str: *const i8,
     esc: u32) -> i32 {
@@ -755,6 +852,8 @@ pub extern "C" fn sqlite3_strlike(z_pattern: *const i8, z_str: *const i8,
     }
 }
 
+/// Array for converting from half-bytes (nybbles) into ASCII hex
+///* digits.
 static hexdigits: [i8; 16] =
     ['0' as i32 as i8, '1' as i32 as i8, '2' as i32 as i8, '3' as i32 as i8,
             '4' as i32 as i8, '5' as i32 as i8, '6' as i32 as i8,
@@ -762,15 +861,27 @@ static hexdigits: [i8; 16] =
             'A' as i32 as i8, 'B' as i32 as i8, 'C' as i32 as i8,
             'D' as i32 as i8, 'E' as i32 as i8, 'F' as i32 as i8];
 
+///* Append to pStr text that is the SQL literal representation of the
+///* value contained in pValue.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
     p_value_1: *mut Sqlite3Value, b_escape_1: i32) -> () {
+
+    /// As currently implemented, the string must be initially empty.
+    ///* we might relax this requirement in the future, but that will
+    ///* require enhancements to the implementation.
     { let _ = 0; };
     '__s7:
         {
         match unsafe { sqlite3_value_type(p_value_1) } {
             2 => {
                 {
+
+                    ///    ,---  Show infinity as 9.0e+999
+                    ///*    |   
+                    ///*    | ,--- 17 precision guarantees round-trip
+                    ///*    v v
                     unsafe {
                         sqlite3_str_appendf(p_str_1 as *mut Sqlite3Str,
                             c"%!0.17g".as_ptr() as *mut i8 as *const i8,
@@ -792,6 +903,8 @@ pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
                     let n_blob: i64 =
                         unsafe { sqlite3_value_bytes(p_value_1) } as i64;
                     { let _ = 0; };
+
+                    /// No encoding change
                     unsafe {
                         sqlite3_str_accum_enlarge(p_str_1,
                             n_blob * 2 as i64 + 4 as i64)
@@ -870,6 +983,8 @@ pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
                     let n_blob: i64 =
                         unsafe { sqlite3_value_bytes(p_value_1) } as i64;
                     { let _ = 0; };
+
+                    /// No encoding change
                     unsafe {
                         sqlite3_str_accum_enlarge(p_str_1,
                             n_blob * 2 as i64 + 4 as i64)
@@ -940,6 +1055,8 @@ pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
                     let n_blob: i64 =
                         unsafe { sqlite3_value_bytes(p_value_1) } as i64;
                     { let _ = 0; };
+
+                    /// No encoding change
                     unsafe {
                         sqlite3_str_accum_enlarge(p_str_1,
                             n_blob * 2 as i64 + 4 as i64)
@@ -1038,15 +1155,22 @@ pub extern "C" fn sqlite3_quote_value(p_str_1: *mut StrAccum,
     }
 }
 
+///* Implementation of the sqlite_version() function.  The result is the version
+///* of the SQLite library that is running.
+#[allow(unused_doc_comments)]
 extern "C" fn version_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
+
+    /// IMP: R-48699-48617 This function is an SQL wrapper around the
+    ///* sqlite3_libversion() C-interface.
     unsafe {
         sqlite3_result_text(context, unsafe { sqlite3_libversion() }, -1,
             None)
     };
 }
 
+///* A function that loads a shared-library extension then returns NULL.
 extern "C" fn load_ext(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_file: *const i8 =
@@ -1095,18 +1219,27 @@ extern "C" fn compileoptionused_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn compileoptionget_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
     { let _ = 0; };
     { let _ = argc; };
-    n = unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) };
+
+    /// IMP: R-04922-24076 The sqlite_compileoption_get() SQL function
+    ///* is a wrapper around the sqlite3_compileoption_get() C/C++ function.
+    (n = unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) });
     unsafe {
         sqlite3_result_text(context, unsafe { sqlite3_compileoption_get(n) },
             -1, None)
     };
 }
 
+///* Allocate nByte bytes of space using sqlite3Malloc(). If the
+///* allocation fails, call sqlite3_result_error_nomem() to notify
+///* the database handle that malloc() has failed and return NULL.
+///* If nByte is larger than the maximum string or blob length, then
+///* raise an SQLITE_TOOBIG exception and return NULL.
 extern "C" fn context_malloc(context: *mut Sqlite3Context, n_byte_1: i64)
     -> *mut () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1125,16 +1258,26 @@ extern "C" fn context_malloc(context: *mut Sqlite3Context, n_byte_1: i64)
     return z as *mut ();
 }
 
+///* Implementation of the TRIM(), LTRIM(), and RTRIM() functions.
+///* The userdata is 0x1 for left trim, 0x2 for right trim, 0x3 for both.
+#[allow(unused_doc_comments)]
 extern "C" fn trim_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
         let mut z_in: *const u8 = core::ptr::null();
+        /// Input string
         let mut z_char_set: *const u8 = core::ptr::null();
+        /// Set of characters to trim
         let mut n_in: u32 = 0 as u32;
+        /// Number of bytes in input
         let mut flags: i32 = 0;
+        /// 1: trimleft  2: trimright  3: trim
         let mut i: i32 = 0;
+        /// Loop counter
         let mut a_len: *mut u32 = core::ptr::null_mut();
+        /// Length of each character in zCharSet
         let mut az_char: *mut *mut u8 = core::ptr::null_mut();
+        /// Individual characters in zCharSet
         let mut n_char: i32 = 0;
         if unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) }
                 == 5 {
@@ -1320,6 +1463,7 @@ extern "C" fn trim_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Return the collating function associated with a function.
 extern "C" fn sqlite3_get_func_coll_seq(context: &Sqlite3Context)
     -> *mut CollSeq {
     unsafe {
@@ -1338,10 +1482,13 @@ extern "C" fn sqlite3_get_func_coll_seq(context: &Sqlite3Context)
     }
 }
 
+///* Implementation of the non-aggregate min() and max() functions
+#[allow(unused_doc_comments)]
 extern "C" fn minmax_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
     let mut mask: i32 = 0;
+    /// 0 for min() or 0xffffffff for max()
     let mut i_best: i32 = 0;
     let mut p_coll: *const CollSeq = core::ptr::null();
     { let _ = 0; };
@@ -1386,6 +1533,8 @@ extern "C" fn minmax_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Indicate that the accumulator load should be skipped on this
+///* iteration of the aggregate loop.
 extern "C" fn sqlite3_skip_accumulator_load(context: &mut Sqlite3Context)
     -> () {
     { let _ = 0; };
@@ -1393,6 +1542,8 @@ extern "C" fn sqlite3_skip_accumulator_load(context: &mut Sqlite3Context)
     (*context).skip_flag = 1 as u8;
 }
 
+///* Routines to implement min() and max() aggregate functions.
+#[allow(unused_doc_comments)]
 extern "C" fn minmax_step(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_arg: *mut Mem = unsafe { *argv.offset(0 as isize) } as *mut Mem;
@@ -1413,9 +1564,17 @@ extern "C" fn minmax_step(context: *mut Sqlite3Context, not_used_1: i32,
         let mut cmp: i32 = 0;
         let p_coll: *const CollSeq =
             sqlite3_get_func_coll_seq(unsafe { &*context }) as *const CollSeq;
-        max =
+
+        /// This step function is used for both the min() and max() aggregates,
+        ///* the only difference between the two being that the sense of the
+        ///* comparison is inverted. For the max() aggregate, the
+        ///* sqlite3_user_data() function returns (void *)-1. For min() it
+        ///* returns (void *)db, where db is the sqlite3* database pointer.
+        ///* Therefore the next statement sets variable 'max' to 1 for the max()
+        ///* aggregate, or 0 for min().
+        (max =
             (unsafe { sqlite3_user_data(context) } != core::ptr::null_mut())
-                as i32;
+                as i32);
         cmp =
             unsafe {
                 sqlite3_mem_compare(p_best as *const Mem, p_arg as *const Mem,
@@ -1455,6 +1614,8 @@ extern "C" fn min_max_value(context: *mut Sqlite3Context) -> () {
     min_max_value_finalize(context, 1);
 }
 
+///* Return the type of the argument.
+#[allow(unused_doc_comments)]
 extern "C" fn typeof_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1468,12 +1629,20 @@ extern "C" fn typeof_func(context: *mut Sqlite3Context, not_used_1: i32,
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
+
+        /// EVIDENCE-OF: R-01470-60482 The sqlite3_value_type(V) interface returns
+        ///* the datatype code for the initial datatype of the sqlite3_value object
+        ///* V. The returned value is one of SQLITE_INTEGER, SQLITE_FLOAT,
+        ///* SQLITE_TEXT, SQLITE_BLOB, or SQLITE_NULL.
         unsafe {
             sqlite3_result_text(context, az_type[i as usize], -1, None)
         };
     }
 }
 
+/// subtype(X)
+///*
+///* Return the subtype of X
 extern "C" fn subtype_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -1485,6 +1654,7 @@ extern "C" fn subtype_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Implementation of the length() function
 extern "C" fn length_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -1732,6 +1902,7 @@ extern "C" fn length_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the octet_length() function
 extern "C" fn bytelength_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -1894,6 +2065,15 @@ extern "C" fn bytelength_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the instr() function.
+///*
+///* instr(haystack,needle) finds the first occurrence of needle
+///* in haystack and returns the number of previous characters plus 1,
+///* or 0 if needle does not occur within haystack.
+///*
+///* If both haystack and needle are BLOBs, then the result is one more than
+///* the number of bytes in haystack prior to the first occurrence of needle,
+///* or 0 if needle never occurs in haystack.
 extern "C" fn instr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_haystack: *const u8 = core::ptr::null();
@@ -2123,6 +2303,7 @@ extern "C" fn instr_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the printf() (a.k.a. format()) SQL function.
 extern "C" fn printf_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: PrintfArguments = unsafe { core::mem::zeroed() };
@@ -2155,6 +2336,8 @@ extern "C" fn printf_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* The unicode() function.  Return the integer unicode code-point value
+///* for the first character of the input string.
 extern "C" fn unicode_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *const u8 =
@@ -2168,6 +2351,9 @@ extern "C" fn unicode_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* The char() function takes zero or more arguments, each of which is
+///* an integer.  It constructs a string where each character of the string
+///* is the unicode character for the corresponding integer argument.
 extern "C" fn char_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *mut u8 = core::ptr::null_mut();
@@ -2297,6 +2483,11 @@ extern "C" fn char_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Implementation of the abs() function.
+///*
+///* IMP: R-23979-26855 The abs(X) function returns the absolute value of
+///* the numeric argument X.
+#[allow(unused_doc_comments)]
 extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -2316,6 +2507,10 @@ extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
                         if i_val ==
                                 -1 as i64 -
                                     (4294967295u32 as i64 | (2147483647 as i64) << 32) {
+
+                            /// IMP: R-31676-45509 If X is the integer -9223372036854775808
+                            ///* then abs(X) throws an integer overflow error since there is no
+                            ///* equivalent positive 64-bit two complement value.
                             unsafe {
                                 sqlite3_result_error(context,
                                     c"integer overflow".as_ptr() as *mut i8 as *const i8, -1)
@@ -2327,8 +2522,17 @@ extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
                     unsafe { sqlite3_result_int64(context, i_val) };
                     break '__s25;
                 }
-                { unsafe { sqlite3_result_null(context) }; break '__s25; }
                 {
+
+                    /// IMP: R-37434-19929 Abs(X) returns NULL if X is NULL.
+                    unsafe { sqlite3_result_null(context) };
+                    break '__s25;
+                }
+                {
+                    /// Because sqlite3_value_double() returns 0.0 if the argument is not
+                    ///* something that can be converted into a number, we have:
+                    ///* IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
+                    ///* that cannot be converted to a numeric value.
                     let mut r_val: f64 =
                         unsafe {
                             sqlite3_value_double(unsafe { *argv.offset(0 as isize) })
@@ -2339,8 +2543,17 @@ extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
                 }
             }
             5 => {
-                { unsafe { sqlite3_result_null(context) }; break '__s25; }
                 {
+
+                    /// IMP: R-37434-19929 Abs(X) returns NULL if X is NULL.
+                    unsafe { sqlite3_result_null(context) };
+                    break '__s25;
+                }
+                {
+                    /// Because sqlite3_value_double() returns 0.0 if the argument is not
+                    ///* something that can be converted into a number, we have:
+                    ///* IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
+                    ///* that cannot be converted to a numeric value.
                     let mut r_val: f64 =
                         unsafe {
                             sqlite3_value_double(unsafe { *argv.offset(0 as isize) })
@@ -2352,6 +2565,10 @@ extern "C" fn abs_func(context: *mut Sqlite3Context, argc: i32,
             }
             _ => {
                 {
+                    /// Because sqlite3_value_double() returns 0.0 if the argument is not
+                    ///* something that can be converted into a number, we have:
+                    ///* IMP: R-01992-00519 Abs(X) returns 0.0 if X is a string or blob
+                    ///* that cannot be converted to a numeric value.
                     let mut r_val: f64 =
                         unsafe {
                             sqlite3_value_double(unsafe { *argv.offset(0 as isize) })
@@ -2409,6 +2626,8 @@ extern "C" fn round_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_double(context, r) };
 }
 
+///* Implementation of the upper() and lower() SQL functions.
+#[allow(unused_doc_comments)]
 extern "C" fn upper_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2424,6 +2643,8 @@ extern "C" fn upper_func(context: *mut Sqlite3Context, argc: i32,
             unsafe {
                 sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) })
             };
+
+        /// Verify that the call to _bytes() does not invalidate the _text() pointer
         { let _ = 0; };
         if !(z2).is_null() {
             z1 = context_malloc(context, n as i64 + 1 as i64) as *mut i8;
@@ -2456,6 +2677,7 @@ extern "C" fn upper_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn lower_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2471,6 +2693,8 @@ extern "C" fn lower_func(context: *mut Sqlite3Context, argc: i32,
             unsafe {
                 sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) })
             };
+
+        /// Verify that the call to _bytes() does not invalidate the _text() pointer
         { let _ = 0; };
         if !(z2).is_null() {
             z1 = context_malloc(context, n as i64 + 1 as i64) as *mut i8;
@@ -2502,6 +2726,9 @@ extern "C" fn lower_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* The hex() function.  Interpret the argument as a blob.  Return
+///* a hexadecimal rendering as text.
+#[allow(unused_doc_comments)]
 extern "C" fn hex_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -2516,13 +2743,15 @@ extern "C" fn hex_func(context: *mut Sqlite3Context, argc: i32,
             *const u8;
     n = unsafe { sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) }) };
     { let _ = 0; };
-    z =
+
+    /// No encoding change
+    (z =
         {
             z_hex =
                 context_malloc(context, n as i64 * 2 as i64 + 1 as i64) as
                     *mut i8;
             z_hex
-        };
+        });
     if !(z_hex).is_null() {
         {
             i = 0;
@@ -2568,6 +2797,8 @@ extern "C" fn hex_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Buffer zStr contains nStr bytes of utf-8 encoded text. Return 1 if zStr
+///* contains character ch, or 0 if it does not.
 extern "C" fn str_contains_char(z_str_1: *const u8, n_str_1: i32, ch: u32)
     -> i32 {
     let z_end: *const u8 = unsafe { &*z_str_1.offset(n_str_1 as isize) };
@@ -2589,6 +2820,27 @@ extern "C" fn str_contains_char(z_str_1: *const u8, n_str_1: i32, ch: u32)
     return 0;
 }
 
+///* The unhex() function. This function may be invoked with either one or
+///* two arguments. In both cases the first argument is interpreted as text
+///* a text value containing a set of pairs of hexadecimal digits which are
+///* decoded and returned as a blob.
+///*
+///* If there is only a single argument, then it must consist only of an
+///* even number of hexadecimal digits. Otherwise, return NULL.
+///*
+///* Or, if there is a second argument, then any character that appears in
+///* the second argument is also allowed to appear between pairs of hexadecimal
+///* digits in the first argument. If any other character appears in the
+///* first argument, or if one of the allowed characters appears between
+///* two hexadecimal digits that make up a single byte, NULL is returned.
+///*
+///* The following expressions are all true:
+///*
+///*     unhex('ABCD')       IS x'ABCD'
+///*     unhex('AB CD')      IS NULL
+///*     unhex('AB CD', ' ') IS x'ABCD'
+///*     unhex('A BCD', ' ') IS NULL
+#[allow(unused_doc_comments)]
 extern "C" fn unhex_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2599,7 +2851,9 @@ extern "C" fn unhex_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
         let mut p_blob: *mut u8 = core::ptr::null_mut();
         let mut p: *mut u8 = core::ptr::null_mut();
         let mut c: u8 = 0 as u8;
+        /// Most significant digit of next byte
         let mut d: u8 = 0 as u8;
+        /// Least significant digit of next byte
         let mut ch: u32 = 0 as u32;
         let mut __state: i32 = 0;
         loop {
@@ -2774,12 +3028,19 @@ extern "C" fn unhex_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     }
 }
 
+/// The core implementation of the CONCAT(...) and CONCAT_WS(SEP,...)
+///* functions.
+///*
+///* Return a string value that is the concatenation of all non-null
+///* entries in argv[].  Use zSep as the separator.
+#[allow(unused_doc_comments)]
 extern "C" fn concat_func_core(context: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, n_sep_1: i32, z_sep_1: *const i8) -> () {
     let mut j: i64 = 0 as i64;
     let mut n: i64 = 0 as i64;
     let mut i: i32 = 0;
     let mut b_not_null: i32 = 0;
+    /// True after at least NOT NULL argument seen
     let mut z: *mut i8 = core::ptr::null_mut();
     {
         i = 0;
@@ -2849,12 +3110,19 @@ extern "C" fn concat_func_core(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* The CONCAT(...) function.  Generate a string result that is the
+///* concatentation of all non-null arguments.
 extern "C" fn concat_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     concat_func_core(context, argc, argv as *const *mut Sqlite3Value, 0,
         c"".as_ptr() as *mut i8 as *const i8);
 }
 
+///* The CONCAT_WS(separator, ...) function.
+///*
+///* Generate a string that is the concatenation of 2nd through the Nth
+///* argument.  Use the first argument (which must be non-NULL) as the
+///* separator.
 extern "C" fn concatws_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let n_sep: i32 =
@@ -2868,6 +3136,8 @@ extern "C" fn concatws_func(context: *mut Sqlite3Context, argc: i32,
         z_sep);
 }
 
+///* Implementation of random().  Return a random integer.
+#[allow(unused_doc_comments)]
 extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let mut r: SqliteInt64 = 0 as SqliteInt64;
@@ -2877,11 +3147,21 @@ extern "C" fn random_func(context: *mut Sqlite3Context, not_used_1: i32,
             &raw mut r as *mut ())
     };
     if r < 0 as i64 {
-        r = -(r & (4294967295u32 as i64 | (2147483647 as i64) << 32));
+
+        /// We need to prevent a random number of 0x8000000000000000
+        ///* (or -9223372036854775808) since when you do abs() of that
+        ///* number of you get the same value back again.  To do this
+        ///* in a way that is testable, mask the sign bit off of negative
+        ///* values, resulting in a positive value.  Then take the
+        ///* 2s complement of that positive value.  The end result can
+        ///* therefore be no less than -9223372036854775807.
+        (r = -(r & (4294967295u32 as i64 | (2147483647 as i64) << 32)));
     }
     unsafe { sqlite3_result_int64(context, r) };
 }
 
+///* Implementation of randomblob(N).  Return a random blob
+///* that is N bytes long.
 extern "C" fn random_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -2900,6 +3180,9 @@ extern "C" fn random_blob(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the NULLIF(x,y) function.  The result is the first
+///* argument if the arguments are different.  The result is NULL if the
+///* arguments are equal to each other.
 extern "C" fn nullif_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_coll: *const CollSeq =
@@ -2917,14 +3200,24 @@ extern "C" fn nullif_func(context: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+///* Implementation of the sqlite_source_id() function. The result is a string
+///* that identifies the particular version of the source code used to build
+///* SQLite.
+#[allow(unused_doc_comments)]
 extern "C" fn sourceid_func(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
+
+    /// IMP: R-24470-31136 This function is an SQL wrapper around the
+    ///* sqlite3_sourceid() C interface.
     unsafe {
         sqlite3_result_text(context, unsafe { sqlite3_sourceid() }, -1, None)
     };
 }
 
+///* Implementation of the sqlite_log() function.  This is a wrapper around
+///* sqlite3_log().  The return value is NULL.  The function exists purely for
+///* its side-effects.
 extern "C" fn errlog_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -2939,6 +3232,9 @@ extern "C" fn errlog_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Return true if z[] begins with N hexadecimal digits, and write
+///* a decoding of those digits into *pVal.  Or return false if any
+///* one of the first N characters in z[] is not a hexadecimal digit.
 extern "C" fn is_n_hex(z: *const i8, n_1: i32, p_val_1: &mut u32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -2970,6 +3266,17 @@ extern "C" fn is_n_hex(z: *const i8, n_1: i32, p_val_1: &mut u32) -> i32 {
     }
 }
 
+///* Implementation of the UNISTR() function.
+///*
+///* This is intended to be a work-alike of the UNISTR() function in
+///* PostgreSQL.  Quoting from the PG documentation (PostgreSQL 17 -
+///* scraped on 2025-02-22):
+///*
+///*    Evaluate escaped Unicode characters in the argument. Unicode
+///*    characters can be specified as \XXXX (4 hexadecimal digits),
+///*    \+XXXXXX (6 hexadecimal digits), \uXXXX (4 hexadecimal digits),
+///*    or \UXXXXXXXX (8 hexadecimal digits). To specify a backslash,
+///*    write two backslashes. All other characters are taken literally.
 extern "C" fn unistr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -3223,6 +3530,18 @@ extern "C" fn unistr_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the QUOTE() function. 
+///*
+///* The quote(X) function returns the text of an SQL literal which is the
+///* value of its argument suitable for inclusion into an SQL statement.
+///* Strings are surrounded by single-quotes with escapes on interior quotes
+///* as needed. BLOBs are encoded as hexadecimal literals. Strings with
+///* embedded NUL characters cannot be represented as string literals in SQL
+///* and hence the returned string literal is truncated prior to the first NUL.
+///*
+///* If sqlite3_user_data() is non-zero, then the UNISTR_QUOTE() function is
+///* implemented instead.  The difference is that UNISTR_QUOTE() uses the
+///* UNISTR() function to escape control characters.
 extern "C" fn quote_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut str: Sqlite3Str = unsafe { core::mem::zeroed() };
@@ -3239,16 +3558,28 @@ extern "C" fn quote_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_str(context, &mut str, 1) };
 }
 
+///* Implementation of the last_insert_rowid() SQL function.  The return
+///* value is the same as the sqlite3_last_insert_rowid() API function.
+#[allow(unused_doc_comments)]
 extern "C" fn last_insert_rowid(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
+
+    /// IMP: R-51513-12026 The last_insert_rowid() SQL function is a
+    ///* wrapper around the sqlite3_last_insert_rowid() C/C++ interface
+    ///* function.
     unsafe {
         sqlite3_result_int64(context,
             unsafe { sqlite3_last_insert_rowid(db) })
     };
 }
 
+///* Implementation of the changes() SQL function.
+///*
+///* IMP: R-32760-32347 The changes() SQL function is a wrapper
+///* around the sqlite3_changes64() C/C++ function and hence follows the
+///* same rules for counting changes.
 extern "C" fn changes(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -3258,29 +3589,51 @@ extern "C" fn changes(context: *mut Sqlite3Context, not_used_1: i32,
     };
 }
 
+///* Implementation of the total_changes() SQL function.  The return value is
+///* the same as the sqlite3_total_changes64() API function.
+#[allow(unused_doc_comments)]
 extern "C" fn total_changes(context: *mut Sqlite3Context, not_used_1: i32,
     not_used2_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     { { let _ = not_used_1; }; { let _ = not_used2_1; } };
+
+    /// IMP: R-11217-42568 This function is a wrapper around the
+    ///* sqlite3_total_changes64() C/C++ interface.
     unsafe {
         sqlite3_result_int64(context, unsafe { sqlite3_total_changes64(db) })
     };
 }
 
+///* The replace() function.  Three arguments are all strings: call
+///* them A, B, and C. The result is also a string which is derived
+///* from A by replacing every occurrence of B with C.  The match
+///* must be exact.  Collating sequences are not used.
+#[allow(unused_doc_comments)]
 extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_str: *const u8 = core::ptr::null();
+    /// The input string A
     let mut z_pattern: *const u8 = core::ptr::null();
+    /// The pattern string B
     let mut z_rep: *const u8 = core::ptr::null();
+    /// The replacement string C
     let mut z_out: *mut u8 = core::ptr::null_mut();
+    /// The output
     let mut n_str: i32 = 0;
+    /// Size of zStr
     let mut n_pattern: i32 = 0;
+    /// Size of zPattern
     let mut n_rep: i32 = 0;
+    /// Size of zRep
     let mut n_out: i64 = 0 as i64;
+    /// Maximum size of zOut
     let mut loop_limit: i32 = 0;
+    /// Last zStr[] that might match zPattern[]
     let mut i: i64 = 0 as i64;
     let mut j: i64 = 0 as i64;
+    /// Loop counters
     let mut cnt_expand: u32 = 0 as u32;
+    /// Number zOut expansions
     let db: *const Sqlite3 =
         unsafe { sqlite3_context_db_handle(context) } as *const Sqlite3;
     { let _ = 0; };
@@ -3291,8 +3644,10 @@ extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
     n_str =
         unsafe { sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) }) };
     { let _ = 0; };
-    z_pattern =
-        unsafe { sqlite3_value_text(unsafe { *argv.offset(1 as isize) }) };
+
+    /// No encoding change
+    (z_pattern =
+        unsafe { sqlite3_value_text(unsafe { *argv.offset(1 as isize) }) });
     if z_pattern == core::ptr::null() { { let _ = 0; }; return; }
     if unsafe { *z_pattern.offset(0 as isize) } as i32 == 0 {
         { let _ = 0; };
@@ -3309,8 +3664,10 @@ extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
     n_pattern =
         unsafe { sqlite3_value_bytes(unsafe { *argv.offset(1 as isize) }) };
     { let _ = 0; };
-    z_rep =
-        unsafe { sqlite3_value_text(unsafe { *argv.offset(2 as isize) }) };
+
+    /// No encoding change
+    (z_rep =
+        unsafe { sqlite3_value_text(unsafe { *argv.offset(2 as isize) }) });
     if z_rep == core::ptr::null() { return; }
     n_rep =
         unsafe { sqlite3_value_bytes(unsafe { *argv.offset(2 as isize) }) };
@@ -3356,6 +3713,8 @@ extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
                             __t
                         };
                         if cnt_expand & cnt_expand - 1 as u32 == 0 as u32 {
+                            /// Grow the size of the output buffer only on substitutions
+                            ///* whose index is a power of two: 1, 2, 4, 8, 16, 32, ...
                             let mut z_old: *mut u8 = core::ptr::null_mut();
                             z_old = z_out;
                             z_out =
@@ -3398,6 +3757,7 @@ extern "C" fn replace_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* The zeroblob(N) function returns a zero-filled blob of size N bytes.
 extern "C" fn zeroblob_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i64 = 0 as i64;
@@ -3410,6 +3770,16 @@ extern "C" fn zeroblob_func(context: *mut Sqlite3Context, argc: i32,
     if rc != 0 { unsafe { sqlite3_result_error_code(context, rc) }; }
 }
 
+///* Implementation of the substr() function.
+///*
+///* substr(x,p1,p2)  returns p2 characters of x[] beginning with p1.
+///* p1 is 1-indexed.  So substr(x,1,1) returns the first character
+///* of x.  If x is text, then we actually count UTF-8 characters.
+///* If x is a blob, then we count bytes.
+///*
+///* If p1 is negative, then we begin abs(p1) from the end of x[].
+///*
+///* If p2 is negative, return the p2 characters preceding p1.
 extern "C" fn substr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z: *const u8 = core::ptr::null();
@@ -3622,6 +3992,7 @@ struct SumCtx {
     ovrfl: u8,
 }
 
+///* Initialize the Kahan-Babaska-Neumaier sum from a 64-bit integer
 extern "C" fn kahan_babuska_neumaier_init(p: *mut SumCtx, i_val_1: i64)
     -> () {
     if i_val_1 <= -4503599627370496i64 || i_val_1 >= 4503599627370496i64 {
@@ -3634,6 +4005,12 @@ extern "C" fn kahan_babuska_neumaier_init(p: *mut SumCtx, i_val_1: i64)
     }
 }
 
+///* Do one step of the Kahan-Babushka-Neumaier summation.
+///*
+///* https://en.wikipedia.org/wiki/Kahan_summation_algorithm
+///*
+///* Variables are marked "volatile" to defeat c89 x86 floating point
+///* optimizations can mess up this algorithm.
 extern "C" fn kahan_babuska_neumaier_step(p_sum_1: *mut SumCtx, r: f64)
     -> () {
     let s: f64 = unsafe { (*p_sum_1).r_sum } as f64;
@@ -3644,6 +4021,7 @@ extern "C" fn kahan_babuska_neumaier_step(p_sum_1: *mut SumCtx, r: f64)
     unsafe { (*p_sum_1).r_sum = t as f64 };
 }
 
+///* Add a (possibly large) integer to the running sum.
 extern "C" fn kahan_babuska_neumaier_step_int64(p_sum_1: *mut SumCtx,
     i_val_1: i64) -> () {
     if i_val_1 <= -4503599627370496i64 || i_val_1 >= 4503599627370496i64 {
@@ -3656,6 +4034,14 @@ extern "C" fn kahan_babuska_neumaier_step_int64(p_sum_1: *mut SumCtx,
     } else { kahan_babuska_neumaier_step(p_sum_1, i_val_1 as f64 as f64); }
 }
 
+///* Routines used to compute the sum, average, and total.
+///*
+///* The SUM() function follows the (broken) SQL standard which means
+///* that it returns NULL if it sums over no inputs.  TOTAL returns
+///* 0.0 in that case.  In addition, TOTAL always returns a float where
+///* SUM might return an integer if it never encounters a floating point
+///* value.  TOTAL never fails, but SUM might throw an exception if
+///* it overflows an integer.
 extern "C" fn sum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SumCtx = core::ptr::null_mut();
@@ -3850,6 +4236,8 @@ struct CountCtx {
     n: i64,
 }
 
+///* Routines to implement the count() aggregate function.
+#[allow(unused_doc_comments)]
 extern "C" fn count_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -3871,6 +4259,11 @@ extern "C" fn count_step(context: *mut Sqlite3Context, argc: i32,
                 __t
             };
         }
+
+        /// The sqlite3_aggregate_count() function is deprecated.  But just to make
+        ///* sure it still operates correctly, verify that its count agrees with our
+        ///* internal count when using count(*) and when the total count can be
+        ///* expressed as a 32-bit integer.
         { let _ = 0; };
     }
 }
@@ -3910,6 +4303,18 @@ extern "C" fn count_inverse(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* group_concat(EXPR, ?SEPARATOR?)
+///* string_agg(EXPR, SEPARATOR)
+///*
+///* Content is accumulated in GroupConcatCtx.str with the SEPARATOR
+///* coming before the EXPR value, except for the first entry which
+///* omits the SEPARATOR.
+///*
+///* It is tragic that the SEPARATOR goes before the EXPR string.  The
+///* groupConcatInverse() implementation would have been easier if the
+///* SEPARATOR were appended after EXPR.  And the order is undocumented,
+///* so we could change it, in theory.  But the old behavior has been
+///* around for so long that we dare not, for fear of breaking something.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GroupConcatCtx {
@@ -3919,6 +4324,7 @@ struct GroupConcatCtx {
     pn_sep_lengths: *mut i32,
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn group_concat_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_val: *const i8 = core::ptr::null();
@@ -3972,11 +4378,13 @@ extern "C" fn group_concat_step(context: *mut Sqlite3Context, argc: i32,
                 {
                 let mut pnsl: *mut i32 = unsafe { (*p_gcc).pn_sep_lengths };
                 if pnsl == core::ptr::null_mut() {
-                    pnsl =
+
+                    /// First separator length variation seen, start tracking them.
+                    (pnsl =
                         unsafe {
                                 sqlite3_malloc64((unsafe { (*p_gcc).n_accum } + 1) as u64 *
                                         core::mem::size_of::<i32>() as u64)
-                            } as *mut i32;
+                            } as *mut i32);
                     if pnsl != core::ptr::null_mut() {
                         let mut i: i32 = 0;
                         let n_a: i32 = unsafe { (*p_gcc).n_accum } - 1;
@@ -4066,6 +4474,7 @@ extern "C" fn group_concat_value(context: *mut Sqlite3Context) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn group_concat_inverse(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_gcc: *mut GroupConcatCtx = core::ptr::null_mut();
@@ -4082,16 +4491,24 @@ extern "C" fn group_concat_inverse(context: *mut Sqlite3Context, argc: i32,
             } as *mut GroupConcatCtx;
     if !(p_gcc).is_null() {
         let mut n_vs: i32 = 0;
+
+        /// Number of characters to remove */
+        ///    /* Must call sqlite3_value_text() to convert the argument into text prior
+        ///* to invoking sqlite3_value_bytes(), in case the text encoding is UTF16
         {
             let _ =
                 unsafe {
                     sqlite3_value_text(unsafe { *argv.offset(0 as isize) })
                 };
         };
-        n_vs =
+
+        /// Number of characters to remove */
+        ///    /* Must call sqlite3_value_text() to convert the argument into text prior
+        ///* to invoking sqlite3_value_bytes(), in case the text encoding is UTF16
+        (n_vs =
             unsafe {
                 sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) })
-            };
+            });
         unsafe { (*p_gcc).n_accum -= 1 };
         if unsafe { (*p_gcc).pn_sep_lengths } != core::ptr::null_mut() {
             { let _ = 0; };
@@ -4106,7 +4523,11 @@ extern "C" fn group_concat_inverse(context: *mut Sqlite3Context, argc: i32,
                             core::mem::size_of::<i32>() as u64)
                 };
             }
-        } else { n_vs += unsafe { (*p_gcc).n_first_sep_length }; }
+        } else {
+
+            /// If removing single accumulated string, harmlessly over-do.
+            (n_vs += unsafe { (*p_gcc).n_first_sep_length });
+        }
         if n_vs >= unsafe { (*p_gcc).str.n_char } as i32 {
             unsafe { (*p_gcc).str.n_char = 0 as u32 };
         } else {
@@ -4142,6 +4563,11 @@ struct Percentile {
     a: *mut f64,
 }
 
+///* Generate an error for a percentile function.
+///*
+///* The error format string must have exactly one occurrence of "%%s()"
+///* (with two '%' characters).  That substring will be replaced by the name
+///* of the function.
 unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg1: *mut i8 = core::ptr::null_mut();
@@ -4164,11 +4590,13 @@ unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg2 as *mut ()) };
 }
 
+///* Return TRUE if two doubles differ by 0.001 or less.
 extern "C" fn percent_same_value(mut a: f64, b: f64) -> i32 {
     a -= b;
     return (a >= -0.001 && a <= 0.001) as i32;
 }
 
+///* Return TRUE if the input floating-point number is an infinity.
 extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     { let _ = 0; };
@@ -4179,9 +4607,20 @@ extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     return (u >> 52 & 2047 as Sqlite3Uint64 == 2047 as u64) as i32;
 }
 
+///* Search p (which must have p->bSorted) looking for an entry with
+///* value y.  Return the index of that entry.
+///*
+///* If bExact is true, return -1 if the entry is not found.
+///*
+///* If bExact is false, return the index at which a new entry with
+///* value y should be insert in order to keep the values in sorted
+///* order.  The smallest return value in this case will be 0, and
+///* the largest return value will be p->nUsed.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     -> i64 {
     let mut i_first: i64 = 0 as i64;
+    /// First element of search range
     let mut i_last: i64 = (*p).n_used as i64 - 1 as i64;
     while i_last >= i_first {
         let i_mid: i64 = (i_first + i_last) / 2 as i64;
@@ -4194,6 +4633,9 @@ extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     return i_first;
 }
 
+///* The "step" function for percentile(Y,P) is called once for each
+///* input row.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -4202,8 +4644,14 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     let mut y: f64 = 0.0;
     { let _ = 0; };
     if argc == 1 {
-        r_pct = 0.5;
+
+        /// Requirement 13:  median(Y) is the same as percentile(Y,50).
+        (r_pct = 0.5);
     } else {
+        /// P must be a number between 0 and 100 for percentile() or between
+        ///* 0.0 and 1.0 for percentile_cont() and percentile_disc().
+        ///*
+        ///* The user-data is an integer which is 10 times the upper bound.
         let mx_frac: f64 =
             if unsafe { sqlite3_user_data(p_ctx_1) } as i64 as i32 & 2 != 0 {
                 100.0
@@ -4227,11 +4675,13 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
             return;
         }
     }
-    p =
+
+    /// Allocate the session context.
+    (p =
         unsafe {
                 sqlite3_aggregate_context(p_ctx_1,
                     core::mem::size_of::<Percentile>() as i32)
-            } as *mut Percentile;
+            } as *mut Percentile);
     if p == core::ptr::null_mut() { return; }
     if (unsafe { (*p).b_pct_valid } == 0) as i32 != 0 {
         unsafe { (*p).r_pct = r_pct };
@@ -4245,8 +4695,10 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
-    e_type =
-        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore rows for which Y is NULL
+    (e_type =
+        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) });
     if e_type == 5 { return; }
     if e_type != 1 && e_type != 2 {
         unsafe {
@@ -4256,7 +4708,10 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
-    y = unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Throw an error if the Y value is infinity or NaN
+    (y =
+        unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) });
     if percent_is_infinity(y) != 0 {
         unsafe {
             percent_error(p_ctx_1,
@@ -4348,12 +4803,33 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Sort an array of doubles.
+///*
+///* Algorithm: quicksort
+///*
+///* This is implemented separately rather than using the qsort() routine
+///* from the standard library because:
+///*
+///*    (1)  To avoid a dependency on qsort()
+///*    (2)  To avoid the function call to the comparison routine for each
+///*         comparison.
+///*
+///* If parameter iReq is non-negative, then the caller will only access
+///* elements a[iReq] and a[iReq+1] (if it exists) of the sorted array and
+///* so it is not necessary to position any other elements. Or if iReq is
+///* negative, then the final array must be fully sorted.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_sort(mut a: *mut f64, mut n: u32, mut i_req_1: i32)
     -> () {
     let mut i_lt: i32 = 0;
+    /// Entries before a[iLt] are less than rPivot
     let mut i_gt: i32 = 0;
+    /// Entries at or after a[iGt] are greater than rPivot
     let mut i: i32 = 0;
+    /// Loop counter
     let mut r_pivot: f64 = 0.0;
+
+    /// The pivot value
     { let _ = 0; };
     '__b46: loop {
         '__c46: loop {
@@ -4468,11 +4944,15 @@ extern "C" fn percent_sort(mut a: *mut f64, mut n: u32, mut i_req_1: i32)
     }
 }
 
+///* Compute the final output of percentile().  Clean up all allocated
+///* memory if and only if bIsFinal is true.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
     -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
     let settings: i32 =
         unsafe { sqlite3_user_data(p_ctx_1) } as i64 as i32 & 1;
+    /// Discrete?
     let mut i1: u32 = 0 as u32;
     let mut i2: u32 = 0 as u32;
     let mut v1: f64 = 0.0;
@@ -4488,6 +4968,11 @@ extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
                 (unsafe { (*p).n_used } - 1 as u64) as f64;
         i1 = ix as u32;
         if unsafe { (*p).b_sorted } as i32 == 0 {
+
+            /// In cases where bIsFinal is non-zero, setting Percentile.bSorted 
+            ///* after the percentSort() call here is not technically correct, as 
+            ///* the array is not fully sorted. But in this case the object will be 
+            ///* freed below anyway, so it doesn't matter.
             { let _ = 0; };
             percent_sort(unsafe { (*p).a }, unsafe { (*p).n_used } as u32,
                 if b_is_final_1 != 0 { i1 as i32 } else { -1 });
@@ -4523,6 +5008,9 @@ extern "C" fn percent_value(p_ctx_1: *mut Sqlite3Context) -> () {
     percent_compute(p_ctx_1, 0);
 }
 
+///* The "inverse" function for percentile(Y,P) is called to remove a
+///* row that was previously inserted by "step".
+#[allow(unused_doc_comments)]
 extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -4530,17 +5018,26 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     let mut y: f64 = 0.0;
     let mut i: i64 = 0 as i64;
     { let _ = 0; };
-    p =
+
+    /// Allocate the session context.
+    (p =
         unsafe {
                 sqlite3_aggregate_context(p_ctx_1,
                     core::mem::size_of::<Percentile>() as i32)
-            } as *mut Percentile;
+            } as *mut Percentile);
+
+    /// Allocate the session context.
     { let _ = 0; };
-    e_type =
-        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore rows for which Y is NULL
+    (e_type =
+        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) });
     if e_type == 5 { return; }
     if e_type != 1 && e_type != 2 { return; }
-    y = unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore the Y value if it is infinity or NaN
+    (y =
+        unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) });
     if percent_is_infinity(y) != 0 { return; }
     if unsafe { (*p).b_sorted } as i32 == 0 {
         { let _ = 0; };
@@ -4548,7 +5045,9 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
         unsafe { (*p).b_sorted = 1 as i8 };
     }
     unsafe { (*p).b_keep_sorted = 1 as i8 };
-    i = percent_binary_search(unsafe { &*p }, y, 1);
+
+    /// Find and remove the row
+    (i = percent_binary_search(unsafe { &*p }, y, 1));
     if i >= 0 as i64 {
         {
             let __p = unsafe { &mut (*p).n_used };
@@ -4571,6 +5070,17 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the like() SQL function.  This function implements
+///* the built-in LIKE operator.  The first argument to the function is the
+///* pattern and the second argument is the string.  So, the SQL statements:
+///*
+///*       A LIKE B
+///*
+///* is implemented as like(B,A).
+///*
+///* This same function (with a different compareInfo structure) computes
+///* the GLOB operator.
+#[allow(unused_doc_comments)]
 extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_a: *const u8 = core::ptr::null();
@@ -4582,8 +5092,11 @@ extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
     let mut p_info: *mut CompareInfo =
         unsafe { sqlite3_user_data(context) } as *mut CompareInfo;
     let mut backup_info: CompareInfo = unsafe { core::mem::zeroed() };
-    n_pat =
-        unsafe { sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Limit the length of the LIKE or GLOB pattern to avoid problems
+    ///* of deep recursion and N*N behavior in patternCompare().
+    (n_pat =
+        unsafe { sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) }) });
     if n_pat > unsafe { (*db).a_limit[8 as usize] } {
         unsafe {
             sqlite3_result_error(context,
@@ -4593,6 +5106,8 @@ extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
         return;
     }
     if argc == 3 {
+        /// The escape character string must consist of a single UTF-8 character.
+        ///* Otherwise, return an error.
         let mut z_esc: *const u8 =
             unsafe {
                 sqlite3_value_text(unsafe { *argv.offset(2 as isize) })
@@ -4634,8 +5149,19 @@ extern "C" fn like_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* On some systems, ceil() and floor() are intrinsic function.  You are
+///* unable to take a pointer to these functions.  Hence, we here wrap them
+///* in our own actual functions.
 extern "C" fn x_ceil(x: f64) -> f64 { return unsafe { ceil(x) }; }
 
+///* Implementation SQL functions:
+///*
+///*   ceil(X)
+///*   ceiling(X)
+///*   floor(X)
+///*
+///* The sqlite3_user_data() pointer is a pointer to the libm implementation
+///* of the underlying C function.
 extern "C" fn ceiling_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -4702,6 +5228,12 @@ extern "C" fn ceiling_func(context: *mut Sqlite3Context, argc: i32,
 
 extern "C" fn x_floor(x: f64) -> f64 { return unsafe { floor(x) }; }
 
+///* Implementation of SQL functions:
+///*
+///*   ln(X)       - natural logarithm
+///*   log(X)      - log X base 10
+///*   log10(X)    - log X base 10
+///*   log(B,X)    - log X base B
 extern "C" fn log_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut x: f64 = 0.0;
@@ -4775,6 +5307,9 @@ extern "C" fn log_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_double(context, ans) };
 }
 
+///* Implementation of 1-argument SQL math functions:
+///*
+///*   exp(X)  - Compute e to the X-th power
 extern "C" fn math1_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4798,6 +5333,9 @@ extern "C" fn math1_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_double(context, ans) };
 }
 
+///* Implementation of 2-argument SQL math functions:
+///*
+///*   power(X,Y)  - Compute X to the Y-th power
 extern "C" fn math2_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4829,6 +5367,7 @@ extern "C" fn math2_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_double(context, ans) };
 }
 
+///* Functions to converts degrees to radians and radians to degrees.
 extern "C" fn deg_to_rad(x: f64) -> f64 {
     return x * (3.141592653589793 / 180.0);
 }
@@ -4837,6 +5376,7 @@ extern "C" fn rad_to_deg(x: f64) -> f64 {
     return x * (180.0 / 3.141592653589793);
 }
 
+///* Implementation of 0-argument pi() function.
 extern "C" fn pi_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = 0; };
@@ -4844,6 +5384,7 @@ extern "C" fn pi_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_double(context, 3.141592653589793) };
 }
 
+///* Implementation of sign(X) function.
 extern "C" fn sign_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut type0: i32 = 0;
@@ -4862,9 +5403,22 @@ extern "C" fn sign_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* All of the FuncDef structures in the aBuiltinFunc[] array above
+///* to the global function hash table.  This occurs at start-time (as
+///* a consequence of calling sqlite3_initialize()).
+///*
+///* After this routine runs
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_register_builtin_functions() -> () {
     unsafe {
+
+        ///** Functions only available with SQLITE_TESTCTRL_INTERNAL_FUNCTIONS ****
+        /// !defined(SQLITE_UNTESTABLE) */
+        ////***** Regular functions ****
+        /// SQLITE_OMIT_COMPILEOPTION_DIAGS
+        /// SQLITE_ENABLE_PERCENTILE
+        /// SQLITE_ENABLE_MATH_FUNCTIONS
         unsafe { sqlite3_alter_functions() };
         unsafe { sqlite3_window_functions() };
         unsafe { sqlite3_register_date_time_functions() };
@@ -4878,6 +5432,9 @@ pub extern "C" fn sqlite3_register_builtin_functions() -> () {
     }
 }
 
+///* This routine does per-connection function registration.  Most
+///* of the built-in functions above are part of the global function set.
+///* This routine only deals with those that are not global.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_register_per_connection_builtin_functions(db:
         *mut Sqlite3) -> () {
@@ -4890,6 +5447,8 @@ pub extern "C" fn sqlite3_register_per_connection_builtin_functions(db:
     if rc == 7 { unsafe { sqlite3_oom_fault(db) }; }
 }
 
+/// If SQLITE_CASE_SENSITIVE_LIKE is defined, then the LIKE operator
+///* is case sensitive causing 'a' LIKE 'A' to be false
 static like_info_alt: CompareInfo =
     CompareInfo {
         match_all: '%' as i32 as u8,
@@ -4898,7 +5457,11 @@ static like_info_alt: CompareInfo =
         no_case: 0 as u8,
     };
 
+///* Re-register the built-in LIKE functions.  The caseSensitive
+///* parameter determines whether or not the LIKE operator is case
+///* sensitive.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_register_like_functions(db: *mut Sqlite3,
     case_sensitive_1: i32) -> () {
     let mut p_def: *mut FuncDef = core::ptr::null_mut();
@@ -4930,6 +5493,9 @@ pub extern "C" fn sqlite3_register_like_functions(db: *mut Sqlite3,
                             0 as u8)
                     };
                 { let _ = 0; };
+
+                /// The sqlite3CreateFunc() call above cannot fail
+                ///* because the "like" SQL-function already exists
                 unsafe { (*p_def).func_flags |= flags as u32 };
                 unsafe { (*p_def).func_flags &= !2097152 as u32 };
                 break '__c53;
@@ -4939,7 +5505,23 @@ pub extern "C" fn sqlite3_register_like_functions(db: *mut Sqlite3,
     }
 }
 
+///* pExpr points to an expression which implements a function.  If
+///* it is appropriate to apply the LIKE optimization to that function
+///* then set aWc[0] through aWc[2] to the wildcard characters and the
+///* escape character and then return TRUE.  If the function is not a
+///* LIKE-style function then return FALSE.
+///*
+///* The expression "a LIKE b ESCAPE c" is only considered a valid LIKE
+///* operator if c is a string literal that is exactly one byte in length.
+///* That one byte is stored in aWc[3].  aWc[3] is set to zero if there is
+///* no ESCAPE clause.
+///*
+///* *pIsNocase is set to true if uppercase and lowercase are equivalent for
+///* the function (default for LIKE).  If the function makes the distinction
+///* between uppercase and lowercase (as does GLOB) then *pIsNocase is set to
+///* false.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_is_like_function(db: *mut Sqlite3, p_expr_1: &Expr,
     p_is_nocase_1: &mut i32, a_wc_1: *mut i8) -> i32 {
     unsafe {
@@ -4960,6 +5542,10 @@ pub extern "C" fn sqlite3_is_like_function(db: *mut Sqlite3, p_expr_1: &Expr,
                 unsafe { (*p_def).func_flags } & 4 as u32 == 0 as u32 {
             return 0;
         }
+
+        /// The memcpy() statement assumes that the wildcard characters are
+        ///* the first three statements in the compareInfo structure.  The
+        ///* asserts() that follow verify that assumption
         unsafe {
             memcpy(a_wc_1 as *mut (),
                 unsafe { (*p_def).p_user_data } as *const (), 3 as u64)

@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -19,10 +25,12 @@ struct Decimal {
     a: *mut i8,
 }
 
+///* Release memory held by a Decimal, but do not free the object itself.
 extern "C" fn decimal_clear(p: &Decimal) -> () {
     unsafe { sqlite3_free((*p).a as *mut ()) };
 }
 
+///* Destroy a Decimal object
 extern "C" fn decimal_free(p: *mut Decimal) -> () {
     if !(p).is_null() {
         decimal_clear(unsafe { &*p });
@@ -30,6 +38,11 @@ extern "C" fn decimal_free(p: *mut Decimal) -> () {
     }
 }
 
+///* Allocate a new Decimal object initialized to the text in zIn[].
+///* Return NULL if any kind of error occurs.
+///*
+///* Note that zIn[] is not necessarily zero-terminated.  Always
+///* respect the boundary imposed by the n argument.
 extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -397,6 +410,12 @@ extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     unreachable!();
 }
 
+///* Multiply A by B.   A := A * B
+///*
+///* All significant digits after the decimal point are retained.
+///* Trailing zeros after the decimal point are omitted as long as
+///* the number of digits after the decimal point is no less than
+///* either the number of digits in either input.
 extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
     let mut acc: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -579,8 +598,11 @@ extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
     }
 }
 
+///* Create a new Decimal object that contains an integer power of 2.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
+    /// The result to be returned
     let mut p_x: *mut Decimal = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -663,9 +685,15 @@ extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
             }
         }
     }
+
+    /// The result to be returned
+    /// Multiplier
+    /// Exit by break
     unreachable!();
 }
 
+/// Forward reference
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     let mut m: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut a: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -696,6 +724,8 @@ extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
         e = e - 1075;
         if e > 971 { return core::ptr::null_mut(); }
     }
+
+    /// At this point m is the integer significand and e is the exponent
     unsafe {
         sqlite3_snprintf(core::mem::size_of::<[i8; 100]>() as i32,
             &raw mut z_num[0 as usize] as *mut i8,
@@ -713,6 +743,15 @@ extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     return p_a;
 }
 
+///* Allocate a new Decimal object from an sqlite3_value.  Return a pointer
+///* to the new object, or NULL if there is an error.  If the pCtx argument
+///* is not NULL, then errors are reported on it as well.
+///*
+///* If the pIn argument is SQLITE_TEXT or SQLITE_INTEGER, it is converted
+///* directly into a Decimal.  For SQLITE_FLOAT or for SQLITE_BLOB of length
+///* 8 bytes, the resulting double value is expanded into its decimal equivalent.
+///* If pIn is NULL or if it is a BLOB that is not exactly 8 bytes in length,
+///* then NULL is returned.
 extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     p_in_1: *mut Sqlite3Value, b_text_only_1: i32) -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -842,6 +881,7 @@ extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     unreachable!();
 }
 
+///* Make the given Decimal the result.
 extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
     -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -927,6 +967,7 @@ extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
     };
 }
 
+/// Forward declaration
 extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
     -> () {
     let mut n_add_sig: i32 = 0;
@@ -971,6 +1012,8 @@ extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
     }
 }
 
+///* Round a decimal value to N significant digits.  N must be positive.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
     let mut i: i32 = 0;
     let mut n_zero: i32 = 0;
@@ -1009,6 +1052,8 @@ extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
                 unsafe { (*p).n_frac });
             if unsafe { (*p).oom } != 0 { return; }
         }
+
+        /// Do the rounding
         {
             let __p =
                 unsafe { &mut *unsafe { (*p).a.offset((n_1 - 1) as isize) } };
@@ -1053,15 +1098,26 @@ extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
     };
 }
 
+///* Make the given Decimal the result in an format similar to  '%+#e'.
+///* In other words, show exponential notation with leading and trailing
+///* zeros omitted.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
     p: *const Decimal, mut n_1: i32) -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// The output buffer
     let mut i: i32 = 0;
+    /// Loop counter
     let mut n_zero: i32 = 0;
+    /// Number of leading zeros
     let mut n_digit: i32 = 0;
+    /// Number of digits not counting trailing zeros
     let mut n_frac: i32 = 0;
+    /// Digits to the right of the decimal point
     let mut exp: i32 = 0;
+    /// Exponent value
     let mut zero: i8 = 0 as i8;
+    /// Zero value
     let mut a: *const i8 = core::ptr::null();
     if p == core::ptr::null_mut() || unsafe { (*p).oom } != 0 {
         unsafe { sqlite3_result_error_nomem(p_ctx_1) };
@@ -1152,6 +1208,15 @@ extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
     };
 }
 
+///* Compare to Decimal objects.  Return negative, 0, or positive if the
+///* first object is less than, equal to, or greater than the second.
+///*
+///* Preconditions for this routine:
+///*
+///*    pA!=0
+///*    pA->isNull==0
+///*    pB!=0
+///*    pB->isNull==0
 extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     -> i32 {
     let mut n_a_sig: i32 = 0;
@@ -1222,6 +1287,10 @@ extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     return rc;
 }
 
+///* SQL Function:   decimal_cmp(X, Y)
+///*
+///* Return negative, zero, or positive if X is less then, equal to, or
+///* greater than Y.
 extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
@@ -1253,6 +1322,9 @@ extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+///* Add the value pB into pA.   A := A + B.
+///*
+///* Both pA and pB might become denormalized by this routine.
 extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
     let mut n_sig: i32 = 0;
     let mut n_frac: i32 = 0;
@@ -1363,6 +1435,17 @@ extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
     }
 }
 
+///* SQL Function:   decimal(X)
+///* OR:             decimal_exp(X)
+///*
+///* Convert input X into decimal and then back into text.
+///*
+///* If X is originally a float, then a full decimal expansion of that floating
+///* point value is done.  Or if X is an 8-byte blob, it is interpreted
+///* as a float and similarly expanded.
+///*
+///* The decimal_exp(X) function returns the result in exponential notation.
+///* decimal(X) returns a complete decimal, without the e+NNN at the end.
 extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut Decimal =
@@ -1380,6 +1463,7 @@ extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Compare text in decimal order.
 extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -1396,6 +1480,10 @@ extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     return rc;
 }
 
+///* SQL Function:   decimal_add(X, Y)
+///*                 decimal_sub(X, Y)
+///*
+///* Return the sum or difference of X and Y.
 extern "C" fn decimal_add_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -1425,6 +1513,10 @@ extern "C" fn decimal_sub_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+/// Aggregate function:   decimal_sum(X)
+///*
+///* Works like sum() except that it uses decimal arithmetic for unlimited
+///* precision.
 extern "C" fn decimal_sum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -1497,6 +1589,9 @@ extern "C" fn decimal_sum_finalize(context: *mut Sqlite3Context) -> () {
     decimal_clear(unsafe { &*p });
 }
 
+///* SQL Function:   decimal_mul(X, Y)
+///*
+///* Return the product of X and Y.
 extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -1523,6 +1618,9 @@ extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+///* SQL Function:   decimal_pow2(N)
+///*
+///* Return the N-th power of 2.  N must be an integer.
 extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -1538,12 +1636,15 @@ extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_decimal_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut i: u32 = 0 as u32;
         { let _ = pz_err_msg_1; };
+
+        /// Unused parameter
         { let _ = p_api_1; };
         {
             i = 0 as u32;

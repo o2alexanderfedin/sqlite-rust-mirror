@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Implementation of the ieee754() function
 extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if argc == 1 {
@@ -163,6 +170,7 @@ extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Functions to convert between blobs and floats.
 extern "C" fn ieee754func_from_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -244,6 +252,9 @@ extern "C" fn ieee754func_to_blob(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Functions to convert between 64-bit integers and floats.
+///*
+///* The bit patterns are copied.  The numeric values are different.
 extern "C" fn ieee754func_from_int(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -280,6 +291,17 @@ extern "C" fn ieee754func_to_int(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL Function:   ieee754_inc(r,N)
+///*
+///* Move the floating point value r by N quantums and return the new
+///* values.
+///*
+///* Behind the scenes: this routine merely casts r into a 64-bit unsigned
+///* integer, adds N, then casts the value back into float.
+///*
+///* Example:  To find the smallest positive number:
+///*
+///*     SELECT ieee754_inc(0.0,+1);
 extern "C" fn ieee754inc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut r: f64 = 0.0;

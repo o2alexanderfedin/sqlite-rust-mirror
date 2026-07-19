@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AggInfo, AggInfoCol, AggInfoFunc, AuthContext, Bft, Bitmask, Bitvec,
+    BusyHandler, CollSeq, Column, Cte, CteUse, DbFixer, Expr, ExprList,
+    ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef, FuncDefHash,
+    FuncDestructor, IdList, IdListItem, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -414,11 +430,18 @@ struct CheckOnCtx {
     p_parent: *mut CheckOnCtx,
 }
 
+///* Return a pointer to the right-most SELECT statement in a compound.
 extern "C" fn find_rightmost(mut p: *mut Select) -> *mut Select {
     while !(unsafe { (*p).p_next }).is_null() { p = unsafe { (*p).p_next }; }
     return p;
 }
 
+///* If the SELECT passed as the second argument has an associated WITH
+///* clause, pop it from the stack stored as part of the Parse object.
+///*
+///* This function is used as the xSelectCallback2() callback by
+///* sqlite3SelectExpand() when walking a SELECT tree to resolve table
+///* names and other FROM clause elements.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_pop_with(p_walker: *mut Walker,
     p: *mut Select) -> () {
@@ -434,6 +457,7 @@ pub extern "C" fn sqlite3_select_pop_with(p_walker: *mut Walker,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
     -> *const i8 {
     unsafe {
@@ -446,8 +470,13 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
             match (*p_expr_1).op {
                 168 => {
                     {
+                        /// The expression is a column. Locate the table the column is being
+                        ///* extracted from in NameContext.pSrcList. This table may be real
+                        ///* database table or a subquery.
                         let mut p_tab: *const Table = core::ptr::null();
+                        /// Table structure column is extracted from
                         let mut p_s: *const Select = core::ptr::null();
+                        /// Select the column is extracted from
                         let i_col: i32 = (*p_expr_1).i_column as i32;
                         while !(p_nc_1).is_null() && (p_tab).is_null() as i32 != 0 {
                             let p_tab_list: *const SrcList =
@@ -486,11 +515,34 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
                                 } else { p_s = core::ptr::null_mut(); }
                             } else { p_nc_1 = unsafe { (*p_nc_1).p_next }; }
                         }
-                        if p_tab == core::ptr::null_mut() { break '__s1; }
+                        if p_tab == core::ptr::null_mut() {
+
+                            /// At one time, code such as "SELECT new.x" within a trigger would
+                            ///* cause this condition to run.  Since then, we have restructured how
+                            ///* trigger code is generated and so this condition is no longer
+                            ///* possible. However, it can still be true for statements like
+                            ///* the following:
+                            ///*
+                            ///*   CREATE TABLE t1(col INTEGER);
+                            ///*   SELECT (SELECT t1.col) FROM FROM t1;
+                            ///*
+                            ///* when columnType() is called on the expression "t1.col" in the
+                            ///* sub-select. In this case, set the column type to NULL, even
+                            ///* though it should really be "INTEGER".
+                            ///*
+                            ///* This is not a problem, as the column type of "t1.col" is never
+                            ///* used. When columnType() is called on the expression
+                            ///* "(SELECT t1.col)", the correct type is returned (see the TK_SELECT
+                            ///* branch below.
+                            break '__s1;
+                        }
                         { let _ = 0; };
                         if !(p_s).is_null() {
                             if i_col < unsafe { (*unsafe { (*p_s).p_e_list }).n_expr }
                                     && ((0 == 0) as i32 != 0 || i_col >= 0) {
+                                /// If iCol is less than zero, then the expression requests the
+                                ///* rowid of the sub-select or view. This expression is legal (see
+                                ///* test case misc2.2.2) - it always evaluates to NULL.
                                 let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
                                 let mut p: *mut Expr =
                                     unsafe {
@@ -503,6 +555,8 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
                                 z_type = column_type_impl(&mut s_nc, unsafe { &*p });
                             }
                         } else {
+
+                            /// A real table or a CTE table
                             { let _ = 0; };
                             { let _ = 0; };
                             if i_col < 0 {
@@ -519,6 +573,9 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
                         break '__s1;
                     }
                     {
+                        /// The expression is a sub-select. Return the declaration type and
+                        ///* origin info for the single column in the result set of the SELECT
+                        ///* statement.
                         let mut s_nc_1: NameContext =
                             unsafe { core::mem::zeroed() };
                         let mut p_s_1: *const Select = core::ptr::null();
@@ -539,6 +596,9 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
                 }
                 139 => {
                     {
+                        /// The expression is a sub-select. Return the declaration type and
+                        ///* origin info for the single column in the result set of the SELECT
+                        ///* statement.
                         let mut s_nc_1: NameContext =
                             unsafe { core::mem::zeroed() };
                         let mut p_s_1: *const Select = core::ptr::null();
@@ -564,6 +624,8 @@ extern "C" fn column_type_impl(mut p_nc_1: *mut NameContext, p_expr_1: &Expr)
     }
 }
 
+///* Generate code that will tell the VDBE the declaration types of columns
+///* in the result set.
 extern "C" fn generate_column_types(p_parse_1: *mut Parse,
     p_tab_list_1: *mut SrcList, p_e_list_1: &ExprList) -> () {
     unsafe {
@@ -601,7 +663,36 @@ extern "C" fn generate_column_types(p_parse_1: *mut Parse,
     }
 }
 
+///* Compute the column names for a SELECT statement.
+///*
+///* The only guarantee that SQLite makes about column names is that if the
+///* column has an AS clause assigning it a name, that will be the name used.
+///* That is the only documented guarantee.  However, countless applications
+///* developed over the years have made baseless assumptions about column names
+///* and will break if those assumptions changes.  Hence, use extreme caution
+///* when modifying this routine to avoid breaking legacy.
+///*
+///* See Also: sqlite3ColumnsFromExprList()
+///*
+///* The PRAGMA short_column_names and PRAGMA full_column_names settings are
+///* deprecated.  The default setting is short=ON, full=OFF.  99.9% of all
+///* applications should operate this way.  Nevertheless, we need to support the
+///* other modes for legacy:
+///*
+///*    short=OFF, full=OFF:      Column name is the text of the expression has it
+///*                              originally appears in the SELECT statement.  In
+///*                              other words, the zSpan of the result expression.
+///*
+///*    short=ON, full=OFF:       (This is the default setting).  If the result
+///*                              refers directly to a table column, then the
+///*                              result column name is just the table column
+///*                              name: COLUMN.  Otherwise use zSpan.
+///*
+///*    full=ON, short=ANY:       If the result refers directly to a table column,
+///*                              then the result column name with the table name
+///*                              prefix, ex: TABLE.COLUMN.  Otherwise use zSpan.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_generate_column_names(p_parse: *mut Parse,
     mut p_select: *mut Select) -> () {
     unsafe {
@@ -612,6 +703,7 @@ pub extern "C" fn sqlite3_generate_column_names(p_parse: *mut Parse,
         let mut p_e_list: *mut ExprList = core::ptr::null_mut();
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
         let mut full_name: i32 = 0;
+        /// TABLE.COLUMN if no AS clause and is a direct table ref
         let mut src_name: i32 = 0;
         if unsafe { (*p_parse).col_names_set() } != 0 { return; }
         while !(unsafe { (*p_select).p_prior }).is_null() {
@@ -641,6 +733,8 @@ pub extern "C" fn sqlite3_generate_column_names(p_parse: *mut Parse,
                             } as *const Expr;
                     { let _ = 0; };
                     { let _ = 0; };
+
+                    /// Agg processing has not run yet
                     { let _ = 0; };
                     if !(unsafe {
                                             (*(unsafe { (*p_e_list).a.as_ptr() } as
@@ -650,6 +744,7 @@ pub extern "C" fn sqlite3_generate_column_names(p_parse: *mut Parse,
                                         (*(unsafe { (*p_e_list).a.as_ptr() } as
                                                             *mut ExprListItem).offset(i as isize)).fg.e_e_name()
                                     } as i32 == 0 {
+                        /// An AS clause always takes first priority
                         let z_name: *const i8 =
                             unsafe {
                                     (*(unsafe { (*p_e_list).a.as_ptr() } as
@@ -739,22 +834,51 @@ pub extern "C" fn sqlite3_generate_column_names(p_parse: *mut Parse,
     }
 }
 
+///* Given an expression list (which is really the list of expressions
+///* that form the result set of a SELECT statement) compute appropriate
+///* column names for a table that would hold the expression list.
+///*
+///* All column names will be unique.
+///*
+///* Only the column names are computed.  Column.zType, Column.zColl,
+///* and other fields of Column are zeroed.
+///*
+///* Return SQLITE_OK on success.  If a memory allocation error occurs,
+///* store NULL in *paCol and 0 in *pnCol and return SQLITE_NOMEM.
+///*
+///* The only guarantee that SQLite makes about column names is that if the
+///* column has an AS clause assigning it a name, that will be the name used.
+///* That is the only documented guarantee.  However, countless applications
+///* developed over the years have made baseless assumptions about column names
+///* and will break if those assumptions changes.  Hence, use extreme caution
+///* when modifying this routine to avoid breaking legacy.
+///*
+///* See Also: sqlite3GenerateColumnNames()
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_columns_from_expr_list(p_parse: *mut Parse,
     p_e_list: *mut ExprList, pn_col: &mut i16, pa_col: &mut *mut Column)
     -> i32 {
     unsafe {
         unsafe {
             let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+            /// Database connection
             let mut i: i32 = 0;
             let mut j: i32 = 0;
+            /// Loop counters
             let mut cnt: u32 = 0 as u32;
+            /// Index added to make the name unique
             let mut a_col: *mut Column = core::ptr::null_mut();
             let mut p_col: *mut Column = core::ptr::null_mut();
+            /// For looping over result columns
             let mut n_col: i32 = 0;
+            /// Number of columns in the result set
             let mut z_name: *mut i8 = core::ptr::null_mut();
+            /// Column name
             let mut n_name: i32 = 0;
+            /// Size of name in zName[]
             let mut ht: Hash = unsafe { core::mem::zeroed() };
+            /// Hash table of column names
             let mut p_tab: *const Table = core::ptr::null();
             unsafe { sqlite3_hash_init(&mut ht) };
             if !(p_e_list).is_null() {
@@ -802,6 +926,7 @@ pub extern "C" fn sqlite3_columns_from_expr_list(p_parse: *mut Parse,
                                         unsafe { (*p_col_expr).flags } &
                                                 (16777216 | 33554432) as u32 == 0 as u32 &&
                                     unsafe { (*p_col_expr).y.p_tab } != core::ptr::null_mut() {
+                                /// For columns use the column name name
                                 let mut i_col: i32 =
                                     unsafe { (*p_col_expr).i_column } as i32;
                                 p_tab = unsafe { (*p_col_expr).y.p_tab };
@@ -817,7 +942,11 @@ pub extern "C" fn sqlite3_columns_from_expr_list(p_parse: *mut Parse,
                             } else if unsafe { (*p_col_expr).op } as i32 == 60 {
                                 { let _ = 0; };
                                 z_name = unsafe { (*p_col_expr).u.z_token };
-                            } else { { let _ = 0; }; }
+                            } else {
+
+                                /// Use the original text of the column expression as its name
+                                { let _ = 0; };
+                            }
                         }
                         if !(z_name).is_null() &&
                                 (unsafe { sqlite3_is_true_or_false(z_name as *const i8) } ==
@@ -831,7 +960,10 @@ pub extern "C" fn sqlite3_columns_from_expr_list(p_parse: *mut Parse,
                                         c"column%d".as_ptr() as *mut i8 as *const i8, i + 1)
                                 };
                         }
-                        cnt = 0 as u32;
+
+                        /// Make sure the column name is unique.  If the name is not unique,
+                        ///* append an integer to the name so that it becomes unique.
+                        (cnt = 0 as u32);
                         while !(z_name).is_null() &&
                                 {
                                         p_collide =
@@ -934,7 +1066,17 @@ pub extern "C" fn sqlite3_columns_from_expr_list(p_parse: *mut Parse,
     }
 }
 
+///* pTab is a transient Table object that represents a subquery of some
+///* kind (maybe a parenthesized subquery in the FROM clause of a larger
+///* query, or a VIEW, or a CTE).  This routine computes type information
+///* for that Table object based on the Select object that implements the
+///* subquery.  For the purposes of this routine, "type information" means:
+///*
+///*    *   The datatype name, as it might appear in a CREATE TABLE statement
+///*    *   Which collating sequence to use for the column
+///*    *   The affinity of the column
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_subquery_column_types(p_parse: *mut Parse,
     p_tab: &mut Table, mut p_select: *mut Select, aff: i8) -> () {
     unsafe {
@@ -978,6 +1120,8 @@ pub extern "C" fn sqlite3_subquery_column_types(p_parse: *mut Parse,
                         (*p_tab).tab_flags |=
                             (unsafe { (*p_col).col_flags } as i32 & 98) as u32;
                         p = unsafe { (*a.offset(i as isize)).p_expr };
+
+                        /// pCol->szEst = ... // Column size est for SELECT tables never used
                         unsafe {
                             (*p_col).affinity =
                                 unsafe { sqlite3_expr_affinity(p as *const Expr) }
@@ -1123,6 +1267,26 @@ pub extern "C" fn sqlite3_subquery_column_types(p_parse: *mut Parse,
     }
 }
 
+///* Detect compound SELECT statements that use an ORDER BY clause with
+///* an alternative collating sequence.
+///*
+///*    SELECT ... FROM t1 EXCEPT SELECT ... FROM t2 ORDER BY .. COLLATE ...
+///*
+///* These are rewritten as a subquery:
+///*
+///*    SELECT * FROM (SELECT ... FROM t1 EXCEPT SELECT ... FROM t2)
+///*     ORDER BY ... COLLATE ...
+///*
+///* This transformation is necessary because the multiSelectByMerge() routine
+///* above that generates the code for a compound SELECT with an ORDER BY clause
+///* uses a merge algorithm that requires the same collating sequence on the
+///* result columns as on the ORDER BY clause.  See ticket
+///* http://sqlite.org/src/info/6709574d2a
+///*
+///* This transformation is only needed for EXCEPT, INTERSECT, and UNION.
+///* The UNION ALL operator works fine with multiSelectByMerge() even when
+///* there are COLLATE terms in the ORDER BY.
+#[allow(unused_doc_comments)]
 extern "C" fn convert_compound_select_to_subquery(p_walker_1: *mut Walker,
     p: *mut Select) -> i32 {
     unsafe {
@@ -1171,7 +1335,9 @@ extern "C" fn convert_compound_select_to_subquery(p_walker_1: *mut Walker,
             }
         }
         if i < 0 { return 0; }
-        p_parse = unsafe { (*p_walker_1).p_parse };
+
+        /// If we reach this point, that means the transformation is required.
+        (p_parse = unsafe { (*p_walker_1).p_parse });
         db = unsafe { (*p_parse).db };
         p_new =
             unsafe {
@@ -1223,6 +1389,22 @@ extern "C" fn convert_compound_select_to_subquery(p_walker_1: *mut Walker,
     }
 }
 
+/// The code generator maintains a stack of active WITH clauses
+///* with the inner-most WITH clause being at the top of the stack.
+///*
+///* This routine pushes the WITH clause passed as the second argument
+///* onto the top of the stack. If argument bFree is true, then this
+///* WITH clause will never be popped from the stack but should instead
+///* be freed along with the Parse object. In other cases, when
+///* bFree==0, the With object will be freed along with the SELECT
+///* statement with which it is associated.
+///*
+///* This routine returns a copy of pWith.  Or, if bFree is true and
+///* the pWith object is destroyed immediately due to an OOM condition,
+///* then this routine return NULL.
+///*
+///* If bFree is true, do not continue to use the pWith pointer after
+///* calling this routine,  Instead, use only the return value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_with_push(p_parse: *mut Parse,
     mut p_with: *mut With, b_free: u8) -> *mut With {
@@ -1246,7 +1428,13 @@ pub extern "C" fn sqlite3_with_push(p_parse: *mut Parse,
     return p_with;
 }
 
+///* The SrcItem structure passed as the second argument represents a
+///* sub-query in the FROM clause of a SELECT statement. This function
+///* allocates and populates the SrcItem.pTab object. If successful,
+///* SQLITE_OK is returned. Otherwise, if an OOM error is encountered,
+///* SQLITE_NOMEM.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expand_subquery(p_parse: *mut Parse,
     p_from: *mut SrcItem) -> i32 {
     unsafe {
@@ -1295,11 +1483,21 @@ pub extern "C" fn sqlite3_expand_subquery(p_parse: *mut Parse,
         unsafe { (*p_tab).e_tab_type = 2 as u8 };
         unsafe { (*p_tab).n_row_log_est = 200 as LogEst };
         { let _ = 0; };
+
+        /// The usual case - do not allow ROWID on a subquery
         unsafe { (*p_tab).tab_flags |= (16384 | 512) as u32 };
         return if unsafe { (*p_parse).n_err } != 0 { 1 } else { 0 };
     }
 }
 
+///* Argument pWith (which may be NULL) points to a linked list of nested
+///* WITH contexts, from inner to outermost. If the table identified by
+///* FROM clause element pItem is really a common-table-expression (CTE)
+///* then return a pointer to the CTE definition for that table. Otherwise
+///* return NULL.
+///*
+///* If a non-NULL value is returned, set *ppContext to point to the With
+///* object that the returned CTE belongs to.
 extern "C" fn search_with(p_with_1: *mut With, p_item_1: &SrcItem,
     pp_context_1: &mut *mut With) -> *mut Cte {
     let z_name: *const i8 = (*p_item_1).z_name as *const i8;
@@ -1344,6 +1542,9 @@ extern "C" fn search_with(p_with_1: *mut With, p_item_1: &SrcItem,
     return core::ptr::null_mut();
 }
 
+///* Check to see if the FROM clause term pFrom has table-valued function
+///* arguments.  If it does, leave an error message in pParse and return
+///* non-zero, since pFrom is not allowed to be a table-valued function.
 extern "C" fn cannot_be_function(p_parse_1: *mut Parse, p_from_1: &SrcItem)
     -> i32 {
     if (*p_from_1).fg.is_tab_func() != 0 {
@@ -1357,23 +1558,56 @@ extern "C" fn cannot_be_function(p_parse_1: *mut Parse, p_from_1: &SrcItem)
     return 0;
 }
 
+///* This function checks if argument pFrom refers to a CTE declared by
+///* a WITH clause on the stack currently maintained by the parser (on the
+///* pParse->pWith linked list).  And if currently processing a CTE
+///* CTE expression, through routine checks to see if the reference is
+///* a recursive reference to the CTE.
+///*
+///* If pFrom matches a CTE according to either of these two above, pFrom->pSTab
+///* and other fields are populated accordingly.
+///*
+///* Return 0 if no match is found.
+///* Return 1 if a match is found.
+///* Return 2 if an error condition is detected.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_from_term_to_cte(p_parse_1: *mut Parse,
     p_walker_1: *mut Walker, p_from_1: *mut SrcItem) -> i32 {
     unsafe {
         let mut p_cte: *mut Cte = core::ptr::null_mut();
+        /// Matched CTE (or NULL if no match)
         let mut p_with: *mut With = core::ptr::null_mut();
+
+        /// The matching WITH
         { let _ = 0; };
         if unsafe { (*p_parse_1).p_with } == core::ptr::null_mut() {
+
+            /// There are no WITH clauses in the stack.  No match is possible
             return 0;
         }
-        if unsafe { (*p_parse_1).n_err } != 0 { return 0; }
+        if unsafe { (*p_parse_1).n_err } != 0 {
+
+            /// Prior errors might have left pParse->pWith in a goofy state, so
+            ///* go no further.
+            return 0;
+        }
         { let _ = 0; };
         if unsafe { (*p_from_1).fg.fixed_schema() } as i32 == 0 &&
                 unsafe { (*p_from_1).u4.z_database } != core::ptr::null_mut()
             {
+
+            /// The FROM term contains a schema qualifier (ex: main.t1) and so
+            ///* it cannot possibly be a CTE reference.
             return 0;
         }
-        if unsafe { (*p_from_1).fg.not_cte() } != 0 { return 0; }
+        if unsafe { (*p_from_1).fg.not_cte() } != 0 {
+
+            /// The FROM term is specifically excluded from matching a CTE.
+            ///*   (1)  It is part of a trigger that used to have zDatabase but had
+            ///*        zDatabase removed by sqlite3FixTriggerStep().
+            ///*   (2)  This is the first term in the FROM clause of an UPDATE.
+            return 0;
+        }
         p_cte =
             search_with(unsafe { (*p_parse_1).p_with }, unsafe { &*p_from_1 },
                 &mut p_with);
@@ -1383,10 +1617,15 @@ extern "C" fn resolve_from_term_to_cte(p_parse_1: *mut Parse,
             let mut p_e_list: *mut ExprList = core::ptr::null_mut();
             let mut p_sel: *mut Select = core::ptr::null_mut();
             let mut p_left: *const Select = core::ptr::null();
+            /// Left-most SELECT statement
             let mut p_rec_term: *mut Select = core::ptr::null_mut();
+            /// Left-most recursive term
             let mut b_may_recursive: i32 = 0;
+            /// True if compound joined by UNION [ALL]
             let mut p_saved_with: *mut With = core::ptr::null_mut();
+            /// Initial value of pParse->pWith
             let mut i_rec_tab: i32 = -1;
+            /// Cursor for recursive table
             let mut p_cte_use: *mut CteUse = core::ptr::null_mut();
             if !(unsafe { (*p_cte).z_cte_err }).is_null() {
                 unsafe {
@@ -1467,7 +1706,9 @@ extern "C" fn resolve_from_term_to_cte(p_parse_1: *mut Parse,
                 *__p += 1;
                 __t
             };
-            p_rec_term = p_sel;
+
+            /// Check if this is a recursive CTE.
+            (p_rec_term = p_sel);
             b_may_recursive =
                 (unsafe { (*p_sel).op } as i32 == 136 ||
                         unsafe { (*p_sel).op } as i32 == 135) as i32;
@@ -1618,6 +1859,11 @@ extern "C" fn resolve_from_term_to_cte(p_parse_1: *mut Parse,
     }
 }
 
+///* If the source-list item passed as an argument was augmented with an
+///* INDEXED BY clause, then try to locate the specified index. If there
+///* was such a clause and the named index cannot be found, return
+///* SQLITE_ERROR and leave an error in pParse. Otherwise, populate
+///* pFrom->pIndex and return SQLITE_OK.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_indexed_by_lookup(p_parse: *mut Parse,
     p_from: &mut SrcItem) -> i32 {
@@ -1656,7 +1902,10 @@ pub extern "C" fn sqlite3_indexed_by_lookup(p_parse: *mut Parse,
     }
 }
 
+///* Return the index of a column in a table.  Return -1 if the column
+///* is not contained in the table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_column_index(p_tab: &Table, z_col: *const i8)
     -> i32 {
     let mut i: i32 = 0;
@@ -1666,9 +1915,11 @@ pub extern "C" fn sqlite3_column_index(p_tab: &Table, z_col: *const i8)
     h = unsafe { sqlite3_str_i_hash(z_col) };
     a_col = (*p_tab).a_col as *const Column;
     n_col = (*p_tab).n_col as i32;
-    i =
+
+    /// See if the aHx gives us a lucky match
+    (i =
         (*p_tab).a_hx[(h as u64 % core::mem::size_of::<[u8; 16]>() as u64) as
-                    usize] as i32;
+                    usize] as i32);
     { let _ = 0; };
     if unsafe { (*a_col.offset(i as isize)).h_name } as i32 == h as i32 &&
             unsafe {
@@ -1678,7 +1929,9 @@ pub extern "C" fn sqlite3_column_index(p_tab: &Table, z_col: *const i8)
                 } == 0 {
         return i;
     }
-    i = 0;
+
+    /// No lucky match from the hash table.  Do a full search.
+    (i = 0);
     loop {
         if unsafe { (*a_col.offset(i as isize)).h_name } as i32 == h as i32 &&
                 unsafe {
@@ -1694,6 +1947,7 @@ pub extern "C" fn sqlite3_column_index(p_tab: &Table, z_col: *const i8)
     return -1;
 }
 
+///* Mark a subquery result column as having been used.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_item_column_used(p_item: &SrcItem, i_col: i32)
     -> () {
@@ -1720,11 +1974,23 @@ pub extern "C" fn sqlite3_src_item_column_used(p_item: &SrcItem, i_col: i32)
     }
 }
 
+///* Search the tables iStart..iEnd (inclusive) in pSrc, looking for a
+///* table that has a column named zCol.  The search is left-to-right.
+///* The first match found is returned.
+///*
+///* When found, set *piTab and *piCol to the table index and column index
+///* of the matching column and return TRUE.
+///*
+///* If not found, return FALSE.
+#[allow(unused_doc_comments)]
 extern "C" fn table_and_column_index(p_src_1: &mut SrcList, i_start_1: i32,
     i_end_1: i32, z_col_1: *const i8, pi_tab_1: *mut i32, pi_col_1: &mut i32,
     b_ignore_hidden_1: i32) -> i32 {
     let mut i: i32 = 0;
+    /// For looping over tables in pSrc
     let mut i_col: i32 = 0;
+
+    /// Index of column matching zCol
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -1769,6 +2035,30 @@ extern "C" fn table_and_column_index(p_src_1: &mut SrcList, i_start_1: i32,
     return 0;
 }
 
+///* Set the EP_OuterON property on all terms of the given expression.
+///* And set the Expr.w.iJoin to iTable for every term in the
+///* expression.
+///*
+///* The EP_OuterON property is used on terms of an expression to tell
+///* the OUTER JOIN processing logic that this term is part of the
+///* join restriction specified in the ON or USING clause and not a part
+///* of the more general WHERE clause.  These terms are moved over to the
+///* WHERE clause during join processing but we need to remember that they
+///* originated in the ON or USING clause.
+///*
+///* The Expr.w.iJoin tells the WHERE clause processing that the
+///* expression depends on table w.iJoin even if that table is not
+///* explicitly mentioned in the expression.  That information is needed
+///* for cases like this:
+///*
+///*    SELECT * FROM t1 LEFT JOIN t2 ON t1.a=t2.b AND t1.x=5
+///*
+///* The where clause needs to defer the handling of the t1.x=5
+///* term until after the t2 loop of the join.  In that way, a
+///* NULL t2 row will be inserted whenever t1.x!=5.  If we do not
+///* defer the handling of t1.x=5, it will be processed immediately
+///* after the t1 loop and rows with t1.x!=5 will never appear in
+///* the output, which is incorrect.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_join_expr(mut p: *mut Expr, i_table: i32,
     join_flag: u32) -> () {
@@ -1805,16 +2095,41 @@ pub extern "C" fn sqlite3_set_join_expr(mut p: *mut Expr, i_table: i32,
     }
 }
 
+///* This routine processes the join information for a SELECT statement.
+///*
+///*   *  A NATURAL join is converted into a USING join.  After that, we
+///*      do not need to be concerned with NATURAL joins and we only have
+///*      think about USING joins.
+///*
+///*   *  ON and USING clauses result in extra terms being added to the
+///*      WHERE clause to enforce the specified constraints.  The extra
+///*      WHERE clause terms will be tagged with EP_OuterON or
+///*      EP_InnerON so that we know that they originated in ON/USING.
+///*
+///* The terms of a FROM clause are contained in the Select.pSrc structure.
+///* The left most table is the first entry in Select.pSrc.  The right-most
+///* table is the last entry.  The join operator is held in the entry to
+///* the right.  Thus entry 1 contains the join operator for the join between
+///* entries 0 and 1.  Any ON or USING clauses associated with the join are
+///* also attached to the right entry.
+///*
+///* This routine returns the number of errors encountered.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_process_join(p_parse_1: *mut Parse, p: &mut Select)
     -> i32 {
     unsafe {
         unsafe {
             let mut p_src: *mut SrcList = core::ptr::null_mut();
+            /// All tables in the FROM clause
             let mut i: i32 = 0;
             let mut j: i32 = 0;
+            /// Loop counters
             let mut p_left: *mut SrcItem = core::ptr::null_mut();
+            /// Left table being joined
             let mut p_right: *mut SrcItem = core::ptr::null_mut();
-            p_src = (*p).p_src;
+
+            /// Right table being joined
+            (p_src = (*p).p_src);
             p_left =
                 unsafe {
                     &mut *(unsafe { (*p_src).a.as_ptr() } as
@@ -1915,17 +2230,25 @@ extern "C" fn sqlite3_process_join(p_parse_1: *mut Parse, p: &mut Select)
                                     if !(j < unsafe { (*p_list).n_id }) { break '__b32; }
                                     '__c32: loop {
                                         let mut z_name_1: *mut i8 = core::ptr::null_mut();
+                                        /// Name of the term in the USING clause
                                         let mut i_left: i32 = 0;
+                                        /// Table on the left with matching column name
                                         let mut i_left_col: i32 = 0;
+                                        /// Column number of matching column on the left
                                         let mut i_right_col: i32 = 0;
+                                        /// Column number of matching column on the right
                                         let mut p_e1: *mut Expr = core::ptr::null_mut();
+                                        /// Reference to the column on the LEFT of the join
                                         let mut p_e2: *mut Expr = core::ptr::null_mut();
+                                        /// Reference to the column on the RIGHT of the join
                                         let mut p_eq: *mut Expr = core::ptr::null_mut();
-                                        z_name_1 =
+
+                                        /// Equality constraint.  pE1 == pE2
+                                        (z_name_1 =
                                             unsafe {
                                                 (*(unsafe { (*p_list).a.as_ptr() } as
                                                                 *mut IdListItem).offset(j as isize)).z_name
-                                            };
+                                            });
                                         i_right_col =
                                             sqlite3_column_index(unsafe { &*p_right_tab },
                                                 z_name_1 as *const i8);
@@ -1952,6 +2275,18 @@ extern "C" fn sqlite3_process_join(p_parse_1: *mut Parse, p: &mut Select)
                                                                 (*(unsafe { (*p_src).a.as_ptr() } as
                                                                                     *mut SrcItem).offset(0 as isize)).fg.jointype
                                                             } as i32 & 64 != 0 && unsafe { (*p_parse_1).n_err } == 0 {
+                                            /// This branch runs if the query contains one or more RIGHT or FULL
+                                            ///* JOINs.  If only a single table on the left side of this join
+                                            ///* contains the zName column, then this branch is a no-op.
+                                            ///* But if there are two or more tables on the left side
+                                            ///* of the join, construct a coalesce() function that gathers all
+                                            ///* such tables.  Raise an error if more than one of those references
+                                            ///* to zName is not also within a prior USING clause.
+                                            ///*
+                                            ///* We really ought to raise an error if there are two or more
+                                            ///* non-USING references to zName on the left of an INNER or LEFT
+                                            ///* JOIN.  But older versions of SQLite do not do that, so we avoid
+                                            ///* adding a new error so as to not break legacy applications.
                                             let mut p_func_args: *mut ExprList = core::ptr::null_mut();
                                             { let _ = 0; };
                                             unsafe { (*p_e1).flags |= 2097152 as u32 };
@@ -2073,6 +2408,13 @@ extern "C" fn sqlite3_process_join(p_parse_1: *mut Parse, p: &mut Select)
     }
 }
 
+///* Check the N SrcItem objects to the right of pBase.  (N might be zero!)
+///* If any of those SrcItem objects have a USING clause containing zName
+///* then return true.
+///*
+///* If N is zero, or none of the N SrcItem objects to the right of pBase
+///* contains a USING clause, or if none of the USING clauses contain zName,
+///* then return false.
 extern "C" fn in_any_using_clause(z_name_1: *const i8,
     mut p_base_1: *const SrcItem, mut n_1: i32) -> i32 {
     unsafe {
@@ -2099,6 +2441,29 @@ extern "C" fn in_any_using_clause(z_name_1: *const i8,
     }
 }
 
+///* This routine is a Walker callback for "expanding" a SELECT statement.
+///* "Expanding" means to do the following:
+///*
+///*    (1)  Make sure VDBE cursor numbers have been assigned to every
+///*         element of the FROM clause.
+///*
+///*    (2)  Fill in the pTabList->a[].pTab fields in the SrcList that
+///*         defines FROM clause.  When views appear in the FROM clause,
+///*         fill pTabList->a[].pSelect with a copy of the SELECT statement
+///*         that implements the view.  A copy is made of the view's SELECT
+///*         statement so that we can freely modify or delete that statement
+///*         without worrying about messing up the persistent representation
+///*         of the view.
+///*
+///*    (3)  Add terms to the WHERE clause to accommodate the NATURAL keyword
+///*         on joins and the ON and USING clause of joins.
+///*
+///*    (4)  Scan the list of columns in the result set (pEList) looking
+///*         for instances of the "*" operator or the TABLE.* operator.
+///*         If found, expand each "*" to be every column in every table
+///*         and TABLE.* to be every column in TABLE.
+///*
+#[allow(unused_doc_comments)]
 extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
     -> i32 {
     unsafe {
@@ -2121,6 +2486,8 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
         { let _ = 0; };
         if sel_flags as i32 & 64 != 0 { return 1; }
         if unsafe { (*p_walker_1).e_code } != 0 {
+
+            /// Renumber selId because it has been copied from a view
             unsafe {
                 (*p).sel_id =
                     {
@@ -2150,6 +2517,9 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
             unsafe { (*unsafe { (*p).p_with }).b_view = 1 };
         }
         sqlite3_with_push(p_parse, unsafe { (*p).p_with }, 0 as u8);
+
+        /// Make sure cursor numbers have been assigned to all entries in
+        ///* the FROM clause of the SELECT statement.
         unsafe { sqlite3_src_list_assign_cursors(p_parse, p_tab_list) };
         {
             {
@@ -2170,6 +2540,8 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                         { let _ = 0; };
                         p_sel =
                             unsafe { (*unsafe { (*p_from).u4.p_subq }).p_select };
+
+                        /// A sub-query in the FROM clause of a SELECT
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { sqlite3_walk_select(p_walker_1, p_sel) } != 0 {
@@ -2186,6 +2558,8 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                         p_tab = unsafe { (*p_from).p_s_tab };
                         { let _ = 0; };
                     } else {
+
+                        /// An ordinary table or view name in the FROM clause
                         { let _ = 0; };
                         unsafe {
                             (*p_from).p_s_tab =
@@ -2288,6 +2662,8 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                 };
             }
         }
+
+        /// Process NATURAL keywords, and ON and USING clauses of joins.
         { let _ = 0; };
         if unsafe { (*p_parse).n_err } != 0 ||
                 sqlite3_process_join(p_parse, unsafe { &mut *p }) != 0 {
@@ -2317,6 +2693,9 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
             }
         }
         if k < unsafe { (*p_e_list).n_expr } {
+            ///* If we get here it means the result set contains one or more "*"
+            ///* operators that need to be expanded.  Loop through each expression
+            ///* in the result set and expand them one by one.
             let a: *mut ExprListItem =
                 unsafe { (*p_e_list).a.as_ptr() } as *mut ExprListItem;
             let mut p_new: *mut ExprList = core::ptr::null_mut();
@@ -2335,11 +2714,13 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                         if unsafe { (*p_e).op } as i32 != 180 &&
                                 (unsafe { (*p_e).op } as i32 != 142 ||
                                     unsafe { (*p_right).op } as i32 != 180) {
-                            p_new =
+
+                            /// This particular expression does not need to be expanded.
+                            (p_new =
                                 unsafe {
                                     sqlite3_expr_list_append(p_parse, p_new,
                                         unsafe { (*a.offset(k as isize)).p_expr })
-                                };
+                                });
                             if !(p_new).is_null() {
                                 unsafe {
                                     (*(unsafe { (*p_new).a.as_ptr() } as
@@ -2363,8 +2744,12 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                                 (*a.offset(k as isize)).p_expr = core::ptr::null_mut()
                             };
                         } else {
+                            /// This expression is a "*" or a "TABLE.*" and needs to be
+                            ///* expanded.
                             let mut table_seen: i32 = 0;
+                            /// Set to 1 when TABLE matches
                             let mut z_t_name: *mut i8 = core::ptr::null_mut();
+                            /// text of name of TABLE
                             let mut i_err_ofst: i32 = 0;
                             if unsafe { (*p_e).op } as i32 == 142 {
                                 { let _ = 0; };
@@ -2387,12 +2772,18 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                                     if !(i < unsafe { (*p_tab_list).n_src }) { break '__b38; }
                                     '__c38: loop {
                                         let mut n_add: i32 = 0;
+                                        /// Number of cols including rowid
                                         let p_tab_1: *mut Table = unsafe { (*p_from).p_s_tab };
+                                        /// Table for this data source
                                         let mut p_nested_from: *mut ExprList =
                                             core::ptr::null_mut();
+                                        /// Result-set of a nested FROM clause
                                         let mut z_tab_name: *mut i8 = core::ptr::null_mut();
+                                        /// AS name for this data source
                                         let mut z_schema_name: *const i8 = core::ptr::null();
+                                        /// Schema name for this data source
                                         let mut i_db: i32 = 0;
+                                        /// Schema index for this data src
                                         let mut p_using: *mut IdList = core::ptr::null_mut();
                                         if { z_tab_name = unsafe { (*p_from).z_alias }; z_tab_name }
                                                 == core::ptr::null_mut() {
@@ -2542,6 +2933,9 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
                                                                         sqlite3_id_list_index(unsafe { (*p_from).u3.p_using },
                                                                             z_name)
                                                                     } >= 0 {
+
+                                                            /// In a join with a USING clause, omit columns in the
+                                                            ///* using clause from the table on the right.
                                                             break '__c40;
                                                         }
                                                     }
@@ -2705,6 +3099,17 @@ extern "C" fn select_expander(p_walker_1: *mut Walker, p: *mut Select)
     }
 }
 
+///* This routine "expands" a SELECT statement and all of its subqueries.
+///* For additional information on what it means to "expand" a SELECT
+///* statement, see the comment on the selectExpand worker callback above.
+///*
+///* Expanding a SELECT statement is the first step in processing a
+///* SELECT statement.  The SELECT statement must be expanded before
+///* name resolution is performed.
+///*
+///* If anything goes wrong, an error message is written into pParse.
+///* The calling function can detect the problem by looking at pParse->nErr
+///* and/or pParse->db->mallocFailed.
 extern "C" fn sqlite3_select_expand(p_parse_1: *mut Parse,
     p_select_1: *mut Select) -> () {
     let mut w: Walker = unsafe { core::mem::zeroed() };
@@ -2721,6 +3126,18 @@ extern "C" fn sqlite3_select_expand(p_parse_1: *mut Parse,
     unsafe { sqlite3_walk_select(&mut w, p_select_1) };
 }
 
+///* This is a Walker.xSelectCallback callback for the sqlite3SelectTypeInfo()
+///* interface.
+///*
+///* For each FROM-clause subquery, add Column.zType, Column.zColl, and
+///* Column.affinity information to the Table structure that represents
+///* the result set of that subquery.
+///*
+///* The Table structure that represents the result set was constructed
+///* by selectExpander() but the type and collation and affinity information
+///* was omitted at that point because identifiers had not yet been resolved.
+///* This routine is called after identifier resolution.
+#[allow(unused_doc_comments)]
 extern "C" fn select_add_subquery_type_info(p_walker_1: *mut Walker,
     p: *mut Select) -> () {
     unsafe {
@@ -2745,6 +3162,7 @@ extern "C" fn select_add_subquery_type_info(p_walker_1: *mut Walker,
                     { let _ = 0; };
                     if unsafe { (*p_tab).tab_flags } & 16384 as u32 != 0 as u32
                             && unsafe { (*p_from).fg.is_subquery() } != 0 {
+                        /// A sub-query in the FROM clause of a SELECT
                         let p_sel: *mut Select =
                             unsafe { (*unsafe { (*p_from).u4.p_subq }).p_select };
                         sqlite3_subquery_column_types(p_parse,
@@ -2766,6 +3184,11 @@ extern "C" fn select_add_subquery_type_info(p_walker_1: *mut Walker,
     }
 }
 
+///* This routine adds datatype and collating sequence information to
+///* the Table structures of all FROM-clause subqueries in a
+///* SELECT statement.
+///*
+///* Use this routine after name resolution.
 extern "C" fn sqlite3_select_add_type_info(p_parse_1: *mut Parse,
     p_select_1: *mut Select) -> () {
     let mut w: Walker = unsafe { core::mem::zeroed() };
@@ -2776,6 +3199,16 @@ extern "C" fn sqlite3_select_add_type_info(p_parse_1: *mut Parse,
     unsafe { sqlite3_walk_select(&mut w, p_select_1) };
 }
 
+///* This routine sets up a SELECT statement for processing.  The
+///* following is accomplished:
+///*
+///*     *  VDBE Cursor numbers are assigned to all FROM-clause terms.
+///*     *  Ephemeral Table objects are created for all FROM-clause subqueries.
+///*     *  ON and USING clauses are shifted into WHERE statements
+///*     *  Wildcards "*" and "TABLE.*" in result sets are expanded.
+///*     *  Identifiers in expression are matched to tables.
+///*
+///* This routine acts recursively on all subqueries within the SELECT.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_prep(p_parse: *mut Parse, p: *mut Select,
     p_outer_nc: *mut NameContext) -> () {
@@ -2790,6 +3223,8 @@ pub extern "C" fn sqlite3_select_prep(p_parse: *mut Parse, p: *mut Select,
     sqlite3_select_add_type_info(p_parse, p);
 }
 
+///* Given a SELECT statement, generate a Table structure that describes
+///* the result set of that SELECT.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_result_set_of_select(p_parse: *mut Parse,
     mut p_select: *mut Select, aff: i8) -> *mut Table {
@@ -2883,6 +3318,8 @@ struct RowLoadInfo {
     ecel_flags: u8,
 }
 
+///* Get a VDBE for the given parser context.  Create a new one if necessary.
+///* If an error occurs, return NULL and leave a message in pParse.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_vdbe(p_parse: *mut Parse) -> *mut Vdbe {
     if !(unsafe { (*p_parse).p_vdbe }).is_null() {
@@ -2896,6 +3333,9 @@ pub extern "C" fn sqlite3_get_vdbe(p_parse: *mut Parse) -> *mut Vdbe {
     return unsafe { sqlite3_vdbe_create(p_parse) };
 }
 
+///* If any term of pSrc, or any SF_NestedFrom sub-query, is not the same
+///* as pSrcItem but has the same alias as p0, then return true.
+///* Otherwise return false.
 extern "C" fn same_src_alias(p0: *mut SrcItem, p_src_1: &mut SrcList) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -2941,6 +3381,19 @@ extern "C" fn same_src_alias(p0: *mut SrcItem, p_src_1: &mut SrcList) -> i32 {
     }
 }
 
+/// Undo the work of sqlite3SetJoinExpr().  This is used when a LEFT JOIN
+///* is simplified into an ordinary JOIN, and when an ON expression is
+///* "pushed down" into the WHERE clause of a subquery.
+///*
+///* Convert every term that is marked with EP_OuterON and w.iJoin==iTable into
+///* an ordinary term that omits the EP_OuterON mark.  Or if iTable<0, then
+///* just clear every EP_OuterON and EP_InnerON mark from the expression tree.
+///*
+///* If nullable is true, that means that Expr p might evaluate to NULL even
+///* if it is a reference to a NOT NULL column.  This can happen, for example,
+///* if the table that p references is on the left side of a RIGHT JOIN.
+///* If nullable is true, then take care to not remove the EP_CanBeNull bit.
+///* See forum thread https://sqlite.org/forum/forumpost/b40696f50145d21c
 extern "C" fn unset_join_expr(mut p: *mut Expr, i_table_1: i32, nullable: i32)
     -> () {
     unsafe {
@@ -2985,6 +3438,8 @@ extern "C" fn unset_join_expr(mut p: *mut Expr, i_table_1: i32, nullable: i32)
     }
 }
 
+///* Return true if any of the result-set columns in the compound query
+///* have incompatible affinities on one or more arms of the compound.
 extern "C" fn compound_has_different_affinities(p: &Select) -> i32 {
     unsafe {
         let mut ii: i32 = 0;
@@ -3038,6 +3493,17 @@ extern "C" fn compound_has_different_affinities(p: &Select) -> i32 {
     }
 }
 
+///* Assign new cursor numbers to each of the items in pSrc. For each
+///* new cursor number assigned, set an entry in the aCsrMap[] array
+///* to map the old cursor number to the new:
+///*
+///*     aCsrMap[iOld+1] = iNew;
+///*
+///* The array is guaranteed by the caller to be large enough for all
+///* existing cursor numbers in pSrc.  aCsrMap[0] is the array size.
+///*
+///* If pSrc contains any sub-selects, call this routine recursively
+///* on the FROM clause of each such sub-select, with iExcept set to -1.
 extern "C" fn srclist_renumber_cursors(p_parse_1: *mut Parse,
     a_csr_map_1: *mut i32, p_src_1: &mut SrcList, i_except_1: i32) -> () {
     unsafe {
@@ -3106,6 +3572,7 @@ extern "C" fn srclist_renumber_cursors(p_parse_1: *mut Parse,
     }
 }
 
+///* *piCursor is a cursor number.  Change it if it needs to be mapped.
 extern "C" fn renumber_cursor_do_mapping(p_walker_1: &Walker,
     pi_cursor_1: &mut i32) -> () {
     unsafe {
@@ -3118,6 +3585,8 @@ extern "C" fn renumber_cursor_do_mapping(p_walker_1: &Walker,
     }
 }
 
+///* Expression walker callback used by renumberCursors() to update
+///* Expr objects to match newly assigned cursor numbers.
 extern "C" fn renumber_cursors_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -3134,6 +3603,22 @@ extern "C" fn renumber_cursors_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Assign a new cursor number to each cursor in the FROM clause (Select.pSrc)
+///* of the SELECT statement passed as the second argument, and to each
+///* cursor in the FROM clause of any FROM clause sub-selects, recursively.
+///* Except, do not assign a new cursor number to the iExcept'th element in
+///* the FROM clause of (*p). Update all expressions and other references
+///* to refer to the new cursor numbers.
+///*
+///* Argument aCsrMap is an array that may be used for temporary working
+///* space. Two guarantees are made by the caller:
+///*
+///*   * the array is larger than the largest cursor number used within the
+///*     select statement passed as an argument, and
+///*
+///*   * the array entries for all cursor numbers that do *not* appear in
+///*     FROM clauses of the select statement as described above are
+///*     initialized to zero.
 extern "C" fn renumber_cursors(p_parse_1: *mut Parse, p: *mut Select,
     i_except_1: i32, a_csr_map_1: *mut i32) -> () {
     unsafe {
@@ -3151,6 +3636,39 @@ extern "C" fn renumber_cursors(p_parse_1: *mut Parse, p: *mut Select,
     }
 }
 
+/// An instance of the SubstContext object describes an substitution edit
+///* to be performed on a parse tree.
+///*
+///* All references to columns in table iTable are to be replaced by corresponding
+///* expressions in pEList.
+///*
+///* ## About "isOuterJoin":
+///*
+///* The isOuterJoin column indicates that the replacement will occur into a
+///* position in the parent that is NULL-able due to an OUTER JOIN.  Either the
+///* target slot in the parent is the right operand of a LEFT JOIN, or one of
+///* the left operands of a RIGHT JOIN.  In either case, we need to potentially
+///* bypass the substituted expression with OP_IfNullRow.
+///*
+///* Suppose the original expression is an integer constant. Even though the table
+///* has the nullRow flag set, because the expression is an integer constant,
+///* it will not be NULLed out.  So instead, we insert an OP_IfNullRow opcode
+///* that checks to see if the nullRow flag is set on the table.  If the nullRow
+///* flag is set, then the value in the register is set to NULL and the original
+///* expression is bypassed.  If the nullRow flag is not set, then the original
+///* expression runs to populate the register.
+///*
+///* Example where this is needed:
+///*
+///*      CREATE TABLE t1(a INTEGER PRIMARY KEY, b INT);
+///*      CREATE TABLE t2(x INT UNIQUE);
+///*
+///*      SELECT a,b,m,x FROM t1 LEFT JOIN (SELECT 59 AS m,x FROM t2) ON b=x;
+///*
+///* When the subquery on the right side of the LEFT JOIN is flattened, we
+///* have to add OP_IfNullRow in front of the OP_Integer that implements the
+///* "m" value of the subquery so that a NULL will be loaded instead of 59
+///* when processing a non-matched row of the left.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SubstContext {
@@ -3163,6 +3681,9 @@ struct SubstContext {
     p_c_list: *mut ExprList,
 }
 
+///* If pSel is not part of a compound SELECT, return a pointer to its
+///* expression list. Otherwise, return a pointer to the expression list
+///* of the leftmost SELECT in the compound.
 extern "C" fn find_leftmost_exprlist(mut p_sel_1: *const Select)
     -> *mut ExprList {
     unsafe {
@@ -3173,6 +3694,17 @@ extern "C" fn find_leftmost_exprlist(mut p_sel_1: *const Select)
     }
 }
 
+///* Scan through the expression pExpr.  Replace every reference to
+///* a column in table number iTable with a copy of the iColumn-th
+///* entry in pEList.  (But leave references to the ROWID column
+///* unchanged.)
+///*
+///* This routine is part of the flattening procedure.  A subquery
+///* whose result set is defined by pEList appears as entry in the
+///* FROM clause of a SELECT such that the VDBE cursor assigned to that
+///* FORM clause entry is iTable.  This routine makes the necessary
+///* changes to pExpr so that it refers directly to the source table
+///* of the subquery rather the result set of the subquery.
 extern "C" fn subst_expr(p_subst_1: *mut SubstContext,
     mut p_expr_1: *mut Expr) -> *mut Expr {
     unsafe {
@@ -3328,6 +3860,7 @@ extern "C" fn subst_expr(p_subst_1: *mut SubstContext,
     }
 }
 
+/// Forward Declarations
 extern "C" fn subst_expr_list(p_subst: *mut SubstContext,
     p_list: *mut ExprList) -> () {
     let mut i: i32 = 0;
@@ -3426,6 +3959,11 @@ extern "C" fn subst_select(p_subst: *mut SubstContext, mut p: *mut Select,
     }
 }
 
+///* pSelect is a SELECT statement and pSrcItem is one item in the FROM
+///* clause of that SELECT.
+///*
+///* This routine scans the entire SELECT statement and recomputes the
+///* pSrcItem->colUsed mask.
 extern "C" fn recompute_columns_used_expr(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -3462,6 +4000,11 @@ extern "C" fn recompute_columns_used(p_select_1: *mut Select,
     }
 }
 
+///* Delete all the content of a Select structure.  Deallocate the structure
+///* itself depending on the value of bFree
+///*
+///* If bFree==1, call sqlite3DbFree() on the p object.
+///* If bFree==0, Leave the first Select object unfreed
 extern "C" fn clear_select(db: *mut Sqlite3, mut p: *mut Select,
     mut b_free_1: i32) -> () {
     unsafe {
@@ -3502,31 +4045,218 @@ extern "C" fn clear_select(db: *mut Sqlite3, mut p: *mut Select,
     }
 }
 
+///* Delete the given Select structure and all of its substructures.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_delete(db: *mut Sqlite3, p: *mut Select)
     -> () {
     if !(p).is_null() { clear_select(db, p, 1); }
 }
 
+///* This routine attempts to flatten subqueries as a performance optimization.
+///* This routine returns 1 if it makes changes and 0 if no flattening occurs.
+///*
+///* To understand the concept of flattening, consider the following
+///* query:
+///*
+///*     SELECT a FROM (SELECT x+y AS a FROM t1 WHERE z<100) WHERE a>5
+///*
+///* The default way of implementing this query is to execute the
+///* subquery first and store the results in a temporary table, then
+///* run the outer query on that temporary table.  This requires two
+///* passes over the data.  Furthermore, because the temporary table
+///* has no indices, the WHERE clause on the outer query cannot be
+///* optimized.
+///*
+///* This routine attempts to rewrite queries such as the above into
+///* a single flat select, like this:
+///*
+///*     SELECT x+y AS a FROM t1 WHERE z<100 AND a>5
+///*
+///* The code generated for this simplification gives the same result
+///* but only has to scan the data once.  And because indices might
+///* exist on the table t1, a complete scan of the data might be
+///* avoided.
+///*
+///* Flattening is subject to the following constraints:
+///*
+///*  (**)  We no longer attempt to flatten aggregate subqueries. Was:
+///*        The subquery and the outer query cannot both be aggregates.
+///*
+///*  (**)  We no longer attempt to flatten aggregate subqueries. Was:
+///*        (2) If the subquery is an aggregate then
+///*        (2a) the outer query must not be a join and
+///*        (2b) the outer query must not use subqueries
+///*             other than the one FROM-clause subquery that is a candidate
+///*             for flattening.  (This is due to ticket [2f7170d73bf9abf80]
+///*             from 2015-02-09.)
+///*
+///*   (3)  If the subquery is the right operand of a LEFT JOIN then
+///*        (3a) the subquery may not be a join
+///*        (**) Was (3b): "the FROM clause of the subquery may not contain
+///*             a virtual table"
+///*        (**) Was: "The outer query may not have a GROUP BY." This case
+///*             is now managed correctly
+///*        (3d) the outer query may not be DISTINCT.
+///*        See also (26) for restrictions on RIGHT JOIN.
+///*
+///*   (4)  The subquery can not be DISTINCT.
+///*
+///*  (**)  At one point restrictions (4) and (5) defined a subset of DISTINCT
+///*        sub-queries that were excluded from this optimization. Restriction
+///*        (4) has since been expanded to exclude all DISTINCT subqueries.
+///*
+///*  (**)  We no longer attempt to flatten aggregate subqueries.  Was:
+///*        If the subquery is aggregate, the outer query may not be DISTINCT.
+///*
+///*   (7)  The subquery must have a FROM clause.  TODO:  For subqueries without
+///*        A FROM clause, consider adding a FROM clause with the special
+///*        table sqlite_once that consists of a single row containing a
+///*        single NULL.
+///*
+///*   (8)  If the subquery uses LIMIT then the outer query may not be a join.
+///*
+///*   (9)  If the subquery uses LIMIT then the outer query may not be aggregate.
+///*
+///*  (**)  Restriction (10) was removed from the code on 2005-02-05 but we
+///*        accidentally carried the comment forward until 2014-09-15.  Original
+///*        constraint: "If the subquery is aggregate then the outer query
+///*        may not use LIMIT."
+///*
+///*  (11)  The subquery and the outer query may not both have ORDER BY clauses.
+///*
+///*  (**)  Not implemented.  Subsumed into restriction (3).  Was previously
+///*        a separate restriction deriving from ticket #350.
+///*
+///*  (13)  The subquery and outer query may not both use LIMIT.
+///*
+///*  (14)  The subquery may not use OFFSET.
+///*
+///*  (15)  If the outer query is part of a compound select, then the
+///*        subquery may not use LIMIT.
+///*        (See ticket #2339 and ticket [02a8e81d44]).
+///*
+///*  (16)  If the outer query is aggregate, then the subquery may not
+///*        use ORDER BY.  (Ticket #2942)  This used to not matter
+///*        until we introduced the group_concat() function. 
+///*
+///*  (17)  If the subquery is a compound select, then
+///*        (17a) all compound operators must be a UNION ALL, and
+///*        (17b) no terms within the subquery compound may be aggregate
+///*              or DISTINCT, and
+///*        (17c) every term within the subquery compound must have a FROM clause
+///*        (17d) the outer query may not be
+///*              (17d1) aggregate, or
+///*              (17d2) DISTINCT
+///*        (17e) the subquery may not contain window functions, and
+///*        (17f) the subquery must not be the RHS of a LEFT JOIN.
+///*        (17g) either the subquery is the first element of the outer
+///*              query or there are no RIGHT or FULL JOINs in any arm
+///*              of the subquery.  (This is a duplicate of condition (27b).)
+///*        (17h) The corresponding result set expressions in all arms of the
+///*              compound must have the same affinity.
+///*
+///*        The parent and sub-query may contain WHERE clauses. Subject to
+///*        rules (11), (13) and (14), they may also contain ORDER BY,
+///*        LIMIT and OFFSET clauses.  The subquery cannot use any compound
+///*        operator other than UNION ALL because all the other compound
+///*        operators have an implied DISTINCT which is disallowed by
+///*        restriction (4).
+///*
+///*        Also, each component of the sub-query must return the same number
+///*        of result columns. This is actually a requirement for any compound
+///*        SELECT statement, but all the code here does is make sure that no
+///*        such (illegal) sub-query is flattened. The caller will detect the
+///*        syntax error and return a detailed message.
+///*
+///*  (18)  If the sub-query is a compound select, then all terms of the
+///*        ORDER BY clause of the parent must be copies of a term returned
+///*        by the parent query.
+///*
+///*  (19)  If the subquery uses LIMIT then the outer query may not
+///*        have a WHERE clause.
+///*
+///*  (20)  If the sub-query is a compound select, then it must not use
+///*        an ORDER BY clause.  Ticket #3773.  We could relax this constraint
+///*        somewhat by saying that the terms of the ORDER BY clause must
+///*        appear as unmodified result columns in the outer query.  But we
+///*        have other optimizations in mind to deal with that case.
+///*
+///*  (21)  If the subquery uses LIMIT then the outer query may not be
+///*        DISTINCT.  (See ticket [752e1646fc]).
+///*
+///*  (22)  The subquery may not be a recursive CTE.
+///*
+///*  (23)  If the outer query is a recursive CTE, then the sub-query may not be
+///*        a compound query.  This restriction is because transforming the
+///*        parent to a compound query confuses the code that handles
+///*        recursive queries in multiSelect().
+///*
+///*  (**)  We no longer attempt to flatten aggregate subqueries.  Was:
+///*        The subquery may not be an aggregate that uses the built-in min() or
+///*        or max() functions.  (Without this restriction, a query like:
+///*        "SELECT x FROM (SELECT max(y), x FROM t1)" would not necessarily
+///*        return the value X for which Y was maximal.)
+///*
+///*  (25)  If either the subquery or the parent query contains a window
+///*        function in the select list or ORDER BY clause, flattening
+///*        is not attempted.
+///*
+///*  (26)  The subquery may not be the right operand of a RIGHT JOIN.
+///*        See also (3) for restrictions on LEFT JOIN.
+///*
+///*  (27)  The subquery may not contain a FULL or RIGHT JOIN unless it
+///*        is the first element of the parent query.  Two subcases:
+///*        (27a) the subquery is not a compound query.
+///*        (27b) the subquery is a compound query and the RIGHT JOIN occurs
+///*              in any arm of the compound query.  (See also (17g).)
+///*
+///*  (28)  The subquery is not a MATERIALIZED CTE.  (This is handled
+///*        in the caller before ever reaching this routine.)
+///*
+///*
+///* In this routine, the "p" parameter is a pointer to the outer query.
+///* The subquery is p->pSrc->a[iFrom].  isAgg is true if the outer query
+///* uses aggregates.
+///*
+///* If flattening is not attempted, this routine is a no-op and returns 0.
+///* If flattening is attempted this routine returns 1.
+///*
+///* All of the expression analysis must occur on both the outer query and
+///* the subquery before this routine runs.
+#[allow(unused_doc_comments)]
 extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
     i_from_1: i32, is_agg_1: i32) -> i32 {
     unsafe {
         let z_saved_auth_context: *const i8 =
             unsafe { (*p_parse_1).z_auth_context };
         let mut p_parent: *mut Select = core::ptr::null_mut();
+        /// Current UNION ALL term of the other query
         let mut p_sub: *mut Select = core::ptr::null_mut();
+        /// The inner query or "subquery"
         let mut p_sub1: *mut Select = core::ptr::null_mut();
+        /// Pointer to the rightmost select in sub-query
         let mut p_src: *mut SrcList = core::ptr::null_mut();
+        /// The FROM clause of the outer query
         let mut p_sub_src: *mut SrcList = core::ptr::null_mut();
+        /// The FROM clause of the subquery
         let mut i_parent: i32 = 0;
+        /// VDBE cursor number of the pSub result set temp table
         let mut i_new_parent: i32 = -1;
+        /// Replacement table for iParent
         let mut is_outer_join: i32 = 0;
+        /// True if pSub is the right side of a LEFT JOIN
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_where: *mut Expr = core::ptr::null_mut();
+        /// The WHERE clause
         let mut p_subitem: *mut SrcItem = core::ptr::null_mut();
+        /// The subquery
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
         let mut w: Walker = unsafe { core::mem::zeroed() };
+        /// Walker to persist agginfo data
         let mut a_csr_map: *mut i32 = core::ptr::null_mut();
+
+        /// Check to see if flattening is permitted.  Return 0 if not.
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*db).db_opt_flags } & 1 as u32 != 0 as u32 { return 0; }
@@ -3545,7 +4275,9 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                 !(unsafe { (*p_sub).p_win }).is_null() {
             return 0;
         }
-        p_sub_src = unsafe { (*p_sub).p_src };
+
+        /// Restriction (25)
+        (p_sub_src = unsafe { (*p_sub).p_src });
         { let _ = 0; };
         if !(unsafe { (*p_sub).p_limit }).is_null() &&
                 !(unsafe { (*p).p_limit }).is_null() {
@@ -3598,6 +4330,8 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                             } as i32 & 64 != 0 {
             return 0;
         }
+
+        /// Condition (28) is blocked by the caller
         { let _ = 0; };
         if !(unsafe { (*p_sub).p_prior }).is_null() {
             let mut ii: i32 = 0;
@@ -3628,6 +4362,10 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                                                 (*(unsafe { (*unsafe { (*p_sub1).p_src }).a.as_ptr() } as
                                                                     *mut SrcItem).offset(0 as isize)).fg.jointype
                                             } as i32 & 64 != 0 {
+
+                            /// Without this restriction, the JT_LTORJ flag would end up being
+                            ///* omitted on left-hand tables of the right join that is being
+                            ///* flattened.
                             return 0;
                         }
                         break '__c56;
@@ -3679,6 +4417,8 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                 }
             }
         }
+
+        /// Authorize the subquery
         unsafe {
             (*p_parse_1).z_auth_context =
                 unsafe { (*p_subitem).z_name } as *const i8
@@ -3783,7 +4523,20 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
             }
             unsafe { (*p_subitem).p_s_tab = core::ptr::null_mut() };
         }
-        p_sub = p_sub1;
+
+        /// The following loop runs once for each term in a compound-subquery
+        ///* flattening (as described above).  If we are doing a different kind
+        ///* of flattening - a flattening other than a compound-subquery flattening -
+        ///* then this loop only runs once.
+        ///*
+        ///* This loop moves all of the FROM elements of the subquery into the
+        ///* the FROM clause of the outer query.  Before doing this, remember
+        ///* the cursor number for the original outer query FROM element in
+        ///* iParent.  The iParent cursor will never be used.  Subsequent code
+        ///* will scan expressions looking for iParent references and replace
+        ///* those references with expressions that resolve to the subquery FROM
+        ///* elements we are now copying in.
+        (p_sub = p_sub1);
         {
             p_parent = p;
             '__b59: loop {
@@ -3793,8 +4546,12 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                     let jointype: u8 = unsafe { (*p_subitem).fg.jointype };
                     { let _ = 0; };
                     p_sub_src = unsafe { (*p_sub).p_src };
-                    n_sub_src = unsafe { (*p_sub_src).n_src };
-                    p_src = unsafe { (*p_parent).p_src };
+
+                    /// FROM clause of subquery
+                    (n_sub_src = unsafe { (*p_sub_src).n_src });
+
+                    /// Number of terms in subquery FROM clause
+                    (p_src = unsafe { (*p_parent).p_src });
                     if n_sub_src > 1 {
                         p_src =
                             unsafe {
@@ -3809,11 +4566,14 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                                                 *mut SrcItem).offset(i_from_1 as isize)
                             };
                     }
-                    i_new_parent =
+
+                    /// Transfer the FROM clause terms from the subquery into the
+                    ///* outer query.
+                    (i_new_parent =
                         unsafe {
                             (*(unsafe { (*p_sub_src).a.as_ptr() } as
                                             *mut SrcItem).offset(0 as isize)).i_cursor
-                        };
+                        });
                     {
                         i = 0;
                         '__b60: loop {
@@ -3856,6 +4616,15 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                         (*p_subitem).fg.jointype |= jointype as i32 as u8
                     };
                     if !(unsafe { (*p_sub).p_order_by }).is_null() {
+                        /// At this point, any non-zero iOrderByCol values indicate that the
+                        ///* ORDER BY column expression is identical to the iOrderByCol'th
+                        ///* expression returned by SELECT statement pSub. Since these values
+                        ///* do not necessarily correspond to columns in SELECT statement pParent,
+                        ///* zero them before transferring the ORDER BY clause.
+                        ///*
+                        ///* Not doing this may cause an error if a subsequent call to this
+                        ///* function attempts to flatten a compound sub-query into pParent.
+                        ///* See ticket [d11a6e908f].
                         let p_order_by_1: *mut ExprList =
                             unsafe { (*p_sub).p_order_by };
                         {
@@ -3907,6 +4676,9 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                         x.p_c_list = find_leftmost_exprlist(p_sub as *const Select);
                         subst_select(&mut x, p_parent, 0);
                     }
+
+                    /// The flattened query is a compound if either the inner or the
+                    ///* outer query is a compound.
                     unsafe {
                         (*p_parent).sel_flags |=
                             unsafe { (*p_sub).sel_flags } & 256 as u32
@@ -3941,6 +4713,8 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
                 };
             }
         }
+
+        /// Finally, delete what is left of the subquery and return success.
         unsafe { sqlite3_agg_info_persist_walker_init(&mut w, p_parse_1) };
         unsafe { sqlite3_walk_select(&mut w, p_sub1) };
         sqlite3_select_delete(db, p_sub1);
@@ -3948,6 +4722,7 @@ extern "C" fn flatten_subquery(p_parse_1: *mut Parse, p: *mut Select,
     }
 }
 
+///* Add code to implement the OFFSET
 extern "C" fn code_offset(v: *mut Vdbe, i_offset_1: i32, i_continue_1: i32)
     -> () {
     if i_offset_1 > 0 {
@@ -3955,6 +4730,8 @@ extern "C" fn code_offset(v: *mut Vdbe, i_offset_1: i32, i_continue_1: i32)
     }
 }
 
+///* This routine does the work of loading query data into an array of
+///* registers so that it can be added to the sorter.
 extern "C" fn inner_loop_load_row(p_parse_1: *mut Parse, p_select_1: &Select,
     p_info_1: &RowLoadInfo) -> () {
     unsafe {
@@ -3965,6 +4742,48 @@ extern "C" fn inner_loop_load_row(p_parse_1: *mut Parse, p_select_1: &Select,
     }
 }
 
+///* Add code that will check to make sure the array of registers starting at
+///* iMem form a distinct entry. This is used by both "SELECT DISTINCT ..." and
+///* distinct aggregates ("SELECT count(DISTINCT <expr>) ..."). Three strategies
+///* are available. Which is used depends on the value of parameter eTnctType,
+///* as follows:
+///*
+///*   WHERE_DISTINCT_UNORDERED/WHERE_DISTINCT_NOOP:
+///*     Build an ephemeral table that contains all entries seen before and
+///*     skip entries which have been seen before.
+///*
+///*     Parameter iTab is the cursor number of an ephemeral table that must
+///*     be opened before the VM code generated by this routine is executed.
+///*     The ephemeral cursor table is queried for a record identical to the
+///*     record formed by the current array of registers. If one is found,
+///*     jump to VM address addrRepeat. Otherwise, insert a new record into
+///*     the ephemeral cursor and proceed.
+///*
+///*     The returned value in this case is a copy of parameter iTab.
+///*
+///*   WHERE_DISTINCT_ORDERED:
+///*     In this case rows are being delivered sorted order. The ephemeral
+///*     table is not required. Instead, the current set of values
+///*     is compared against previous row. If they match, the new row
+///*     is not distinct and control jumps to VM address addrRepeat. Otherwise,
+///*     the VM program proceeds with processing the new row.
+///*
+///*     The returned value in this case is the register number of the first
+///*     in an array of registers used to store the previous result row so that
+///*     it can be compared to the next. The caller must ensure that this
+///*     register is initialized to NULL.  (The fixDistinctOpenEph() routine
+///*     will take care of this initialization.)
+///*
+///*   WHERE_DISTINCT_UNIQUE:
+///*     In this case it has already been determined that the rows are distinct.
+///*     No special action is required. The return value is zero.
+///*
+///* Parameter pEList is the list of expressions used to generated the
+///* contents of each row. It is used by this routine to determine (a)
+///* how many elements there are in the array of registers and (b) the
+///* collation sequences that should be used for the comparisons if
+///* eTnctType is WHERE_DISTINCT_ORDERED.
+#[allow(unused_doc_comments)]
 extern "C" fn code_distinct(p_parse_1: *mut Parse, e_tnct_type_1: i32,
     i_tab_1: i32, addr_repeat_1: i32, p_e_list_1: &ExprList, reg_elem_1: i32)
     -> i32 {
@@ -3978,9 +4797,13 @@ extern "C" fn code_distinct(p_parse_1: *mut Parse, e_tnct_type_1: i32,
                 {
                     let mut i: i32 = 0;
                     let mut i_jump: i32 = 0;
+                    /// Jump destination
                     let mut reg_prev: i32 = 0;
-                    i_ret =
-                        { reg_prev = unsafe { (*p_parse_1).n_mem } + 1; reg_prev };
+
+                    /// Previous row content
+                    /// Allocate space for the previous row
+                    (i_ret =
+                        { reg_prev = unsafe { (*p_parse_1).n_mem } + 1; reg_prev });
                     unsafe { (*p_parse_1).n_mem += n_result_col };
                     i_jump =
                         unsafe { sqlite3_vdbe_current_addr(v) } + n_result_col;
@@ -4024,7 +4847,11 @@ extern "C" fn code_distinct(p_parse_1: *mut Parse, e_tnct_type_1: i32,
                     };
                     break '__s63;
                 }
-                { break '__s63; }
+                {
+
+                    /// nothing to do
+                    break '__s63;
+                }
                 {
                     let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
                     unsafe {
@@ -4045,7 +4872,11 @@ extern "C" fn code_distinct(p_parse_1: *mut Parse, e_tnct_type_1: i32,
                 }
             }
             1 => {
-                { break '__s63; }
+                {
+
+                    /// nothing to do
+                    break '__s63;
+                }
                 {
                     let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
                     unsafe {
@@ -4090,6 +4921,28 @@ extern "C" fn code_distinct(p_parse_1: *mut Parse, e_tnct_type_1: i32,
     return i_ret;
 }
 
+///* This routine runs after codeDistinct().  It makes necessary
+///* adjustments to the OP_OpenEphemeral opcode that the codeDistinct()
+///* routine made use of.  This processing must be done separately since
+///* sometimes codeDistinct is called before the OP_OpenEphemeral is actually
+///* laid down.
+///*
+///* WHERE_DISTINCT_NOOP:
+///* WHERE_DISTINCT_UNORDERED:
+///*
+///*     No adjustments necessary.  This function is a no-op.
+///*
+///* WHERE_DISTINCT_UNIQUE:
+///*
+///*     The ephemeral table is not needed.  So change the
+///*     OP_OpenEphemeral opcode into an OP_Noop.
+///*
+///* WHERE_DISTINCT_ORDERED:
+///*
+///*     The ephemeral table is not needed.  But we do need register
+///*     iVal to be initialized to NULL.  So change the OP_OpenEphemeral
+///*     into an OP_Null on the iVal register.
+#[allow(unused_doc_comments)]
 extern "C" fn fix_distinct_open_eph(p_parse_1: &Parse, e_tnct_type_1: i32,
     i_val_1: i32, i_open_eph_addr_1: i32) -> () {
     if (*p_parse_1).n_err == 0 && (e_tnct_type_1 == 1 || e_tnct_type_1 == 2) {
@@ -4103,6 +4956,10 @@ extern "C" fn fix_distinct_open_eph(p_parse_1: &Parse, e_tnct_type_1: i32,
             unsafe { sqlite3_vdbe_change_to_noop(v, i_open_eph_addr_1 + 1) };
         }
         if e_tnct_type_1 == 2 {
+            /// Change the OP_OpenEphemeral to an OP_Null that sets the MEM_Cleared
+            ///* bit on the first register of the previous value.  This will cause the
+            ///* OP_Ne added in codeDistinct() to always fail on the first iteration of
+            ///* the loop even if the first row is all NULLs.
             let p_op: *mut VdbeOp =
                 unsafe { sqlite3_vdbe_get_op(v, i_open_eph_addr_1) };
             unsafe { (*p_op).opcode = 77 as u8 };
@@ -4112,6 +4969,10 @@ extern "C" fn fix_distinct_open_eph(p_parse_1: &Parse, e_tnct_type_1: i32,
     }
 }
 
+///* Code the OP_MakeRecord instruction that generates the entry to be
+///* added into the sorter.
+///*
+///* Return the register in which the result is stored.
 extern "C" fn make_sorter_record(p_parse_1: *mut Parse, p_sort_1: &SortCtx,
     p_select_1: *mut Select, reg_base_1: i32, n_base_1: i32) -> i32 {
     let n_ob_sat: i32 = (*p_sort_1).n_ob_sat;
@@ -4129,6 +4990,8 @@ extern "C" fn make_sorter_record(p_parse_1: *mut Parse, p_sort_1: &SortCtx,
     return reg_out;
 }
 
+///* Allocate a KeyInfo object sufficient for an index of N key columns and
+///* X extra columns.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_key_info_alloc(db: *mut Sqlite3, n: i32, x: i32)
     -> *mut KeyInfo {
@@ -4169,6 +5032,18 @@ pub extern "C" fn sqlite3_key_info_alloc(db: *mut Sqlite3, n: i32, x: i32)
     return p;
 }
 
+///* Given an expression list, generate a KeyInfo structure that records
+///* the collating sequence for each expression in that expression list.
+///*
+///* If the ExprList is an ORDER BY or GROUP BY clause then the resulting
+///* KeyInfo structure is appropriate for initializing a virtual index to
+///* implement that clause.  If the ExprList is the result set of a SELECT
+///* then the KeyInfo structure is appropriate for initializing a virtual
+///* index to implement a DISTINCT test.
+///*
+///* Space to hold the KeyInfo structure is obtained from malloc.  The calling
+///* function is responsible for seeing that this structure is eventually
+///* freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_key_info_from_expr_list(p_parse: *mut Parse,
     p_list: &ExprList, i_start: i32, n_extra: i32) -> *mut KeyInfo {
@@ -4223,23 +5098,49 @@ pub extern "C" fn sqlite3_key_info_from_expr_list(p_parse: *mut Parse,
     return p_info;
 }
 
+///* Generate code that will push the record in registers regData
+///* through regData+nData-1 onto the sorter.
+#[allow(unused_doc_comments)]
 extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
     p_select_1: *mut Select, reg_data_1: i32, reg_orig_data_1: i32,
     n_data_1: i32, n_prefix_reg_1: i32) -> () {
     unsafe {
         let v: *mut Vdbe = unsafe { (*p_parse_1).p_vdbe };
+        /// Stmt under construction
         let b_seq: i32 =
             (unsafe { (*p_sort_1).sort_flags } as i32 & 1 == 0) as i32;
         let n_expr: i32 =
             unsafe { (*unsafe { (*p_sort_1).p_order_by }).n_expr };
+        /// No. of ORDER BY terms
         let n_base: i32 = n_expr + b_seq + n_data_1;
+        /// Fields in sorter record
         let mut reg_base: i32 = 0;
+        /// Regs for sorter record
         let mut reg_record: i32 = 0;
+        /// Assembled sorter record
         let n_ob_sat: i32 = unsafe { (*p_sort_1).n_ob_sat };
+        /// ORDER BY terms to skip
         let mut op: i32 = 0;
+        /// Opcode to add sorter record to sorter
         let mut i_limit: i32 = 0;
+        /// LIMIT counter
         let mut i_skip: i32 = 0;
+
+        /// End of the sorter insert loop
         { let _ = 0; };
+
+        /// Three cases:
+        ///*   (1) The data to be sorted has already been packed into a Record
+        ///*       by a prior OP_MakeRecord.  In this case nData==1 and regData
+        ///*       will be completely unrelated to regOrigData.
+        ///*   (2) All output columns are included in the sort record.  In that
+        ///*       case regData==regOrigData.
+        ///*   (3) Some output columns are omitted from the sort record due to
+        ///*       the SQLITE_ENABLE_SORTER_REFERENCES optimization, or due to the
+        ///*       SQLITE_ECEL_OMITREF optimization, or due to the
+        ///*       SortCtx.pDeferredRowLoad optimization.  In any of these cases
+        ///*       regOrigData is 0 to prevent this routine from trying to copy
+        ///*       values that might not yet exist.
         { let _ = 0; };
         if n_prefix_reg_1 != 0 {
             { let _ = 0; };
@@ -4276,14 +5177,21 @@ extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
         }
         if n_ob_sat > 0 {
             let mut reg_prev_key: i32 = 0;
+            /// The first nOBSat columns of the previous row
             let mut addr_first: i32 = 0;
+            /// Address of the OP_IfNot opcode
             let mut addr_jmp: i32 = 0;
+            /// Address of the OP_Jump opcode
             let mut p_op: *mut VdbeOp = core::ptr::null_mut();
+            /// Opcode that opens the sorter
             let mut n_key: i32 = 0;
+            /// Number of sorting key columns, including OP_Sequence
             let mut p_ki: *mut KeyInfo = core::ptr::null_mut();
-            reg_record =
+
+            /// Original KeyInfo on the sorter table
+            (reg_record =
                 make_sorter_record(p_parse_1, unsafe { &*p_sort_1 },
-                    p_select_1, reg_base, n_base);
+                    p_select_1, reg_base, n_base));
             reg_prev_key = unsafe { (*p_parse_1).n_mem } + 1;
             unsafe { (*p_parse_1).n_mem += unsafe { (*p_sort_1).n_ob_sat } };
             n_key = n_expr - unsafe { (*p_sort_1).n_ob_sat } + b_seq;
@@ -4315,6 +5223,8 @@ extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
                 memset(unsafe { (*p_ki).a_sort_flags } as *mut (), 0,
                     unsafe { (*p_ki).n_key_field } as u64)
             };
+
+            /// Makes OP_Jump testable
             unsafe {
                 sqlite3_vdbe_change_p4(v, -1, p_ki as *mut i8 as *const i8,
                     -9)
@@ -4327,7 +5237,9 @@ extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
                                 unsafe { (*p_ki).n_key_field } as i32 - 1)
             };
             p_op = core::ptr::null_mut();
-            addr_jmp = unsafe { sqlite3_vdbe_current_addr(v) };
+
+            /// Ensure pOp not used after sqlite3VdbeAddOp3()
+            (addr_jmp = unsafe { sqlite3_vdbe_current_addr(v) });
             unsafe {
                 sqlite3_vdbe_add_op3(v, 14, addr_jmp + 1, 0, addr_jmp + 1)
             };
@@ -4365,6 +5277,20 @@ extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
             unsafe { sqlite3_vdbe_jump_here(v, addr_jmp) };
         }
         if i_limit != 0 {
+            /// At this point the values for the new sorter entry are stored
+            ///* in an array of registers. They need to be composed into a record
+            ///* and inserted into the sorter if either (a) there are currently
+            ///* less than LIMIT+OFFSET items or (b) the new record is smaller than
+            ///* the largest record currently in the sorter. If (b) is true and there
+            ///* are already LIMIT+OFFSET items in the sorter, delete the largest
+            ///* entry before inserting the new one. This way there are never more
+            ///* than LIMIT+OFFSET items in the sorter.
+            ///*
+            ///* If the new record does not need to be inserted into the sorter,
+            ///* jump to the next iteration of the loop. If the pSort->labelOBLopt
+            ///* value is not zero, then it is a label of where to jump.  Otherwise,
+            ///* just bypass the row insert logic.  See the header comment on the
+            ///* sqlite3WhereOrderByLimitOptLabel() function for additional info.
             let i_csr: i32 = unsafe { (*p_sort_1).i_e_cursor };
             unsafe {
                 sqlite3_vdbe_add_op2(v, 62, i_limit,
@@ -4401,6 +5327,14 @@ extern "C" fn push_onto_sorter(p_parse_1: *mut Parse, p_sort_1: *mut SortCtx,
     }
 }
 
+///* This routine generates the code for the inside of the inner loop
+///* of a SELECT.
+///*
+///* If srcTab is negative, then the p->pEList expressions
+///* are evaluated in order to get the data for this row.  If srcTab is
+///* zero or more, then data is pulled from srcTab and p->pEList is used only
+///* to get the number of columns and the collation sequence for each column.
+#[allow(unused_doc_comments)]
 extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
     src_tab_1: i32, mut p_sort_1: *mut SortCtx,
     p_distinct_1: *const DistinctCtx, p_dest_1: &mut SelectDest,
@@ -4409,13 +5343,27 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
         let v: *mut Vdbe = unsafe { (*p_parse_1).p_vdbe };
         let mut i: i32 = 0;
         let mut has_distinct: i32 = 0;
+        /// True if the DISTINCT keyword is present
         let e_dest: i32 = (*p_dest_1).e_dest as i32;
+        /// How to dispose of results
         let i_parm: i32 = (*p_dest_1).i_sd_parm;
+        /// First argument to disposal method
         let mut n_result_col: i32 = 0;
+        /// Number of result columns
         let mut n_prefix_reg: i32 = 0;
+        /// Number of extra registers before regResult
         let mut s_row_load_info: RowLoadInfo = unsafe { core::mem::zeroed() };
+        /// Info for deferred row loading
+        /// Usually, regResult is the first cell in an array of memory cells
+        ///* containing the current result row. In this case regOrig is set to the
+        ///* same value. However, if the results are being sent to the sorter, the
+        ///* values for any expressions that are also part of the sort-key are omitted
+        ///* from this array. In this case regOrig is set to zero.
         let mut reg_result: i32 = 0;
+        /// Start of memory holding current results
         let mut reg_orig: i32 = 0;
+
+        /// Start of memory holding full result (or 0)
         { let _ = 0; };
         { let _ = 0; };
         has_distinct =
@@ -4431,7 +5379,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
             { let _ = 0; };
             code_offset(v, unsafe { (*p).i_offset }, i_continue_1);
         }
-        n_result_col = unsafe { (*unsafe { (*p).p_e_list }).n_expr };
+
+        /// Pull the requested columns.
+        (n_result_col = unsafe { (*unsafe { (*p).p_e_list }).n_expr });
         if (*p_dest_1).i_sdst == 0 {
             if !(p_sort_1).is_null() {
                 n_prefix_reg =
@@ -4451,6 +5401,12 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
             unsafe { (*p_parse_1).n_mem += n_result_col };
         } else if (*p_dest_1).i_sdst + n_result_col >
                 unsafe { (*p_parse_1).n_mem } {
+
+            /// This is an error condition that can result, for example, when a SELECT
+            ///* on the right-hand side of an INSERT contains more result columns than
+            ///* there are columns in the table on the left.  The error will be caught
+            ///* and reported later.  But we need to make sure enough memory is allocated
+            ///* to avoid other spurious errors in the meantime.
             unsafe { (*p_parse_1).n_mem += n_result_col };
         }
         (*p_dest_1).n_sdst = n_result_col;
@@ -4470,14 +5426,24 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                 }
             }
         } else if e_dest != 1 {
+            /// If the destination is an EXISTS(...) expression, the actual
+            ///* values returned by the SELECT are not required.
             let mut ecel_flags: u8 = 0 as u8;
+            /// "ecel" is an abbreviation of "ExprCodeExprList"
             let mut p_e_list: *const ExprList = core::ptr::null();
             if e_dest == 8 || e_dest == 7 || e_dest == 11 {
                 ecel_flags = 1 as u8;
             } else { ecel_flags = 0 as u8; }
             if !(p_sort_1).is_null() && has_distinct == 0 && e_dest != 10 &&
                     e_dest != 12 {
-                ecel_flags |= (8 | 4) as u8;
+
+                /// For each expression in p->pEList that is a copy of an expression in
+                ///* the ORDER BY clause (pSort->pOrderBy), set the associated
+                ///* iOrderByCol value to one more than the index of the ORDER BY
+                ///* expression within the sort-key that pushOntoSorter() will generate.
+                ///* This allows the p->pEList field to be omitted from the sorted record,
+                ///* saving space and CPU cycles.
+                (ecel_flags |= (8 | 4) as u8);
                 {
                     i = unsafe { (*p_sort_1).n_ob_sat };
                     '__b67: loop {
@@ -4509,7 +5475,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                     }
                 }
-                p_e_list = unsafe { (*p).p_e_list };
+
+                /// Adjust nResultCol to account for columns that are omitted
+                ///* from the sorter by the optimizations in this branch
+                (p_e_list = unsafe { (*p).p_e_list });
                 {
                     i = 0;
                     '__b68: loop {
@@ -4576,6 +5545,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                                 r1 + n_prefix_reg)
                         };
                         if e_dest == 3 {
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index. If the current row is already present
+                            ///* in the index, do not write it to the output. If not, add the
+                            ///* current row to the index and proceed with writing it to the
+                            ///* output table as well.
                             let addr: i32 = unsafe { sqlite3_vdbe_current_addr(v) } + 4;
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, addr, r1, 0)
@@ -4611,6 +5585,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             let i2: i32 = (*p_dest_1).i_sd_parm2;
                             let mut r1: i32 =
                                 unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+                            /// If the UPDATE FROM join is an aggregate that matches no rows, it
+                            ///* might still be trying to return one row, because that is what
+                            ///* aggregates do.  Don't record that empty row in the output table.
                             unsafe {
                                 sqlite3_vdbe_add_op2(v, 51, reg_result, i_break_1)
                             };
@@ -4632,6 +5610,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -4663,6 +5646,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -4674,6 +5659,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -4712,11 +5700,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -4770,6 +5762,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                                 r1 + n_prefix_reg)
                         };
                         if e_dest == 3 {
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index. If the current row is already present
+                            ///* in the index, do not write it to the output. If not, add the
+                            ///* current row to the index and proceed with writing it to the
+                            ///* output table as well.
                             let addr: i32 = unsafe { sqlite3_vdbe_current_addr(v) } + 4;
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, addr, r1, 0)
@@ -4805,6 +5802,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             let i2: i32 = (*p_dest_1).i_sd_parm2;
                             let mut r1: i32 =
                                 unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+                            /// If the UPDATE FROM join is an aggregate that matches no rows, it
+                            ///* might still be trying to return one row, because that is what
+                            ///* aggregates do.  Don't record that empty row in the output table.
                             unsafe {
                                 sqlite3_vdbe_add_op2(v, 51, reg_result, i_break_1)
                             };
@@ -4826,6 +5827,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -4857,6 +5863,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -4868,6 +5876,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -4906,11 +5917,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -4964,6 +5979,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                                 r1 + n_prefix_reg)
                         };
                         if e_dest == 3 {
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index. If the current row is already present
+                            ///* in the index, do not write it to the output. If not, add the
+                            ///* current row to the index and proceed with writing it to the
+                            ///* output table as well.
                             let addr: i32 = unsafe { sqlite3_vdbe_current_addr(v) } + 4;
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, addr, r1, 0)
@@ -4999,6 +6019,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             let i2: i32 = (*p_dest_1).i_sd_parm2;
                             let mut r1: i32 =
                                 unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+                            /// If the UPDATE FROM join is an aggregate that matches no rows, it
+                            ///* might still be trying to return one row, because that is what
+                            ///* aggregates do.  Don't record that empty row in the output table.
                             unsafe {
                                 sqlite3_vdbe_add_op2(v, 51, reg_result, i_break_1)
                             };
@@ -5020,6 +6044,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -5051,6 +6080,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -5062,6 +6093,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5100,11 +6134,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5158,6 +6196,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                                 r1 + n_prefix_reg)
                         };
                         if e_dest == 3 {
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index. If the current row is already present
+                            ///* in the index, do not write it to the output. If not, add the
+                            ///* current row to the index and proceed with writing it to the
+                            ///* output table as well.
                             let addr: i32 = unsafe { sqlite3_vdbe_current_addr(v) } + 4;
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, addr, r1, 0)
@@ -5193,6 +6236,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             let i2: i32 = (*p_dest_1).i_sd_parm2;
                             let mut r1: i32 =
                                 unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+                            /// If the UPDATE FROM join is an aggregate that matches no rows, it
+                            ///* might still be trying to return one row, because that is what
+                            ///* aggregates do.  Don't record that empty row in the output table.
                             unsafe {
                                 sqlite3_vdbe_add_op2(v, 51, reg_result, i_break_1)
                             };
@@ -5214,6 +6261,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -5245,6 +6297,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -5256,6 +6310,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5294,11 +6351,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5350,6 +6411,10 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             let i2: i32 = (*p_dest_1).i_sd_parm2;
                             let mut r1: i32 =
                                 unsafe { sqlite3_get_temp_reg(p_parse_1) };
+
+                            /// If the UPDATE FROM join is an aggregate that matches no rows, it
+                            ///* might still be trying to return one row, because that is what
+                            ///* aggregates do.  Don't record that empty row in the output table.
                             unsafe {
                                 sqlite3_vdbe_add_op2(v, 51, reg_result, i_break_1)
                             };
@@ -5371,6 +6436,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -5402,6 +6472,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -5413,6 +6485,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5451,11 +6526,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5501,6 +6580,11 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                 9 => {
                     {
                         if !(p_sort_1).is_null() {
+
+                            /// At first glance you would think we could optimize out the
+                            ///* ORDER BY in this case since the order of entries in the set
+                            ///* does not matter.  But there might be a LIMIT clause, in which
+                            ///* case the order does matter
                             push_onto_sorter(p_parse_1, p_sort_1, p, reg_result,
                                 reg_orig, n_result_col, n_prefix_reg);
                             (*p_dest_1).i_sd_parm2 = 0;
@@ -5532,6 +6616,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                     }
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -5543,6 +6629,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5581,11 +6670,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5631,6 +6724,8 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                 1 => {
                     {
                         unsafe { sqlite3_vdbe_add_op2(v, 73, 1, i_parm) };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s69;
                     }
                     {
@@ -5642,6 +6737,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5680,11 +6778,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5737,6 +6839,9 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                         } else {
                             { let _ = 0; };
                             if reg_result != i_parm {
+
+                                /// This occurs in cases where the SELECT had both a DISTINCT and
+                                ///* an OFFSET clause.
                                 unsafe {
                                     sqlite3_vdbe_add_op3(v, 82, reg_result, i_parm,
                                         n_result_col - 1)
@@ -5775,11 +6880,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5853,11 +6962,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5931,11 +7044,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -5994,11 +7111,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -6057,11 +7178,15 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
                             unsafe { sqlite3_get_temp_range(p_parse_1, n_key + 2) };
                         r3 = r2 + n_key + 1;
                         if e_dest == 4 {
-                            addr_test =
+
+                            /// If the destination is DistQueue, then cursor (iParm+1) is open
+                            ///* on a second ephemeral index that holds all values every previously
+                            ///* added to the queue.
+                            (addr_test =
                                 unsafe {
                                     sqlite3_vdbe_add_op4_int(v, 29, i_parm + 1, 0, reg_result,
                                         n_result_col)
-                                };
+                                });
                         }
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_result, n_result_col, r3)
@@ -6116,6 +7241,20 @@ extern "C" fn select_inner_loop(p_parse_1: *mut Parse, p: *mut Select,
     }
 }
 
+///* Handle the special case of a compound-select that originates from a
+///* VALUES clause.  By handling this as a special case, we avoid deep
+///* recursion, and thus do not need to enforce the SQLITE_LIMIT_COMPOUND_SELECT
+///* on a VALUES clause.
+///*
+///* Because the Select object originates from a VALUES clause:
+///*   (1) There is no LIMIT or OFFSET or else there is a LIMIT of exactly 1
+///*   (2) All terms are UNION ALL
+///*   (3) There is no ORDER BY clause
+///*
+///* The "LIMIT of exactly 1" case of condition (1) comes about when a VALUES
+///* clause occurs within scalar expression (ex: "SELECT (VALUES(1),(2),(3))").
+///* The sqlite3CodeSubselect will have added the LIMIT 1 clause in tht case.
+///* Since the limit is exactly 1, we only need to evaluate the left-most VALUES.
 extern "C" fn multi_select_values(p_parse_1: *mut Parse, mut p: *mut Select,
     p_dest_1: *mut SelectDest) -> i32 {
     unsafe {
@@ -6158,6 +7297,9 @@ extern "C" fn multi_select_values(p_parse_1: *mut Parse, mut p: *mut Select,
     }
 }
 
+///* Return true if the SELECT statement which is known to be the recursive
+///* part of a recursive CTE still has its anchor terms attached.  If the
+///* anchor terms have already been removed, then return false.
 extern "C" fn has_anchor(mut p: *const Select) -> i32 {
     while !(p).is_null() &&
             unsafe { (*p).sel_flags } & 8192 as u32 != 0 as u32 {
@@ -6166,6 +7308,28 @@ extern "C" fn has_anchor(mut p: *const Select) -> i32 {
     return (p != core::ptr::null_mut()) as i32;
 }
 
+///* Compute the iLimit and iOffset fields of the SELECT based on the
+///* pLimit expressions.  pLimit->pLeft and pLimit->pRight hold the expressions
+///* that appear in the original SQL statement after the LIMIT and OFFSET
+///* keywords.  Or NULL if those keywords are omitted. iLimit and iOffset
+///* are the integer memory register numbers for counters used to compute
+///* the limit and offset.  If there is no limit and/or offset, then
+///* iLimit and iOffset are negative.
+///*
+///* This routine changes the values of iLimit and iOffset only if
+///* a limit or offset is defined by pLimit->pLeft and pLimit->pRight.  iLimit
+///* and iOffset should have been preset to appropriate default values (zero)
+///* prior to calling this routine.
+///*
+///* The iOffset register (if it exists) is initialized to the value
+///* of the OFFSET.  The iLimit register is initialized to LIMIT.  Register
+///* iOffset+1 is initialized to LIMIT+OFFSET.
+///*
+///* Only if pLimit->pLeft!=0 do the limit registers get
+///* redefined.  The UNION ALL operator uses this property to force
+///* the reuse of the same limit and offset registers across multiple
+///* SELECT statements.
+#[allow(unused_doc_comments)]
 extern "C" fn compute_limit_registers(p_parse_1: *mut Parse, p: &mut Select,
     i_break_1: i32) -> () {
     let mut v: *mut Vdbe = core::ptr::null_mut();
@@ -6227,6 +7391,8 @@ extern "C" fn compute_limit_registers(p_parse_1: *mut Parse, p: &mut Select,
                 *__p += 1;
                 __t
             };
+
+            /// Allocate an extra register for limit+offset
             unsafe {
                 sqlite3_expr_code(p_parse_1, unsafe { (*p_limit).p_right },
                     i_offset)
@@ -6239,6 +7405,7 @@ extern "C" fn compute_limit_registers(p_parse_1: *mut Parse, p: &mut Select,
     }
 }
 
+///* Initialize a SelectDest structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_dest_init(p_dest: &mut SelectDest,
     e_dest: i32, i_parm: i32) -> () {
@@ -6250,6 +7417,12 @@ pub extern "C" fn sqlite3_select_dest_init(p_dest: &mut SelectDest,
     (*p_dest).n_sdst = 0;
 }
 
+///* Return the appropriate collating sequence for the iCol-th column of
+///* the result set for the compound-select statement "p".  Return NULL if
+///* the column has no default collating sequence.
+///*
+///* The collating sequence for the compound select is taken from the
+///* left-most term of the select that has a collating sequence.
 extern "C" fn multi_select_coll_seq(p_parse_1: *mut Parse, p: &Select,
     i_col_1: i32) -> *mut CollSeq {
     unsafe {
@@ -6275,6 +7448,13 @@ extern "C" fn multi_select_coll_seq(p_parse_1: *mut Parse, p: &Select,
     }
 }
 
+///* The select statement passed as the second parameter is a compound SELECT
+///* with an ORDER BY clause. This function allocates and returns a KeyInfo
+///* structure suitable for implementing the ORDER BY.
+///*
+///* Space to hold the KeyInfo structure is obtained from malloc. The calling
+///* function is responsible for ensuring that this structure is eventually
+///* freed.
 extern "C" fn multi_select_by_merge_key_info(p_parse_1: *mut Parse,
     p: *mut Select, n_extra_1: i32) -> *mut KeyInfo {
     unsafe {
@@ -6343,31 +7523,95 @@ extern "C" fn multi_select_by_merge_key_info(p_parse_1: *mut Parse,
     }
 }
 
+///* This routine generates VDBE code to compute the content of a WITH RECURSIVE
+///* query of the form:
+///*
+///*   <recursive-table> AS (<setup-query> UNION [ALL] <recursive-query>)
+///*                         \___________/             \_______________/
+///*                           p->pPrior                      p
+///*
+///*
+///* There is exactly one reference to the recursive-table in the FROM clause
+///* of recursive-query, marked with the SrcList->a[].fg.isRecursive flag.
+///*
+///* The setup-query runs once to generate an initial set of rows that go
+///* into a Queue table.  Rows are extracted from the Queue table one by
+///* one.  Each row extracted from Queue is output to pDest.  Then the single
+///* extracted row (now in the iCurrent table) becomes the content of the
+///* recursive-table for a recursive-query run.  The output of the recursive-query
+///* is added back into the Queue table.  Then another row is extracted from Queue
+///* and the iteration continues until the Queue table is empty.
+///*
+///* If the compound query operator is UNION then no duplicate rows are ever
+///* inserted into the Queue table.  The iDistinct table keeps a copy of all rows
+///* that have ever been inserted into Queue and causes duplicates to be
+///* discarded.  If the operator is UNION ALL, then duplicates are allowed.
+///*
+///* If the query has an ORDER BY, then entries in the Queue table are kept in
+///* ORDER BY order and the first entry is extracted for each cycle.  Without
+///* an ORDER BY, the Queue table is just a FIFO.
+///*
+///* If a LIMIT clause is provided, then the iteration stops after LIMIT rows
+///* have been output to pDest.  A LIMIT of zero means to output no rows and a
+///* negative LIMIT means to output all rows.  If there is also an OFFSET clause
+///* with a positive value, then the first OFFSET outputs are discarded rather
+///* than being sent to pDest.  The LIMIT count does not begin until after OFFSET
+///* rows have been skipped.
+#[allow(unused_doc_comments)]
 extern "C" fn generate_with_recursive_query(p_parse_1: *mut Parse,
     p: *mut Select, p_dest_1: *mut SelectDest) -> () {
     unsafe {
         let mut p_src: *const SrcList = core::ptr::null();
+        /// The FROM clause of the recursive query
         let mut n_col: i32 = 0;
+        /// Number of columns in the recursive table
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The prepared statement under construction
         let mut p_setup: *mut Select = core::ptr::null_mut();
+        /// The setup query
         let mut p_first_rec: *mut Select = core::ptr::null_mut();
+        /// Left-most recursive term
         let mut addr_top: i32 = 0;
+        /// Top of the loop
         let mut addr_cont: i32 = 0;
         let mut addr_break: i32 = 0;
+        /// CONTINUE and BREAK addresses
         let mut i_current: i32 = 0;
+        /// The Current table
         let mut reg_current: i32 = 0;
+        /// Register holding Current table
         let mut i_queue: i32 = 0;
+        /// The Queue table
         let mut i_distinct: i32 = 0;
+        /// To ensure unique results if UNION
         let mut e_dest: i32 = 0;
+        /// How to write to Queue
         let mut dest_queue: SelectDest = unsafe { core::mem::zeroed() };
+        /// SelectDest targeting the Queue table
         let mut i: i32 = 0;
+        /// Loop counter
         let mut rc: i32 = 0;
+        /// Result code
         let mut p_order_by: *mut ExprList = core::ptr::null_mut();
+        /// The ORDER BY clause
         let mut p_limit: *mut Expr = core::ptr::null_mut();
+        /// Saved LIMIT and OFFSET
         let mut reg_limit: i32 = 0;
         let mut reg_offset: i32 = 0;
+        /// Registers used by LIMIT and OFFSET
+        /// Obtain authorization to do a recursive query
+        /// Process the LIMIT and OFFSET clauses, if they exist
+        /// 4 billion rows
+        /// Locate the cursor number of the Current table
+        /// Allocate cursors numbers for Queue and Distinct.  The cursor number for
+        ///* the Distinct table must be exactly one greater than Queue in order
+        ///* for the SRT_DistFifo and SRT_DistQueue destinations to work.
+        /// Allocate cursors for Current, Queue, and Distinct.
         let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
+        /// Generate an ephemeral table used to enforce distinctness on the
+        ///* output of the recursive part of the CTE.
         let mut p_key_info_1: *mut KeyInfo = core::ptr::null_mut();
+        /// Collating sequence for the result set
         let mut ap_coll: *mut *mut CollSeq = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -6804,6 +8048,7 @@ extern "C" fn generate_with_recursive_query(p_parse_1: *mut Parse,
     }
 }
 
+///* Name of the connection operator, used for error messages.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_op_name(id: i32) -> *const i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -6819,6 +8064,7 @@ pub extern "C" fn sqlite3_select_op_name(id: i32) -> *const i8 {
     return z as *const i8;
 }
 
+///* Make a new pointer to a KeyInfo object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_key_info_ref(p: *mut KeyInfo) -> *mut KeyInfo {
     if !(p).is_null() {
@@ -6833,6 +8079,25 @@ pub extern "C" fn sqlite3_key_info_ref(p: *mut KeyInfo) -> *mut KeyInfo {
     return p;
 }
 
+///* Code an output subroutine for a coroutine implementation of a
+///* SELECT statement.
+///*
+///* The data to be output is contained in an array of pIn->nSdst registers
+///* starting at register pIn->iSdst.  pDest is where the output should
+///* be sent.
+///*
+///* regReturn is the number of the register holding the subroutine
+///* return address.
+///*
+///* If regPrev>0 then it is the first register in a vector that
+///* records the previous output.  mem[regPrev] is a flag that is false
+///* if there has been no previous output.  If regPrev>0 then code is
+///* generated to suppress duplicates.  pKeyInfo is used for comparing
+///* keys.
+///*
+///* If the LIMIT found in p->iLimit is reached, jump immediately to
+///* iBreak.
+#[allow(unused_doc_comments)]
 extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
     p_in_1: &SelectDest, p_dest_1: &mut SelectDest, reg_return_1: i32,
     reg_prev_1: i32, p_key_info_1: *mut KeyInfo, i_break_1: i32) -> i32 {
@@ -6867,6 +8132,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
         if unsafe { (*unsafe { (*p_parse_1).db }).malloc_failed } != 0 {
             return 0;
         }
+
+        /// Suppress the first OFFSET entries if there is an OFFSET clause
         code_offset(v, (*p).i_offset, i_continue);
         '__s78:
             {
@@ -6883,6 +8150,13 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                                 (*p_in_1).n_sdst, r1)
                         };
                         if (*p_dest_1).e_dest as i32 == 3 {
+
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index that is used to enforce uniqueness on the
+                            ///* total result.  At this point, we are processing the setup portion
+                            ///* of the recursive CTE using the merge algorithm, so the results are
+                            ///* guaranteed to be unique anyhow.  But we still need to populate the
+                            ///* (iParm+1) cursor for use by the subsequent recursive phase.
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 140, i_parm + 1, r1,
                                     (*p_in_1).i_sdst, (*p_in_1).n_sdst)
@@ -6899,6 +8173,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73, 1, (*p_dest_1).i_sd_parm)
                         };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s78;
                     }
                     {
@@ -6931,6 +8207,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7026,6 +8304,13 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                                 (*p_in_1).n_sdst, r1)
                         };
                         if (*p_dest_1).e_dest as i32 == 3 {
+
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index that is used to enforce uniqueness on the
+                            ///* total result.  At this point, we are processing the setup portion
+                            ///* of the recursive CTE using the merge algorithm, so the results are
+                            ///* guaranteed to be unique anyhow.  But we still need to populate the
+                            ///* (iParm+1) cursor for use by the subsequent recursive phase.
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 140, i_parm + 1, r1,
                                     (*p_in_1).i_sdst, (*p_in_1).n_sdst)
@@ -7042,6 +8327,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73, 1, (*p_dest_1).i_sd_parm)
                         };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s78;
                     }
                     {
@@ -7074,6 +8361,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7169,6 +8458,13 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                                 (*p_in_1).n_sdst, r1)
                         };
                         if (*p_dest_1).e_dest as i32 == 3 {
+
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index that is used to enforce uniqueness on the
+                            ///* total result.  At this point, we are processing the setup portion
+                            ///* of the recursive CTE using the merge algorithm, so the results are
+                            ///* guaranteed to be unique anyhow.  But we still need to populate the
+                            ///* (iParm+1) cursor for use by the subsequent recursive phase.
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 140, i_parm + 1, r1,
                                     (*p_in_1).i_sdst, (*p_in_1).n_sdst)
@@ -7185,6 +8481,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73, 1, (*p_dest_1).i_sd_parm)
                         };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s78;
                     }
                     {
@@ -7217,6 +8515,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7312,6 +8612,13 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                                 (*p_in_1).n_sdst, r1)
                         };
                         if (*p_dest_1).e_dest as i32 == 3 {
+
+                            /// If the destination is DistFifo, then cursor (iParm+1) is open
+                            ///* on an ephemeral index that is used to enforce uniqueness on the
+                            ///* total result.  At this point, we are processing the setup portion
+                            ///* of the recursive CTE using the merge algorithm, so the results are
+                            ///* guaranteed to be unique anyhow.  But we still need to populate the
+                            ///* (iParm+1) cursor for use by the subsequent recursive phase.
                             unsafe {
                                 sqlite3_vdbe_add_op4_int(v, 140, i_parm + 1, r1,
                                     (*p_in_1).i_sdst, (*p_in_1).n_sdst)
@@ -7328,6 +8635,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73, 1, (*p_dest_1).i_sd_parm)
                         };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s78;
                     }
                     {
@@ -7360,6 +8669,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7448,6 +8759,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73, 1, (*p_dest_1).i_sd_parm)
                         };
+
+                        /// The LIMIT clause will terminate the loop for us
                         break '__s78;
                     }
                     {
@@ -7480,6 +8793,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7594,6 +8909,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -7683,6 +9000,8 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
                             sqlite3_expr_code_move(p_parse_1, (*p_in_1).i_sdst,
                                 (*p_dest_1).i_sd_parm, (*p_in_1).n_sdst)
                         };
+
+                        /// The LIMIT clause will jump out of the loop for us
                         break '__s78;
                     }
                     {
@@ -8004,12 +9323,15 @@ extern "C" fn generate_output_subroutine(p_parse_1: *mut Parse, p: &Select,
         if (*p).i_limit != 0 {
             unsafe { sqlite3_vdbe_add_op2(v, 63, (*p).i_limit, i_break_1) };
         }
+
+        /// Generate the subroutine return
         unsafe { sqlite3_vdbe_resolve_label(v, i_continue) };
         unsafe { sqlite3_vdbe_add_op1(v, 69, reg_return_1) };
         return addr;
     }
 }
 
+///* Deallocate a KeyInfo object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_key_info_unref(p: *mut KeyInfo) -> () {
     if !(p).is_null() {
@@ -8035,54 +9357,99 @@ pub extern "C" fn sqlite3_select_delete_generic(db: *mut Sqlite3, p: *mut ())
     if !(p).is_null() { clear_select(db, p as *mut Select, 1); }
 }
 
+/// Forward references
+#[allow(unused_doc_comments)]
 extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
     p_dest: *mut SelectDest) -> i32 {
     unsafe {
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut p_prior: *mut Select = core::ptr::null_mut();
+        /// Another SELECT immediately to our left
         let mut p_split: *mut Select = core::ptr::null_mut();
+        /// Left-most SELECT in the right-hand group
         let mut n_select: i32 = 0;
+        /// Number of SELECT statements in the compound
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// Generate code to this VDBE
         let mut dest_a: SelectDest = unsafe { core::mem::zeroed() };
+        /// Destination for coroutine A
         let mut dest_b: SelectDest = unsafe { core::mem::zeroed() };
+        /// Destination for coroutine B
         let mut reg_addr_a: i32 = 0;
+        /// Address register for select-A coroutine
         let mut reg_addr_b: i32 = 0;
+        /// Address register for select-B coroutine
         let mut addr_select_a: i32 = 0;
+        /// Address of the select-A coroutine
         let mut addr_select_b: i32 = 0;
+        /// Address of the select-B coroutine
         let mut reg_out_a: i32 = 0;
+        /// Address register for the output-A subroutine
         let mut reg_out_b: i32 = 0;
+        /// Address register for the output-B subroutine
         let mut addr_out_a: i32 = 0;
+        /// Address of the output-A subroutine
         let mut addr_out_b: i32 = 0;
+        /// Address of the output-B subroutine
         let mut addr_eof_a: i32 = 0;
+        /// Address of the select-A-exhausted subroutine
         let mut addr_eof_a_no_b: i32 = 0;
+        /// Alternate addrEofA if B is uninitialized
         let mut addr_eof_b: i32 = 0;
+        /// Address of the select-B-exhausted subroutine
         let mut addr_alt_b: i32 = 0;
+        /// Address of the A<B subroutine
         let mut addr_aeq_b: i32 = 0;
+        /// Address of the A==B subroutine
         let mut addr_agt_b: i32 = 0;
+        /// Address of the A>B subroutine
         let mut reg_limit_a: i32 = 0;
+        /// Limit register for select-A
         let mut reg_limit_b: i32 = 0;
+        /// Limit register for select-A
         let mut reg_prev: i32 = 0;
+        /// A range of registers to hold previous output
         let mut saved_limit: i32 = 0;
+        /// Saved value of p->iLimit
         let mut saved_offset: i32 = 0;
+        /// Saved value of p->iOffset
         let mut label_cmpr: i32 = 0;
+        /// Label for the start of the merge algorithm
         let mut label_end: i32 = 0;
+        /// Label for the end of the overall SELECT stmt
         let mut addr1: i32 = 0;
+        /// Jump instructions that get retargeted
         let mut op: i32 = 0;
+        /// One of TK_ALL, TK_UNION, TK_EXCEPT, TK_INTERSECT
         let mut p_key_dup: *mut KeyInfo = core::ptr::null_mut();
+        /// Comparison information for duplicate removal
         let mut p_key_merge: *mut KeyInfo = core::ptr::null_mut();
+        /// Comparison information for merging rows
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Database connection
         let mut p_order_by: *mut ExprList = core::ptr::null_mut();
+        /// The ORDER BY clause
         let mut n_order_by: i32 = 0;
+        /// Number of terms in the ORDER BY clause
         let mut a_permute: *mut u32 = core::ptr::null_mut();
+
+        /// Mapping from ORDER BY terms to result set columns
         { let _ = 0; };
         { let _ = 0; };
-        db = unsafe { (*p_parse).db };
+
+        /// "Managed" code needs this.  Ticket #3382.
+        (db = unsafe { (*p_parse).db });
         v = unsafe { (*p_parse).p_vdbe };
         { let _ = 0; };
-        label_end = unsafe { sqlite3_vdbe_make_label(p_parse) };
+
+        /// Already thrown the error if VDBE alloc failed
+        (label_end = unsafe { sqlite3_vdbe_make_label(p_parse) });
         label_cmpr = unsafe { sqlite3_vdbe_make_label(p_parse) };
-        op = unsafe { (*p).op } as i32;
+
+        /// Patch up the ORDER BY clause
+        (op = unsafe { (*p).op } as i32);
         { let _ = 0; };
         p_order_by = unsafe { (*p).p_order_by };
         { let _ = 0; };
@@ -8155,12 +9522,18 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
                 }
             }
         }
-        a_permute =
+
+        /// Compute the comparison permutation and keyinfo that is used with
+        ///* the permutation to determine if the next row of results comes
+        ///* from selectA or selectB.  Also add literal collations to the
+        ///* ORDER BY clause terms so that when selectA and selectB are
+        ///* evaluated, they use the correct collation.
+        (a_permute =
             unsafe {
                     sqlite3_db_malloc_raw_nn(db,
                         core::mem::size_of::<u32>() as u64 *
                             (n_order_by + 1) as u64)
-                } as *mut u32;
+                } as *mut u32);
         if !(a_permute).is_null() {
             let mut p_item_1: *const ExprListItem = core::ptr::null();
             let mut b_keep: i32 = 0;
@@ -8237,7 +9610,9 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
                 }
             }
         }
-        n_select = 1;
+
+        /// Separate the left and the right query from one another
+        (n_select = 1);
         if (op == 136 || op == 135) &&
                 unsafe { (*db).db_opt_flags } & 2097152 as u32 == 0 as u32 {
             {
@@ -8295,6 +9670,8 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
                 unsafe { (*p_prior).p_order_by },
                 c"ORDER".as_ptr() as *mut i8 as *const i8)
         };
+
+        /// Compute the limit registers
         compute_limit_registers(p_parse, unsafe { &mut *p }, label_end);
         if unsafe { (*p).i_limit } != 0 && op == 136 {
             reg_limit_a =
@@ -8334,7 +9711,10 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
                 c"MERGE (%s)".as_ptr() as *mut i8 as *const i8,
                 sqlite3_select_op_name(unsafe { (*p).op } as i32))
         };
-        addr_select_a = unsafe { sqlite3_vdbe_current_addr(v) } + 1;
+
+        /// Generate a coroutine to evaluate the SELECT statement to the
+        ///* left of the compound operator - the "A" select.
+        (addr_select_a = unsafe { sqlite3_vdbe_current_addr(v) } + 1);
         addr1 =
             unsafe {
                 sqlite3_vdbe_add_op3(v, 11, reg_addr_a, 0, addr_select_a)
@@ -8347,7 +9727,10 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
         sqlite3_select(p_parse, p_prior, &mut dest_a);
         unsafe { sqlite3_vdbe_end_coroutine(v, reg_addr_a) };
         unsafe { sqlite3_vdbe_jump_here(v, addr1) };
-        addr_select_b = unsafe { sqlite3_vdbe_current_addr(v) } + 1;
+
+        /// Generate a coroutine to evaluate the SELECT statement on
+        ///* the right - the "B" select
+        (addr_select_b = unsafe { sqlite3_vdbe_current_addr(v) } + 1);
         addr1 =
             unsafe {
                 sqlite3_vdbe_add_op3(v, 11, reg_addr_b, 0, addr_select_b)
@@ -8405,8 +9788,10 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
             unsafe { sqlite3_vdbe_add_op2(v, 12, reg_addr_a, label_end) };
             unsafe { sqlite3_vdbe_goto(v, addr_eof_b) };
         }
-        addr_alt_b =
-            unsafe { sqlite3_vdbe_add_op2(v, 10, reg_out_a, addr_out_a) };
+
+        /// Generate code to handle the case of A<B
+        (addr_alt_b =
+            unsafe { sqlite3_vdbe_add_op2(v, 10, reg_out_a, addr_out_a) });
         unsafe { sqlite3_vdbe_add_op2(v, 12, reg_addr_a, addr_eof_a) };
         unsafe { sqlite3_vdbe_goto(v, label_cmpr) };
         if op == 136 {
@@ -8415,7 +9800,9 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
             addr_aeq_b = addr_alt_b;
             { let __p = &mut addr_alt_b; let __t = *__p; *__p += 1; __t };
         } else { addr_aeq_b = addr_alt_b + 1; }
-        addr_agt_b = unsafe { sqlite3_vdbe_current_addr(v) };
+
+        /// Generate code to handle the case of A>B
+        (addr_agt_b = unsafe { sqlite3_vdbe_current_addr(v) });
         if op == 136 || op == 135 {
             unsafe { sqlite3_vdbe_add_op2(v, 10, reg_out_b, addr_out_b) };
             unsafe { sqlite3_vdbe_add_op2(v, 12, reg_addr_b, addr_eof_b) };
@@ -8423,8 +9810,12 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
         } else {
             { let __p = &mut addr_agt_b; let __t = *__p; *__p += 1; __t };
         }
+
+        /// This code runs once to initialize everything.
         unsafe { sqlite3_vdbe_jump_here(v, addr1) };
         unsafe { sqlite3_vdbe_add_op2(v, 12, reg_addr_a, addr_eof_a_no_b) };
+
+        /// v---  Also the A>B case for EXCEPT and INTERSECT
         unsafe { sqlite3_vdbe_add_op2(v, 12, reg_addr_b, addr_eof_b) };
         if a_permute != core::ptr::null_mut() {
             unsafe {
@@ -8443,6 +9834,8 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
         unsafe {
             sqlite3_vdbe_add_op3(v, 14, addr_alt_b, addr_aeq_b, addr_agt_b)
         };
+
+        /// Jump to the this point in order to terminate the query.
         unsafe { sqlite3_vdbe_resolve_label(v, label_end) };
         if !(unsafe { (*p_split).p_prior }).is_null() {
             unsafe {
@@ -8457,23 +9850,71 @@ extern "C" fn multi_select_by_merge(p_parse: *mut Parse, p: *mut Select,
             sqlite3_expr_list_delete(db, unsafe { (*p_prior).p_order_by })
         };
         unsafe { (*p_prior).p_order_by = core::ptr::null_mut() };
+
+        ///TBD:  Insert subroutine calls to close cursors on incomplete
+        ///*** subqueries ***
         unsafe { sqlite3_vdbe_explain_pop(p_parse) };
         return (unsafe { (*p_parse).n_err } != 0) as i32;
     }
 }
 
+///* This routine is called to process a compound query form from
+///* two or more separate queries using UNION, UNION ALL, EXCEPT, or
+///* INTERSECT
+///*
+///* "p" points to the right-most of the two queries.  the query on the
+///* left is p->pPrior.  The left query could also be a compound query
+///* in which case this routine will be called recursively.
+///*
+///* The results of the total query are to be written into a destination
+///* of type eDest with parameter iParm.
+///*
+///* Example 1:  Consider a three-way compound SQL statement.
+///*
+///*     SELECT a FROM t1 UNION SELECT b FROM t2 UNION SELECT c FROM t3
+///*
+///* This statement is parsed up as follows:
+///*
+///*     SELECT c FROM t3
+///*      |
+///*      `----->  SELECT b FROM t2
+///*                |
+///*                `------>  SELECT a FROM t1
+///*
+///* The arrows in the diagram above represent the Select.pPrior pointer.
+///* So if this routine is called with p equal to the t3 query, then
+///* pPrior will be the t2 query.  p->op will be TK_UNION in this case.
+///*
+///* Notice that because of the way SQLite parses compound SELECTs, the
+///* individual selects always group from left to right.
+#[allow(unused_doc_comments)]
 extern "C" fn multi_select(p_parse_1: *mut Parse, p: *mut Select,
     p_dest_1: *mut SelectDest) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Success code from a subroutine
+        /// Another SELECT immediately to our left
+        /// Generate code to this VDBE
         let mut dest: SelectDest = unsafe { core::mem::zeroed() };
+        /// Alternative data destination
         let mut p_delete: *mut Select = core::ptr::null_mut();
         '__b86: loop {
             '__c86: loop {
+                /// Success code from a subroutine
                 let mut p_prior: *mut Select = core::ptr::null_mut();
+                /// Another SELECT immediately to our left
                 let mut v: *mut Vdbe = core::ptr::null_mut();
+                /// Generate code to this VDBE
+                /// Alternative data destination
+                /// Chain of simple selects to delete
                 let mut db: *mut Sqlite3 = core::ptr::null_mut();
+
+                /// Database connection
+                /// Make sure there is no ORDER BY or LIMIT clause on prior SELECTs.  Only
+                ///* the last (right-most) SELECT in the series may have an ORDER BY or LIMIT.
                 { let _ = 0; };
+
+                /// Calling function guarantees this much
                 { let _ = 0; };
                 { let _ = 0; };
                 db = unsafe { (*p_parse_1).db };
@@ -8496,14 +9937,24 @@ extern "C" fn multi_select(p_parse_1: *mut Parse, p: *mut Select,
                     if rc >= 0 { break '__b86; }
                     rc = 0;
                 }
+
+                /// Make sure all SELECTs in the statement have the same number of elements
+                ///* in their result sets.
                 { let _ = 0; };
                 { let _ = 0; };
                 if unsafe { (*p).sel_flags } & 8192 as u32 != 0 as u32 &&
                         has_anchor(p as *const Select) != 0 {
                     generate_with_recursive_query(p_parse_1, p, &mut dest);
                 } else if !(unsafe { (*p).p_order_by }).is_null() {
+
+                    /// If the compound has an ORDER BY clause, then always use the merge
+                    ///* algorithm.
                     return multi_select_by_merge(p_parse_1, p, p_dest_1);
                 } else if unsafe { (*p).op } as i32 != 136 {
+                    /// If the compound is EXCEPT, INTERSECT, or UNION (anything other than
+                    ///* UNION ALL) then also always use the merge algorithm.  However, the
+                    ///* multiSelectByMerge() routine requires that the compound have an
+                    ///* ORDER BY clause, and it doesn't right now.  So invent one first.
                     let p_one: *mut Expr = unsafe { sqlite3_expr_int32(db, 1) };
                     unsafe {
                         (*p).p_order_by =
@@ -8521,6 +9972,8 @@ extern "C" fn multi_select(p_parse_1: *mut Parse, p: *mut Select,
                     };
                     return multi_select_by_merge(p_parse_1, p, p_dest_1);
                 } else {
+                    /// For a UNION ALL compound without ORDER BY, simply run the left
+                    ///* query, then run the right query
                     let mut addr: i32 = 0;
                     let mut n_limit: i32 = 0;
                     if unsafe { (*p_prior).p_prior } == core::ptr::null_mut() {
@@ -8600,6 +10053,30 @@ extern "C" fn multi_select(p_parse_1: *mut Parse, p: *mut Select,
             }
             if !(false) { break '__b86; }
         }
+
+        /// Success code from a subroutine
+        /// Another SELECT immediately to our left
+        /// Generate code to this VDBE
+        /// Alternative data destination
+        /// Chain of simple selects to delete
+        /// Database connection
+        /// Make sure there is no ORDER BY or LIMIT clause on prior SELECTs.  Only
+        ///* the last (right-most) SELECT in the series may have an ORDER BY or LIMIT.
+        /// Calling function guarantees this much
+        /// The VDBE already created by calling function
+        /// Create the destination temporary table if necessary
+        /// Special handling for a compound-select that originates as a VALUES clause.
+        /// Make sure all SELECTs in the statement have the same number of elements
+        ///* in their result sets.
+        /// If the compound has an ORDER BY clause, then always use the merge
+        ///* algorithm.
+        /// If the compound is EXCEPT, INTERSECT, or UNION (anything other than
+        ///* UNION ALL) then also always use the merge algorithm.  However, the
+        ///* multiSelectByMerge() routine requires that the compound have an
+        ///* ORDER BY clause, and it doesn't right now.  So invent one first.
+        /// For a UNION ALL compound without ORDER BY, simply run the left
+        ///* query, then run the right query
+        /// Initialize to suppress harmless compiler warning
         unsafe { (*p_dest_1).i_sdst = dest.i_sdst };
         unsafe { (*p_dest_1).n_sdst = dest.n_sdst };
         unsafe { (*p_dest_1).i_sd_parm2 = dest.i_sd_parm2 };
@@ -8613,6 +10090,31 @@ extern "C" fn multi_select(p_parse_1: *mut Parse, p: *mut Select,
     }
 }
 
+///* Argument pWhere is the WHERE clause belonging to SELECT statement p. This
+///* function attempts to transform expressions of the form:
+///*
+///*     EXISTS (SELECT ...)
+///*
+///* into joins. For example, given
+///*
+///*    CREATE TABLE sailors(sid INTEGER PRIMARY KEY, name TEXT);
+///*    CREATE TABLE reserves(sid INT, day DATE, PRIMARY KEY(sid, day));
+///*
+///*    SELECT name FROM sailors AS S WHERE EXISTS (
+///*      SELECT * FROM reserves AS R WHERE S.sid = R.sid AND R.day = '2022-10-25'
+///*    );
+///*
+///* the SELECT statement may be transformed as follows:
+///*
+///*    SELECT name FROM sailors AS S, reserves AS R
+///*      WHERE S.sid = R.sid AND R.day = '2022-10-25';
+///*
+///* **Approximately**.  Really, we have to ensure that the FROM-clause term
+///* that was formerly inside the EXISTS is only executed once.  This is handled
+///* by setting the SrcItem.fg.fromExists flag, which then causes code in
+///* the where.c file to exit the corresponding loop after the first successful
+///* match (if any).
+#[allow(unused_doc_comments)]
 extern "C" fn exists_to_join(p_parse_1: *mut Parse, p: *mut Select,
     p_where_1: *mut Expr) -> () {
     unsafe {
@@ -8642,6 +10144,11 @@ extern "C" fn exists_to_join(p_parse_1: *mut Parse, p: *mut Select,
                                             } == 0) as i32 != 0 &&
                             unsafe { (*p_sub).p_limit } == core::ptr::null_mut() &&
                         unsafe { (*p_sub).p_prior } == core::ptr::null_mut() {
+                    /// Before combining the sub-select with the parent, renumber the 
+                    ///* cursor used by the subselect. This is because the EXISTS expression
+                    ///* might be a copy of another EXISTS expression from somewhere
+                    ///* else in the tree, and in this case it is important that it use
+                    ///* a unique cursor number.
                     let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
                     let a_csr_map: *mut i32 =
                         unsafe {
@@ -8697,6 +10204,12 @@ extern "C" fn exists_to_join(p_parse_1: *mut Parse, p: *mut Select,
     }
 }
 
+///* Add a new entry to the pConst object.  Except, do not add duplicate
+///* pColumn entries.  Also, do not add if doing so would not be appropriate.
+///*
+///* The caller guarantees the pColumn is a column and pValue is a constant.
+///* This routine has to do some additional checks before completing the
+///* insert.
 extern "C" fn const_insert(p_const_1: &mut WhereConst, p_column_1: *mut Expr,
     p_value_1: *mut Expr, p_expr_1: *const Expr) -> () {
     let mut i: i32 = 0;
@@ -8763,6 +10276,10 @@ extern "C" fn const_insert(p_const_1: &mut WhereConst, p_column_1: *mut Expr,
     }
 }
 
+///* Find all terms of COLUMN=VALUE or VALUE=COLUMN in pExpr where VALUE
+///* is a constant expression and where the term must be true because it
+///* is part of the AND-connected terms of the expression.  For each term
+///* found, add it to the pConst structure.
 extern "C" fn find_const_in_where(p_const_1: *mut WhereConst,
     p_expr_1: *mut Expr) -> () {
     let mut p_right: *mut Expr = core::ptr::null_mut();
@@ -8800,6 +10317,14 @@ extern "C" fn find_const_in_where(p_const_1: *mut WhereConst,
     }
 }
 
+///* This is a helper function for Walker callback propagateConstantExprRewrite().
+///*
+///* Argument pExpr is a candidate expression to be replaced by a value. If
+///* pExpr is equivalent to one of the columns named in pWalker->u.pConst,
+///* then overwrite it with the corresponding value. Except, do not do so
+///* if argument bIgnoreAffBlob is non-zero and the affinity of pExpr
+///* is SQLITE_AFF_BLOB.
+#[allow(unused_doc_comments)]
 extern "C" fn propagate_constant_expr_rewrite_one(p_const_1: &mut WhereConst,
     p_expr_1: *mut Expr, b_ignore_aff_blob_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -8833,6 +10358,8 @@ extern "C" fn propagate_constant_expr_rewrite_one(p_const_1: &mut WhereConst,
                                 i32 <= 65 {
                     break '__b88;
                 }
+
+                /// A match is found.  Add the EP_FixedCol property
                 {
                     let __p = &mut (*p_const_1).n_chng;
                     let __t = *__p;
@@ -8865,6 +10392,20 @@ extern "C" fn propagate_constant_expr_rewrite_one(p_const_1: &mut WhereConst,
     return 1;
 }
 
+///* This is a Walker expression callback. pExpr is a node from the WHERE
+///* clause of a SELECT statement. This function examines pExpr to see if
+///* any substitutions based on the contents of pWalker->u.pConst should
+///* be made to pExpr or its immediate children.
+///*
+///* A substitution is made if:
+///*
+///*   + pExpr is a column with an affinity other than BLOB that matches
+///*     one of the columns in pWalker->u.pConst, or
+///*
+///*   + pExpr is a binary comparison operator (=, <=, >=, <, >) that
+///*     uses an affinity other than TEXT and one of its immediate
+///*     children is a column that matches one of the columns in
+///*     pWalker->u.pConst.
 extern "C" fn propagate_constant_expr_rewrite(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -8899,6 +10440,56 @@ extern "C" fn propagate_constant_expr_rewrite(p_walker_1: *mut Walker,
     }
 }
 
+///* The WHERE-clause constant propagation optimization.
+///*
+///* If the WHERE clause contains terms of the form COLUMN=CONSTANT or
+///* CONSTANT=COLUMN that are top-level AND-connected terms that are not
+///* part of a ON clause from a LEFT JOIN, then throughout the query
+///* replace all other occurrences of COLUMN with CONSTANT.
+///*
+///* For example, the query:
+///*
+///*      SELECT * FROM t1, t2, t3 WHERE t1.a=39 AND t2.b=t1.a AND t3.c=t2.b
+///*
+///* Is transformed into
+///*
+///*      SELECT * FROM t1, t2, t3 WHERE t1.a=39 AND t2.b=39 AND t3.c=39
+///*
+///* Return true if any transformations where made and false if not.
+///*
+///* Implementation note:  Constant propagation is tricky due to affinity
+///* and collating sequence interactions.  Consider this example:
+///*
+///*    CREATE TABLE t1(a INT,b TEXT);
+///*    INSERT INTO t1 VALUES(123,'0123');
+///*    SELECT * FROM t1 WHERE a=123 AND b=a;
+///*    SELECT * FROM t1 WHERE a=123 AND b=123;
+///*
+///* The two SELECT statements above should return different answers.  b=a
+///* is always true because the comparison uses numeric affinity, but b=123
+///* is false because it uses text affinity and '0123' is not the same as '123'.
+///* To work around this, the expression tree is not actually changed from
+///* "b=a" to "b=123" but rather the "a" in "b=a" is tagged with EP_FixedCol
+///* and the "123" value is hung off of the pLeft pointer.  Code generator
+///* routines know to generate the constant "123" instead of looking up the
+///* column value.  Also, to avoid collation problems, this optimization is
+///* only attempted if the "a=123" term uses the default BINARY collation.
+///*
+///* 2021-05-25 forum post 6a06202608: Another troublesome case is...
+///*
+///*    CREATE TABLE t1(x);
+///*    INSERT INTO t1 VALUES(10.0);
+///*    SELECT 1 FROM t1 WHERE x=10 AND x LIKE 10;
+///*
+///* The query should return no rows, because the t1.x value is '10.0' not '10'
+///* and '10.0' is not LIKE '10'.  But if we are not careful, the first WHERE
+///* term "x=10" will cause the second WHERE term to become "10 LIKE 10",
+///* resulting in a false positive.  To avoid this, constant propagation for
+///* columns with BLOB affinity is only allowed if the constant is used with
+///* operators ==, <=, <, >=, >, or IS in a way that will cause the correct
+///* type conversions to occur.  See logic associated with the bHasAffBlob flag
+///* for details.
+#[allow(unused_doc_comments)]
 extern "C" fn propagate_constants(p_parse_1: *mut Parse, p: &Select) -> i32 {
     unsafe {
         let mut x: WhereConst = unsafe { core::mem::zeroed() };
@@ -8919,8 +10510,15 @@ extern "C" fn propagate_constants(p_parse_1: *mut Parse, p: &Select) -> i32 {
                                         (*(unsafe { (*(*p).p_src).a.as_ptr() } as
                                                             *mut SrcItem).offset(0 as isize)).fg.jointype
                                     } as i32 & 64 != 0 {
-                    x.m_exclude_on = (2 | 1) as u32;
-                } else { x.m_exclude_on = 1 as u32; }
+
+                    /// Do not propagate constants on any ON clause if there is a
+                    ///* RIGHT JOIN anywhere in the query
+                    (x.m_exclude_on = (2 | 1) as u32);
+                } else {
+
+                    /// Do not propagate constants through the ON clause of a LEFT JOIN
+                    (x.m_exclude_on = 1 as u32);
+                }
                 find_const_in_where(&mut x, (*p).p_where);
                 if x.n_const != 0 {
                     unsafe {
@@ -8948,6 +10546,25 @@ extern "C" fn propagate_constants(p_parse_1: *mut Parse, p: &Select) -> i32 {
     }
 }
 
+///* Attempt to transform a query of the form
+///*
+///*    SELECT count(*) FROM (SELECT x FROM t1 UNION ALL SELECT y FROM t2)
+///*
+///* Into this:
+///*
+///*    SELECT (SELECT count(*) FROM t1)+(SELECT count(*) FROM t2)
+///*
+///* The transformation only works if all of the following are true:
+///*
+///*   *  The subquery is a UNION ALL of two or more terms
+///*   *  The subquery does not have a LIMIT clause
+///*   *  There is no WHERE or GROUP BY or HAVING clauses on the subqueries
+///*   *  The outer query is a simple count(*) with no WHERE clause or other
+///*      extraneous syntax.
+///*   *  None of the subqueries are DISTINCT (forumpost/a860f5fb2e 2025-03-10)
+///*
+///* Return TRUE if the optimization is undertaken.
+#[allow(unused_doc_comments)]
 extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
     p: &mut Select) -> i32 {
     unsafe {
@@ -8969,6 +10586,8 @@ extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
                                 *mut ExprListItem).offset(0 as isize)).p_expr
             };
         if unsafe { (*p_expr).op } as i32 != 169 { return 0; }
+
+        /// Result is an aggregate
         { let _ = 0; };
         if unsafe {
                     sqlite3_stricmp(unsafe { (*p_expr).u.z_token } as *const i8,
@@ -8976,6 +10595,8 @@ extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
                 } != 0 {
             return 0;
         }
+
+        /// Is count()
         { let _ = 0; };
         if unsafe { (*p_expr).x.p_list } != core::ptr::null_mut() {
             return 0;
@@ -8984,9 +10605,13 @@ extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
         if unsafe { (*p_expr).flags } & 16777216 as u32 != 0 as u32 {
             return 0;
         }
-        p_from = unsafe { (*(*p).p_src).a.as_ptr() } as *mut SrcItem;
+
+        /// Not a window function
+        (p_from = unsafe { (*(*p).p_src).a.as_ptr() } as *mut SrcItem);
         if unsafe { (*p_from).fg.is_subquery() } as i32 == 0 { return 0; }
-        p_sub = unsafe { (*unsafe { (*p_from).u4.p_subq }).p_select };
+
+        /// FROM is a subquery
+        (p_sub = unsafe { (*unsafe { (*p_from).u4.p_subq }).p_select });
         if unsafe { (*p_sub).p_prior } == core::ptr::null_mut() { return 0; }
         if unsafe { (*p_sub).sel_flags } & 67108864 as u32 != 0 { return 0; }
         '__b90: loop {
@@ -9001,12 +10626,16 @@ extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
                     return 0;
                 }
                 { let _ = 0; };
-                p_sub = unsafe { (*p_sub).p_prior };
+
+                /// Due to the previous
+                (p_sub = unsafe { (*p_sub).p_prior });
                 break '__c90;
             }
             if !(!(p_sub).is_null()) { break '__b90; }
         }
-        db = unsafe { (*p_parse_1).db };
+
+        /// If we reach this point then it is OK to perform the transformation
+        (db = unsafe { (*p_parse_1).db });
         p_count = p_expr;
         p_expr = core::ptr::null_mut();
         p_sub = unsafe { sqlite3_subquery_detach(db, p_from) };
@@ -9064,6 +10693,22 @@ extern "C" fn count_of_view_optimization(p_parse_1: *mut Parse,
     }
 }
 
+///* This function is called to determine whether or not it is safe to
+///* push WHERE clause expression pExpr down to FROM clause sub-query
+///* pSubq, which contains at least one window function. Return 1
+///* if it is safe and the expression should be pushed down, or 0
+///* otherwise.
+///*
+///* It is only safe to push the expression down if it consists only
+///* of constants and copies of expressions that appear in the PARTITION
+///* BY clause of all window function used by the sub-query. It is safe
+///* to filter out entire partitions, but not rows within partitions, as
+///* this may change the results of the window functions.
+///*
+///* At the time this function is called it is guaranteed that
+///*
+///*   * the sub-query uses only one distinct window frame, and
+///*   * that the window frame has a PARTITION BY clause.
 extern "C" fn push_down_window_check(p_parse_1: *mut Parse, p_subq_1: &Select,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -9077,12 +10722,120 @@ extern "C" fn push_down_window_check(p_parse_1: *mut Parse, p_subq_1: &Select,
     }
 }
 
+///* Make copies of relevant WHERE clause terms of the outer query into
+///* the WHERE clause of subquery.  Example:
+///*
+///*    SELECT * FROM (SELECT a AS x, c-d AS y FROM t1) WHERE x=5 AND y=10;
+///*
+///* Transformed into:
+///*
+///*    SELECT * FROM (SELECT a AS x, c-d AS y FROM t1 WHERE a=5 AND c-d=10)
+///*     WHERE x=5 AND y=10;
+///*
+///* The hope is that the terms added to the inner query will make it more
+///* efficient.
+///*
+///* NAME AMBIGUITY
+///*
+///* This optimization is called the "WHERE-clause push-down optimization"
+///* or sometimes the "predicate push-down optimization".
+///*
+///* Do not confuse this optimization with another unrelated optimization
+///* with a similar name:  The "MySQL push-down optimization" causes WHERE
+///* clause terms that can be evaluated using only the index and without
+///* reference to the table are run first, so that if they are false,
+///* unnecessary table seeks are avoided.
+///*
+///* RULES
+///*
+///* Do not attempt this optimization if:
+///*
+///*   (1) (** This restriction was removed on 2017-09-29.  We used to
+///*           disallow this optimization for aggregate subqueries, but now
+///*           it is allowed by putting the extra terms on the HAVING clause.
+///*           The added HAVING clause is pointless if the subquery lacks
+///*           a GROUP BY clause.  But such a HAVING clause is also harmless
+///*           so there does not appear to be any reason to add extra logic
+///*           to suppress it. **)
+///*
+///*   (2) The inner query is the recursive part of a common table expression.
+///*
+///*   (3) The inner query has a LIMIT clause (since the changes to the WHERE
+///*       clause would change the meaning of the LIMIT).
+///*
+///*   (4) The inner query is the right operand of a LEFT JOIN and the
+///*       expression to be pushed down does not come from the ON clause
+///*       on that LEFT JOIN.
+///*
+///*   (5) The WHERE clause expression originates in the ON or USING clause
+///*       of a LEFT JOIN where iCursor is not the right-hand table of that
+///*       left join.  An example:
+///*
+///*           SELECT *
+///*           FROM (SELECT 1 AS a1 UNION ALL SELECT 2) AS aa
+///*           JOIN (SELECT 1 AS b2 UNION ALL SELECT 2) AS bb ON (a1=b2)
+///*           LEFT JOIN (SELECT 8 AS c3 UNION ALL SELECT 9) AS cc ON (b2=2);
+///*
+///*       The correct answer is three rows:  (1,1,NULL),(2,2,8),(2,2,9).
+///*       But if the (b2=2) term were to be pushed down into the bb subquery,
+///*       then the (1,1,NULL) row would be suppressed.
+///*
+///*   (6) Window functions make things tricky as changes to the WHERE clause
+///*       of the inner query could change the window over which window
+///*       functions are calculated. Therefore, do not attempt the optimization
+///*       if:
+///*
+///*     (6a) The inner query uses multiple incompatible window partitions.
+///*
+///*     (6b) The inner query is a compound and uses window-functions.
+///*
+///*     (6c) The WHERE clause does not consist entirely of constants and
+///*          copies of expressions found in the PARTITION BY clause of
+///*          all window-functions used by the sub-query. It is safe to
+///*          filter out entire partitions, as this does not change the
+///*          window over which any window-function is calculated.
+///*
+///*   (7) The inner query is a Common Table Expression (CTE) that should
+///*       be materialized.  (This restriction is implemented in the calling
+///*       routine.)
+///*
+///*   (8) If the subquery is a compound that uses UNION, INTERSECT,
+///*       or EXCEPT, then all of the result set columns for all arms of
+///*       the compound must use the BINARY collating sequence.
+///*
+///*   (9) All three of the following are true:
+///*
+///*       (9a) The WHERE clause expression originates in the ON or USING clause
+///*            of a join (either an INNER or an OUTER join), and
+///*
+///*       (9b) The subquery is to the right of the ON/USING clause
+///*
+///*       (9c) There is a RIGHT JOIN (or FULL JOIN) in between the ON/USING
+///*            clause and the subquery.
+///*
+///*       Without this restriction, the WHERE-clause push-down optimization
+///*       might move the ON/USING filter expression from the left side of a
+///*       RIGHT JOIN over to the right side, which leads to incorrect answers.
+///*       See also restriction (6) in sqlite3ExprIsSingleTableConstraint().
+///*
+///*  (10) The inner query is not the right-hand table of a RIGHT JOIN.
+///*
+///*  (11) The subquery is not a VALUES clause
+///*
+///*  (12) The WHERE clause is not "rowid ISNULL" or the equivalent.  This
+///*       case only comes up if SQLite is compiled using
+///*       SQLITE_ALLOW_ROWID_IN_VIEW.
+///*
+///* Return 0 if no changes are made and non-zero if one or more WHERE clause
+///* terms are duplicated into the subquery.
+#[allow(unused_doc_comments)]
 extern "C" fn push_down_where_terms(p_parse_1: *mut Parse,
     mut p_subq_1: *mut Select, mut p_where_1: *mut Expr,
     p_src_list_1: *mut SrcList, i_src_1: i32) -> i32 {
     unsafe {
         let mut p_new: *mut Expr = core::ptr::null_mut();
         let mut p_src: *const SrcItem = core::ptr::null();
+        /// The subquery FROM term into which WHERE is pushed
         let mut n_chng: i32 = 0;
         p_src =
             unsafe {
@@ -9212,6 +10965,8 @@ extern "C" fn push_down_where_terms(p_parse_1: *mut Parse,
                         0 ==
                             push_down_window_check(p_parse_1, unsafe { &*p_subq_1 },
                                 p_new) {
+
+                    /// Restriction 6c has prevented push-down in this case
                     unsafe {
                         sqlite3_expr_delete(unsafe { (*p_parse_1).db }, p_new)
                     };
@@ -9242,16 +10997,29 @@ extern "C" fn push_down_where_terms(p_parse_1: *mut Parse,
     }
 }
 
+///* Check to see if a subquery contains result-set columns that are
+///* never used.  If it does, change the value of those result-set columns
+///* to NULL so that they do not cause unnecessary work to compute.
+///*
+///* Return the number of column that were changed to NULL.
+#[allow(unused_doc_comments)]
 extern "C" fn disable_unused_subquery_result_columns(p_item_1: &SrcItem)
     -> i32 {
     unsafe {
         let mut n_col: i32 = 0;
         let mut p_sub: *mut Select = core::ptr::null_mut();
+        /// The subquery to be simplified
         let mut p_x: *mut Select = core::ptr::null_mut();
+        /// For looping over compound elements of pSub
         let mut p_tab: *const Table = core::ptr::null();
+        /// The table that describes the subquery
         let mut j: i32 = 0;
+        /// Column number
         let mut n_chng: i32 = 0;
+        /// Number of columns converted to NULL
         let mut col_used: Bitmask = 0 as Bitmask;
+
+        /// Columns that may not be NULLed out
         { let _ = 0; };
         if (*p_item_1).fg.is_correlated() != 0 || (*p_item_1).fg.is_cte() != 0
             {
@@ -9273,9 +11041,17 @@ extern "C" fn disable_unused_subquery_result_columns(p_item_1: &SrcItem)
                     }
                     if !(unsafe { (*p_x).p_prior }).is_null() &&
                             unsafe { (*p_x).op } as i32 != 136 {
+
+                        /// This optimization does not work for compound subqueries that
+                        ///* use UNION, INTERSECT, or EXCEPT.  Only UNION ALL is allowed.
                         return 0;
                     }
-                    if !(unsafe { (*p_x).p_win }).is_null() { return 0; }
+                    if !(unsafe { (*p_x).p_win }).is_null() {
+
+                        /// This optimization does not work for subqueries that use window
+                        ///* functions.
+                        return 0;
+                    }
                     break '__c97;
                 }
                 p_x = unsafe { (*p_x).p_prior };
@@ -9357,6 +11133,13 @@ extern "C" fn disable_unused_subquery_result_columns(p_item_1: &SrcItem)
     }
 }
 
+///* Check to see if the pThis entry of pTabList is a self-join of another view.
+///* Search FROM-clause entries in the range of iFirst..iEnd, including iFirst
+///* but stopping before iEnd.
+///*
+///* If pThis is a self-join, then return the SrcItem for the first other
+///* instance of that view found.  If pThis is not a self-join then return 0.
+#[allow(unused_doc_comments)]
 extern "C" fn is_self_join_view(p_tab_list_1: &mut SrcList,
     p_this_1: &SrcItem, mut i_first_1: i32, i_end_1: i32) -> *mut SrcItem {
     unsafe {
@@ -9403,9 +11186,15 @@ extern "C" fn is_self_join_view(p_tab_list_1: &mut SrcList,
             if unsafe { (*unsafe { (*p_item).p_s_tab }).p_schema } ==
                         core::ptr::null_mut() &&
                     unsafe { (*p_sel).sel_id } != unsafe { (*p_s1).sel_id } {
+
+                /// The query flattener left two different CTE tables with identical
+                ///* names in the same FROM clause.
                 continue;
             }
             if unsafe { (*p_s1).sel_flags } & 16777216 as u32 != 0 {
+
+                /// The view was modified by some other optimization such as
+                ///* pushDownWhereTerms()
                 continue;
             }
             return p_item;
@@ -9414,6 +11203,33 @@ extern "C" fn is_self_join_view(p_tab_list_1: &mut SrcList,
     }
 }
 
+///* Return TRUE (non-zero) if the i-th entry in the pTabList SrcList can
+///* be implemented as a co-routine.  The i-th entry is guaranteed to be
+///* a subquery.
+///*
+///* The subquery is implemented as a co-routine if all of the following are
+///* true:
+///*
+///*    (1)  The subquery will likely be implemented in the outer loop of
+///*         the query.  This will be the case if any one of the following
+///*         conditions hold:
+///*         (a)  The subquery is the only term in the FROM clause
+///*         (b)  The subquery is the left-most term and a CROSS JOIN or similar
+///*              requires it to be the outer loop
+///*         (c)  All of the following are true:
+///*                (i) The subquery is the left-most subquery in the FROM clause
+///*               (ii) There is nothing that would prevent the subquery from
+///*                    being used as the outer loop if the sqlite3WhereBegin()
+///*                    routine nominates it to that position.
+///*              (iii) The query is not a UPDATE ... FROM
+///*    (2)  The subquery is not a CTE that should be materialized because
+///*         (a) the AS MATERIALIZED keyword is used, or
+///*         (b) the CTE is used multiple times and does not have the
+///*             NOT MATERIALIZED keyword
+///*    (3)  The subquery is not part of a left operand for a RIGHT JOIN
+///*    (4)  The SQLITE_Coroutine optimization disable flag is not set
+///*    (5)  The subquery is not self-joined
+#[allow(unused_doc_comments)]
 extern "C" fn from_clause_term_can_be_coroutine(p_parse_1: &Parse,
     p_tab_list_1: *mut SrcList, mut i: i32, sel_flags_1: i32) -> i32 {
     unsafe {
@@ -9455,6 +11271,8 @@ extern "C" fn from_clause_term_can_be_coroutine(p_parse_1: &Parse,
                 return 1;
             }
             if sel_flags_1 & 268435456 != 0 { return 0; }
+
+            /// (1c-iii)
             return 1;
         }
         if sel_flags_1 & 268435456 != 0 { return 0; }
@@ -9476,6 +11294,13 @@ extern "C" fn from_clause_term_can_be_coroutine(p_parse_1: &Parse,
     }
 }
 
+///* If p2 exists and p1 and p2 have the same number of terms, then change
+///* every term of p1 to have the same sort order as p2 and return true.
+///*
+///* If p2 is NULL or p1 and p2 are different lengths, then make no changes
+///* and return false.
+///*
+///* p1 must be non-NULL.
 extern "C" fn sqlite3_copy_sort_order(p1: &mut ExprList, p2: *const ExprList)
     -> i32 {
     { let _ = 0; };
@@ -9506,6 +11331,7 @@ extern "C" fn sqlite3_copy_sort_order(p1: &mut ExprList, p2: *const ExprList)
     } else { return 0; }
 }
 
+///* Deallocate a single AggInfo object
 extern "C" fn agginfo_free(db: *mut Sqlite3, p_arg_1: *mut ()) -> () {
     let p: *mut AggInfo = p_arg_1 as *mut AggInfo;
     unsafe { sqlite3_db_free(db, unsafe { (*p).a_col } as *mut ()) };
@@ -9513,6 +11339,15 @@ extern "C" fn agginfo_free(db: *mut Sqlite3, p_arg_1: *mut ()) -> () {
     unsafe { sqlite3_db_free_nn(db, p as *mut ()) };
 }
 
+///* sqlite3WalkExpr() callback used by havingToWhere().
+///*
+///* If the node passed to the callback is a TK_AND node, return
+///* WRC_Continue to tell sqlite3WalkExpr() to iterate through child nodes.
+///*
+///* Otherwise, return WRC_Prune. In this case, also check if the
+///* sub-expression matches the criteria for being moved to the WHERE
+///* clause. If so, add it to the WHERE clause and replace the sub-expression
+///* within the HAVING expression with a constant "1".
 extern "C" fn having_to_where_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -9552,6 +11387,19 @@ extern "C" fn having_to_where_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Transfer eligible terms from the HAVING clause of a query, which is
+///* processed after grouping, to the WHERE clause, which is processed before
+///* grouping. For example, the query:
+///*
+///*   SELECT * FROM <tables> WHERE a=? GROUP BY b HAVING b=? AND c=?
+///*
+///* can be rewritten as:
+///*
+///*   SELECT * FROM <tables> WHERE a=? AND b=? GROUP BY b HAVING c=?
+///*
+///* A term of the HAVING expression is eligible for transfer if it consists
+///* entirely of constants and expressions that are also GROUP BY terms that
+///* use the "BINARY" collation sequence.
 extern "C" fn having_to_where(p_parse_1: *mut Parse, p: *mut Select) -> () {
     unsafe {
         let mut s_walker: Walker = unsafe { core::mem::zeroed() };
@@ -9566,12 +11414,30 @@ extern "C" fn having_to_where(p_parse_1: *mut Parse, p: *mut Select) -> () {
     }
 }
 
+///* The pFunc is the only aggregate function in the query.  Check to see
+///* if the query is a candidate for the min/max optimization.
+///*
+///* If the query is a candidate for the min/max optimization, then set
+///* *ppMinMax to be an ORDER BY clause to be used for the optimization
+///* and return either WHERE_ORDERBY_MIN or WHERE_ORDERBY_MAX depending on
+///* whether pFunc is a min() or max() function.
+///*
+///* If the query is not a candidate for the min/max optimization, return
+///* WHERE_ORDERBY_NORMAL (which must be zero).
+///*
+///* This routine must be called after aggregate functions have been
+///* located but before their arguments have been subjected to aggregate
+///* analysis.
+#[allow(unused_doc_comments)]
 extern "C" fn min_max_query(db: *mut Sqlite3, p_func_1: &Expr,
     pp_min_max_1: &mut *mut ExprList) -> u8 {
     unsafe {
         let mut e_ret: i32 = 0;
+        /// Return value
         let mut p_e_list: *const ExprList = core::ptr::null();
+        /// Arguments to agg function
         let mut z_func: *const i8 = core::ptr::null();
+        /// Name of aggregate function pFunc
         let mut p_order_by: *mut ExprList = core::ptr::null_mut();
         let mut sort_flags: u8 = 0 as u8;
         { let _ = 0; };
@@ -9627,6 +11493,21 @@ extern "C" fn min_max_query(db: *mut Sqlite3, p_func_1: &Expr,
     }
 }
 
+///* Analyze the arguments to aggregate functions.  Create new pAggInfo->aCol[]
+///* entries for columns that are arguments to aggregate functions but which
+///* are not otherwise used.
+///*
+///* The aCol[] entries in AggInfo prior to nAccumulator are columns that
+///* are referenced outside of aggregate functions.  These might be columns
+///* that are part of the GROUP by clause, for example.  Other database engines
+///* would throw an error if there is a column reference that is not in the
+///* GROUP BY clause and that is not part of an aggregate function argument.
+///* But SQLite allows this.
+///*
+///* The aCol[] entries beginning with the aCol[nAccumulator] and following
+///* are column references that are used exclusively as arguments to
+///* aggregate functions.  This routine is responsible for computing
+///* (or recomputing) those aCol[] entries.
 extern "C" fn analyze_agg_func_args(p_agg_info_1: &AggInfo,
     p_nc_1: *mut NameContext) -> () {
     unsafe {
@@ -9674,6 +11555,11 @@ extern "C" fn analyze_agg_func_args(p_agg_info_1: &AggInfo,
     }
 }
 
+///* An index on expressions is being used in the inner loop of an
+///* aggregate query with a GROUP BY clause.  This routine attempts
+///* to adjust the AggInfo object to take advantage of index and to
+///* perhaps use the index as a covering index.
+///*
 extern "C" fn optimize_aggregate_use_of_indexed_expr(p_parse_1: *const Parse,
     p_select_1: *const Select, p_agg_info_1: *mut AggInfo,
     p_nc_1: *mut NameContext) -> () {
@@ -9717,6 +11603,21 @@ extern "C" fn optimize_aggregate_use_of_indexed_expr(p_parse_1: *const Parse,
     }
 }
 
+///* Allocate a block of registers so that there is one register for each
+///* pAggInfo->aCol[] and pAggInfo->aFunc[] entry in pAggInfo.  The first
+///* register in this block is stored in pAggInfo->iFirstReg.
+///*
+///* This routine may only be called once for each AggInfo object.  Prior
+///* to calling this routine:
+///*
+///*     *  The aCol[] and aFunc[] arrays may be modified
+///*     *  The AggInfoColumnReg() and AggInfoFuncReg() macros may not be used
+///*
+///* After calling this routine:
+///*
+///*     *  The aCol[] and aFunc[] arrays are fixed
+///*     *  The AggInfoColumnReg() and AggInfoFuncReg() macros may be used
+///*
 extern "C" fn assign_aggregate_registers(p_parse_1: &mut Parse,
     p_agg_info_1: &mut AggInfo) -> () {
     { let _ = 0; };
@@ -9725,6 +11626,7 @@ extern "C" fn assign_aggregate_registers(p_parse_1: &mut Parse,
     (*p_parse_1).n_mem += (*p_agg_info_1).n_column + (*p_agg_info_1).n_func;
 }
 
+///* Walker callback for aggregateConvertIndexedExprRefToColumn().
 extern "C" fn aggregate_idx_epr_ref_to_col_callback(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -9760,6 +11662,9 @@ extern "C" fn aggregate_idx_epr_ref_to_col_callback(p_walker_1: *mut Walker,
     }
 }
 
+///* Convert every pAggInfo->aFunc[].pExpr such that any node within
+///* those expressions that has pAppInfo set is changed into a TK_AGG_COLUMN
+///* opcode.
 extern "C" fn aggregate_convert_indexed_expr_ref_to_column(p_agg_info_1:
         &AggInfo) -> () {
     let mut i: i32 = 0;
@@ -9787,6 +11692,21 @@ extern "C" fn aggregate_convert_indexed_expr_ref_to_column(p_agg_info_1:
     }
 }
 
+///* Generate code that will update the accumulator memory cells for an
+///* aggregate based on the current cursor position.
+///*
+///* If regAcc is non-zero and there are no min() or max() aggregates
+///* in pAggInfo, then only populate the pAggInfo->nAccumulator accumulator
+///* registers if register regAcc contains 0. The caller will take care
+///* of setting and clearing regAcc.
+///*
+///* For an ORDER BY aggregate, the actual accumulator memory cell update
+///* is deferred until after all input rows have been received, so that they
+///* can be run in the requested order.  In that case, instead of invoking
+///* OP_AggStep to update the accumulator, just add the arguments that would
+///* have been passed into OP_AggStep into the sorting ephemeral table
+///* (along with the appropriate sort key).
+#[allow(unused_doc_comments)]
 extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
     p_agg_info_1: &mut AggInfo, e_distinct_type_1: i32) -> () {
     unsafe {
@@ -9831,6 +11751,14 @@ extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
                                         *__p
                                     };
                             }
+
+                            /// If this is the first row of the group (regAcc contains 0), clear the
+                            ///* "magnet" register regHit so that the accumulator registers
+                            ///* are populated if the FILTER clause jumps over the the
+                            ///* invocation of min() or max() altogether. Or, if this is not
+                            ///* the first row (regAcc contains 1), set the magnet register so that
+                            ///* the accumulators are not populated unless the min()/max() is invoked
+                            ///* and indicates that they should be.
                             unsafe { sqlite3_vdbe_add_op2(v, 82, reg_acc_1, reg_hit) };
                         }
                         addr_next = unsafe { sqlite3_vdbe_make_label(p_parse_1) };
@@ -9839,8 +11767,13 @@ extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
                         };
                     }
                     if unsafe { (*p_f).i_ob_tab } >= 0 {
+                        /// Instead of invoking AggStep, we must push the arguments that would
+                        ///* have been passed to AggStep onto the sorting table.
                         let mut jj: i32 = 0;
+                        /// Registered used so far in building the record
                         let mut p_ob_list: *mut ExprList = core::ptr::null_mut();
+
+                        /// The ORDER BY clause
                         { let _ = 0; };
                         n_arg = unsafe { (*p_list).n_expr };
                         { let _ = 0; };
@@ -9874,8 +11807,10 @@ extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
                             *__p += 1;
                             __t
                         };
-                        reg_agg =
-                            unsafe { sqlite3_get_temp_range(p_parse_1, reg_agg_sz) };
+
+                        /// One extra register to hold result of MakeRecord
+                        (reg_agg =
+                            unsafe { sqlite3_get_temp_range(p_parse_1, reg_agg_sz) });
                         reg_distinct = reg_agg;
                         unsafe {
                             sqlite3_expr_code_expr_list(p_parse_1, p_ob_list, reg_agg,
@@ -9943,6 +11878,8 @@ extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
                         };
                     }
                     if unsafe { (*p_f).i_ob_tab } >= 0 {
+
+                        /// Insert a new record into the ORDER BY table
                         unsafe {
                             sqlite3_vdbe_add_op3(v, 99, reg_agg, reg_agg_sz - 1,
                                 reg_agg + reg_agg_sz - 1)
@@ -10073,6 +12010,9 @@ extern "C" fn update_accumulator(p_parse_1: *mut Parse, reg_acc_1: i32,
     }
 }
 
+///* Invoke the OP_AggFinalize opcode for every aggregate function
+///* in the AggInfo structure.
+#[allow(unused_doc_comments)]
 extern "C" fn finalize_agg_functions(p_parse_1: *mut Parse,
     p_agg_info_1: &AggInfo) -> () {
     unsafe {
@@ -10089,11 +12029,21 @@ extern "C" fn finalize_agg_functions(p_parse_1: *mut Parse,
                     if unsafe { (*p_parse_1).n_err } != 0 { return; }
                     p_list = unsafe { (*unsafe { (*p_f).p_f_expr }).x.p_list };
                     if unsafe { (*p_f).i_ob_tab } >= 0 {
+                        /// For an ORDER BY aggregate, calls to OP_AggStep were deferred.  Inputs
+                        ///* were stored in emphermal table pF->iOBTab.  Here, we extract those
+                        ///* inputs (in ORDER BY order) and make all calls to OP_AggStep
+                        ///* before doing the OP_AggFinal call.
                         let mut i_top: i32 = 0;
+                        /// Start of loop for extracting columns
                         let mut n_arg: i32 = 0;
+                        /// Number of columns to extract
                         let mut n_key: i32 = 0;
+                        /// Key columns to be skipped
                         let mut reg_agg: i32 = 0;
+                        /// Extract into this array
                         let mut j: i32 = 0;
+
+                        /// Loop counter
                         { let _ = 0; };
                         n_arg = unsafe { (*p_list).n_expr };
                         reg_agg =
@@ -10203,6 +12153,13 @@ extern "C" fn finalize_agg_functions(p_parse_1: *mut Parse,
     }
 }
 
+///* Reset the aggregate accumulator.
+///*
+///* The aggregate accumulator is a set of memory cells that hold
+///* intermediate results while calculating an aggregate.  This
+///* routine generates code that stores NULLs in all of those memory
+///* cells.
+#[allow(unused_doc_comments)]
 extern "C" fn reset_accumulator(p_parse_1: *mut Parse, p_agg_info_1: &AggInfo)
     -> () {
     unsafe {
@@ -10273,6 +12230,8 @@ extern "C" fn reset_accumulator(p_parse_1: *mut Parse, p_agg_info_1: &AggInfo)
                             { let __p = &mut n_extra; let __t = *__p; *__p += 1; __t };
                         }
                         if unsafe { (*p_func).b_ob_payload } != 0 {
+
+                            /// extra columns for the function arguments
                             { let _ = 0; };
                             { let _ = 0; };
                             n_extra +=
@@ -10329,6 +12288,21 @@ extern "C" fn reset_accumulator(p_parse_1: *mut Parse, p_agg_info_1: &AggInfo)
     }
 }
 
+///* The select statement passed as the first argument is an aggregate query.
+///* The second argument is the associated aggregate-info object. This
+///* function tests if the SELECT is of the form:
+///*
+///*   SELECT count(*) FROM <tbl>
+///*
+///* where table is a database table, not a sub-select or view. If the query
+///* does match this pattern, then a pointer to the Table object representing
+///* <tbl> is returned. Otherwise, NULL is returned.
+///*
+///* This routine checks to see if it is safe to use the count optimization.
+///* A correct answer is still obtained (though perhaps more slowly) if
+///* this routine returns NULL when it could have returned a table pointer.
+///* But returning the pointer when NULL should have been returned can
+///* result in incorrect answers and/or crashes.  So, when in doubt, return NULL.
 extern "C" fn is_simple_count(p: &Select, p_agg_info_1: *mut AggInfo)
     -> *mut Table {
     unsafe {
@@ -10406,6 +12380,14 @@ extern "C" fn explain_simple_count(p_parse_1: *mut Parse, p_tab_1: &Table,
     }
 }
 
+///* Unless an "EXPLAIN QUERY PLAN" command is being processed, this function
+///* is a no-op. Otherwise, it adds a single row of output to the EQP result,
+///* where the caption is of the form:
+///*
+///*   "USE TEMP B-TREE FOR xxx"
+///*
+///* where xxx is one of "DISTINCT", "ORDER BY" or "GROUP BY". Exactly which
+///* is determined by the zUsage argument.
 extern "C" fn explain_temp_table(p_parse_1: *mut Parse, z_usage_1: *const i8)
     -> () {
     unsafe {
@@ -10415,14 +12397,23 @@ extern "C" fn explain_temp_table(p_parse_1: *mut Parse, z_usage_1: *const i8)
     };
 }
 
+///* If the inner loop was generated using a non-null pOrderBy argument,
+///* then the results were placed in a sorter.  After the loop is terminated
+///* we need to run the sorter and output the results.  The following
+///* routine generates the code needed to do that.
+#[allow(unused_doc_comments)]
 extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
     p_sort_1: &SortCtx, mut n_column_1: i32, p_dest_1: &SelectDest) -> () {
     unsafe {
         let v: *mut Vdbe = unsafe { (*p_parse_1).p_vdbe };
+        /// The prepared statement
         let addr_break: i32 = (*p_sort_1).label_done;
+        /// Jump here to exit loop
         let addr_continue: i32 =
             unsafe { sqlite3_vdbe_make_label(p_parse_1) };
+        /// Jump here for next cycle
         let mut addr: i32 = 0;
+        /// Top of output loop. Jump for Next.
         let mut addr_once: i32 = 0;
         let mut i_tab: i32 = 0;
         let p_order_by: *const ExprList =
@@ -10433,9 +12424,12 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
         let mut reg_rowid: i32 = 0;
         let mut i_col: i32 = 0;
         let mut n_key: i32 = 0;
+        /// Number of key columns in sorter record
         let mut i_sort_tab: i32 = 0;
+        /// Sorter cursor to read from
         let mut i: i32 = 0;
         let mut b_seq: i32 = 0;
+        /// True if sorter record includes seq. no.
         let n_ref_key: i32 = 0;
         let a_out_ex: *const ExprListItem =
             unsafe { (*(*p).p_e_list).a.as_ptr() } as *const ExprListItem;
@@ -10594,7 +12588,11 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
                         };
                         break '__s117;
                     }
-                    { break '__s117; }
+                    {
+
+                        /// The LIMIT clause will terminate the loop for us
+                        break '__s117;
+                    }
                     {
                         let i2: i32 = (*p_dest_1).i_sd_parm2;
                         let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
@@ -10652,7 +12650,11 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
                         };
                         break '__s117;
                     }
-                    { break '__s117; }
+                    {
+
+                        /// The LIMIT clause will terminate the loop for us
+                        break '__s117;
+                    }
                     {
                         let i2: i32 = (*p_dest_1).i_sd_parm2;
                         let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
@@ -10698,7 +12700,11 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
                         };
                         break '__s117;
                     }
-                    { break '__s117; }
+                    {
+
+                        /// The LIMIT clause will terminate the loop for us
+                        break '__s117;
+                    }
                     {
                         let i2: i32 = (*p_dest_1).i_sd_parm2;
                         let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
@@ -10732,7 +12738,11 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
                     }
                 }
                 8 => {
-                    { break '__s117; }
+                    {
+
+                        /// The LIMIT clause will terminate the loop for us
+                        break '__s117;
+                    }
                     {
                         let i2: i32 = (*p_dest_1).i_sd_parm2;
                         let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
@@ -10825,6 +12835,8 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
             }
             unsafe { sqlite3_release_temp_reg(p_parse_1, reg_rowid) };
         }
+
+        /// The bottom of the loop
         unsafe { sqlite3_vdbe_resolve_label(v, addr_continue) };
         if (*p_sort_1).sort_flags as i32 & 1 != 0 {
             unsafe { sqlite3_vdbe_add_op2(v, 38, i_tab, addr) };
@@ -10836,100 +12848,505 @@ extern "C" fn generate_sort_tail(p_parse_1: *mut Parse, p: &Select,
     }
 }
 
+///* Generate byte-code for the SELECT statement given in the p argument. 
+///*
+///* The results are returned according to the SelectDest structure.
+///* See comments in sqliteInt.h for further information.
+///*
+///* This routine returns the number of errors.  If any errors are
+///* encountered, then an appropriate error message is left in
+///* pParse->zErrMsg.
+///*
+///* This routine does NOT free the Select structure passed in.  The
+///* calling function needs to do that.
+///*
+///* This is a long function.  The following is an outline of the processing
+///* steps, with tags referencing various milestones:
+///*
+///*  *  Resolve names and similar preparation                tag-select-0100
+///*  *  Scan of the FROM clause                              tag-select-0200
+///*      +  OUTER JOIN strength reduction                      tag-select-0220
+///*      +  Sub-query ORDER BY removal                         tag-select-0230
+///*      +  Query flattening                                   tag-select-0240
+///*  *  Separate subroutine for compound-SELECT              tag-select-0300
+///*  *  WHERE-clause constant propagation                    tag-select-0330
+///*  *  Count()-of-VIEW optimization                         tag-select-0350
+///*  *  Scan of the FROM clause again                        tag-select-0400
+///*      +  Authorize unreferenced tables                      tag-select-0410
+///*      +  Predicate push-down optimization                   tag-select-0420
+///*      +  Omit unused subquery columns optimization          tag-select-0440
+///*      +  Generate code to implement subqueries              tag-select-0480
+///*         -  Co-routines                                       tag-select-0482
+///*         -  Reuse previously computed CTE                     tag-select-0484
+///*         -  REuse previously computed VIEW                    tag-select-0486
+///*         -  Materialize a VIEW or CTE                         tag-select-0488
+///*  *  DISTINCT ORDER BY -> GROUP BY optimization           tag-select-0500
+///*  *  Set up for ORDER BY                                  tag-select-0600
+///*  *  Create output table                                  tag-select-0630
+///*  *  Prepare registers for LIMIT                          tag-select-0650
+///*  *  Setup for DISTINCT                                   tag-select-0680
+///*  *  Generate code for non-aggregate and non-GROUP BY     tag-select-0700
+///*  *  Generate code for aggregate and/or GROUP BY          tag-select-0800
+///*      +  GROUP BY queries                                   tag-select-0810
+///*      +  non-GROUP BY queries                               tag-select-0820
+///*         -  Special case of count() w/o GROUP BY              tag-select-0821
+///*         -  General case of non-GROUP BY aggregates           tag-select-0822
+///*  *  Sort results, as needed                              tag-select-0900
+///*  *  Internal self-checks                                 tag-select-1000
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_select(p_parse: *mut Parse, p: *mut Select,
     p_dest: *mut SelectDest) -> i32 {
     unsafe {
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// Return from sqlite3WhereBegin()
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The virtual machine under construction
         let mut is_agg: i32 = 0;
+        /// True for select lists like "count(*)"
         let mut p_e_list: *mut ExprList = core::ptr::null_mut();
+        /// List of columns to extract.
         let mut p_tab_list: *mut SrcList = core::ptr::null_mut();
+        /// List of tables to select from
         let mut p_where: *mut Expr = core::ptr::null_mut();
+        /// The WHERE clause.  May be NULL
         let mut p_group_by: *mut ExprList = core::ptr::null_mut();
+        /// The GROUP BY clause.  May be NULL
         let mut p_having: *mut Expr = core::ptr::null_mut();
+        /// The HAVING clause.  May be NULL
         let mut p_agg_info: *mut AggInfo = core::ptr::null_mut();
+        /// Aggregate information
         let mut rc: i32 = 0;
+        /// Value to return from this function
         let mut s_distinct: DistinctCtx = unsafe { core::mem::zeroed() };
+        /// Info on how to code the DISTINCT keyword
         let mut s_sort: SortCtx = unsafe { core::mem::zeroed() };
+        /// Info on how to code the ORDER BY clause
         let mut i_end: i32 = 0;
+        /// Address of the end of the query
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut p_min_max_order_by: *mut ExprList = core::ptr::null_mut();
+        /// Added ORDER BY for min/max queries
         let mut min_max_flag: u8 = 0 as u8;
+        /// Flag for min/max queries
+        /// tag-select-0100
+        /// All of these destinations are also able to ignore the ORDER BY clause
+        /// If the SF_UFSrcCheck flag is set, then this function is being called
+        ///* as part of populating the temp table for an UPDATE...FROM statement.
+        ///* In this case, it is an error if the target object (pSrc->a[0]) name
+        ///* or alias is duplicated within FROM clause (pSrc->a[1..n]). 
+        ///*
+        ///* Postgres disallows this case too. The reason is that some other
+        ///* systems handle this case differently, and not all the same way,
+        ///* which is just confusing. To avoid this, we follow PG's lead and
+        ///* disallow it altogether.
         let mut p0: *mut SrcItem = core::ptr::null_mut();
+        /// Clear the SF_UFSrcCheck flag. The check has already been performed,
+        ///* and leaving this flag set can cause errors if a compound sub-query
+        ///* in p->pSrc is flattened into this query and this function called
+        ///* again as part of compound SELECT processing.
+        /// SQLITE_OMIT_WINDOWFUNC
+        /// Try to do various optimizations (flattening subqueries, and strength
+        ///* reduction of join operators) in the FROM clause up into the main query
+        ///* tag-select-0200
         let mut p_item: *mut SrcItem = core::ptr::null_mut();
         let mut p_sub: *mut Select = core::ptr::null_mut();
         let mut p_tab: *const Table = core::ptr::null();
+        /// The expander should have already created transient Table objects
+        ///* even for FROM clause elements such as subqueries that do not correspond
+        ///* to a real table
+        /// Try to simplify joins:
+        ///*
+        ///*      LEFT JOIN  ->  JOIN
+        ///*     RIGHT JOIN  ->  JOIN
+        ///*      FULL JOIN  ->  RIGHT JOIN
+        ///*
+        ///* If terms of the i-th table are used in the WHERE clause in such a
+        ///* way that the i-th table cannot be the NULL row of a join, then
+        ///* perform the appropriate simplification. This is called
+        ///* "OUTER JOIN strength reduction" in the SQLite documentation.
+        ///* tag-select-0220
         let mut p_i2: *mut SrcItem = core::ptr::null_mut();
+        /// No further action if this term of the FROM clause is not a subquery
+        /// Catch mismatch in the declared columns of a view and the number of
+        ///* columns in the SELECT on the RHS
+        /// Do not attempt the usual optimizations (flattening and ORDER BY
+        ///* elimination) on a MATERIALIZED common table expression because
+        ///* a MATERIALIZED common table expression is an optimization fence.
+        /// Do not try to flatten an aggregate subquery.
+        ///*
+        ///* Flattening an aggregate subquery is only possible if the outer query
+        ///* is not a join.  But if the outer query is not a join, then the subquery
+        ///* will be implemented as a co-routine and there is no advantage to
+        ///* flattening in that case.
+        /// tag-select-0230:
+        ///* If a FROM-clause subquery has an ORDER BY clause that is not
+        ///* really doing anything, then delete it now so that it does not
+        ///* interfere with query flattening.  See the discussion at
+        ///* https://sqlite.org/forum/forumpost/2d76f2bcf65d256a
+        ///*
+        ///* Beware of these cases where the ORDER BY clause may not be safely
+        ///* omitted:
+        ///*
+        ///*    (1)   There is also a LIMIT clause
+        ///*    (2)   The subquery was added to help with window-function
+        ///*          processing
+        ///*    (3)   The subquery is in the FROM clause of an UPDATE
+        ///*    (4)   The outer query uses an aggregate function other than
+        ///*          the built-in count(), min(), or max().
+        ///*    (5)   The ORDER BY isn't going to accomplish anything because
+        ///*          one of:
+        ///*            (a)  The outer query has a different ORDER BY clause
+        ///*            (b)  The subquery is part of a join
+        ///*          See forum post 062d576715d277c8
+        ///*    (6)   The subquery is not a recursive CTE.  ORDER BY has a different
+        ///*          meaning for recursive CTEs and this optimization does not
+        ///*          apply.
+        ///*
+        ///* Also retain the ORDER BY if the OmitOrderBy optimization is disabled.
+        /// Condition (5)
+        /// Condition (1)
+        /// (2) and (6)
+        /// Condition (3) and (4)
+        /// If the outer query contains a "complex" result set (that is,
+        ///* if the result set of the outer query uses functions or subqueries)
+        ///* and if the subquery contains an ORDER BY clause and if
+        ///* it will be implemented as a co-routine, then do not flatten.  This
+        ///* restriction allows SQL constructs like this:
+        ///*
+        ///*  SELECT expensive_function(x)
+        ///*    FROM (SELECT x FROM tab ORDER BY y LIMIT 10);
+        ///*
+        ///* The expensive_function() is only computed on the 10 rows that
+        ///* are output, rather than every row of the table.
+        ///*
+        ///* The requirement that the outer query have a complex result set
+        ///* means that flattening does occur on simpler SQL constraints without
+        ///* the expensive_function() like:
+        ///*
+        ///*  SELECT x FROM (SELECT x FROM tab ORDER BY y LIMIT 10);
+        /// tag-select-0240
+        /// This subquery can be absorbed into its parent.
+        /// Handle compound SELECT statements using the separate multiSelect()
+        ///* procedure.  tag-select-0300
+        /// If there may be an "EXISTS (SELECT ...)" in the WHERE clause, attempt
+        ///* to change it into a join.
+        /// Do the WHERE-clause constant propagation optimization if this is
+        ///* a join.  No need to spend time on this operation for non-join queries
+        ///* as the equivalent optimization will be handled by query planner in
+        ///* sqlite3WhereBegin().  tag-select-0330
+        /// tag-select-0350
+        /// Loop over all terms in the FROM clause and do two things for each term:
+        ///*
+        ///*   (1) Authorize unreferenced tables
+        ///*   (2) Generate code for all sub-queries
+        ///*
+        ///* tag-select-0400
         let mut p_item_1: *mut SrcItem = core::ptr::null_mut();
         let mut p_prior: *const SrcItem = core::ptr::null();
         let mut dest: SelectDest = unsafe { core::mem::zeroed() };
         let mut p_subq: *mut Subquery = core::ptr::null_mut();
         let mut p_sub_1: *mut Select = core::ptr::null_mut();
         let mut z_saved_auth_context: *const i8 = core::ptr::null();
+        /// Authorized unreferenced tables.  tag-select-0410
+        ///*
+        ///* Issue SQLITE_READ authorizations with a fake column name for any
+        ///* tables that are referenced but from which no values are extracted.
+        ///* Examples of where these kinds of null SQLITE_READ authorizations
+        ///* would occur:
+        ///*
+        ///*     SELECT count(*) FROM t1;   -- SQLITE_READ t1.""
+        ///*     SELECT t1.* FROM t1, t2;   -- SQLITE_READ t2.""
+        ///*
+        ///* The fake column name is an empty string.  It is possible for a table to
+        ///* have a column named by the empty string, in which case there is no way to
+        ///* distinguish between an unreferenced table and an actual reference to the
+        ///* "" column. The original design was for the fake column name to be a NULL,
+        ///* which would be unambiguous.  But legacy authorization callbacks might
+        ///* assume the column name is non-NULL and segfault.  The use of an empty
+        ///* string for the fake column name seems safer.
         let mut z_db: *const i8 = core::ptr::null();
         let mut i_db: i32 = 0;
+        /// Generate code for all sub-queries in the FROM clause
+        /// The code for a subquery should only be generated once.
+        /// Increment Parse.nHeight by the height of the largest expression
+        ///* tree referred to by this, the parent select. The child select
+        ///* may contain expression trees of at most
+        ///* (SQLITE_MAX_EXPR_DEPTH-Parse.nHeight) height. This is a bit
+        ///* more conservative than necessary, but much easier than enforcing
+        ///* an exact limit.
+        /// Make copies of constant WHERE-clause terms in the outer query down
+        ///* inside the subquery.  This can help the subquery to run more efficiently.
+        ///* This is the "predicate push-down optimization".  tag-select-0420
+        /// Convert unused result columns of the subquery into simple NULL
+        ///* expressions, to avoid unneeded searching and computation.
+        ///* tag-select-0440
+        /// Generate byte-code to implement the subquery  tag-select-0480
+        /// Implement a co-routine that will return a single row of the result
+        ///* set on each invocation.  tag-select-0482
         let mut addr_top: i32 = 0;
+        /// This is a CTE for which materialization code has already been
+        ///* generated.  Invoke the subroutine to compute the materialization,
+        ///* then make the pItem->iCursor be a copy of the ephemeral table that
+        ///* holds the result of the materialization. tag-select-0484
         let mut p_cte_use: *const CteUse = core::ptr::null();
+        /// This view has already been materialized by a prior entry in
+        ///* this same FROM clause.  Reuse it.  tag-select-0486
         let mut p_prior_subq: *const Subquery = core::ptr::null();
+        /// Materialize the view.  If the view is not correlated, generate a
+        ///* subroutine to do the materialization so that subsequent uses of
+        ///* the same view can reuse the materialization.  tag-select-0488
         let mut top_addr: i32 = 0;
         let mut once_addr: i32 = 0;
+        /// If the subquery is not correlated and if we are not inside of
+        ///* a trigger, then we only need to compute the value of the subquery
+        ///* once.
         let mut p_cte_use_1: *mut CteUse = core::ptr::null_mut();
+        /// Various elements of the SELECT copied into local variables for
+        ///* convenience
+        /// tag-select-0500
+        ///*
+        ///* If the query is DISTINCT with an ORDER BY but is not an aggregate, and
+        ///* if the select-list is the same as the ORDER BY list, then this query
+        ///* can be rewritten as a GROUP BY. In other words, this:
+        ///*
+        ///*     SELECT DISTINCT xyz FROM ... ORDER BY xyz
+        ///*
+        ///* is transformed to:
+        ///*
+        ///*     SELECT xyz FROM ... GROUP BY xyz ORDER BY xyz
+        ///*
+        ///* The second form is preferred as a single index (or temp-table) may be
+        ///* used for both the ORDER BY and DISTINCT processing. As originally
+        ///* written the query must use a temp-table for at least one of the ORDER
+        ///* BY and DISTINCT, and an index or separate temp-table for the other.
+        /// Notice that even thought SF_Distinct has been cleared from p->selFlags,
+        ///* the sDistinct.isTnct is still set.  Hence, isTnct represents the
+        ///* original setting of the SF_Distinct flag, not the current setting
+        /// If there is an ORDER BY clause, then create an ephemeral index to
+        ///* do the sorting.  But this sorting ephemeral index might end up
+        ///* being unused if the data can be extracted in pre-sorted order.
+        ///* If that is the case, then the OP_OpenEphemeral instruction will be
+        ///* changed to an OP_Noop once we figure out that the sorting index is
+        ///* not needed.  The sSort.addrSortIndex variable is used to facilitate
+        ///* that change.  tag-select-0600
         let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
+        /// If the output is destined for a temporary table, open that table.
+        ///* tag-select-0630
+        /// Delete or NULL-out result columns that will never be used
         let mut ii: i32 = 0;
+        /// Set the limiter.  tag-select-0650
+        /// 4 billion rows
+        /// Open an ephemeral index to use for the distinct set. tag-select-0680
+        /// No aggregate functions and no GROUP BY clause.  tag-select-0700
         let mut wctrl_flags: u16 = 0 as u16;
         let mut p_win: *const Window = core::ptr::null();
+        /// Main window object (or NULL)
+        /// Begin the database scan.
+        /// TUNING: For a UNION CTE, because UNION is implies DISTINCT,
+        ///* reduce the estimated output row count by 8 (LogEst 30). 
+        ///* Search for tag-20250414a to see other cases
+        /// If sorting index that was created by a prior OP_OpenEphemeral
+        ///* instruction ended up not being needed, then change the OP_OpenEphemeral
+        ///* into an OP_Noop.
         let mut addr_gosub: i32 = 0;
         let mut i_cont: i32 = 0;
         let mut i_break: i32 = 0;
         let mut reg_gosub: i32 = 0;
+        /// SQLITE_OMIT_WINDOWFUNC
+        /// Use the standard inner loop.
+        /// End the database scan loop.
+        /// This case is for when there exist aggregate functions or a GROUP BY
+        ///* clause or both.  tag-select-0800
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context for processing aggregate information
         let mut i_a_mem: i32 = 0;
+        /// First Mem address for storing current GROUP BY
         let mut i_b_mem: i32 = 0;
+        /// First Mem address for previous GROUP BY
         let mut i_use_flag: i32 = 0;
+        /// Mem address holding flag indicating that at least
+        ///* one row of the input to the aggregator has been
+        ///* processed
         let mut i_abort_flag: i32 = 0;
+        /// Mem address which causes query abort if positive
         let mut group_by_sort: i32 = 0;
+        /// Rows come from source in GROUP BY order
         let mut addr_end: i32 = 0;
+        /// End of processing for this SELECT
         let mut sort_p_tab: i32 = 0;
+        /// Pseudotable used to decode sorting results
         let mut sort_out: i32 = 0;
+        /// Output register from the sorter
         let mut order_by_grp: i32 = 0;
+        /// True if the GROUP BY and ORDER BY are the same
+        /// Remove any and all aliases between the result set and the
+        ///* GROUP BY clause.
         let mut k: i32 = 0;
+        /// Loop counter
         let mut p_item_2: *mut ExprListItem = core::ptr::null_mut();
+        /// For looping over expression in a list
+        /// If there is both a GROUP BY and an ORDER BY clause and they are
+        ///* identical, then it may be possible to disable the ORDER BY clause
+        ///* on the grounds that the GROUP BY will cause elements to come out
+        ///* in the correct order. It also may not - the GROUP BY might use a
+        ///* database index that causes rows to be grouped together as required
+        ///* but not actually sorted. Either way, record the fact that the
+        ///* ORDER BY and GROUP BY clauses are the same by setting the orderByGrp
+        ///* variable.
+        /// Create a label to jump to when we want to abort the query
+        /// Convert TK_COLUMN nodes into TK_AGG_COLUMN and make entries in
+        ///* sAggInfo for all TK_AGG_FUNCTION nodes in expressions of the
+        ///* SELECT statement.
+        /// Processing for aggregates with GROUP BY is very different and
+        ///* much more complex than aggregates without a GROUP BY.  tag-select-0810
         let mut p_key_info_1: *mut KeyInfo = core::ptr::null_mut();
+        /// Keying information for the group by clause
         let mut addr1: i32 = 0;
+        /// A-vs-B comparison jump
         let mut addr_output_row: i32 = 0;
+        /// Start of subroutine that outputs a result row
         let mut reg_output_row: i32 = 0;
+        /// Return address register for output subroutine
         let mut addr_set_abort: i32 = 0;
+        /// Set the abort flag and return
         let mut addr_top_of_loop: i32 = 0;
+        /// Top of the input loop
         let mut addr_sorting_idx: i32 = 0;
+        /// The OP_OpenEphemeral for the sorting index
         let mut addr_reset: i32 = 0;
+        /// Subroutine for resetting the accumulator
         let mut reg_reset: i32 = 0;
+        /// Return address register for reset subroutine
         let mut p_distinct: *mut ExprList = core::ptr::null_mut();
         let mut dist_flag: u16 = 0 as u16;
         let mut e_dist: i32 = 0;
         let mut p_expr: *mut Expr = core::ptr::null_mut();
+        /// If there is a GROUP BY clause we might need a sorting index to
+        ///* implement it.  Allocate that sorting index now.  If it turns out
+        ///* that we do not need it after all, the OP_SorterOpen instruction
+        ///* will be converted into a Noop.
+        /// Initialize memory locations used by GROUP BY aggregate processing
+        /// Begin a loop that will extract all source rows in GROUP BY order.
+        ///* This might involve two separate loops with an OP_Sort in between, or
+        ///* it might be a single loop that uses an index to extract information
+        ///* in the right order to begin with.
+        /// The optimizer is able to deliver rows in group by order so
+        ///* we do not have to sort.  The OP_OpenEphemeral table will be
+        ///* cancelled later because we still need to use the pKeyInfo
+        /// Rows are coming out in undetermined order.  We have to push
+        ///* each row into a sorting index, terminate the first loop,
+        ///* then loop over the sorting index in order to get the output
+        ///* in sorted order
         let mut reg_base: i32 = 0;
         let mut reg_record: i32 = 0;
         let mut n_col: i32 = 0;
         let mut n_group_by: i32 = 0;
         let mut p_col: *const AggInfoCol = core::ptr::null();
+        /// If there are entries in pAgggInfo->aFunc[] that contain subexpressions
+        ///* that are indexed (and that were previously identified and tagged
+        ///* in optimizeAggregateUseOfIndexedExpr()) then those subexpressions
+        ///* must now be converted into a TK_AGG_COLUMN node so that the value
+        ///* is correctly pulled from the index rather than being recomputed.
+        /// If the index or temporary table used by the GROUP BY sort
+        ///* will naturally deliver rows in the order required by the ORDER BY
+        ///* clause, cancel the ephemeral table open coded earlier.
+        ///*
+        ///* This is an optimization - the correct answer should result regardless.
+        ///* Use the SQLITE_GroupByOrder flag with SQLITE_TESTCTRL_OPTIMIZER to
+        ///* disable this optimization for testing purposes.
+        /// Evaluate the current GROUP BY terms and store in b0, b1, b2...
+        ///* (b0 is memory location iBMem+0, b1 is iBMem+1, and so forth)
+        ///* Then compare the current GROUP BY terms against the GROUP BY terms
+        ///* from the previous row currently stored in a0, a1, a2...
         let mut i_order_by_col: i32 = 0;
         let mut p_x: *mut Expr = core::ptr::null_mut();
         let mut p_base: *const Expr = core::ptr::null();
+        /// Generate code that runs whenever the GROUP BY changes.
+        ///* Changes in the GROUP BY are detected by the previous code
+        ///* block.  If there were no changes, this block is skipped.
+        ///*
+        ///* This code copies current group by terms in b0,b1,b2,...
+        ///* over to a0,a1,a2.  It then calls the output subroutine
+        ///* and resets the aggregate accumulator registers in preparation
+        ///* for the next GROUP BY batch.
+        /// Update the aggregate accumulators based on the content of
+        ///* the current row
+        /// End of the loop
+        /// Output the final row of result
+        /// Jump over the subroutines
+        /// Generate a subroutine that outputs a single row of the result
+        ///* set.  This subroutine first looks at the iUseFlag.  If iUseFlag
+        ///* is less than or equal to zero, the subroutine is a no-op.  If
+        ///* the processing calls for the query to abort, this subroutine
+        ///* increments the iAbortFlag memory location before returning in
+        ///* order to signal the caller to abort.
+        /// Generate a subroutine that will reset the group-by accumulator
         let mut p_f: *const AggInfoFunc = core::ptr::null();
+        /// endif pGroupBy.  Begin aggregate queries without GROUP BY:
+        /// Aggregate functions without GROUP BY. tag-select-0820
         let mut p_tab_1: *mut Table = core::ptr::null_mut();
+        /// tag-select-0821
+        ///*
+        ///* If isSimpleCount() returns a pointer to a Table structure, then
+        ///* the SQL statement is of the form:
+        ///*
+        ///*   SELECT count(*) FROM <tbl>
+        ///*
+        ///* where the Table structure returned represents table <tbl>.
+        ///*
+        ///* This statement is so common that it is optimized specially. The
+        ///* OP_Count instruction is executed either on the intkey table that
+        ///* contains the data for table <tbl> or on one of its indexes. It
+        ///* is better to execute the op on an index, as indexes are almost
+        ///* always spread across less pages than their corresponding tables.
         let mut i_db_1: i32 = 0;
         let mut i_csr: i32 = 0;
+        /// Cursor to scan b-tree
         let mut p_idx: *mut Index = core::ptr::null_mut();
+        /// Iterator variable
         let mut p_key_info_2: *mut KeyInfo = core::ptr::null_mut();
+        /// Keyinfo for scanned index
         let mut p_best: *mut Index = core::ptr::null_mut();
+        /// Best index found so far
         let mut i_root: Pgno = 0 as Pgno;
+        /// Root page of scanned b-tree
+        /// Search for the index that has the lowest scan cost.
+        ///*
+        ///* (2011-04-15) Do not do a full scan of an unordered index.
+        ///*
+        ///* (2013-10-03) Do not count the entries in a partial index.
+        ///*
+        ///* In practice the KeyInfo structure will not be used. It is only
+        ///* passed to keep OP_OpenRead happy.
+        /// Open a read-only cursor, execute the OP_Count, close the cursor.
+        /// The general case of an aggregate query without GROUP BY
+        ///* tag-select-0822
         let mut reg_acc: i32 = 0;
+        /// "populate accumulators" flag
         let mut p_distinct_1: *mut ExprList = core::ptr::null_mut();
         let mut dist_flag_1: u16 = 0 as u16;
         let mut e_dist_1: i32 = 0;
+        /// If there are accumulator registers but no min() or max() functions
+        ///* without FILTER clauses, allocate register regAcc. Register regAcc
+        ///* will contain 0 the first time the inner loop runs, and 1 thereafter.
+        ///* The code generated by updateAccumulator() uses this to ensure
+        ///* that the accumulator registers are (a) updated only once if
+        ///* there are no min() or max functions or (b) always updated for the
+        ///* first row visited by the aggregate, so that they are updated at
+        ///* least once even if the FILTER clause means the min() or max()
+        ///* function visits zero rows.
+        /// This case runs if the aggregate has no GROUP BY clause.  The
+        ///* processing is much simpler since there is only a single row
+        ///* of output.
+        /// If this query is a candidate for the min/max optimization, then
+        ///* minMaxFlag will have been previously set to either
+        ///* WHERE_ORDERBY_MIN or WHERE_ORDERBY_MAX and pMinMaxOrderBy will
+        ///* be an appropriate ORDER BY expression for the optimization.
         let mut p_f_1: *const AggInfoFunc = core::ptr::null();
         let mut __state: i32 = 0;
         loop {
@@ -13667,10 +16084,380 @@ pub extern "C" fn sqlite3_select(p_parse: *mut Parse, p: *mut Select,
                 }
             }
         }
+
+        /// Loop counters
+        /// Return from sqlite3WhereBegin()
+        /// The virtual machine under construction
+        /// True for select lists like "count(*)"
+        /// List of columns to extract.
+        /// List of tables to select from
+        /// The WHERE clause.  May be NULL
+        /// The GROUP BY clause.  May be NULL
+        /// The HAVING clause.  May be NULL
+        /// Aggregate information
+        /// Value to return from this function
+        /// Info on how to code the DISTINCT keyword
+        /// Info on how to code the ORDER BY clause
+        /// Address of the end of the query
+        /// The database connection
+        /// Added ORDER BY for min/max queries
+        /// Flag for min/max queries
+        /// tag-select-0100
+        /// All of these destinations are also able to ignore the ORDER BY clause
+        /// If the SF_UFSrcCheck flag is set, then this function is being called
+        ///* as part of populating the temp table for an UPDATE...FROM statement.
+        ///* In this case, it is an error if the target object (pSrc->a[0]) name
+        ///* or alias is duplicated within FROM clause (pSrc->a[1..n]). 
+        ///*
+        ///* Postgres disallows this case too. The reason is that some other
+        ///* systems handle this case differently, and not all the same way,
+        ///* which is just confusing. To avoid this, we follow PG's lead and
+        ///* disallow it altogether.
+        /// Clear the SF_UFSrcCheck flag. The check has already been performed,
+        ///* and leaving this flag set can cause errors if a compound sub-query
+        ///* in p->pSrc is flattened into this query and this function called
+        ///* again as part of compound SELECT processing.
+        /// SQLITE_OMIT_WINDOWFUNC
+        /// Try to do various optimizations (flattening subqueries, and strength
+        ///* reduction of join operators) in the FROM clause up into the main query
+        ///* tag-select-0200
+        /// The expander should have already created transient Table objects
+        ///* even for FROM clause elements such as subqueries that do not correspond
+        ///* to a real table
+        /// Try to simplify joins:
+        ///*
+        ///*      LEFT JOIN  ->  JOIN
+        ///*     RIGHT JOIN  ->  JOIN
+        ///*      FULL JOIN  ->  RIGHT JOIN
+        ///*
+        ///* If terms of the i-th table are used in the WHERE clause in such a
+        ///* way that the i-th table cannot be the NULL row of a join, then
+        ///* perform the appropriate simplification. This is called
+        ///* "OUTER JOIN strength reduction" in the SQLite documentation.
+        ///* tag-select-0220
+        /// No further action if this term of the FROM clause is not a subquery
+        /// Catch mismatch in the declared columns of a view and the number of
+        ///* columns in the SELECT on the RHS
+        /// Do not attempt the usual optimizations (flattening and ORDER BY
+        ///* elimination) on a MATERIALIZED common table expression because
+        ///* a MATERIALIZED common table expression is an optimization fence.
+        /// Do not try to flatten an aggregate subquery.
+        ///*
+        ///* Flattening an aggregate subquery is only possible if the outer query
+        ///* is not a join.  But if the outer query is not a join, then the subquery
+        ///* will be implemented as a co-routine and there is no advantage to
+        ///* flattening in that case.
+        /// tag-select-0230:
+        ///* If a FROM-clause subquery has an ORDER BY clause that is not
+        ///* really doing anything, then delete it now so that it does not
+        ///* interfere with query flattening.  See the discussion at
+        ///* https://sqlite.org/forum/forumpost/2d76f2bcf65d256a
+        ///*
+        ///* Beware of these cases where the ORDER BY clause may not be safely
+        ///* omitted:
+        ///*
+        ///*    (1)   There is also a LIMIT clause
+        ///*    (2)   The subquery was added to help with window-function
+        ///*          processing
+        ///*    (3)   The subquery is in the FROM clause of an UPDATE
+        ///*    (4)   The outer query uses an aggregate function other than
+        ///*          the built-in count(), min(), or max().
+        ///*    (5)   The ORDER BY isn't going to accomplish anything because
+        ///*          one of:
+        ///*            (a)  The outer query has a different ORDER BY clause
+        ///*            (b)  The subquery is part of a join
+        ///*          See forum post 062d576715d277c8
+        ///*    (6)   The subquery is not a recursive CTE.  ORDER BY has a different
+        ///*          meaning for recursive CTEs and this optimization does not
+        ///*          apply.
+        ///*
+        ///* Also retain the ORDER BY if the OmitOrderBy optimization is disabled.
+        /// Condition (5)
+        /// Condition (1)
+        /// (2) and (6)
+        /// Condition (3) and (4)
+        /// If the outer query contains a "complex" result set (that is,
+        ///* if the result set of the outer query uses functions or subqueries)
+        ///* and if the subquery contains an ORDER BY clause and if
+        ///* it will be implemented as a co-routine, then do not flatten.  This
+        ///* restriction allows SQL constructs like this:
+        ///*
+        ///*  SELECT expensive_function(x)
+        ///*    FROM (SELECT x FROM tab ORDER BY y LIMIT 10);
+        ///*
+        ///* The expensive_function() is only computed on the 10 rows that
+        ///* are output, rather than every row of the table.
+        ///*
+        ///* The requirement that the outer query have a complex result set
+        ///* means that flattening does occur on simpler SQL constraints without
+        ///* the expensive_function() like:
+        ///*
+        ///*  SELECT x FROM (SELECT x FROM tab ORDER BY y LIMIT 10);
+        /// tag-select-0240
+        /// This subquery can be absorbed into its parent.
+        /// Handle compound SELECT statements using the separate multiSelect()
+        ///* procedure.  tag-select-0300
+        /// If there may be an "EXISTS (SELECT ...)" in the WHERE clause, attempt
+        ///* to change it into a join.
+        /// Do the WHERE-clause constant propagation optimization if this is
+        ///* a join.  No need to spend time on this operation for non-join queries
+        ///* as the equivalent optimization will be handled by query planner in
+        ///* sqlite3WhereBegin().  tag-select-0330
+        /// tag-select-0350
+        /// Loop over all terms in the FROM clause and do two things for each term:
+        ///*
+        ///*   (1) Authorize unreferenced tables
+        ///*   (2) Generate code for all sub-queries
+        ///*
+        ///* tag-select-0400
+        /// Authorized unreferenced tables.  tag-select-0410
+        ///*
+        ///* Issue SQLITE_READ authorizations with a fake column name for any
+        ///* tables that are referenced but from which no values are extracted.
+        ///* Examples of where these kinds of null SQLITE_READ authorizations
+        ///* would occur:
+        ///*
+        ///*     SELECT count(*) FROM t1;   -- SQLITE_READ t1.""
+        ///*     SELECT t1.* FROM t1, t2;   -- SQLITE_READ t2.""
+        ///*
+        ///* The fake column name is an empty string.  It is possible for a table to
+        ///* have a column named by the empty string, in which case there is no way to
+        ///* distinguish between an unreferenced table and an actual reference to the
+        ///* "" column. The original design was for the fake column name to be a NULL,
+        ///* which would be unambiguous.  But legacy authorization callbacks might
+        ///* assume the column name is non-NULL and segfault.  The use of an empty
+        ///* string for the fake column name seems safer.
+        /// Generate code for all sub-queries in the FROM clause
+        /// The code for a subquery should only be generated once.
+        /// Increment Parse.nHeight by the height of the largest expression
+        ///* tree referred to by this, the parent select. The child select
+        ///* may contain expression trees of at most
+        ///* (SQLITE_MAX_EXPR_DEPTH-Parse.nHeight) height. This is a bit
+        ///* more conservative than necessary, but much easier than enforcing
+        ///* an exact limit.
+        /// Make copies of constant WHERE-clause terms in the outer query down
+        ///* inside the subquery.  This can help the subquery to run more efficiently.
+        ///* This is the "predicate push-down optimization".  tag-select-0420
+        /// Convert unused result columns of the subquery into simple NULL
+        ///* expressions, to avoid unneeded searching and computation.
+        ///* tag-select-0440
+        /// Generate byte-code to implement the subquery  tag-select-0480
+        /// Implement a co-routine that will return a single row of the result
+        ///* set on each invocation.  tag-select-0482
+        /// This is a CTE for which materialization code has already been
+        ///* generated.  Invoke the subroutine to compute the materialization,
+        ///* then make the pItem->iCursor be a copy of the ephemeral table that
+        ///* holds the result of the materialization. tag-select-0484
+        /// This view has already been materialized by a prior entry in
+        ///* this same FROM clause.  Reuse it.  tag-select-0486
+        /// Materialize the view.  If the view is not correlated, generate a
+        ///* subroutine to do the materialization so that subsequent uses of
+        ///* the same view can reuse the materialization.  tag-select-0488
+        /// If the subquery is not correlated and if we are not inside of
+        ///* a trigger, then we only need to compute the value of the subquery
+        ///* once.
+        /// Various elements of the SELECT copied into local variables for
+        ///* convenience
+        /// tag-select-0500
+        ///*
+        ///* If the query is DISTINCT with an ORDER BY but is not an aggregate, and
+        ///* if the select-list is the same as the ORDER BY list, then this query
+        ///* can be rewritten as a GROUP BY. In other words, this:
+        ///*
+        ///*     SELECT DISTINCT xyz FROM ... ORDER BY xyz
+        ///*
+        ///* is transformed to:
+        ///*
+        ///*     SELECT xyz FROM ... GROUP BY xyz ORDER BY xyz
+        ///*
+        ///* The second form is preferred as a single index (or temp-table) may be
+        ///* used for both the ORDER BY and DISTINCT processing. As originally
+        ///* written the query must use a temp-table for at least one of the ORDER
+        ///* BY and DISTINCT, and an index or separate temp-table for the other.
+        /// Notice that even thought SF_Distinct has been cleared from p->selFlags,
+        ///* the sDistinct.isTnct is still set.  Hence, isTnct represents the
+        ///* original setting of the SF_Distinct flag, not the current setting
+        /// If there is an ORDER BY clause, then create an ephemeral index to
+        ///* do the sorting.  But this sorting ephemeral index might end up
+        ///* being unused if the data can be extracted in pre-sorted order.
+        ///* If that is the case, then the OP_OpenEphemeral instruction will be
+        ///* changed to an OP_Noop once we figure out that the sorting index is
+        ///* not needed.  The sSort.addrSortIndex variable is used to facilitate
+        ///* that change.  tag-select-0600
+        /// If the output is destined for a temporary table, open that table.
+        ///* tag-select-0630
+        /// Delete or NULL-out result columns that will never be used
+        /// Set the limiter.  tag-select-0650
+        /// 4 billion rows
+        /// Open an ephemeral index to use for the distinct set. tag-select-0680
+        /// No aggregate functions and no GROUP BY clause.  tag-select-0700
+        /// Main window object (or NULL)
+        /// Begin the database scan.
+        /// TUNING: For a UNION CTE, because UNION is implies DISTINCT,
+        ///* reduce the estimated output row count by 8 (LogEst 30). 
+        ///* Search for tag-20250414a to see other cases
+        /// If sorting index that was created by a prior OP_OpenEphemeral
+        ///* instruction ended up not being needed, then change the OP_OpenEphemeral
+        ///* into an OP_Noop.
+        /// SQLITE_OMIT_WINDOWFUNC
+        /// Use the standard inner loop.
+        /// End the database scan loop.
+        /// This case is for when there exist aggregate functions or a GROUP BY
+        ///* clause or both.  tag-select-0800
+        /// Name context for processing aggregate information
+        /// First Mem address for storing current GROUP BY
+        /// First Mem address for previous GROUP BY
+        /// Mem address holding flag indicating that at least
+        ///* one row of the input to the aggregator has been
+        ///* processed
+        /// Mem address which causes query abort if positive
+        /// Rows come from source in GROUP BY order
+        /// End of processing for this SELECT
+        /// Pseudotable used to decode sorting results
+        /// Output register from the sorter
+        /// True if the GROUP BY and ORDER BY are the same
+        /// Remove any and all aliases between the result set and the
+        ///* GROUP BY clause.
+        /// Loop counter
+        /// For looping over expression in a list
+        /// If there is both a GROUP BY and an ORDER BY clause and they are
+        ///* identical, then it may be possible to disable the ORDER BY clause
+        ///* on the grounds that the GROUP BY will cause elements to come out
+        ///* in the correct order. It also may not - the GROUP BY might use a
+        ///* database index that causes rows to be grouped together as required
+        ///* but not actually sorted. Either way, record the fact that the
+        ///* ORDER BY and GROUP BY clauses are the same by setting the orderByGrp
+        ///* variable.
+        /// Create a label to jump to when we want to abort the query
+        /// Convert TK_COLUMN nodes into TK_AGG_COLUMN and make entries in
+        ///* sAggInfo for all TK_AGG_FUNCTION nodes in expressions of the
+        ///* SELECT statement.
+        /// Processing for aggregates with GROUP BY is very different and
+        ///* much more complex than aggregates without a GROUP BY.  tag-select-0810
+        /// Keying information for the group by clause
+        /// A-vs-B comparison jump
+        /// Start of subroutine that outputs a result row
+        /// Return address register for output subroutine
+        /// Set the abort flag and return
+        /// Top of the input loop
+        /// The OP_OpenEphemeral for the sorting index
+        /// Subroutine for resetting the accumulator
+        /// Return address register for reset subroutine
+        /// If there is a GROUP BY clause we might need a sorting index to
+        ///* implement it.  Allocate that sorting index now.  If it turns out
+        ///* that we do not need it after all, the OP_SorterOpen instruction
+        ///* will be converted into a Noop.
+        /// Initialize memory locations used by GROUP BY aggregate processing
+        /// Begin a loop that will extract all source rows in GROUP BY order.
+        ///* This might involve two separate loops with an OP_Sort in between, or
+        ///* it might be a single loop that uses an index to extract information
+        ///* in the right order to begin with.
+        /// The optimizer is able to deliver rows in group by order so
+        ///* we do not have to sort.  The OP_OpenEphemeral table will be
+        ///* cancelled later because we still need to use the pKeyInfo
+        /// Rows are coming out in undetermined order.  We have to push
+        ///* each row into a sorting index, terminate the first loop,
+        ///* then loop over the sorting index in order to get the output
+        ///* in sorted order
+        /// If there are entries in pAgggInfo->aFunc[] that contain subexpressions
+        ///* that are indexed (and that were previously identified and tagged
+        ///* in optimizeAggregateUseOfIndexedExpr()) then those subexpressions
+        ///* must now be converted into a TK_AGG_COLUMN node so that the value
+        ///* is correctly pulled from the index rather than being recomputed.
+        /// If the index or temporary table used by the GROUP BY sort
+        ///* will naturally deliver rows in the order required by the ORDER BY
+        ///* clause, cancel the ephemeral table open coded earlier.
+        ///*
+        ///* This is an optimization - the correct answer should result regardless.
+        ///* Use the SQLITE_GroupByOrder flag with SQLITE_TESTCTRL_OPTIMIZER to
+        ///* disable this optimization for testing purposes.
+        /// Evaluate the current GROUP BY terms and store in b0, b1, b2...
+        ///* (b0 is memory location iBMem+0, b1 is iBMem+1, and so forth)
+        ///* Then compare the current GROUP BY terms against the GROUP BY terms
+        ///* from the previous row currently stored in a0, a1, a2...
+        /// Generate code that runs whenever the GROUP BY changes.
+        ///* Changes in the GROUP BY are detected by the previous code
+        ///* block.  If there were no changes, this block is skipped.
+        ///*
+        ///* This code copies current group by terms in b0,b1,b2,...
+        ///* over to a0,a1,a2.  It then calls the output subroutine
+        ///* and resets the aggregate accumulator registers in preparation
+        ///* for the next GROUP BY batch.
+        /// Update the aggregate accumulators based on the content of
+        ///* the current row
+        /// End of the loop
+        /// Output the final row of result
+        /// Jump over the subroutines
+        /// Generate a subroutine that outputs a single row of the result
+        ///* set.  This subroutine first looks at the iUseFlag.  If iUseFlag
+        ///* is less than or equal to zero, the subroutine is a no-op.  If
+        ///* the processing calls for the query to abort, this subroutine
+        ///* increments the iAbortFlag memory location before returning in
+        ///* order to signal the caller to abort.
+        /// Generate a subroutine that will reset the group-by accumulator
+        /// endif pGroupBy.  Begin aggregate queries without GROUP BY:
+        /// Aggregate functions without GROUP BY. tag-select-0820
+        /// tag-select-0821
+        ///*
+        ///* If isSimpleCount() returns a pointer to a Table structure, then
+        ///* the SQL statement is of the form:
+        ///*
+        ///*   SELECT count(*) FROM <tbl>
+        ///*
+        ///* where the Table structure returned represents table <tbl>.
+        ///*
+        ///* This statement is so common that it is optimized specially. The
+        ///* OP_Count instruction is executed either on the intkey table that
+        ///* contains the data for table <tbl> or on one of its indexes. It
+        ///* is better to execute the op on an index, as indexes are almost
+        ///* always spread across less pages than their corresponding tables.
+        /// Cursor to scan b-tree
+        /// Iterator variable
+        /// Keyinfo for scanned index
+        /// Best index found so far
+        /// Root page of scanned b-tree
+        /// Search for the index that has the lowest scan cost.
+        ///*
+        ///* (2011-04-15) Do not do a full scan of an unordered index.
+        ///*
+        ///* (2013-10-03) Do not count the entries in a partial index.
+        ///*
+        ///* In practice the KeyInfo structure will not be used. It is only
+        ///* passed to keep OP_OpenRead happy.
+        /// Open a read-only cursor, execute the OP_Count, close the cursor.
+        /// The general case of an aggregate query without GROUP BY
+        ///* tag-select-0822
+        /// "populate accumulators" flag
+        /// If there are accumulator registers but no min() or max() functions
+        ///* without FILTER clauses, allocate register regAcc. Register regAcc
+        ///* will contain 0 the first time the inner loop runs, and 1 thereafter.
+        ///* The code generated by updateAccumulator() uses this to ensure
+        ///* that the accumulator registers are (a) updated only once if
+        ///* there are no min() or max functions or (b) always updated for the
+        ///* first row visited by the aggregate, so that they are updated at
+        ///* least once even if the FILTER clause means the min() or max()
+        ///* function visits zero rows.
+        /// This case runs if the aggregate has no GROUP BY clause.  The
+        ///* processing is much simpler since there is only a single row
+        ///* of output.
+        /// If this query is a candidate for the min/max optimization, then
+        ///* minMaxFlag will have been previously set to either
+        ///* WHERE_ORDERBY_MIN or WHERE_ORDERBY_MAX and pMinMaxOrderBy will
+        ///* be an appropriate ORDER BY expression for the optimization.
+        /// endif aggregate query
+        /// If there is an ORDER BY clause, then we need to sort the results
+        ///* and send them to the callback one by one.  tag-select-0900
+        /// Jump here to skip this query
+        /// The SELECT has been coded. If there is an error in the Parse structure,
+        ///* set the return code to 1. Otherwise 0.
+        /// Control jumps to here if an error is encountered above, or upon
+        ///* successful coding of the SELECT.
         unreachable!();
     }
 }
 
+///* Allocate a new Select structure and return a pointer to that
+///* structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_new(p_parse: *mut Parse,
     mut p_e_list: *mut ExprList, mut p_src: *mut SrcList, p_where: *mut Expr,
@@ -13745,6 +16532,8 @@ pub extern "C" fn sqlite3_select_new(p_parse: *mut Parse,
     }
 }
 
+///* The xExpr callback for the search of invalid ON clause terms.
+#[allow(unused_doc_comments)]
 extern "C" fn select_check_on_clauses_expr(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -13756,6 +16545,12 @@ extern "C" fn select_check_on_clauses_expr(p_walker_1: *mut Walker,
                                     (*(unsafe { (*unsafe { (*p_ctx).p_src }).a.as_ptr() } as
                                                         *mut SrcItem).offset(0 as isize)).fg.jointype
                                 } as i32 & 64 != 0 {
+
+            /// If CheckOnCtx.iJoin is already set, then fall through and process
+            ///* this expression node as normal. Or, if CheckOnCtx.iJoin is still 0,
+            ///* set it to the cursor number of the RHS of the join to which this
+            ///* ON expression was attached and then iterate through the entire 
+            ///* expression.
             { let _ = 0; };
             if unsafe { (*p_ctx).i_join } == 0 {
                 unsafe { (*p_ctx).i_join = unsafe { (*p_expr_1).w.i_join } };
@@ -13811,6 +16606,7 @@ extern "C" fn select_check_on_clauses_expr(p_walker_1: *mut Walker,
     }
 }
 
+///* The xSelect callback for the search of invalid ON clause terms.
 extern "C" fn select_check_on_clauses_select(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -13836,7 +16632,10 @@ extern "C" fn select_check_on_clauses_select(p_walker_1: *mut Walker,
     }
 }
 
+///* Check all ON clauses in pSelect to verify that they do not reference
+///* columns to the right.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_select_check_on_clauses(p_parse: *mut Parse,
     p_select: &mut Select) -> () {
     unsafe {
@@ -13860,7 +16659,11 @@ pub extern "C" fn sqlite3_select_check_on_clauses(p_parse: *mut Parse,
         s_ctx.p_src = (*p_select).p_src;
         unsafe { sqlite3_walk_expr(&mut w, (*p_select).p_where) };
         (*p_select).sel_flags &= !1073741824 as u32;
-        s_ctx.b_func_arg = 1;
+
+        /// Check for any table-function args that are attached to virtual tables 
+        ///* on the RHS of an outer join. They are subject to the same constraints
+        ///* as ON clauses.
+        (s_ctx.b_func_arg = 1);
         {
             ii = 0;
             '__b122: loop {
@@ -13889,13 +16692,85 @@ pub extern "C" fn sqlite3_select_check_on_clauses(p_parse: *mut Parse,
     }
 }
 
+///* Given 1 to 3 identifiers preceding the JOIN keyword, determine the
+///* type of join.  Return an integer constant that expresses that type
+///* in terms of the following bit values:
+///*
+///*     JT_INNER
+///*     JT_CROSS
+///*     JT_OUTER
+///*     JT_NATURAL
+///*     JT_LEFT
+///*     JT_RIGHT
+///*
+///* A full outer join is the combination of JT_LEFT and JT_RIGHT.
+///*
+///* If an illegal or unsupported join type is seen, then still return
+///* a join type, but put an error in the pParse structure.
+///*
+///* These are the valid join types:
+///*
+///*
+///*      pA       pB       pC               Return Value
+///*     -------  -----    -----             ------------
+///*     CROSS      -        -                 JT_CROSS
+///*     INNER      -        -                 JT_INNER
+///*     LEFT       -        -                 JT_LEFT|JT_OUTER
+///*     LEFT     OUTER      -                 JT_LEFT|JT_OUTER
+///*     RIGHT      -        -                 JT_RIGHT|JT_OUTER
+///*     RIGHT    OUTER      -                 JT_RIGHT|JT_OUTER
+///*     FULL       -        -                 JT_LEFT|JT_RIGHT|JT_OUTER
+///*     FULL     OUTER      -                 JT_LEFT|JT_RIGHT|JT_OUTER
+///*     NATURAL  INNER      -                 JT_NATURAL|JT_INNER
+///*     NATURAL  LEFT       -                 JT_NATURAL|JT_LEFT|JT_OUTER
+///*     NATURAL  LEFT     OUTER               JT_NATURAL|JT_LEFT|JT_OUTER
+///*     NATURAL  RIGHT      -                 JT_NATURAL|JT_RIGHT|JT_OUTER
+///*     NATURAL  RIGHT    OUTER               JT_NATURAL|JT_RIGHT|JT_OUTER
+///*     NATURAL  FULL       -                 JT_NATURAL|JT_LEFT|JT_RIGHT
+///*     NATURAL  FULL     OUTER               JT_NATRUAL|JT_LEFT|JT_RIGHT
+///*
+///* To preserve historical compatibly, SQLite also accepts a variety
+///* of other non-standard and in many cases nonsensical join types.
+///* This routine makes as much sense at it can from the nonsense join
+///* type and returns a result.  Examples of accepted nonsense join types
+///* include but are not limited to:
+///*
+///*          INNER CROSS JOIN        ->   same as JOIN
+///*          NATURAL CROSS JOIN      ->   same as NATURAL JOIN
+///*          OUTER LEFT JOIN         ->   same as LEFT JOIN
+///*          LEFT NATURAL JOIN       ->   same as NATURAL LEFT JOIN
+///*          LEFT RIGHT JOIN         ->   same as FULL JOIN
+///*          RIGHT OUTER FULL JOIN   ->   same as FULL JOIN
+///*          CROSS CROSS CROSS JOIN  ->   same as JOIN
+///*
+///* The only restrictions on the join type name are:
+///*
+///*    *   "INNER" cannot appear together with "OUTER", "LEFT", "RIGHT",
+///*        or "FULL".
+///*
+///*    *   "CROSS" cannot appear together with "OUTER", "LEFT", "RIGHT,
+///*        or "FULL".
+///*
+///*    *   If "OUTER" is present then there must also be one of
+///*        "LEFT", "RIGHT", or "FULL"
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_join_type(p_parse: *mut Parse, p_a: *mut Token,
     p_b: *mut Token, p_c: *mut Token) -> i32 {
     unsafe {
         let mut jointype: i32 = 0;
         let mut ap_all: [*mut Token; 3] = [core::ptr::null_mut(); 3];
         let mut p: *mut Token = core::ptr::null_mut();
+        /// Beginning of keyword text in zKeyText[]
+        /// Length of the keyword in characters
+        /// Join type mask
+        /// (0) natural
+        /// (1) left
+        /// (2) outer
+        /// (3) right
+        /// (4) full
+        /// (5) inner
+        /// (6) cross
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         ap_all[0 as usize] = p_a;
@@ -13975,6 +16850,8 @@ pub extern "C" fn sqlite3_join_type(p_parse: *mut Parse, p_a: *mut Token,
     }
 }
 
+///* Error message for when two or more terms of a compound select have different
+///* size result sets.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_wrong_num_terms_error(p_parse: *mut Parse,
     p: &Select) -> () {

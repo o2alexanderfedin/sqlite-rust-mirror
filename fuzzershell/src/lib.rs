@@ -2,10 +2,18 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3MemMethods, Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+    SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
+///* All global variables are gathered into the "g" singleton.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -23,12 +31,15 @@ struct GlobalVars {
 #[unsafe(no_mangle)]
 pub static mut g: GlobalVars = unsafe { core::mem::zeroed() };
 
+///* This routine is called when a simulated OOM occurs.  It exists as a
+///* convenient place to set a debugger breakpoint.
 extern "C" fn oom_fault() -> () {
     unsafe {
         { let __p = &mut g.n_oom_brkpt; let __t = *__p; *__p += 1; __t };
     }
 }
 
+/// Versions of malloc() and realloc() that simulate OOM conditions
 extern "C" fn oom_malloc(n_byte_1: i32) -> *mut () {
     unsafe {
         if n_byte_1 > 0 && g.b_oom_enable != 0 && g.i_oom_cntdown > 0 {
@@ -79,6 +90,8 @@ extern "C" fn oom_realloc(p_old_1: *mut (), n_byte_1: i32) -> *mut () {
     }
 }
 
+///* Print an error message and abort in such a way to indicate to the
+///* fuzzer that this counts as a crash.
 unsafe extern "C" fn abend_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -103,6 +116,8 @@ unsafe extern "C" fn abend_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Print an error message and quit, but not in a way that would look
+///* like a crash.
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -127,6 +142,7 @@ unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Evaluate some SQL.  Abort if unable.
 unsafe extern "C" fn sqlexec(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -150,6 +166,7 @@ unsafe extern "C" fn sqlexec(db: *mut Sqlite3, z_format_1: *const i8,
     unsafe { sqlite3_free(z_sql as *mut ()) };
 }
 
+///* This callback is invoked by sqlite3_log().
 extern "C" fn shell_log(p_not_used_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     unsafe {
@@ -166,6 +183,7 @@ extern "C" fn shell_log_noop(p_not_used_1: *mut (), i_err_code_1: i32,
     return;
 }
 
+///* This callback is invoked by sqlite3_exec() to return query results.
 extern "C" fn exec_callback(not_used_1: *mut (), argc: i32,
     argv: *mut *mut i8, colv: *mut *mut i8) -> i32 {
     unsafe {
@@ -210,6 +228,8 @@ extern "C" fn exec_noop(not_used_1: *mut (), argc: i32, argv: *mut *mut i8,
     return 0;
 }
 
+///* This callback is invoked by sqlite3_trace() as each SQL statement
+///* starts.
 extern "C" fn trace_callback(not_used_1: *mut (), z_msg_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -223,6 +243,8 @@ extern "C" fn trace_noop(not_used_1: *mut (), z_msg_1: *const i8) -> () {
     return;
 }
 
+///************************************************************************
+///* String accumulator object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Str {
@@ -232,10 +254,12 @@ struct Str {
     oom_err: i32,
 }
 
+/// Initialize a Str object
 extern "C" fn str_init(p: *mut Str) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<Str>() as u64) };
 }
 
+/// Append text to the end of a Str object
 extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     let n: Sqlite3Uint64 = unsafe { strlen(z) } as Sqlite3Uint64;
     if unsafe { (*p).n } + n >= unsafe { (*p).n_alloc } {
@@ -268,13 +292,20 @@ extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     unsafe { *unsafe { (*p).z.add(unsafe { (*p).n } as usize) } = 0 as i8 };
 }
 
+/// Return the current string content
 extern "C" fn str_str(p: &Str) -> *mut i8 { return (*p).z; }
 
+/// Free the string
 extern "C" fn str_free(p: *mut Str) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     str_init(p);
 }
 
+///************************************************************************
+///* eval() implementation copied from ../ext/misc/eval.c
+////
+////*
+///* Structure used to accumulate the output
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EvalResult {
@@ -285,6 +316,8 @@ struct EvalResult {
     n_used: Sqlite3Int64,
 }
 
+///* Callback from sqlite_exec() for the eval() function.
+#[allow(unused_doc_comments)]
 extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     colnames: *mut *mut i8) -> i32 {
     let p: *mut EvalResult = p_ctx_1 as *mut EvalResult;
@@ -309,13 +342,17 @@ extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
                                             sz as u64 + unsafe { (*p).sz_sep } as u64 + 1 as u64) as
                                 Sqlite3Int64
                     };
-                    z_new =
+
+                    /// Using sqlite3_realloc64() would be better, but it is a recent
+                    ///* addition and will cause a segfault if loaded by an older version
+                    ///* of SQLite.
+                    (z_new =
                         if unsafe { (*p).n_alloc } <= 2147483647 as i64 {
                                 unsafe {
                                     sqlite3_realloc(unsafe { (*p).z } as *mut (),
                                         unsafe { (*p).n_alloc } as i32)
                                 }
-                            } else { core::ptr::null_mut() } as *mut i8;
+                            } else { core::ptr::null_mut() } as *mut i8);
                     if z_new == core::ptr::null_mut() {
                         unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
                         unsafe {
@@ -355,6 +392,10 @@ extern "C" fn callback(p_ctx_1: *mut (), argc: i32, argv: *mut *mut i8,
     return 0;
 }
 
+///* Implementation of the eval(X) and eval(X,Y) SQL functions.
+///*
+///* Evaluate the SQL text in X.  Return the results, using string
+///* Y as the separator.  If Y is omitted, use a single space character.
 extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const i8 = core::ptr::null();
@@ -398,6 +439,14 @@ extern "C" fn sql_eval_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///***************************************************************************
+///* The generate_series(START,END,STEP) eponymous table-valued function.
+///*
+///* This code is copy/pasted from ext/misc/series.c in the SQLite source tree.
+////
+////* series_cursor is a subclass of sqlite3_vtab_cursor which will
+///* serve as the underlying representation of a cursor that scans
+///* over rows of the result
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SeriesCursor {
@@ -410,17 +459,31 @@ struct SeriesCursor {
     i_step: Sqlite3Int64,
 }
 
+///* The seriesConnect() method is invoked to create a new
+///* series_vtab that describes the generate_series virtual table.
+///*
+///* Think of this routine as the constructor for series_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the series_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against generate_series will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn series_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut Sqlite3Vtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
-    rc =
+
+    /// Column numbers
+    (rc =
         unsafe {
             sqlite3_declare_vtab(db,
                 c"CREATE TABLE x(value,start hidden,stop hidden,step hidden)".as_ptr()
                         as *mut i8 as *const i8)
-        };
+        });
     if rc == 0 {
         p_new =
             {
@@ -441,11 +504,13 @@ extern "C" fn series_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* This method is the destructor for series_cursor objects.
 extern "C" fn series_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new series_cursor object.
 extern "C" fn series_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
@@ -461,11 +526,13 @@ extern "C" fn series_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a series_cursor.
 extern "C" fn series_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a series_cursor to its next row of output.
 extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut SeriesCursor = cur as *mut SeriesCursor;
     if unsafe { (*p_cur).is_desc } != 0 {
@@ -480,6 +547,8 @@ extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
 extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -498,6 +567,8 @@ extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -506,6 +577,8 @@ extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SeriesCursor =
         cur as *mut SeriesCursor as *const SeriesCursor;
@@ -518,6 +591,25 @@ extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+///* This method is called to "rewind" the series_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to seriesColumn() or seriesRowid() or 
+///* seriesEof().
+///*
+///* The query plan selected by seriesBestIndex is passed in the idxNum
+///* parameter.  (idxStr is not used in this implementation.)  idxNum
+///* is a bitmask showing which constraints are available:
+///*
+///*    1:    start=VALUE
+///*    2:    stop=VALUE
+///*    4:    step=VALUE
+///*
+///* Also, if bit 8 is set, that means that the series should be output
+///* in descending order rather than in ascending order.
+///*
+///* This routine should initialize the cursor and position it so that it
+///* is pointing at the first row, or pointing off the end of the table
+///* (so that seriesEof() will return true) if the table is empty.
 extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -589,14 +681,35 @@ extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the generate_series virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* In this implementation idxNum is used to represent the
+///* query plan.  idxStr is unused.
+///*
+///* The query plan is represented by bits in idxNum:
+///*
+///*  (1)  start = $value  -- constraint exists
+///*  (2)  stop = $value   -- constraint exists
+///*  (4)  step = $value   -- constraint exists
+///*  (8)  output in descending order
+#[allow(unused_doc_comments)]
 extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop over constraints
     let mut idx_num: i32 = 0;
+    /// The query plan bitmask
     let mut start_idx: i32 = -1;
+    /// Index of the start= constraint, or -1 if none
     let mut stop_idx: i32 = -1;
+    /// Index of the stop= constraint, or -1 if none
     let mut step_idx: i32 = -1;
+    /// Index of the step= constraint, or -1 if none
     let mut n_arg: i32 = 0;
+    /// Number of arguments that seriesFilter() expects
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
     p_constraint =
         unsafe { (*p_idx_info_1).a_constraint } as
@@ -671,10 +784,16 @@ extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
         };
     }
     if idx_num & 3 == 3 {
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe {
             (*p_idx_info_1).estimated_cost =
                 (2 - (idx_num & 4 != 0) as i32) as f64
         };
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe { (*p_idx_info_1).estimated_rows = 1000 as Sqlite3Int64 };
         if unsafe { (*p_idx_info_1).n_order_by } == 1 {
             if unsafe {
@@ -687,7 +806,15 @@ extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
             unsafe { (*p_idx_info_1).order_by_consumed = 1 };
         }
     } else {
+
+        /// If either boundary is missing, we have to generate a huge span
+        ///* of numbers.  Make this case very expensive so that the query
+        ///* planner will work hard to avoid it.
         unsafe { (*p_idx_info_1).estimated_cost = 2147483647 as f64 };
+
+        /// If either boundary is missing, we have to generate a huge span
+        ///* of numbers.  Make this case very expensive so that the query
+        ///* planner will work hard to avoid it.
         unsafe {
             (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64
         };
@@ -696,6 +823,8 @@ extern "C" fn series_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* generate_series virtual table.
 static mut series_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -725,6 +854,7 @@ static mut series_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Print sketchy documentation for this utility program
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -738,6 +868,8 @@ extern "C" fn show_help() -> () {
     }
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -751,6 +883,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -840,6 +973,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     }
 }
 
+/// Return the current wall-clock time
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -866,57 +1000,101 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut z_in: *mut i8 = core::ptr::null_mut();
+        /// Input text
         let mut n_alloc: i32 = 0;
+        /// Number of bytes allocated for zIn[]
         let mut n_in: i32 = 0;
+        /// Number of bytes of zIn[] used
         let mut got: u64 = 0 as u64;
+        /// Bytes read from input
         let mut rc: i32 = 0;
+        /// Result codes from API functions
         let mut i: i32 = 0;
+        /// Loop counter
         let mut i_next: i32 = 0;
+        /// Next block of SQL
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Open database
         let mut z_err_msg: *mut i8 = core::ptr::null_mut();
+        /// Error message returned from sqlite3_exec()
         let mut z_encoding: *const i8 = core::ptr::null();
+        /// --utf16be or --utf16le
         let mut n_heap: i32 = 0;
         let mut mn_heap: i32 = 0;
+        /// Heap size from --heap
         let mut n_look: i32 = 0;
         let mut sz_look: i32 = 0;
+        /// --lookaside configuration
         let mut n_p_cache: i32 = 0;
         let mut sz_p_cache: i32 = 0;
+        /// --pcache configuration
         let mut n_scratch: i32 = 0;
         let mut sz_scratch: i32 = 0;
+        /// --scratch configuration
         let mut page_size: i32 = 0;
+        /// Desired page size.  0 means default
         let mut p_heap: *mut () = core::ptr::null_mut();
+        /// Allocated heap space
         let mut p_look: *mut () = core::ptr::null_mut();
+        /// Allocated lookaside space
         let mut p_p_cache: *mut () = core::ptr::null_mut();
+        /// Allocated storage for pcache
         let mut p_scratch: *mut () = core::ptr::null_mut();
+        /// Allocated storage for scratch
         let mut do_autovac: i32 = 0;
+        /// True for --autovacuum
         let mut z_sql: *const i8 = core::ptr::null();
+        /// SQL to run
         let mut z_to_free: *mut i8 = core::ptr::null_mut();
+        /// Call sqlite3_free() on this afte running zSql
         let mut verbose_flag: i32 = 0;
+        /// --verbose or -v flag
         let mut quiet_flag: i32 = 0;
+        /// --quiet or -q flag
         let mut n_test: i32 = 0;
+        /// Number of test cases run
         let mut multi_test: i32 = 0;
+        /// True if there will be multiple test cases
         let mut last_pct: i32 = -1;
+        /// Previous percentage done output
         let mut data_db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Database holding compacted input data
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Statement to insert testcase into dataDb
         let mut z_data_out: *const i8 = core::ptr::null();
+        /// Write compacted data to this output file
         let mut n_header: i32 = 0;
+        /// Bytes of header comment text on input file
         let mut oom_flag: i32 = 0;
+        /// --oom
         let mut oom_cnt: i32 = 0;
+        /// Counter for the OOM loop
         let mut z_err_buf: [i8; 200] = [0; 200];
+        /// Space for the error message
         let mut z_fail_code: *const i8 = core::ptr::null();
+        /// Value of the TEST_FAILURE environment var
         let mut z_prompt: *const i8 = core::ptr::null();
+        /// Initial prompt when large-file fuzzing
         let mut n_in_file: i32 = 0;
+        /// Number of input files to read
         let mut az_in_file: *mut *mut i8 = core::ptr::null_mut();
+        /// Array of input file names
         let mut jj: i32 = 0;
+        /// Loop counter for azInFile[]
         let mut i_begin: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Start time for the whole program
         let mut i_start: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut i_end: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Start and end-times for a test case
         let mut z_db_name: *const i8 = core::ptr::null();
-        i_begin = time_of_day();
+
+        /// Name of an on-disk database file to open
+        (i_begin = time_of_day());
         unsafe { sqlite3_shutdown() };
         z_fail_code =
             unsafe {
@@ -1315,6 +1493,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Do global SQLite initialization
         unsafe {
             sqlite3_config(16,
                 if verbose_flag != 0 { shell_log } else { shell_log_noop }, 0)
@@ -1460,6 +1640,7 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             '__b11: loop {
                 if !(jj < n_in_file) { break '__b11; }
                 '__c11: loop {
+                    /// Read the complete content of the next input file into zIn[]
                     let mut in_: *mut FILE = core::ptr::null_mut();
                     if !(az_in_file).is_null() {
                         let mut j: i32 = 0;
@@ -1616,7 +1797,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                                 }
                                 c_saved = unsafe { *z_in.offset(i_next as isize) };
                                 unsafe { *z_in.offset(i_next as isize) = 0 as i8 };
-                                z_sql = unsafe { z_in.offset(i as isize) };
+
+                                /// Print out the SQL of the next test case is --verbose is enabled
+                                (z_sql = unsafe { z_in.offset(i as isize) });
                                 if verbose_flag != 0 {
                                     unsafe {
                                         printf(c"INPUT (offset: %d, size: %d): [%s]\n".as_ptr() as
@@ -1887,6 +2070,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                                         };
                                     } else if unsafe { *z_fail_code.offset(0 as isize) } as i32
                                             != 0 {
+
+                                        /// If TEST_FAILURE is something other than 5, just exit the test
+                                        ///* early
                                         unsafe {
                                             printf(c"\nExit early due to TEST_FAILURE being set".as_ptr()
                                                         as *mut i8 as *const i8)
@@ -1974,6 +2160,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             unsafe { sqlite3_finalize(p_stmt) };
             unsafe { sqlite3_close(data_db) };
         }
+
+        /// Clean up and exit.
         unsafe { free(az_in_file as *mut ()) };
         unsafe { free(z_in as *mut ()) };
         unsafe { free(p_heap) };

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+/// All threads share a single random number generator.
+///* This structure is the current state of the generator.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3PrngType {
@@ -732,11 +749,36 @@ extern "C" fn chacha_block(out: *mut u32, in__1: *const u32) -> () {
     }
 }
 
+///* CAPI3REF: Pseudo-Random Number Generator
+///*
+///* SQLite contains a high-quality pseudo-random number generator (PRNG) used to
+///* select random [ROWID | ROWIDs] when inserting new records into a table that
+///* already uses the largest possible [ROWID].  The PRNG is also used for
+///* the built-in random() and randomblob() SQL functions.  This interface allows
+///* applications to access the same PRNG for other purposes.
+///*
+///* ^A call to this routine stores N bytes of randomness into buffer P.
+///* ^The P parameter can be a NULL pointer.
+///*
+///* ^If this routine has not been previously called or if the previous
+///* call had N less than one or a NULL pointer for P, then the PRNG is
+///* seeded using randomness obtained from the xRandomness method of
+///* the default [sqlite3_vfs] object.
+///* ^If the previous call to this routine had an N of 1 or more and a
+///* non-NULL P then the pseudo-randomness is generated
+///* internally and without recourse to the [sqlite3_vfs] xRandomness
+///* method.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_randomness(mut n: i32, p_buf: *mut ()) -> () {
     unsafe {
         unsafe {
             let mut z_buf: *mut u8 = p_buf as *mut u8;
+            /// The "wsdPrng" macro will resolve to the pseudo-random number generator
+            ///* state vector.  If writable static data is unsupported on the target,
+            ///* we have to locate the state vector at run-time.  In the more common
+            ///* case where writable static data is supported, wsdPrng can refer directly
+            ///* to the "sqlite3Prng" state vector declared above.
             let mut mutex: *mut Sqlite3Mutex = core::ptr::null_mut();
             if unsafe { sqlite3_initialize() } != 0 { return; }
             mutex = unsafe { sqlite3MutexAlloc(5) };
@@ -810,6 +852,13 @@ pub extern "C" fn sqlite3_randomness(mut n: i32, p_buf: *mut ()) -> () {
     }
 }
 
+///* For testing purposes, we sometimes want to preserve the state of
+///* PRNG and restore the PRNG to its saved state at a later time, or
+///* to reset the PRNG to its initial state.  These routines accomplish
+///* those tasks.
+///*
+///* The sqlite3_test_control() interface calls these routines to
+///* control the PRNG.
 static mut sqlite3_saved_prng: Sqlite3PrngType =
     unsafe { core::mem::zeroed() };
 

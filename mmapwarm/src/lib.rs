@@ -1,9 +1,44 @@
+//!* 2017-09-18
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+///* This function is used to touch each page of a mapping of a memory
+///* mapped SQLite database. Assuming that the system has sufficient free
+///* memory and supports sufficiently large mappings, this causes the OS 
+///* to cache the entire database in main memory, making subsequent 
+///* database accesses faster.
+///*
+///* If the second parameter to this function is not NULL, it is the name of
+///* the specific database to operate on (i.e. "main" or the name of an
+///* attached database).
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+///* It is not considered an error if the file is not memory-mapped, or if
+///* the mapping does not span the entire file. If an error does occur, a
+///* transaction may be left open on the database file.
+///*
+///* It is illegal to call this function when the database handle has an 
+///* open transaction. SQLITE_MISUSE is returned in this case.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_mmap_warm(db: *mut Sqlite3, z_db_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -11,7 +46,9 @@ pub extern "C" fn sqlite3_mmap_warm(db: *mut Sqlite3, z_db_1: *const i8)
     let mut pgsz: i32 = 0;
     let mut n_total: u32 = 0 as u32;
     if 0 == unsafe { sqlite3_get_autocommit(db) } { return 21; }
-    z_sql =
+
+    /// Open a read-only transaction on the file in question
+    (z_sql =
         unsafe {
             sqlite3_mprintf(c"BEGIN; SELECT * FROM %s%q%ssqlite_schema".as_ptr()
                         as *mut i8 as *const i8,
@@ -24,7 +61,7 @@ pub extern "C" fn sqlite3_mmap_warm(db: *mut Sqlite3, z_db_1: *const i8)
                 if !(z_db_1).is_null() {
                     c"\'.".as_ptr() as *mut i8
                 } else { c"".as_ptr() as *mut i8 })
-        };
+        });
     if z_sql == core::ptr::null_mut() { return 7; }
     rc =
         unsafe {

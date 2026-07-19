@@ -1,21 +1,37 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod pragma_h;
-pub(crate) use crate::pragma_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::pragma_h::{PragmaName, a_pragma_name, prag_c_name};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+    SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SColMap, SQLiteThread,
+    Schema, Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo,
+    Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token,
+    Trigger, TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker,
+    WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinIntptrT = i64;
 
@@ -397,6 +413,7 @@ impl Parse {
     }
 }
 
+///* Generate code to return a single text value.
 extern "C" fn return_single_text(v: *mut Vdbe, z_value_1: *const i8) -> () {
     if !(z_value_1).is_null() {
         unsafe { sqlite3_vdbe_load_string(v, 1, z_value_1 as *const i8) };
@@ -404,6 +421,7 @@ extern "C" fn return_single_text(v: *mut Vdbe, z_value_1: *const i8) -> () {
     }
 }
 
+///* Locate a pragma in the aPragmaName[] array.
 extern "C" fn pragma_locate(z_name_1: *const i8) -> *const PragmaName {
     unsafe {
         let mut upr: i32 = 0;
@@ -430,6 +448,7 @@ extern "C" fn pragma_locate(z_name_1: *const i8) -> *const PragmaName {
     }
 }
 
+///* Set result column names for a pragma.
 extern "C" fn set_pragma_result_column_names(v: *mut Vdbe,
     p_pragma_1: &PragmaName) -> () {
     unsafe {
@@ -466,6 +485,7 @@ extern "C" fn set_pragma_result_column_names(v: *mut Vdbe,
     }
 }
 
+///* Generate code to return a single integer value.
 extern "C" fn return_single_int(v: *mut Vdbe, mut value: i64) -> () {
     unsafe {
         sqlite3_vdbe_add_op4_dup8(v, 74, 0, 1, 0, &raw mut value as *const u8,
@@ -474,9 +494,20 @@ extern "C" fn return_single_int(v: *mut Vdbe, mut value: i64) -> () {
     unsafe { sqlite3_vdbe_add_op2(v, 86, 1, 1) };
 }
 
+///* Interpret the given string as a safety level.  Return 0 for OFF,
+///* 1 for ON or NORMAL, 2 for FULL, and 3 for EXTRA.  Return 1 for an empty or
+///* unrecognized string argument.  The FULL and EXTRA option is disallowed
+///* if the omitFull parameter it 1.
+///*
+///* Note that the values returned are one less that the values that
+///* should be passed into sqlite3BtreeSetSafetyLevel().  The is done
+///* to support legacy SQL code.  The safety level used to be boolean
+///* and older scripts may have used numbers 0 for OFF and 1 for ON.
+#[allow(unused_doc_comments)]
 extern "C" fn get_safety_level(z: *const i8, omit_full_1: i32, dflt: u8)
     -> u8 {
     unsafe {
+        /// on no off false yes true extra full
         let mut i: i32 = 0;
         let mut n: i32 = 0;
         if unsafe {
@@ -513,11 +544,13 @@ extern "C" fn get_safety_level(z: *const i8, omit_full_1: i32, dflt: u8)
     }
 }
 
+///* Interpret the given string as a boolean value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_boolean(z: *const i8, dflt: u8) -> u8 {
     return (get_safety_level(z, 1, dflt) as i32 != 0) as u8;
 }
 
+///* Interpret the given string as a locking mode value.
 extern "C" fn get_locking_mode(z: *const i8) -> i32 {
     if !(z).is_null() {
         if 0 ==
@@ -538,6 +571,9 @@ extern "C" fn get_locking_mode(z: *const i8) -> i32 {
     return -1;
 }
 
+///* Parameter eMode must be one of the PAGER_JOURNALMODE_XXX constants
+///* defined in pager.h. This function returns the associated lowercase
+///* journal-mode name.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_journal_modename(e_mode: i32) -> *const i8 {
     unsafe {
@@ -557,6 +593,10 @@ pub extern "C" fn sqlite3_journal_modename(e_mode: i32) -> *const i8 {
     }
 }
 
+///* Interpret the given string as an auto-vacuum mode value.
+///*
+///* The following strings, "none", "full" and "incremental" are
+///* acceptable, as are their numeric equivalents: 0, 1 and 2 respectively.
 extern "C" fn get_auto_vacuum(z: *const i8) -> i32 {
     let mut i: i32 = 0;
     if 0 ==
@@ -609,6 +649,9 @@ extern "C" fn set_all_pager_flags(db: &Sqlite3) -> () {
     }
 }
 
+///* Interpret the given string as a temp db location. Return 1 for file
+///* backed temporary databases, 2 for the Red-Black tree in memory database
+///* and 0 to use the compile-time default.
 extern "C" fn get_temp_store(z: *const i8) -> i32 {
     if unsafe { *z.offset(0 as isize) } as i32 >= '0' as i32 &&
             unsafe { *z.offset(0 as isize) } as i32 <= '2' as i32 {
@@ -625,6 +668,8 @@ extern "C" fn get_temp_store(z: *const i8) -> i32 {
     } else { return 0; }
 }
 
+///* Invalidate temp storage, either when the temp storage is changed
+///* from default, or when 'file' and the temp_store_directory has changed
 extern "C" fn invalidate_temp_storage(p_parse_1: *mut Parse) -> i32 {
     let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
     if unsafe { (*unsafe { (*db).a_db.offset(1 as isize) }).p_bt } !=
@@ -656,6 +701,9 @@ extern "C" fn invalidate_temp_storage(p_parse_1: *mut Parse) -> i32 {
     return 0;
 }
 
+///* If the TEMP database is open, close it and mark the database schema
+///* as needing reloading.  This must be done when using the SQLITE_TEMP_STORE
+///* or DEFAULT_TEMP_STORE pragmas.
 extern "C" fn change_temp_storage(p_parse_1: *mut Parse,
     z_storage_type_1: *const i8) -> i32 {
     let ts: i32 = get_temp_store(z_storage_type_1);
@@ -666,6 +714,8 @@ extern "C" fn change_temp_storage(p_parse_1: *mut Parse,
     return 0;
 }
 
+///* Create zero or more entries in the output for the SQL functions
+///* defined by FuncDef p.
 extern "C" fn pragma_funclist_line(v: *mut Vdbe, mut p: *const FuncDef,
     is_builtin_1: i32, show_intern_funcs_1: i32) -> () {
     unsafe {
@@ -727,6 +777,12 @@ extern "C" fn action_name(action: u8) -> *const i8 {
     return z_name;
 }
 
+///* Should table pTab be skipped when doing an integrity_check?
+///* Return true or false.
+///*
+///* If pObjTab is not null, the return true if pTab matches pObjTab.
+///*
+///* If pObjTab is null, then return true only if pTab is an imposter table.
 extern "C" fn table_skip_integrity_check(p_tab_1: *const Table,
     p_obj_tab_1: *const Table) -> i32 {
     if !(p_obj_tab_1).is_null() {
@@ -737,6 +793,11 @@ extern "C" fn table_skip_integrity_check(p_tab_1: *const Table,
     }
 }
 
+///* Helper subroutine for PRAGMA integrity_check:
+///*
+///* Generate code to output a single-column result row with a value of the
+///* string held in register 3.  Decrement the result count in register 1
+///* and halt if the maximum number of result rows have been issued.
 extern "C" fn integrity_check_result_row(v: *mut Vdbe) -> i32 {
     let mut addr: i32 = 0;
     unsafe { sqlite3_vdbe_add_op2(v, 86, 3, 1) };
@@ -749,60 +810,254 @@ extern "C" fn integrity_check_result_row(v: *mut Vdbe) -> i32 {
     return addr;
 }
 
+///* Process a pragma statement. 
+///*
+///* Pragmas are of this form:
+///*
+///*      PRAGMA [schema.]id [= value]
+///*
+///* The identifier might also be a string.  The value is a string, and
+///* identifier, or a number.  If minusFlag is true, then the value is
+///* a number that was preceded by a minus sign.
+///*
+///* If the left side is "database.id" then pId1 is the database name
+///* and pId2 is the id.  If the left side is just "id" then pId1 is the
+///* id and pId2 is any empty string.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
     p_id2: *mut Token, p_value: *mut Token, minus_flag: i32) -> () {
     unsafe {
         unsafe {
             let mut z_left: *mut i8 = core::ptr::null_mut();
+            /// Nul-terminated UTF-8 string <id>
             let mut z_right: *mut i8 = core::ptr::null_mut();
+            /// Nul-terminated UTF-8 string <value>, or NULL
             let mut z_db: *const i8 = core::ptr::null();
+            /// The database name
             let mut p_id: *mut Token = core::ptr::null_mut();
+            /// Pointer to <id> token
             let mut a_fcntl: [*mut i8; 4] = [core::ptr::null_mut(); 4];
+            /// Argument to SQLITE_FCNTL_PRAGMA
             let mut i_db: i32 = 0;
+            /// Database index for <database>
             let mut rc: i32 = 0;
+            /// return value form SQLITE_FCNTL_PRAGMA
             let mut db: *mut Sqlite3 = core::ptr::null_mut();
+            /// The database connection
             let mut p_db: *mut Db = core::ptr::null_mut();
+            /// The specific database being pragmaed
             let mut v: *mut Vdbe = core::ptr::null_mut();
+            /// Prepared statement
             let mut p_pragma: *const PragmaName = core::ptr::null();
+            /// 0
+            /// 1
+            /// 6
             let mut a_op: *mut VdbeOp = core::ptr::null_mut();
             let mut size: i32 = 0;
+            /// !SQLITE_OMIT_PAGER_PRAGMAS && !SQLITE_OMIT_DEPRECATED
+            ///*  PRAGMA [schema.]page_size
+            ///*  PRAGMA [schema.]page_size=N
+            ///*
+            ///* The first form reports the current setting for the
+            ///* database page size in bytes.  The second form sets the
+            ///* database page size value.  The value can only be set if
+            ///* the database has not yet been created.
             let mut p_bt: *mut Btree = core::ptr::null_mut();
             let mut size__1: i32 = 0;
+            /// Malloc may fail when setting the page-size, as there is an internal
+            ///* buffer that the pager module resizes using sqlite3_realloc().
+            ///*  PRAGMA [schema.]secure_delete
+            ///*  PRAGMA [schema.]secure_delete=ON/OFF/FAST
+            ///*
+            ///* The first form reports the current setting for the
+            ///* secure_delete flag.  The second form changes the secure_delete
+            ///* flag setting and reports the new value.
             let mut p_bt_1: *mut Btree = core::ptr::null_mut();
             let mut b: i32 = 0;
             let mut ii: i32 = 0;
+            ///*  PRAGMA [schema.]max_page_count
+            ///*  PRAGMA [schema.]max_page_count=N
+            ///*
+            ///* The first form reports the current setting for the
+            ///* maximum number of pages in the database file.  The
+            ///* second form attempts to change this setting.  Both
+            ///* forms return the current setting.
+            ///*
+            ///* The absolute value of N is used.  This is undocumented and might
+            ///* change.  The only purpose is to provide an easy way to test
+            ///* the sqlite3AbsInt32() function.
+            ///*
+            ///*  PRAGMA [schema.]page_count
+            ///*
+            ///* Return the number of pages in the specified database.
             let mut i_reg: i32 = 0;
             let mut x: i64 = 0 as i64;
+            ///*  PRAGMA [schema.]locking_mode
+            ///*  PRAGMA [schema.]locking_mode = (normal|exclusive)
             let mut z_ret: *const i8 = core::ptr::null();
             let mut e_mode: i32 = 0;
+            /// Simple "PRAGMA locking_mode;" statement. This is a query for
+            ///* the current default locking mode (which may be different to
+            ///* the locking-mode of the main database).
             let mut p_pager: *mut Pager = core::ptr::null_mut();
+            /// This indicates that no database name was specified as part
+            ///* of the PRAGMA command. In this case the locking-mode must be
+            ///* set on all attached databases, as well as the main db file.
+            ///*
+            ///* Also, the sqlite3.dfltLockMode variable is set so that
+            ///* any subsequently attached databases also use the specified
+            ///* locking mode.
             let mut ii__1: i32 = 0;
+            ///*  PRAGMA [schema.]journal_mode
+            ///*  PRAGMA [schema.]journal_mode =
+            ///*                      (delete|persist|off|truncate|memory|wal|off)
             let mut e_mode_1: i32 = 0;
+            /// One of the PAGER_JOURNALMODE_XXX symbols
             let mut ii__2: i32 = 0;
+            /// Loop counter
+            /// If there is no "=MODE" part of the pragma, do a query for the
+            ///* current mode
             let mut z_mode: *const i8 = core::ptr::null();
             let mut n: i32 = 0;
+            /// If the "=MODE" part does not match any known journal mode,
+            ///* then do a query
+            /// Do not allow journal-mode "OFF" in defensive since the database
+            ///* can become corrupted using ordinary SQL when the journal is off
+            /// Convert "PRAGMA journal_mode" into "PRAGMA main.journal_mode"
+            ///*  PRAGMA [schema.]journal_size_limit
+            ///*  PRAGMA [schema.]journal_size_limit=N
+            ///*
+            ///* Get or set the size limit on rollback journal files.
             let mut p_pager_1: *mut Pager = core::ptr::null_mut();
             let mut i_limit: i64 = 0 as i64;
+            /// SQLITE_OMIT_PAGER_PRAGMAS
+            ///*  PRAGMA [schema.]auto_vacuum
+            ///*  PRAGMA [schema.]auto_vacuum=N
+            ///*
+            ///* Get or set the value of the database 'auto-vacuum' parameter.
+            ///* The value is one of:  0 NONE 1 FULL 2 INCREMENTAL
             let mut p_bt_2: *mut Btree = core::ptr::null_mut();
             let mut e_auto: i32 = 0;
+            /// 0
+            /// 2
+            /// 3
+            /// 4
             let mut a_op_1: *mut VdbeOp = core::ptr::null_mut();
             let mut i_addr: i32 = 0;
+            ///*  PRAGMA [schema.]incremental_vacuum(N)
+            ///*
+            ///* Do N steps of incremental vacuuming on a database.
             let mut i_limit_1: i32 = 0;
             let mut addr: i32 = 0;
+            ///*  PRAGMA [schema.]cache_size
+            ///*  PRAGMA [schema.]cache_size=N
+            ///*
+            ///* The first form reports the current local setting for the
+            ///* page cache size. The second form sets the local
+            ///* page cache size value.  If N is positive then that is the
+            ///* number of pages in the cache.  If N is negative, then the
+            ///* number of pages is adjusted so that the cache uses -N kibibytes
+            ///* of memory.
             let mut size__2: i32 = 0;
+            ///*  PRAGMA [schema.]cache_spill
+            ///*  PRAGMA cache_spill=BOOLEAN
+            ///*  PRAGMA [schema.]cache_spill=N
+            ///*
+            ///* The first form reports the current local setting for the
+            ///* page cache spill size. The second form turns cache spill on
+            ///* or off.  When turning cache spill on, the size is set to the
+            ///* current cache_size.  The third form sets a spill size that
+            ///* may be different form the cache size.
+            ///* If N is positive then that is the
+            ///* number of pages in the cache.  If N is negative, then the
+            ///* number of pages is adjusted so that the cache uses -N kibibytes
+            ///* of memory.
+            ///*
+            ///* If the number of cache_spill pages is less then the number of
+            ///* cache_size pages, no spilling occurs until the page count exceeds
+            ///* the number of cache_size pages.
+            ///*
+            ///* The cache_spill=BOOLEAN setting applies to all attached schemas,
+            ///* not just the schema specified.
             let mut size__3: i32 = 0;
+            ///*  PRAGMA [schema.]mmap_size(N)
+            ///*
+            ///* Used to set mapping size limit. The mapping size limit is
+            ///* used to limit the aggregate size of all memory mapped regions of the
+            ///* database file. If this parameter is set to zero, then memory mapping
+            ///* is not used at all.  If N is negative, then the default memory map
+            ///* limit determined by sqlite3_config(SQLITE_CONFIG_MMAP_SIZE) is set.
+            ///* The parameter N is measured in bytes.
+            ///*
+            ///* This value is advisory.  The underlying VFS is free to memory map
+            ///* as little or as much as it wants.  Except, if N is set to 0 then the
+            ///* upper layers will never invoke the xFetch interfaces to the VFS.
             let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
             let mut ii__3: i32 = 0;
+            ///*   PRAGMA temp_store
+            ///*   PRAGMA temp_store = "default"|"memory"|"file"
+            ///*
+            ///* Return or set the local value of the temp_store flag.  Changing
+            ///* the local value does not make changes to the disk file and the default
+            ///* value will be restored the next time the database is opened.
+            ///*
+            ///* Note that it is possible for the library compile-time options to
+            ///* override this setting
+            ///*   PRAGMA temp_store_directory
+            ///*   PRAGMA temp_store_directory = ""|"directory_name"
+            ///*
+            ///* Return or set the local value of the temp_store_directory flag.  Changing
+            ///* the value sets a specific directory to be used for temporary files.
+            ///* Setting to a null string reverts to the default temporary directory search.
+            ///* If temporary directory is changed, then invalidateTempStorage.
+            ///*
             let mut res: i32 = 0;
+            /// SQLITE_OMIT_WSD
+            ///*   PRAGMA [schema.]lock_proxy_file
+            ///*   PRAGMA [schema.]lock_proxy_file = ":auto:"|"lock_file_path"
+            ///*
+            ///* Return or set the value of the lock_proxy_file flag.  Changing
+            ///* the value sets a specific file to be used for database access locks.
+            ///*
             let mut p_pager_2: *mut Pager = core::ptr::null_mut();
             let mut proxy_file_path: *const i8 = core::ptr::null();
             let mut p_file: *mut Sqlite3File = core::ptr::null_mut();
             let mut p_pager_3: *mut Pager = core::ptr::null_mut();
             let mut p_file_1: *mut Sqlite3File = core::ptr::null_mut();
             let mut res__1: i32 = 0;
+            /// SQLITE_ENABLE_LOCKING_STYLE
+            ///*   PRAGMA [schema.]synchronous
+            ///*   PRAGMA [schema.]synchronous=OFF|ON|NORMAL|FULL|EXTRA
+            ///*
+            ///* Return or set the local value of the synchronous flag.  Changing
+            ///* the local value does not make changes to the disk file and the
+            ///* default value will be restored the next time the database is
+            ///* opened.
             let mut i_level: i32 = 0;
+            /// SQLITE_OMIT_PAGER_PRAGMAS
             let mut mask: u64 = 0 as u64;
+            /// Mask of bits to set or clear.
+            /// Foreign key support may not be enabled or disabled while not
+            ///* in auto-commit mode.
+            /// IMP: R-60817-01178 If the argument is "RESET" then schema
+            ///* writing is disabled (as with "PRAGMA writable_schema=OFF") and,
+            ///* in addition, the schema is reloaded.
+            /// Many of the flag-pragmas modify the code generated by the SQL
+            ///* compiler (eg. count_changes). So add an opcode to expire all
+            ///* compiled SQL statements after modifying a pragma value.
+            /// SQLITE_OMIT_FLAG_PRAGMAS
+            ///*   PRAGMA table_info(<table>)
+            ///*
+            ///* Return a single row for each column of the named table. The columns of
+            ///* the returned data set are:
+            ///*
+            ///* cid:        Column id (numbered from left to right, starting at 0)
+            ///* name:       Column name
+            ///* type:       Column declaration type.
+            ///* notnull:    True if 'NOT NULL' is part of column declaration
+            ///* dflt_value: The default value for the column, if any.
+            ///* pk:         Non-zero for PK fields.
             let mut p_tab: *mut Table = core::ptr::null_mut();
             let mut i: i32 = 0;
             let mut k: i32 = 0;
@@ -811,10 +1066,28 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
             let mut p_pk: *const Index = core::ptr::null();
             let mut is_hidden: i32 = 0;
             let mut p_col_expr: *const Expr = core::ptr::null();
+            /// GENERATED ALWAYS AS ... VIRTUAL
+            /// GENERATED ALWAYS AS ... STORED
+            /// HIDDEN
+            ///*   PRAGMA table_list
+            ///*
+            ///* Return a single row for each table, virtual table, or view in the
+            ///* entire schema.
+            ///*
+            ///* schema:     Name of attached database hold this table
+            ///* name:       Name of the table itself
+            ///* type:       "table", "view", "virtual", "shadow"
+            ///* ncol:       Number of columns
+            ///* wr:         True for a WITHOUT ROWID table
+            ///* strict:     True for a STRICT table
             let mut ii__4: i32 = 0;
             let mut k__1: *const HashElem = core::ptr::null();
             let mut p_hash: *const Hash = core::ptr::null();
             let mut init_n_col: i32 = 0;
+            /// Ensure that the Table.nCol field is initialized for all views
+            ///* and virtual tables.  Each time we initialize a Table.nCol value
+            ///* for a table, that can potentially disrupt the hash table, so restart
+            ///* the initialization scan.
             let mut p_tab_1: *const Table = core::ptr::null();
             let mut z_sql: *mut i8 = core::ptr::null_mut();
             let mut p_dummy: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -822,9 +1095,14 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
             let mut z_type: *const i8 = core::ptr::null();
             let mut p_idx: *const Index = core::ptr::null();
             let mut p_tab_3: *mut Table = core::ptr::null_mut();
+            /// If there is no index named zRight, check to see if there is a
+            ///* WITHOUT ROWID table named zRight, and if there is, show the
+            ///* structure of the PRIMARY KEY index for that table.
             let mut i_idx_db: i32 = 0;
             let mut i__1: i32 = 0;
             let mut mx: i32 = 0;
+            /// PRAGMA index_xinfo (newer version with more rows and columns)
+            /// PRAGMA index_info (legacy version)
             let mut cnum: i16 = 0 as i16;
             let mut p_idx_1: *const Index = core::ptr::null();
             let mut p_tab_4: *const Table = core::ptr::null();
@@ -843,74 +1121,204 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
             let mut show_intern_func: i32 = 0;
             let mut j__1: *mut HashElem = core::ptr::null_mut();
             let mut p_mod: *const Module = core::ptr::null();
+            /// SQLITE_OMIT_VIRTUALTABLE
             let mut i__6: i32 = 0;
+            /// SQLITE_INTROSPECTION_PRAGMAS
+            /// SQLITE_OMIT_SCHEMA_PRAGMAS
             let mut p_fk: *const FKey = core::ptr::null();
             let mut p_tab_5: *const Table = core::ptr::null();
             let mut i_tab_db_1: i32 = 0;
             let mut i__7: i32 = 0;
             let mut j__2: i32 = 0;
+            /// ON UPDATE
+            /// ON DELETE
+            /// !defined(SQLITE_OMIT_FOREIGN_KEY)
             let mut p_fk_1: *mut FKey = core::ptr::null_mut();
+            /// A foreign key constraint
             let mut p_tab_6: *mut Table = core::ptr::null_mut();
+            /// Child table contain "REFERENCES" keyword
             let mut p_parent: *mut Table = core::ptr::null_mut();
+            /// Parent table that child points to
             let mut p_idx_2: *mut Index = core::ptr::null_mut();
+            /// Index in the parent table
             let mut i__8: i32 = 0;
+            /// Loop counter:  Foreign key number for pTab
             let mut j__3: i32 = 0;
+            /// Loop counter:  Field of the foreign key
             let mut k__2: *mut HashElem = core::ptr::null_mut();
+            /// Loop counter:  Next table in schema
             let mut x__1: i32 = 0;
+            /// result variable
             let mut reg_result: i32 = 0;
+            /// 3 registers to hold a result row
             let mut reg_row: i32 = 0;
+            /// Registers to hold a row from pTab
             let mut addr_top: i32 = 0;
+            /// Top of a loop checking foreign keys
             let mut addr_ok: i32 = 0;
+            /// Jump here if the key is OK
             let mut ai_cols: *mut i32 = core::ptr::null_mut();
+            /// child to parent column mapping
+            /// Generate code to read the child key values into registers
+            ///* regRow..regRow+n. If any of the child key values are NULL, this
+            ///* row cannot cause an FK violation. Jump directly to addrOk in
+            ///* this case.
             let mut i_col: i32 = 0;
+            /// Generate code to query the parent index for a matching parent
+            ///* key. If a match is found, jump to addrOk.
             let mut jmp: i32 = 0;
+            /// Generate code to report an FK violation to the caller.
+            /// !defined(SQLITE_OMIT_TRIGGER)
+            /// !defined(SQLITE_OMIT_FOREIGN_KEY)
+            /// Reinstall the LIKE and GLOB functions.  The variant of LIKE
+            ///* used will be case sensitive or not depending on the RHS.
+            /// SQLITE_OMIT_CASE_SENSITIVE_LIKE_PRAGMA
+            ///    PRAGMA integrity_check
+            ///*    PRAGMA integrity_check(N)
+            ///*    PRAGMA quick_check
+            ///*    PRAGMA quick_check(N)
+            ///*
+            ///* Verify the integrity of the database.
+            ///*
+            ///* The "quick_check" is reduced version of
+            ///* integrity_check designed to detect most database corruption
+            ///* without the overhead of cross-checking indexes.  Quick_check
+            ///* is linear time whereas integrity_check is O(NlogN).
+            ///*
+            ///* The maximum number of errors is 100 by default.  A different default
+            ///* can be specified using a numeric parameter N.
+            ///*
+            ///* Or, the parameter N can be the name of a table.  In that case, only
+            ///* the one table named is verified.  The freelist is only verified if
+            ///* the named table is "sqlite_schema" (or one of its aliases).
+            ///*
+            ///* All schemas are checked by default.  To check just a single
+            ///* schema, use the form:
+            ///*
+            ///*      PRAGMA schema.integrity_check;
             let mut i__9: i32 = 0;
             let mut j__4: i32 = 0;
             let mut addr__1: i32 = 0;
             let mut mx_err: i32 = 0;
             let mut p_obj_tab: *const Table = core::ptr::null();
+            /// Check only this one table, if not NULL
             let mut is_quick: i32 = 0;
+            /// If the PRAGMA command was of the form "PRAGMA <db>.integrity_check",
+            ///* then iDb is set to the index of the database identified by <db>.
+            ///* In this case, the integrity of database iDb only is verified by
+            ///* the VDBE created below.
+            ///*
+            ///* Otherwise, if the command was simply "PRAGMA integrity_check" (or
+            ///* "PRAGMA quick_check"), then iDb is set to 0. In this case, set iDb
+            ///* to -1 here, to indicate that the VDBE should verify the integrity
+            ///* of all attached databases.
+            /// Initialize the VDBE program
+            /// Set the maximum error count
+            /// reg[1] holds errors left
+            /// Do an integrity check on each database file
             let mut x__2: *const HashElem = core::ptr::null();
+            /// For looping over tables in the schema
             let mut p_tbls: *const Hash = core::ptr::null();
+            /// Set of all tables in the schema
             let mut a_root: *mut i32 = core::ptr::null_mut();
+            /// Array of root page numbers of all btrees
             let mut cnt: i32 = 0;
+            /// Number of entries in aRoot[]
+            /// tag-20230327-1
+            /// Do an integrity check of the B-Tree
+            ///*
+            ///* Begin by finding the root pages numbers
+            ///* for all tables and indices in the database.
             let mut p_tab_7: *const Table = core::ptr::null();
+            /// Current table
             let mut p_idx_3: *const Index = core::ptr::null();
+            /// An index on pTab
             let mut n_idx: i32 = 0;
+            /// Number of indexes on pTab
             let mut p_tab_8: *const Table = core::ptr::null();
             let mut p_idx_4: *const Index = core::ptr::null();
+            /// Make sure sufficient number of registers have been allocated
+            /// Do the b-tree integrity checks
+            /// Check that the indexes all have the right number of rows
             let mut i_tab: i32 = 0;
             let mut p_tab_9: *const Table = core::ptr::null();
             let mut p_idx_5: *const Index = core::ptr::null();
+            /// Make sure all the indices are constructed correctly.
             let mut p_tab_10: *mut Table = core::ptr::null_mut();
             let mut p_idx_6: *mut Index = core::ptr::null_mut();
             let mut p_pk_1: *mut Index = core::ptr::null_mut();
             let mut p_prior: *mut Index = core::ptr::null_mut();
+            /// Previous index
             let mut loop_top: i32 = 0;
             let mut i_data_cur: i32 = 0;
             let mut i_idx_cur: i32 = 0;
             let mut r1: i32 = 0;
             let mut b_strict: i32 = 0;
+            /// True for a STRICT table
             let mut r2: i32 = 0;
+            /// Previous key for WITHOUT ROWID tables
             let mut mx_col: i32 = 0;
+            /// Maximum non-virtual column number
+            /// reg[7] counts the number of entries in the table.
+            ///* reg[8+i] counts the number of entries in the i-th index
+            /// index entries counter
+            /// Fetch the right-most column from the table.  This will cause
+            ///* the entire record header to be parsed and sanity checked.  It
+            ///* will also prepopulate the cursor column cache that is used
+            ///* by the OP_IsType code, so it is a required step.
+            /// COLFLAG_VIRTUAL columns are not included in the WITHOUT ROWID
+            ///* PK index column-count, so there is no need to account for them
+            ///* in this case.
+            /// Verify WITHOUT ROWID keys are in ascending order
             let mut a1: i32 = 0;
             let mut z_err: *const i8 = core::ptr::null();
+            /// Verify datatypes for all columns:
+            ///*
+            ///*   (1) NOT NULL columns may not contain a NULL
+            ///*   (2) Datatype must be exact for non-ANY columns in STRICT tables
+            ///*   (3) Datatype for TEXT columns in non-STRICT tables must be
+            ///*       NULL, TEXT, or BLOB.
+            ///*   (4) Datatype for numeric columns in non-STRICT tables must not
+            ///*       be a TEXT value that can be losslessly converted to numeric.
             let mut z_err_1: *const i8 = core::ptr::null();
             let mut p_col_1: *mut Column = core::ptr::null_mut();
+            /// The column to be checked
             let mut label_error: i32 = 0;
+            /// Jump here to report an error
             let mut label_ok: i32 = 0;
+            /// Jump here if all looks ok
             let mut p1: i32 = 0;
             let mut p3: i32 = 0;
             let mut p4: i32 = 0;
+            /// Operands to the OP_IsType opcode
             let mut do_type_check: i32 = 0;
+            /// Check datatypes (besides NOT NULL)
+            /// Compute the operands that will be needed for OP_IsType
             let mut p_dflt_value: *mut Sqlite3Value = core::ptr::null_mut();
+            /// (1) NOT NULL columns may not contain a NULL
             let mut jmp3: i32 = 0;
             let mut jmp2: i32 = 0;
+            /// ANY
+            /// BLOB
+            /// INT
+            /// INTEGER
+            /// REAL
+            /// TEXT
+            /// (3) Datatype for TEXT columns in non-STRICT tables must be
+            ///*     NULL, TEXT, or BLOB.
+            /// NULL, TEXT, or BLOB
+            /// (4) Datatype for numeric columns in non-STRICT tables must not
+            ///*     be a TEXT value that can be converted to numeric.
+            /// NULL, INT, FLOAT, or BLOB
+            /// NULL, TEXT, or BLOB
+            /// Verify CHECK constraints
             let mut p_check: *mut ExprList = core::ptr::null_mut();
             let mut addr_ck_fault: i32 = 0;
             let mut addr_ck_ok: i32 = 0;
             let mut z_err_2: *const i8 = core::ptr::null();
             let mut k__3: i32 = 0;
+            /// Omit the remaining tests for quick_check */
+            ///          /* Validate index entries for the current row
             let mut jmp2__1: i32 = 0;
             let mut jmp3__1: i32 = 0;
             let mut jmp4: i32 = 0;
@@ -918,47 +1326,275 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
             let mut label6: i32 = 0;
             let mut kk: i32 = 0;
             let mut ck_uniq: i32 = 0;
+            /// increment entry count */
+            ///            /* Verify that an index entry exists for the current table row
+            /// The OP_IdxRowid opcode is an optimized version of OP_Column
+            ///* that extracts the rowid off the end of the index record.
+            ///* But it only works correctly if index record does not have
+            ///* any extra bytes at the end.  Verify that this is the case.
             let mut jmp7: i32 = 0;
+            /// Any indexed columns with non-BINARY collations must still hold
+            ///* the exact same text value as the table.
             let mut jmp6: i32 = 0;
+            /// For UNIQUE indexes, verify that only one entry exists with the
+            ///* current key.  The entry is unique if (1) any column is NULL
+            ///* or (2) the next entry has a different key
             let mut uniq_ok: i32 = 0;
             let mut jmp6__1: i32 = 0;
             let mut i_col_1: i32 = 0;
+            /// Second pass to invoke the xIntegrity method on all virtual
+            ///* tables.
             let mut p_tab_11: *mut Table = core::ptr::null_mut();
             let mut p_v_tab: *const Sqlite3Vtab = core::ptr::null();
             let mut a1__1: i32 = 0;
             let mut z_mod: *const i8 = core::ptr::null();
+            /// 0
+            /// 1
+            /// 2
+            /// 3
+            /// 4
+            /// 5
+            /// 6
             let mut a_op_2: *mut VdbeOp = core::ptr::null_mut();
+            /// Must be element [1]
+            /// Must be element [2]
+            /// Must be element [3]
+            /// SQLITE_UTF16NATIVE
+            /// SQLITE_UTF16NATIVE
             let mut p_enc: *const EncNameN7EncName = core::ptr::null();
+            /// "PRAGMA encoding"
+            /// "PRAGMA encoding = XXX" */
+            ///      /* Only change the value of sqlite.enc if the database handle is not
+            ///* initialized. If the main database exists, the new sqlite.enc value
+            ///* will be overwritten when the schema is next loaded. If it does not
+            ///* already exists, it will be created to use the new encoding value.
             let mut enc: u8 = 0 as u8;
+            /// SQLITE_OMIT_UTF16
+            ///*   PRAGMA [schema.]schema_version
+            ///*   PRAGMA [schema.]schema_version = <integer>
+            ///*
+            ///*   PRAGMA [schema.]user_version
+            ///*   PRAGMA [schema.]user_version = <integer>
+            ///*
+            ///*   PRAGMA [schema.]freelist_count
+            ///*
+            ///*   PRAGMA [schema.]data_version
+            ///*
+            ///*   PRAGMA [schema.]application_id
+            ///*   PRAGMA [schema.]application_id = <integer>
+            ///*
+            ///* The pragma's schema_version and user_version are used to set or get
+            ///* the value of the schema-version and user-version, respectively. Both
+            ///* the schema-version and the user-version are 32-bit signed integers
+            ///* stored in the database header.
+            ///*
+            ///* The schema-cookie is usually only manipulated internally by SQLite. It
+            ///* is incremented by SQLite whenever the database schema is modified (by
+            ///* creating or dropping a table or index). The schema version is used by
+            ///* SQLite each time a query is executed to ensure that the internal cache
+            ///* of the schema used when compiling the SQL query matches the schema of
+            ///* the database against which the compiled query is actually executed.
+            ///* Subverting this mechanism by using "PRAGMA schema_version" to modify
+            ///* the schema-version is potentially dangerous and may lead to program
+            ///* crashes or database corruption. Use with caution!
+            ///*
+            ///* The user-version is not used internally by SQLite. It may be used by
+            ///* applications for any purpose.
             let mut i_cookie: i32 = 0;
+            /// 0
+            /// 1
             let mut a_op_3: *mut VdbeOp = core::ptr::null_mut();
+            /// 0
+            /// 1
             let mut a_op_4: *mut VdbeOp = core::ptr::null_mut();
+            /// SQLITE_OMIT_SCHEMA_VERSION_PRAGMAS
+            ///*   PRAGMA compile_options
+            ///*
+            ///* Return the names of all compile-time options used in this build,
+            ///* one option per row.
             let mut i__10: i32 = 0;
             let mut z_opt: *const i8 = core::ptr::null();
+            /// SQLITE_OMIT_COMPILEOPTION_DIAGS
+            ///*   PRAGMA [schema.]wal_checkpoint = passive|full|restart|truncate
+            ///*
+            ///* Checkpoint the database.
             let mut i_bt: i32 = 0;
             let mut e_mode_2: i32 = 0;
+            ///*   PRAGMA wal_autocheckpoint
+            ///*   PRAGMA wal_autocheckpoint = N
+            ///*
+            ///* Configure a database connection to automatically checkpoint a database
+            ///* after accumulating N frames in the log. Or query for the current value
+            ///* of N.
+            ///*  PRAGMA shrink_memory
+            ///*
+            ///* IMPLEMENTATION-OF: R-23445-46109 This pragma causes the database
+            ///* connection on which it is invoked to free up as much memory as it
+            ///* can, by calling sqlite3_db_release_memory().
+            ///*  PRAGMA optimize
+            ///*  PRAGMA optimize(MASK)
+            ///*  PRAGMA schema.optimize
+            ///*  PRAGMA schema.optimize(MASK)
+            ///*
+            ///* Attempt to optimize the database.  All schemas are optimized in the first
+            ///* two forms, and only the specified schema is optimized in the latter two.
+            ///*
+            ///* The details of optimizations performed by this pragma are expected
+            ///* to change and improve over time.  Applications should anticipate that
+            ///* this pragma will perform new optimizations in future releases.
+            ///*
+            ///* The optional argument is a bitmask of optimizations to perform:
+            ///*
+            ///*    0x00001    Debugging mode.  Do not actually perform any optimizations
+            ///*               but instead return one line of text for each optimization
+            ///*               that would have been done.  Off by default.
+            ///*
+            ///*    0x00002    Run ANALYZE on tables that might benefit.  On by default.
+            ///*               See below for additional information.
+            ///*
+            ///*    0x00010    Run all ANALYZE operations using an analysis_limit that
+            ///*               is the lessor of the current analysis_limit and the
+            ///*               SQLITE_DEFAULT_OPTIMIZE_LIMIT compile-time option.
+            ///*               The default value of SQLITE_DEFAULT_OPTIMIZE_LIMIT is
+            ///*               currently (2024-02-19) set to 2000, which is such that
+            ///*               the worst case run-time for PRAGMA optimize on a 100MB
+            ///*               database will usually be less than 100 milliseconds on
+            ///*               a RaspberryPI-4 class machine.  On by default.
+            ///*
+            ///*    0x10000    Look at tables to see if they need to be reanalyzed
+            ///*               due to growth or shrinkage even if they have not been
+            ///*               queried during the current connection.  Off by default.
+            ///*
+            ///* The default MASK is and always shall be 0x0fffe.  In the current
+            ///* implementation, the default mask only covers the 0x00002 optimization,
+            ///* though additional optimizations that are covered by 0x0fffe might be
+            ///* added in the future.  Optimizations that are off by default and must
+            ///* be explicitly requested have masks of 0x10000 or greater.
+            ///*
+            ///* DETERMINATION OF WHEN TO RUN ANALYZE
+            ///*
+            ///* In the current implementation, a table is analyzed if only if all of
+            ///* the following are true:
+            ///*
+            ///* (1) MASK bit 0x00002 is set.
+            ///*
+            ///* (2) The table is an ordinary table, not a virtual table or view.
+            ///*
+            ///* (3) The table name does not begin with "sqlite_".
+            ///*
+            ///* (4) One or more of the following is true:
+            ///*      (4a) The 0x10000 MASK bit is set.
+            ///*      (4b) One or more indexes on the table lacks an entry
+            ///*           in the sqlite_stat1 table.
+            ///*      (4c) The query planner used sqlite_stat1-style statistics for one
+            ///*           or more indexes of the table at some point during the lifetime
+            ///*           of the current connection.
+            ///*
+            ///* (5) One or more of the following is true:
+            ///*      (5a) One or more indexes on the table lacks an entry
+            ///*           in the sqlite_stat1 table.  (Same as 4a)
+            ///*      (5b) The number of rows in the table has increased or decreased by
+            ///*           10-fold.  In other words, the current size of the table is
+            ///*           10 times larger than the size in sqlite_stat1 or else the
+            ///*           current size is less than 1/10th the size in sqlite_stat1.
+            ///*
+            ///* The rules for when tables are analyzed are likely to change in
+            ///* future releases.  Future versions of SQLite might accept a string
+            ///* literal argument to this pragma that contains a mnemonic description
+            ///* of the options rather than a bitmap.
             let mut i_db_last: i32 = 0;
+            /// Loop termination point for the schema loop
             let mut i_tab_cur: i32 = 0;
+            /// Cursor for a table whose size needs checking
             let mut k__4: *mut HashElem = core::ptr::null_mut();
+            /// Loop over tables of a schema
             let mut p_schema: *mut Schema = core::ptr::null_mut();
+            /// The current schema
             let mut p_tab_12: *mut Table = core::ptr::null_mut();
+            /// A table in the schema
             let mut p_idx_7: *const Index = core::ptr::null();
+            /// An index of the table
             let mut sz_threshold: LogEst = 0 as LogEst;
+            /// Size threshold above which reanalysis needed
             let mut z_sub_sql: *const i8 = core::ptr::null();
+            /// SQL statement for the OP_SqlExec opcode
             let mut op_mask: u32 = 0 as u32;
+            /// Mask of operations to perform
             let mut n_limit: i32 = 0;
+            /// Analysis limit to use
             let mut n_check: i32 = 0;
+            /// Number of tables to be optimized
             let mut n_btree: i32 = 0;
+            /// Number of btrees to scan
             let mut n_index: i32 = 0;
+            /// Number of indexes on the current table
+            /// This only works for ordinary tables
+            /// Do not scan system tables
+            /// Find the size of the table as last recorded in sqlite_stat1.
+            ///* If any index is unanalyzed, then the threshold is -1 to
+            ///* indicate a new, unanalyzed index
+            /// Always analyze if any index lacks statistics
+            /// If table pTab has not been used in a way that would benefit from
+            ///* having analysis statistics during the current session, then skip it,
+            ///* unless the 0x10000 MASK bit is set.
+            /// Check for size change if stat1 has been used for a query
+            /// Check for size change if 0x10000 is set
+            /// Do analysis if unanalyzed indexes exists
+            /// Otherwise, we can skip this table
+            /// If ANALYZE might be invoked two or more times, hold a write
+            ///* transaction for efficiency
+            /// Reanalyze if the table is 10 times larger or smaller than
+            ///* the last analysis.  Unconditional reanalysis if there are
+            ///* unanalyzed indexes.
             let mut i_range: LogEst = 0 as LogEst;
+            /// 10x size change
             let mut r1__1: i32 = 0;
+            /// In a schema with a large number of tables and indexes, scale back
+            ///* the analysis_limit to avoid excess run-time in the worst case.
             let mut i_addr_1: i32 = 0;
             let mut i_end: i32 = 0;
             let mut a_op_5: *mut VdbeOp = core::ptr::null_mut();
+            ///*   PRAGMA busy_timeout
+            ///*   PRAGMA busy_timeout = N
+            ///*
+            ///* Call sqlite3_busy_timeout(db, N).  Return the current timeout value
+            ///* if one is set.  If no busy handler or a different busy handler is set
+            ///* then 0 is returned.  Setting the busy_timeout to 0 or negative
+            ///* disables the timeout.
+            ////
+            ///  /*case PragTyp_BUSY_TIMEOUT
+            ///*   PRAGMA soft_heap_limit
+            ///*   PRAGMA soft_heap_limit = N
+            ///*
+            ///* IMPLEMENTATION-OF: R-26343-45930 This pragma invokes the
+            ///* sqlite3_soft_heap_limit64() interface with the argument N, if N is
+            ///* specified and is a non-negative integer.
+            ///* IMPLEMENTATION-OF: R-64451-07163 The soft_heap_limit pragma always
+            ///* returns the same integer that would be returned by the
+            ///* sqlite3_soft_heap_limit64(-1) C-language function.
             let mut n__1: Sqlite3Int64 = 0 as Sqlite3Int64;
+            ///*   PRAGMA hard_heap_limit
+            ///*   PRAGMA hard_heap_limit = N
+            ///*
+            ///* Invoke sqlite3_hard_heap_limit64() to query or set the hard heap
+            ///* limit.  The hard heap limit can be activated or lowered by this
+            ///* pragma, but not raised or deactivated.  Only the
+            ///* sqlite3_hard_heap_limit64() C-language API can raise or deactivate
+            ///* the hard heap limit.  This allows an application to set a heap limit
+            ///* constraint that cannot be relaxed by an untrusted SQL script.
             let mut n_1: Sqlite3Int64 = 0 as Sqlite3Int64;
             let mut i_prior: Sqlite3Int64 = 0 as Sqlite3Int64;
+            ///*   PRAGMA threads
+            ///*   PRAGMA threads = N
+            ///*
+            ///* Configure the maximum number of worker threads.  Return the new
+            ///* maximum, which might be less than requested.
             let mut n_2: Sqlite3Int64 = 0 as Sqlite3Int64;
+            ///*   PRAGMA analysis_limit
+            ///*   PRAGMA analysis_limit = N
+            ///*
+            ///* Configure the maximum number of rows that ANALYZE will examine
+            ///* in each index that it looks at.  Return the new limit.
             let mut n_3: Sqlite3Int64 = 0 as Sqlite3Int64;
             let mut __state: i32 = 0;
             loop {
@@ -5828,6 +6464,9 @@ pub extern "C" fn sqlite3_pragma(p_parse: *mut Parse, p_id1: *mut Token,
     }
 }
 
+///**************************************************************************
+///* Implementation of an eponymous virtual table that runs a pragma.
+///*
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PragmaVtab {
@@ -5838,6 +6477,7 @@ struct PragmaVtab {
     i_hidden: u8,
 }
 
+///* Pragma virtual table module xConnect method.
 extern "C" fn pragma_vtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -5947,6 +6587,12 @@ extern "C" fn pragma_vtab_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     }
 }
 
+/// Figure out the best index to use to search a pragma virtual table.
+///*
+///* There are not really any index choices.  But we want to encourage the
+///* query planner to give == constraints on as many hidden parameters as
+///* possible, and especially on the first hidden parameter.  So return a
+///* high cost if hidden parameters are unconstrained.
 extern "C" fn pragma_vtab_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const PragmaVtab =
@@ -6031,6 +6677,7 @@ extern "C" fn pragma_vtab_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Pragma virtual table module xDisconnect method.
 extern "C" fn pragma_vtab_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut PragmaVtab = p_vtab_1 as *mut PragmaVtab;
     unsafe { sqlite3_free(p_tab as *mut ()) };
@@ -6046,6 +6693,7 @@ struct PragmaVtabCursor {
     az_arg: [*mut i8; 2],
 }
 
+/// Create a new cursor for the pragma virtual table
 extern "C" fn pragma_vtab_open(p_vtab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
@@ -6066,6 +6714,7 @@ extern "C" fn pragma_vtab_open(p_vtab_1: *mut Sqlite3Vtab,
     }
 }
 
+/// Clear all content from pragma virtual table cursor.
 extern "C" fn pragma_vtab_cursor_clear(p_csr_1: &mut PragmaVtabCursor) -> () {
     let mut i: i32 = 0;
     unsafe { sqlite3_finalize((*p_csr_1).p_pragma) };
@@ -6091,6 +6740,7 @@ extern "C" fn pragma_vtab_cursor_clear(p_csr_1: &mut PragmaVtabCursor) -> () {
     }
 }
 
+/// Close a pragma virtual table cursor
 extern "C" fn pragma_vtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut PragmaVtabCursor = cur as *mut PragmaVtabCursor;
     pragma_vtab_cursor_clear(unsafe { &mut *p_csr });
@@ -6098,11 +6748,15 @@ extern "C" fn pragma_vtab_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+/// Advance the pragma virtual table cursor to the next row
+#[allow(unused_doc_comments)]
 extern "C" fn pragma_vtab_next(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut PragmaVtabCursor =
         p_vtab_cursor_1 as *mut PragmaVtabCursor;
     let mut rc: i32 = 0;
+
+    /// Increment the xRowid value
     {
         let __p = unsafe { &mut (*p_csr).i_rowid };
         let __t = *__p;
@@ -6118,6 +6772,7 @@ extern "C" fn pragma_vtab_next(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     return rc;
 }
 
+///* Pragma virtual table module xFilter method.
 extern "C" fn pragma_vtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -6221,6 +6876,7 @@ extern "C" fn pragma_vtab_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Pragma virtual table module xEof method.
 extern "C" fn pragma_vtab_eof(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *const PragmaVtabCursor =
@@ -6228,6 +6884,8 @@ extern "C" fn pragma_vtab_eof(p_vtab_cursor_1: *mut Sqlite3VtabCursor)
     return (unsafe { (*p_csr).p_pragma } == core::ptr::null_mut()) as i32;
 }
 
+/// The xColumn method simply returns the corresponding column from
+///* the PRAGMA.
 extern "C" fn pragma_vtab_column(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -6262,6 +6920,7 @@ extern "C" fn pragma_vtab_column(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Pragma virtual table module xRowid method.
 extern "C" fn pragma_vtab_rowid(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     p: *mut SqliteInt64) -> i32 {
     let p_csr: *const PragmaVtabCursor =
@@ -6270,6 +6929,7 @@ extern "C" fn pragma_vtab_rowid(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// The pragma virtual table object
 static pragma_vtab_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -6299,6 +6959,9 @@ static pragma_vtab_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Check to see if zTabName is really the name of a pragma.  If it is,
+///* then register an eponymous virtual table for that pragma and return
+///* a pointer to the Module object for the new virtual table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pragma_vtab_register(db: *mut Sqlite3,
     z_name: *const i8) -> *mut Module {

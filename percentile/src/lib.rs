@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -55,6 +61,7 @@ static mut a_percent_func: [PercentileFunc; 4] =
                 b_discrete: 1 as i8,
             }];
 
+///* Return TRUE if the input floating-point number is an infinity.
 extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if !(core::mem::size_of::<Sqlite3Uint64>() as u64 ==
@@ -72,14 +79,26 @@ extern "C" fn percent_is_infinity(mut r: f64) -> i32 {
     return (u >> 52 & 2047 as Sqlite3Uint64 == 2047 as u64) as i32;
 }
 
+///* Return TRUE if two doubles differ by 0.001 or less.
 extern "C" fn percent_same_value(mut a: f64, b: f64) -> i32 {
     a -= b;
     return (a >= -0.001 && a <= 0.001) as i32;
 }
 
+///* Search p (which must have p->bSorted) looking for an entry with
+///* value y.  Return the index of that entry.
+///*
+///* If bExact is true, return -1 if the entry is not found.
+///*
+///* If bExact is false, return the index at which a new entry with
+///* value y should be insert in order to keep the values in sorted
+///* order.  The smallest return value in this case will be 0, and
+///* the largest return value will be p->nUsed.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     -> i32 {
     let mut i_first: i32 = 0;
+    /// First element of search range
     let mut i_last: i32 = ((*p).n_used - 1 as u32) as i32;
     while i_last >= i_first {
         let i_mid: i32 = (i_first + i_last) / 2;
@@ -92,6 +111,11 @@ extern "C" fn percent_binary_search(p: &Percentile, y: f64, b_exact_1: i32)
     return i_first;
 }
 
+///* Generate an error for a percentile function.
+///*
+///* The error format string must have exactly one occurrence of "%%s()"
+///* (with two '%' characters).  That substring will be replaced by the name
+///* of the function.
 unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let p_func: *const PercentileFunc =
@@ -115,6 +139,9 @@ unsafe extern "C" fn percent_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg2 as *mut ()) };
 }
 
+///* The "step" function for percentile(Y,P) is called once for each
+///* input row.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -129,8 +156,11 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         }
     } else { { let _ = 0; } };
     if argc == 1 {
-        r_pct = 0.5;
+
+        /// Requirement 13:  median(Y) is the same as percentile(Y,50).
+        (r_pct = 0.5);
     } else {
+        /// Requirement 3:  P must be a number between 0 and 100
         let p_func: *const PercentileFunc =
             unsafe { sqlite3_user_data(p_ctx_1) } as *mut PercentileFunc as
                 *const PercentileFunc;
@@ -154,11 +184,13 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
             return;
         }
     }
-    p =
+
+    /// Allocate the session context.
+    (p =
         unsafe {
                 sqlite3_aggregate_context(p_ctx_1,
                     core::mem::size_of::<Percentile>() as i32)
-            } as *mut Percentile;
+            } as *mut Percentile);
     if p == core::ptr::null_mut() { return; }
     if (unsafe { (*p).b_pct_valid } == 0) as i32 != 0 {
         unsafe { (*p).r_pct = r_pct };
@@ -172,8 +204,10 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
-    e_type =
-        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore rows for which Y is NULL
+    (e_type =
+        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) });
     if e_type == 5 { return; }
     if e_type != 1 && e_type != 2 {
         unsafe {
@@ -183,7 +217,10 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
-    y = unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Throw an error if the Y value is infinity or NaN
+    (y =
+        unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) });
     if percent_is_infinity(y) != 0 {
         unsafe {
             percent_error(p_ctx_1,
@@ -275,10 +312,24 @@ extern "C" fn percent_step(p_ctx_1: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Sort an array of doubles.
+///*
+///* Algorithm: quicksort
+///*
+///* This is implemented separately rather than using the qsort() routine
+///* from the standard library because:
+///*
+///*    (1)  To avoid a dependency on qsort()
+///*    (2)  To avoid the function call to the comparison routine for each
+///*         comparison.
+#[allow(unused_doc_comments)]
 extern "C" fn percent_sort(mut a: *mut f64, mut n: u32) -> () {
     let mut i_lt: i32 = 0;
+    /// Entries before a[iLt] are less than rPivot
     let mut i_gt: i32 = 0;
+    /// Entries at or after a[iGt] are greater than rPivot
     let mut i: i32 = 0;
+    /// Loop counter
     let mut r_pivot: f64 = 0.0;
     while n >= 2 as u32 {
         if unsafe { *a.offset(0 as isize) } >
@@ -372,6 +423,9 @@ extern "C" fn percent_sort(mut a: *mut f64, mut n: u32) -> () {
     }
 }
 
+///* The "inverse" function for percentile(Y,P) is called to remove a
+///* row that was previously inserted by "step".
+#[allow(unused_doc_comments)]
 extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();
@@ -385,11 +439,15 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
                 c"argc==2 || argc==1".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
-    p =
+
+    /// Allocate the session context.
+    (p =
         unsafe {
                 sqlite3_aggregate_context(p_ctx_1,
                     core::mem::size_of::<Percentile>() as i32)
-            } as *mut Percentile;
+            } as *mut Percentile);
+
+    /// Allocate the session context.
     if !(p != core::ptr::null_mut()) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"percentInverse".as_ptr() as *const i8,
@@ -397,11 +455,16 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
                 c"p!=0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
-    e_type =
-        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore rows for which Y is NULL
+    (e_type =
+        unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) });
     if e_type == 5 { return; }
     if e_type != 1 && e_type != 2 { return; }
-    y = unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) };
+
+    /// Ignore the Y value if it is infinity or NaN
+    (y =
+        unsafe { sqlite3_value_double(unsafe { *argv.offset(0 as isize) }) });
     if percent_is_infinity(y) != 0 { return; }
     if unsafe { (*p).b_sorted } as i32 == 0 {
         if !(unsafe { (*p).n_used } > 1 as u32) as i32 as i64 != 0 {
@@ -415,7 +478,9 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
         unsafe { (*p).b_sorted = 1 as i8 };
     }
     unsafe { (*p).b_keep_sorted = 1 as i8 };
-    i = percent_binary_search(unsafe { &*p }, y, 1);
+
+    /// Find and remove the row
+    (i = percent_binary_search(unsafe { &*p }, y, 1));
     if i >= 0 {
         {
             let __p = unsafe { &mut (*p).n_used };
@@ -438,6 +503,8 @@ extern "C" fn percent_inverse(p_ctx_1: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Compute the final output of percentile().  Clean up all allocated
+///* memory if and only if bIsFinal is true.
 extern "C" fn percent_compute(p_ctx_1: *mut Sqlite3Context, b_is_final_1: i32)
     -> () {
     let mut p: *mut Percentile = core::ptr::null_mut();

@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -31,15 +37,46 @@ struct CompletionCursor {
     j: i32,
 }
 
+///* The completionConnect() method is invoked to create a new
+///* completion_vtab that describes the completion virtual table.
+///*
+///* Think of this routine as the constructor for completion_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the completion_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against completion will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut CompletionVtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
     { let _ = p_aux_1; };
+
+    /// Unused parameter
     { let _ = argc; };
+
+    /// Unused parameter
+    /// Unused parameter
     { let _ = argv; };
+
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
     { let _ = pz_err_1; };
+
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
+    /// Column numbers
+    /// Suggested completion of the input
+    /// Prefix of the word to be completed
+    /// Entire line seen so far
+    /// ePhase - used for debugging only
     unsafe { sqlite3_vtab_config(db, 2) };
     rc =
         unsafe {
@@ -64,11 +101,13 @@ extern "C" fn completion_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     return rc;
 }
 
+///* This method is the destructor for completion_cursor objects.
 extern "C" fn completion_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new completion_cursor object.
 extern "C" fn completion_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut CompletionCursor = core::ptr::null_mut();
@@ -87,6 +126,7 @@ extern "C" fn completion_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset the completion_cursor.
 extern "C" fn completion_cursor_reset(p_cur_1: &mut CompletionCursor) -> () {
     unsafe { sqlite3_free((*p_cur_1).z_prefix as *mut ()) };
     (*p_cur_1).z_prefix = core::ptr::null_mut();
@@ -99,16 +139,32 @@ extern "C" fn completion_cursor_reset(p_cur_1: &mut CompletionCursor) -> () {
     (*p_cur_1).j = 0;
 }
 
+///* Destructor for a completion_cursor.
 extern "C" fn completion_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     completion_cursor_reset(unsafe { &mut *(cur as *mut CompletionCursor) });
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a completion_cursor to its next row of output.
+///*
+///* The ->ePhase, ->j, and ->pStmt fields of the completion_cursor object
+///* record the current state of the scan.  This routine sets ->zCurrentRow
+///* to the current row of output and then returns.  If no more rows remain,
+///* then ->ePhase is set to COMPLETION_EOF which will signal the virtual
+///* table that has reached the end of its scan.
+///*
+///* The current implementation just lists potential identifiers and
+///* keywords and filters them by zPrefix.  Future enhancements should
+///* take zLine into account to try to restrict the set of identifiers and
+///* keywords based on what would be legal at the current point of input.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CompletionCursor = cur as *mut CompletionCursor;
     let mut e_next_phase: i32 = 0;
+    /// Next phase to try if current phase reaches end
     let mut i_col: i32 = -1;
+    /// If >=0, step pCur->pStmt and use the i-th column
     let mut rc: i32 = 0;
     {
         let __p = unsafe { &mut (*p_cur).i_rowid };
@@ -460,12 +516,16 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
             }
         } else {
             if unsafe { sqlite3_step(unsafe { (*p_cur).p_stmt }) } == 100 {
+
+                /// Extract the next row of content
                 unsafe {
                     (*p_cur).z_current_row =
                         unsafe {
                                 sqlite3_column_text(unsafe { (*p_cur).p_stmt }, i_col)
                             } as *const i8
                 };
+
+                /// Extract the next row of content
                 unsafe {
                     (*p_cur).sz_row =
                         unsafe {
@@ -473,7 +533,10 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
                         }
                 };
             } else {
-                rc = unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) };
+
+                /// When all rows are finished, advance to the next phase
+                (rc =
+                    unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) });
                 unsafe { (*p_cur).p_stmt = core::ptr::null_mut() };
                 unsafe { (*p_cur).e_phase = e_next_phase };
                 if rc != 0 { return rc; }
@@ -493,6 +556,8 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the completion_cursor
+///* is currently pointing.
 extern "C" fn completion_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const CompletionCursor =
@@ -610,6 +675,8 @@ extern "C" fn completion_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn completion_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const CompletionCursor =
@@ -618,12 +685,19 @@ extern "C" fn completion_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn completion_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const CompletionCursor =
         cur as *mut CompletionCursor as *const CompletionCursor;
     return (unsafe { (*p_cur).e_phase } >= 11) as i32;
 }
 
+///* This method is called to "rewind" the completion_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to completionColumn() or completionRowid() or 
+///* completionEof().
+#[allow(unused_doc_comments)]
 extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -631,7 +705,12 @@ extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         p_vtab_cursor_1 as *mut CompletionCursor;
     let mut i_arg: i32 = 0;
     { let _ = idx_str_1; };
+
+    /// Unused parameter
     { let _ = argc; };
+
+    /// Unused parameter
+    /// Unused parameter
     completion_cursor_reset(unsafe { &mut *p_cur });
     if idx_num_1 & 1 != 0 {
         unsafe {
@@ -727,18 +806,34 @@ extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return completion_next(p_vtab_cursor_1);
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the completion virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* There are two hidden parameters that act as arguments to the table-valued
+///* function:  "prefix" and "wholeline".  Bit 0 of idxNum is set if "prefix"
+///* is available and bit 1 is set if "wholeline" is available.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop over constraints
     let mut idx_num: i32 = 0;
+    /// The query plan bitmask
     let mut prefix_idx: i32 = -1;
+    /// Index of the start= constraint, or -1 if none
     let mut wholeline_idx: i32 = -1;
+    /// Index of the stop= constraint, or -1 if none
     let mut n_arg: i32 = 0;
+    /// Number of arguments that completeFilter() expects
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
     { let _ = tab; };
-    p_constraint =
+
+    /// Unused parameter
+    (p_constraint =
         unsafe { (*p_idx_info_1).a_constraint } as
-            *const Sqlite3IndexConstraint;
+            *const Sqlite3IndexConstraint);
     {
         i = 0;
         '__b6: loop {
@@ -807,6 +902,8 @@ extern "C" fn completion_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* completion virtual table.
 static mut completion_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -852,12 +949,15 @@ pub extern "C" fn sqlite3_completion_vtab_init(db: *mut Sqlite3) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_completion_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc = sqlite3_completion_vtab_init(db);
+
+    /// Unused parameter
+    (rc = sqlite3_completion_vtab_init(db));
     return rc;
 }
 

@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -81,6 +87,10 @@ struct Stat {
     st_qspare: [i64; 2],
 }
 
+///********************** Global Variables **********************************/
+////*
+///* All global variables used by this file are containing within the following
+///* gQuota structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -93,6 +103,18 @@ struct AnonS0 {
     p_group: *mut QuotaGroup,
 }
 
+///* A "quota group" is a collection of files whose collective size we want
+///* to limit.  Each quota group is defined by a GLOB pattern.
+///*
+///* There is an instance of the following object for each defined quota
+///* group.  This object records the GLOB pattern that defines which files
+///* belong to the quota group.  The object also remembers the size limit
+///* for the group (the quota) and the callback to be invoked when the
+///* sum of the sizes of the files within the group goes over the limit.
+///*
+///* A quota group must be established (using sqlite3_quota_set(...))
+///* prior to opening any of the database connections that access files
+///* within the quota group.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaGroup {
@@ -108,6 +130,12 @@ struct QuotaGroup {
     p_files: *mut QuotaFile,
 }
 
+///* An instance of this structure represents a single file that is part
+///* of a quota group.  A single file can be opened multiple times.  In
+///* order keep multiple openings of the same file from causing the size
+///* of the file to count against the quota multiple times, each file
+///* has a unique instance of this object and multiple open connections
+///* to the same file each point to a single instance of this object.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaFile {
@@ -122,6 +150,10 @@ struct QuotaFile {
 
 static mut g_quota: AnonS0 = unsafe { core::mem::zeroed() };
 
+///* An instance of the following object represents each open connection
+///* to a file that participates in quota tracking.  This object is a
+///* subclass of sqlite3_file.  The sqlite3_file object for the underlying
+///* VFS is appended to this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaConn {
@@ -129,10 +161,29 @@ struct QuotaConn {
     p_file: *mut QuotaFile,
 }
 
+///********************** Utility Routines *********************************/
+////*
+///* Acquire and release the mutex used to serialize access to the
+///* list of quotaGroups.
 extern "C" fn quota_enter() -> () {
     unsafe { unsafe { sqlite3_mutex_enter(g_quota.p_mutex) }; }
 }
 
+///* Return TRUE if string z matches glob pattern zGlob.
+///*
+///* Globbing rules:
+///*
+///*      '*'       Matches any sequence of zero or more characters.
+///*
+///*      '?'       Matches exactly one character.
+///*
+///*     [...]      Matches one character from the enclosed list of
+///*                characters.
+///*
+///*     [^...]     Matches one character not in the enclosed list.
+///*
+///*     /          Matches "/" or "\\"
+///*
 extern "C" fn quota_strglob(mut z_glob_1: *const i8, mut z: *const i8)
     -> i32 {
     let mut c: i32 = 0;
@@ -334,6 +385,9 @@ extern "C" fn quota_strglob(mut z_glob_1: *const i8, mut z: *const i8)
     return (unsafe { *z } as i32 == 0) as i32;
 }
 
+/// Find a quotaGroup given the filename.
+///*
+///* Return a pointer to the quotaGroup object. Return NULL if not found.
 extern "C" fn quota_group_find(z_filename_1: *const i8) -> *mut QuotaGroup {
     unsafe {
         let mut p: *mut QuotaGroup = core::ptr::null_mut();
@@ -353,11 +407,15 @@ extern "C" fn quota_group_find(z_filename_1: *const i8) -> *mut QuotaGroup {
     }
 }
 
+/// Translate an sqlite3_file* that is really a quotaConn* into
+///* the sqlite3_file* for the underlying original VFS.
 extern "C" fn quota_sub_open(p_conn_1: *mut Sqlite3File) -> *mut Sqlite3File {
     let p: *mut QuotaConn = p_conn_1 as *mut QuotaConn;
     return unsafe { &raw mut *p.offset(1 as isize) } as *mut Sqlite3File;
 }
 
+/// Find a file in a quota group and return a pointer to that file.
+///* Return NULL if the file is not in the group.
 extern "C" fn quota_find_file(p_group_1: *mut QuotaGroup, z_name_1: *const i8,
     create_flag_1: i32) -> *mut QuotaFile {
     let mut p_file: *mut QuotaFile = unsafe { (*p_group_1).p_files };
@@ -410,14 +468,27 @@ extern "C" fn quota_leave() -> () {
     unsafe { unsafe { sqlite3_mutex_leave(g_quota.p_mutex) }; }
 }
 
+///********************** VFS Method Wrappers *****************************/
+////*
+///* This is the xOpen method used for the "quota" VFS.
+///*
+///* Most of the work is done by the underlying original VFS.  This method
+///* simply links the new file into the appropriate quota group if it is a
+///* file that needs to be tracked.
+#[allow(unused_doc_comments)]
 extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_conn_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Result code
         let mut p_quota_open: *mut QuotaConn = core::ptr::null_mut();
+        /// The new quota file descriptor
         let mut p_file: *mut QuotaFile = core::ptr::null_mut();
+        /// Corresponding quotaFile obj
         let mut p_group: *mut QuotaGroup = core::ptr::null_mut();
+        /// The group file belongs to
         let mut p_sub_open: *mut Sqlite3File = core::ptr::null_mut();
+        /// Real file descriptor
         let p_orig_vfs: *mut Sqlite3Vfs = g_quota.p_orig_vfs;
         if flags & (256 | 524288) == 0 {
             return unsafe {
@@ -426,6 +497,9 @@ extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                         })(p_orig_vfs, z_name_1, p_conn_1, flags, p_out_flags_1)
                 };
         }
+
+        /// If the name of the file does not match any quota group, then
+        ///* use the normal xOpen method.
         quota_enter();
         p_group = quota_group_find(z_name_1);
         if p_group == core::ptr::null_mut() {
@@ -436,8 +510,12 @@ extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                         })(p_orig_vfs, z_name_1, p_conn_1, flags, p_out_flags_1)
                 };
         } else {
-            p_quota_open = p_conn_1 as *mut QuotaConn;
-            p_sub_open = quota_sub_open(p_conn_1);
+
+            /// If we get to this point, it means the file needs to be quota tracked.
+            (p_quota_open = p_conn_1 as *mut QuotaConn);
+
+            /// If we get to this point, it means the file needs to be quota tracked.
+            (p_sub_open = quota_sub_open(p_conn_1));
             rc =
                 unsafe {
                     (unsafe {
@@ -484,6 +562,7 @@ extern "C" fn quota_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     }
 }
 
+/// Remove a file from a quota group.
 extern "C" fn quota_remove_file(p_file_1: *mut QuotaFile) -> () {
     let p_group: *mut QuotaGroup = unsafe { (*p_file_1).p_group };
     unsafe { (*p_group).i_size -= unsafe { (*p_file_1).i_size } };
@@ -499,6 +578,7 @@ extern "C" fn quota_remove_file(p_file_1: *mut QuotaFile) -> () {
     unsafe { sqlite3_free(p_file_1 as *mut ()) };
 }
 
+/// Count the number of open files in a quotaGroup
 extern "C" fn quota_group_open_file_count(p_group_1: &QuotaGroup) -> i32 {
     let mut n: i32 = 0;
     let mut p_file: *const QuotaFile =
@@ -512,6 +592,8 @@ extern "C" fn quota_group_open_file_count(p_group_1: &QuotaGroup) -> i32 {
     return n;
 }
 
+/// Remove all files from a quota group.  It is always the case that
+///* all files will be closed when this routine is called.
 extern "C" fn quota_remove_all_files(p_group_1: &QuotaGroup) -> () {
     while !((*p_group_1).p_files).is_null() {
         if !(unsafe { (*(*p_group_1).p_files).n_ref } == 0) as i32 as i64 != 0
@@ -526,6 +608,8 @@ extern "C" fn quota_remove_all_files(p_group_1: &QuotaGroup) -> () {
     }
 }
 
+/// If the reference count and threshold for a quotaGroup are both
+///* zero, then destroy the quotaGroup.
 extern "C" fn quota_group_deref(p_group_1: *mut QuotaGroup) -> () {
     if unsafe { (*p_group_1).i_limit } == 0 as i64 &&
             quota_group_open_file_count(unsafe { &*p_group_1 }) == 0 {
@@ -550,19 +634,31 @@ extern "C" fn quota_group_deref(p_group_1: *mut QuotaGroup) -> () {
     }
 }
 
+///* This is the xDelete method used for the "quota" VFS.
+///*
+///* If the file being deleted is part of the quota group, then reduce
+///* the size of the quota group accordingly.  And remove the file from
+///* the set of files in the quota group.
+#[allow(unused_doc_comments)]
 extern "C" fn quota_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     sync_dir_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Result code
         let mut p_file: *mut QuotaFile = core::ptr::null_mut();
+        /// Files in the quota
         let mut p_group: *mut QuotaGroup = core::ptr::null_mut();
+        /// The group file belongs to
         let p_orig_vfs: *mut Sqlite3Vfs = g_quota.p_orig_vfs;
-        rc =
+
+        /// Real VFS
+        /// Do the actual file delete
+        (rc =
             unsafe {
                 (unsafe {
                         (*p_orig_vfs).x_delete.unwrap()
                     })(p_orig_vfs, z_name_1, sync_dir_1)
-            };
+            });
         if rc == 0 {
             quota_enter();
             p_group = quota_group_find(z_name_1);
@@ -583,6 +679,9 @@ extern "C" fn quota_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     }
 }
 
+/// xClose requests get passed through to the original VFS.  But we
+///* also have to unlink the quotaConn from the quotaFile and quotaGroup.
+///* The quotaFile and/or quotaGroup are freed if they are no longer in use.
 extern "C" fn quota_close(p_conn_1: *mut Sqlite3File) -> i32 {
     unsafe {
         let p: *const QuotaConn =
@@ -621,6 +720,8 @@ extern "C" fn quota_close(p_conn_1: *mut Sqlite3File) -> i32 {
     }
 }
 
+/// Pass xRead requests directory thru to the original VFS without
+///* further processing.
 extern "C" fn quota_read(p_conn_1: *mut Sqlite3File, p_buf_1: *mut (),
     i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -631,6 +732,9 @@ extern "C" fn quota_read(p_conn_1: *mut Sqlite3File, p_buf_1: *mut (),
         };
 }
 
+/// Check xWrite requests to see if they expand the file.  If they do,
+///* the perform a quota check before passing them through to the
+///* original VFS.
 extern "C" fn quota_write(p_conn_1: *mut Sqlite3File, p_buf_1: *const (),
     i_amt_1: i32, i_ofst_1: Sqlite3Int64) -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -673,6 +777,8 @@ extern "C" fn quota_write(p_conn_1: *mut Sqlite3File, p_buf_1: *const (),
         };
 }
 
+/// Pass xTruncate requests thru to the original VFS.  If the
+///* success, update the file size.
 extern "C" fn quota_truncate(p_conn_1: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -696,6 +802,7 @@ extern "C" fn quota_truncate(p_conn_1: *mut Sqlite3File, size: Sqlite3Int64)
     return rc;
 }
 
+/// Pass xSync requests through to the original VFS without change
 extern "C" fn quota_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -705,6 +812,8 @@ extern "C" fn quota_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
         };
 }
 
+/// Pass xFileSize requests through to the original VFS but then
+///* update the quotaGroup with the new size before returning.
 extern "C" fn quota_file_size(p_conn_1: *mut Sqlite3File,
     p_size_1: *mut Sqlite3Int64) -> i32 {
     let p: *const QuotaConn = p_conn_1 as *mut QuotaConn as *const QuotaConn;
@@ -731,6 +840,7 @@ extern "C" fn quota_file_size(p_conn_1: *mut Sqlite3File,
     return rc;
 }
 
+/// Pass xLock requests through to the original VFS unchanged.
 extern "C" fn quota_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -740,6 +850,7 @@ extern "C" fn quota_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
         };
 }
 
+/// Pass xUnlock requests through to the original VFS unchanged.
 extern "C" fn quota_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -749,6 +860,7 @@ extern "C" fn quota_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
         };
 }
 
+/// Pass xCheckReservedLock requests through to the original VFS unchanged.
 extern "C" fn quota_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -761,6 +873,7 @@ extern "C" fn quota_check_reserved_lock(p_conn_1: *mut Sqlite3File,
         };
 }
 
+/// Pass xFileControl requests through to the original VFS unchanged.
 extern "C" fn quota_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -784,6 +897,7 @@ extern "C" fn quota_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+/// Pass xSectorSize requests through to the original VFS unchanged.
 extern "C" fn quota_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     return unsafe {
@@ -793,6 +907,7 @@ extern "C" fn quota_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
         };
 }
 
+/// Pass xDeviceCharacteristics requests through to the original VFS unchanged.
 extern "C" fn quota_device_characteristics(p_conn_1: *mut Sqlite3File)
     -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -805,6 +920,7 @@ extern "C" fn quota_device_characteristics(p_conn_1: *mut Sqlite3File)
         };
 }
 
+/// Pass xShmMap requests through to the original VFS unchanged.
 extern "C" fn quota_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -815,6 +931,7 @@ extern "C" fn quota_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
         };
 }
 
+/// Pass xShmLock requests through to the original VFS unchanged.
 extern "C" fn quota_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -825,6 +942,7 @@ extern "C" fn quota_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32, n: i32,
         };
 }
 
+/// Pass xShmBarrier requests through to the original VFS unchanged.
 extern "C" fn quota_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
     unsafe {
@@ -834,6 +952,7 @@ extern "C" fn quota_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     };
 }
 
+/// Pass xShmUnmap requests through to the original VFS unchanged.
 extern "C" fn quota_shm_unmap(p_conn_1: *mut Sqlite3File, delete_flag_1: i32)
     -> i32 {
     let p_sub_open: *mut Sqlite3File = quota_sub_open(p_conn_1);
@@ -844,6 +963,15 @@ extern "C" fn quota_shm_unmap(p_conn_1: *mut Sqlite3File, delete_flag_1: i32)
         };
 }
 
+///* Initialize the quota VFS shim.  Use the VFS named zOrigVfsName
+///* as the VFS that does the actual work.  Use the default if
+///* zOrigVfsName==NULL.  
+///*
+///* The quota VFS shim is named "quota".  It will become the default
+///* VFS if makeDefault is non-zero.
+///*
+///* THIS ROUTINE IS NOT THREADSAFE.  Call this routine exactly once
+///* during start-up.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_initialize(z_orig_vfs_name: *const i8,
     make_default: i32) -> i32 {
@@ -900,6 +1028,13 @@ pub extern "C" fn sqlite3_quota_initialize(z_orig_vfs_name: *const i8,
     }
 }
 
+///* Shutdown the quota system.
+///*
+///* All SQLite database connections must be closed before calling this
+///* routine.
+///*
+///* THIS ROUTINE IS NOT THREADSAFE.  Call this routine exactly once while
+///* shutting down in order to free all remaining quota groups.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_shutdown() -> i32 {
     unsafe {
@@ -942,6 +1077,56 @@ pub extern "C" fn sqlite3_quota_shutdown() -> i32 {
     }
 }
 
+///* Create or destroy a quota group.
+///*
+///* The quota group is defined by the zPattern.  When calling this routine
+///* with a zPattern for a quota group that already exists, this routine
+///* merely updates the iLimit, xCallback, and pArg values for that quota
+///* group.  If zPattern is new, then a new quota group is created.
+///*
+///* The zPattern is always compared against the full pathname of the file.
+///* Even if APIs are called with relative pathnames, SQLite converts the
+///* name to a full pathname before comparing it against zPattern.  zPattern
+///* is a glob pattern with the following matching rules:
+///*
+///*      '*'       Matches any sequence of zero or more characters.
+///*
+///*      '?'       Matches exactly one character.
+///*
+///*     [...]      Matches one character from the enclosed list of
+///*                characters.  "]" can be part of the list if it is
+///*                the first character.  Within the list "X-Y" matches
+///*                characters X or Y or any character in between the
+///*                two.  Ex:  "[0-9]" matches any digit.
+///*
+///*     [^...]     Matches one character not in the enclosed list.
+///*
+///*     /          Matches either / or \.  This allows glob patterns
+///*                containing / to work on both unix and windows.
+///*
+///* Note that, unlike unix shell globbing, the directory separator "/"
+///* can match a wildcard.  So, for example, the pattern "/abc/xyz/" "*"
+///* matches any files anywhere in the directory hierarchy beneath
+///* /abc/xyz.
+///*
+///* The glob algorithm works on bytes.  Multi-byte UTF8 characters are
+///* matched as if each byte were a separate character.
+///*
+///* If the iLimit for a quota group is set to zero, then the quota group
+///* is disabled and will be deleted when the last database connection using
+///* the quota group is closed.
+///*
+///* Calling this routine on a zPattern that does not exist and with a
+///* zero iLimit is a no-op.
+///*
+///* A quota group must exist with a non-zero iLimit prior to opening
+///* database connections if those connections are to participate in the
+///* quota group.  Creating a quota group does not affect database connections
+///* that are already open.
+///*
+///* The patterns that define the various quota groups should be distinct.
+///* If the same filename matches more than one quota group pattern, then
+///* the behavior of this package is undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_set(z_pattern: *const i8,
     i_limit: Sqlite3Int64,
@@ -1009,7 +1194,12 @@ pub extern "C" fn sqlite3_quota_set(z_pattern: *const i8,
     }
 }
 
+///* Bring the named file under quota management, assuming its name matches
+///* the glob pattern of some quota group.  Or if it is already under
+///* management, update its size.  If zFilename does not match the glob
+///* pattern of any quota group, this routine is a no-op.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_quota_file(z_filename: *const i8) -> i32 {
     unsafe {
         let mut z_full: *mut i8 = core::ptr::null_mut();
@@ -1020,7 +1210,9 @@ pub extern "C" fn sqlite3_quota_file(z_filename: *const i8) -> i32 {
         let n_alloc: i32 =
             g_quota.s_this_vfs.sz_os_file + g_quota.s_this_vfs.mx_pathname +
                 2;
-        fd = unsafe { sqlite3_malloc(n_alloc) } as *mut Sqlite3File;
+
+        /// Allocate space for a file-handle and the full path for file zFilename
+        (fd = unsafe { sqlite3_malloc(n_alloc) } as *mut Sqlite3File);
         if fd == core::ptr::null_mut() {
             rc = 7;
         } else {
@@ -1073,6 +1265,9 @@ pub extern "C" fn sqlite3_quota_file(z_filename: *const i8) -> i32 {
     }
 }
 
+///* An instance of the following object records the state of an
+///* open file.  This object is opaque to all users - the internal
+///* structure is only visible to the functions below.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct QuotaFILE {
@@ -1081,12 +1276,18 @@ struct QuotaFILE {
     p_file: *mut QuotaFile,
 }
 
+///* Deallocate any memory allocated by quota_utf8_to_mbcs().
 extern "C" fn quota_mbcs_free(z_old_1: *const i8) -> () {}
 
+///* Translate UTF8 to MBCS for use in fopen() calls.  Return a pointer to the
+///* translated text..  Call quota_mbcs_free() to deallocate any memory
+///* used to store the returned pointer when done.
 extern "C" fn quota_utf8_to_mbcs(z_utf8_1: *const i8) -> *mut i8 {
     return z_utf8_1 as *mut i8;
 }
 
+///* Create a new quota_FILE object used to read and/or write to the
+///* file zFilename.  The zMode parameter is as with standard library zMode.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fopen(z_filename_1: *const i8,
     z_mode_1: *const i8) -> *mut QuotaFILE {
@@ -1167,12 +1368,17 @@ pub extern "C" fn sqlite3_quota_fopen(z_filename_1: *const i8,
     }
 }
 
+///* Perform I/O against a quota_FILE object.  When doing writes, the
+///* quota mechanism may result in a short write, in order to prevent
+///* the sum of sizes of all files from going over quota.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fread(p_buf_1: *mut (), size: u64, nmemb: u64,
     p: &QuotaFILE) -> u64 {
     return unsafe { fread(p_buf_1, size, nmemb, (*p).f) };
 }
 
+///* Write content into a quota_FILE.  Invoke the quota callback and block
+///* the write if we exceed quota.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fwrite(p_buf_1: *const (), size: u64,
     mut nmemb: u64, p: &QuotaFILE) -> u64 {
@@ -1235,6 +1441,14 @@ pub extern "C" fn sqlite3_quota_fwrite(p_buf_1: *const (), size: u64,
     return rc;
 }
 
+///* Flush all written content held in memory buffers out to disk.
+///* This is the equivalent of fflush() in the standard library.
+///*
+///* If the hardSync parameter is true (non-zero) then this routine
+///* also forces OS buffers to disk - the equivalent of fsync().
+///*
+///* This routine return zero on success and non-zero if something goes
+///* wrong.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fflush(p: &QuotaFILE, do_fsync_1: i32)
     -> i32 {
@@ -1246,6 +1460,8 @@ pub extern "C" fn sqlite3_quota_fflush(p: &QuotaFILE, do_fsync_1: i32)
     return (rc != 0) as i32;
 }
 
+///* Close a quota_FILE object and free all associated resources.  The
+///* file remains under quota management.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fclose(p: *mut QuotaFILE) -> i32 {
     unsafe {
@@ -1281,28 +1497,42 @@ pub extern "C" fn sqlite3_quota_fclose(p: *mut QuotaFILE) -> i32 {
     }
 }
 
+///* Move the read/write pointer for a quota_FILE object.  Or tell the
+///* current location of the read/write pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_fseek(p: &QuotaFILE, offset: i64, whence: i32)
     -> i32 {
     return unsafe { fseek((*p).f, offset, whence) };
 }
 
+///* rewind a quota_FILE stream.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_rewind(p: &QuotaFILE) -> () {
     unsafe { rewind((*p).f) };
 }
 
+///* Tell the current location of a quota_FILE stream.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_ftell(p: &QuotaFILE) -> i64 {
     return unsafe { ftell((*p).f) };
 }
 
+///* Test the error indicator for the given file.
+///*
+///* Return non-zero if the error indicator is set.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_ferror(p: &QuotaFILE) -> i32 {
     return unsafe { ferror((*p).f) };
 }
 
+///* Truncate a file previously opened by sqlite3_quota_fopen().  Return
+///* zero on success and non-zero on any kind of failure.
+///*
+///* The newSize argument must be less than or equal to the current file size.
+///* Any attempt to "truncate" a file to a larger size results in 
+///* undefined behavior.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_quota_ftruncate(p: &QuotaFILE,
     sz_new_1: Sqlite3Int64) -> i32 {
     let mut p_file: *mut QuotaFile = (*p).p_file;
@@ -1310,7 +1540,12 @@ pub extern "C" fn sqlite3_quota_ftruncate(p: &QuotaFILE,
     if { p_file = (*p).p_file; p_file } != core::ptr::null_mut() &&
             unsafe { (*p_file).i_size } < sz_new_1 {
         let mut p_group: *mut QuotaGroup = core::ptr::null_mut();
-        if unsafe { (*p_file).i_size } < sz_new_1 { return -1; }
+        if unsafe { (*p_file).i_size } < sz_new_1 {
+
+            /// This routine cannot be used to extend a file that is under
+            ///* quota management.  Only true truncation is allowed.
+            return -1;
+        }
         p_group = unsafe { (*p_file).p_group };
         quota_enter();
         unsafe {
@@ -1331,6 +1566,8 @@ pub extern "C" fn sqlite3_quota_ftruncate(p: &QuotaFILE,
     return rc;
 }
 
+///* Return the last modification time of the opened file, in seconds
+///* since 1970.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_mtime(p: &QuotaFILE,
     p_time_1: *mut TimeT) -> i32 {
@@ -1341,6 +1578,15 @@ pub extern "C" fn sqlite3_quota_file_mtime(p: &QuotaFILE,
     return rc;
 }
 
+///* Return the size of the file as it is known to the quota system.
+///*
+///* This size might be different from the true size of the file on
+///* disk if some outside process has modified the file without using the
+///* quota mechanism, or if calls to sqlite3_quota_fwrite() have occurred
+///* which have increased the file size, but those writes have not yet been
+///* forced to disk using sqlite3_quota_fflush().
+///*
+///* Return -1 if the file is not participating in quota management.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_size(p: &QuotaFILE) -> Sqlite3Int64 {
     return if !((*p).p_file).is_null() {
@@ -1348,6 +1594,15 @@ pub extern "C" fn sqlite3_quota_file_size(p: &QuotaFILE) -> Sqlite3Int64 {
         } else { -1 as Sqlite3Int64 };
 }
 
+///* Return the true size of the file.
+///*
+///* The true size should be the same as the size of the file as known
+///* to the quota system, however the sizes might be different if the
+///* file has been extended or truncated via some outside process or if
+///* pending writes have not yet been flushed to disk.
+///*
+///* Return -1 if the file does not exist or if the size of the file
+///* cannot be determined for some reason.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_truesize(p: &QuotaFILE) -> Sqlite3Int64 {
     let mut rc: i32 = 0;
@@ -1356,6 +1611,10 @@ pub extern "C" fn sqlite3_quota_file_truesize(p: &QuotaFILE) -> Sqlite3Int64 {
     return if rc == 0 { buf.st_size } else { -1 as OffT };
 }
 
+///* Determine the amount of data in bytes available for reading
+///* in the given file.
+///*
+///* Return -1 if the amount cannot be determined for some reason.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_quota_file_available(p: &QuotaFILE) -> i64 {
     let f: *mut FILE = (*p).f;
@@ -1373,20 +1632,47 @@ pub extern "C" fn sqlite3_quota_file_available(p: &QuotaFILE) -> i64 {
     return pos2 - pos1;
 }
 
+///* Delete a file from the disk, if that file is under quota management.
+///* Adjust quotas accordingly.
+///*
+///* If zFilename is the name of a directory that matches one of the
+///* quota glob patterns, then all files under quota management that
+///* are contained within that directory are deleted.
+///*
+///* A standard SQLite result code is returned (SQLITE_OK, SQLITE_NOMEM, etc.)
+///* When deleting a directory of files, if the deletion of any one
+///* file fails (for example due to an I/O error), then this routine
+///* returns immediately, with the error code, and does not try to 
+///* delete any of the other files in the specified directory.
+///*
+///* All files are removed from quota management and deleted from disk.
+///* However, no attempt is made to remove empty directories.
+///*
+///* This routine is a no-op for files that are not under quota management.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_quota_remove(z_filename: *const i8) -> i32 {
     unsafe {
         let mut z_full: *mut i8 = core::ptr::null_mut();
+        /// Full pathname for zFilename
         let mut n_full: u64 = 0 as u64;
+        /// Number of bytes in zFilename
         let mut rc: i32 = 0;
+        /// Result code
         let mut p_group: *mut QuotaGroup = core::ptr::null_mut();
+        /// Group containing zFilename
         let mut p_file: *mut QuotaFile = core::ptr::null_mut();
+        /// A file in the group
         let mut p_next_file: *mut QuotaFile = core::ptr::null_mut();
+        /// next file in the group
         let mut diff: i32 = 0;
+        /// Difference between filenames
         let mut c: i8 = 0 as i8;
-        z_full =
+
+        /// First character past end of pattern
+        (z_full =
             unsafe { sqlite3_malloc(g_quota.s_this_vfs.mx_pathname + 1) } as
-                *mut i8;
+                *mut i8);
         if z_full == core::ptr::null_mut() { return 7; }
         rc =
             unsafe {
@@ -1396,7 +1682,10 @@ pub extern "C" fn sqlite3_quota_remove(z_filename: *const i8) -> i32 {
                     g_quota.s_this_vfs.mx_pathname + 1, z_full)
             };
         if rc != 0 { unsafe { sqlite3_free(z_full as *mut ()) }; return rc; }
-        n_full = unsafe { strlen(z_full as *const i8) };
+
+        /// Figure out the length of the full pathname.  If the name ends with
+        ///* / (or \ on windows) then remove the trailing /.
+        (n_full = unsafe { strlen(z_full as *const i8) });
         if n_full > 0 as u64 &&
                 (unsafe { *z_full.add((n_full - 1 as u64) as usize) } as i32
                         == '/' as i32 ||

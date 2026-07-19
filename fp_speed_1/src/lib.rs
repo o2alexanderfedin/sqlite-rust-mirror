@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinTimeT = i64;
 
@@ -64,6 +70,8 @@ static mut a_val: [f64; 100] =
             -3.110995118966854e170, -948418780317.0427, -3.739845166830441e67,
             4.898404200891596e-91];
 
+/// Return the current wall-clock time in microseconds since the
+///* Unix epoch (1970-01-01T00:00:00Z)
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     let mut s_now: Timeval = unsafe { core::mem::zeroed() };
     { let _ = unsafe { gettimeofday(&mut s_now, core::ptr::null_mut()) }; };

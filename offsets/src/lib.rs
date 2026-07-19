@@ -2,10 +2,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* Global state information for this program.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GState {
@@ -22,6 +29,7 @@ struct GState {
     b_trace: i32,
 }
 
+///* Write an error.
 unsafe extern "C" fn ofst_error(p: &mut GState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -31,6 +39,7 @@ unsafe extern "C" fn ofst_error(p: &mut GState, z_format_1: *const i8,
     ();
 }
 
+///* Write a trace message
 unsafe extern "C" fn ofst_trace(p: *const GState, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -41,6 +50,7 @@ unsafe extern "C" fn ofst_trace(p: *const GState, z_format_1: *const i8,
     }
 }
 
+///* Find the root page of the table and the column number of the column.
 extern "C" fn ofst_root_and_column(p: *mut GState, z_file_1: *const i8,
     z_table_1: *const i8, z_column_1: *const i8) -> () {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -276,6 +286,7 @@ extern "C" fn ofst_root_and_column(p: *mut GState, z_file_1: *const i8,
     }
 }
 
+///* Pop a page from the stack
 extern "C" fn ofst_pop_page(p: &mut GState) -> () {
     if (*p).n_stack <= 0 { return; }
     { let __p = &mut (*p).n_stack; let __t = *__p; *__p -= 1; __t };
@@ -284,6 +295,7 @@ extern "C" fn ofst_pop_page(p: &mut GState) -> () {
     (*p).a_page = (*p).a_stack[((*p).n_stack - 1) as usize];
 }
 
+///* Push a new page onto the stack.
 extern "C" fn ofst_push_page(p: *mut GState, pgno: i32) -> () {
     let mut p_page: *mut u8 = core::ptr::null_mut();
     let mut got: u64 = 0 as u64;
@@ -337,12 +349,14 @@ extern "C" fn ofst_push_page(p: *mut GState, pgno: i32) -> () {
     }
 }
 
+/// Read a two-byte integer at the given offset into the current page
 extern "C" fn ofst2byte(p: &GState, ofst: i32) -> i32 {
     let x: i32 = unsafe { *(*p).a_page.offset(ofst as isize) } as i32;
     return (x << 8) +
             unsafe { *(*p).a_page.offset((ofst + 1) as isize) } as i32;
 }
 
+/// Read a four-byte integer at the given offset into the current page
 extern "C" fn ofst4byte(p: &GState, ofst: i32) -> i32 {
     let mut x: i32 = unsafe { *(*p).a_page.offset(ofst as isize) } as i32;
     x = (x << 8) + unsafe { *(*p).a_page.offset((ofst + 1) as isize) } as i32;
@@ -351,6 +365,7 @@ extern "C" fn ofst4byte(p: &GState, ofst: i32) -> i32 {
     return x;
 }
 
+/// Read a variable-length integer.  Update the offset
 extern "C" fn ofst_varint(p: &GState, p_ofst_1: &mut i32) -> Sqlite3Int64 {
     let mut x: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut a: *const u8 =
@@ -379,10 +394,14 @@ extern "C" fn ofst_varint(p: &GState, p_ofst_1: &mut i32) -> Sqlite3Int64 {
     return x;
 }
 
+/// Return the absolute offset into a file for the given offset
+///* into the current page
 extern "C" fn ofst_in_file(p: &GState, ofst: i32) -> i32 {
     return (*p).sz_pg * ((*p).pgno - 1) + ofst;
 }
 
+/// Return the size (in bytes) of the data corresponding to the
+///* given serial code
 extern "C" fn ofst_serial_size(scode: i32) -> i32 {
     if scode < 5 { return scode; }
     if scode == 5 { return 6; }
@@ -391,6 +410,7 @@ extern "C" fn ofst_serial_size(scode: i32) -> i32 {
     return (scode - 12) / 2;
 }
 
+/// Walk an interior btree page
 extern "C" fn ofst_walk_interior_page(p: *mut GState) -> () {
     let mut n_cell: i32 = 0;
     let mut i: i32 = 0;
@@ -414,6 +434,7 @@ extern "C" fn ofst_walk_interior_page(p: *mut GState) -> () {
     unsafe { ofst_walk_page(p, ofst4byte(unsafe { &*p }, 8)) };
 }
 
+/// Walk a leaf btree page
 extern "C" fn ofst_walk_leaf_page(p: *mut GState) -> () {
     let mut n_cell: i32 = 0;
     let mut i: i32 = 0;
@@ -483,6 +504,7 @@ extern "C" fn ofst_walk_leaf_page(p: *mut GState) -> () {
     }
 }
 
+/// Forward reference
 extern "C" fn ofst_walk_page(p: *mut GState, pgno: i32) -> () {
     if !(unsafe { (*p).z_err }).is_null() { return; }
     ofst_push_page(p, pgno);

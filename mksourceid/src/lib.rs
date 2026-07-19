@@ -16,6 +16,7 @@ union SHA3ContextU0 {
     x: [u8; 1600],
 }
 
+///* A single step of the Keccak mixing function for a 1600-bit state
 extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -543,6 +544,10 @@ extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     }
 }
 
+///* Initialize a new hash.  iSize determines the size of the hash
+///* in bits and should be one of 224, 256, 384, or 512.  Or iSize
+///* can be zero to use the default hash size of 256 bits.
+#[allow(unused_doc_comments)]
 extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -556,12 +561,20 @@ extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
         } else { unsafe { (*p).n_rate = ((1600 - 2 * 256) / 8) as u32 }; }
         {
             if 1 == unsafe { *(&raw mut one_1 as *mut u8) } as i32 {
+
+                /// Little endian.  No byte swapping.
                 unsafe { (*p).ix_mask = 0 as u32 };
-            } else { unsafe { (*p).ix_mask = 7 as u32 }; }
+            } else {
+
+                /// Big endian.  Byte swap.
+                unsafe { (*p).ix_mask = 7 as u32 };
+            }
         }
     }
 }
 
+///* Make consecutive calls to the SHA3Update function to add new content
+///* to the hash
 extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: &[u8]) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -592,6 +605,9 @@ extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: &[u8]) -> () {
     }
 }
 
+///* After all content has been added, invoke SHA3Final() to compute
+///* the final hash.  The function returns a pointer to the binary
+///* hash value.
 extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -641,6 +657,10 @@ extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     }
 }
 
+///* Convert a digest into base-16.  digest should be declared as
+///* "unsigned char digest[20]" in the calling function.  The SHA3
+///* digest is stored in the first 20 bytes.  zBuf should
+///* be "char zBuf[41]".
 extern "C" fn digest_to_base16(mut digest: *const u8, mut z_buf_1: *mut i8,
     n_byte_1: i32) -> () {
     let mut ix: i32 = 0;
@@ -683,6 +703,10 @@ extern "C" fn digest_to_base16(mut digest: *const u8, mut z_buf_1: *mut i8,
     unsafe { *z_buf_1 = '\u{0}' as i32 as i8 };
 }
 
+///* Compute the SHA3 checksum of a file on disk.  Store the resulting
+///* checksum in the blob pCksum.  pCksum is assumed to be initialized.
+///*
+///* Return the number of errors.
 extern "C" fn sha3sum_file(z_filename_1: *const i8, i_size_1: i32,
     p_cksum_1: *mut i8) -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -731,6 +755,7 @@ struct SHA1Context {
     buffer: [u8; 64],
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -2083,6 +2108,8 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
                         } + 3395469782u32 +
                 (qq[1 as usize] << 5 | qq[1 as usize] >> 32 - 5);
         qq[2 as usize] = qq[2 as usize] << 32 - 2 | qq[2 as usize] >> 2;
+
+        /// Add the working vars back into context.state[]
         unsafe { *state.offset(0 as isize) += qq[0 as usize] };
         unsafe { *state.offset(1 as isize) += qq[1 as usize] };
         unsafe { *state.offset(2 as isize) += qq[2 as usize] };
@@ -2091,8 +2118,12 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     }
 }
 
+///SHA1Init - Initialize new context
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_init(context: &mut SHA1Context) -> () {
-    (*context).state[0 as usize] = 1732584193 as u32;
+
+    /// SHA1 initialization constants
+    ((*context).state[0 as usize] = 1732584193 as u32);
     (*context).state[1 as usize] = 4023233417u32;
     (*context).state[2 as usize] = 2562383102u32;
     (*context).state[3 as usize] = 271733878 as u32;
@@ -2104,6 +2135,7 @@ extern "C" fn sha1_init(context: &mut SHA1Context) -> () {
         };
 }
 
+///Run your data through this.
 extern "C" fn sha1_update(context: &mut SHA1Context, data: *const u8,
     len: u32) -> () {
     let mut i: u32 = 0 as u32;
@@ -2149,6 +2181,7 @@ extern "C" fn sha1_update(context: &mut SHA1Context, data: *const u8,
     };
 }
 
+///Add padding and return the message digest.
 extern "C" fn sha1_final(digest: *mut u8, context: *mut SHA1Context) -> () {
     let mut i: u32 = 0 as u32;
     let mut finalcount: [u8; 8] = [0; 8];
@@ -2194,6 +2227,10 @@ extern "C" fn sha1_final(digest: *mut u8, context: *mut SHA1Context) -> () {
     }
 }
 
+///* Compute the SHA1 checksum of a file on disk.  Store the resulting
+///* checksum in the blob pCksum.  pCksum is assumed to be initialized.
+///*
+///* Return the number of errors.
 extern "C" fn sha1sum_file(z_filename_1: *const i8, p_cksum_1: *mut i8)
     -> i32 {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -2229,6 +2266,7 @@ extern "C" fn sha1sum_file(z_filename_1: *const i8, p_cksum_1: *mut i8)
     return 0;
 }
 
+///* Print a usage comment and quit.
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -2240,6 +2278,8 @@ extern "C" fn usage(argv0: *const i8) -> () {
     }
 }
 
+///* Find the first whitespace character in a string.  Set that whitespace
+///* to a \000 terminator and return a pointer to the next character.
 extern "C" fn next_token(mut z: *mut i8) -> *mut i8 {
     while unsafe { *z } != 0 &&
             (unsafe { isspace(unsafe { *z } as i32) } == 0) as i32 != 0 {

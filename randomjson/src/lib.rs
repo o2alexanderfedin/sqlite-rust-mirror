@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// Pseudo-random number generator
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Prng {
@@ -14,11 +21,13 @@ struct Prng {
     y: u32,
 }
 
+/// Reseed the PRNG
 extern "C" fn prng_seed(p: &mut Prng, i_seed_1: u32) -> () {
     (*p).x = i_seed_1 | 1 as u32;
     (*p).y = i_seed_1;
 }
 
+/// Extract a random number
 extern "C" fn prng_int(p: &mut Prng) -> u32 {
     (*p).x = (*p).x >> 1 ^ 1 as u32 + !((*p).x & 1 as u32) & 3489660929u32;
     (*p).y = (*p).y * 1103515245 as u32 + 12345 as u32;
@@ -103,6 +112,7 @@ static mut az_json_template: [*mut i8; 28] =
             c"[%,%,%,%,%]".as_ptr() as *mut i8,
             c"[%,%,%,%,%]".as_ptr() as *mut i8];
 
+#[allow(unused_doc_comments)]
 extern "C" fn json_expand(mut z_src_1: *const i8, z_dest_1: *mut i8,
     p: *mut Prng, e_type_1: i32, mut r: u32) -> () {
     unsafe {
@@ -142,17 +152,21 @@ extern "C" fn json_expand(mut z_src_1: *const i8, z_dest_1: *mut i8,
                     if r == 0 as u32 ||
                             r < 1000 as u32 &&
                                 prng_int(unsafe { &mut *p }) % 1000 as u32 <= r {
-                        k =
+
+                        /// Fill in without values without any new %
+                        (k =
                             (prng_int(unsafe { &mut *p }) as u64 %
                                     (core::mem::size_of::<[*mut i8; 84]>() as u64 /
-                                            core::mem::size_of::<*mut i8>() as u64 / 2 as u64)) as u32;
+                                            core::mem::size_of::<*mut i8>() as u64 / 2 as u64)) as u32);
                         k = k * 2 as u32 + e_type_1 as u32;
                         z = az_json_atoms[k as usize];
                     } else {
-                        k =
+
+                        /// Add new % terms
+                        (k =
                             (prng_int(unsafe { &mut *p }) as u64 %
                                     (core::mem::size_of::<[*mut i8; 28]>() as u64 /
-                                            core::mem::size_of::<*mut i8>() as u64 / 2 as u64)) as u32;
+                                            core::mem::size_of::<*mut i8>() as u64 / 2 as u64)) as u32);
                         k = k * 2 as u32 + e_type_1 as u32;
                         z = az_json_template[k as usize];
                     }
@@ -320,19 +334,22 @@ extern "C" fn rand_json_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_randomjson_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         { let _ = p_api_1; };
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Unused parameter
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"random_json".as_ptr() as *mut i8 as *const i8, 1,
                     1 | 2097152 | 2048, &raw mut c_zero as *mut (),
                     Some(rand_json_func), None, None)
-            };
+            });
         if rc == 0 {
             rc =
                 unsafe {

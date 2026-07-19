@@ -2,16 +2,50 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Table, Fts5Termset, Fts5Token, Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* pSavedRow:
+///*   SQL statement FTS5_STMT_LOOKUP2 is a copy of FTS5_STMT_LOOKUP, it 
+///*   does a by-rowid lookup to retrieve a single row from the %_content 
+///*   table or equivalent external-content table/view.
+///*
+///*   However, FTS5_STMT_LOOKUP2 is only used when retrieving the original
+///*   values for a row being UPDATEd. In that case, the SQL statement is
+///*   not reset and pSavedRow is set to point at it. This is so that the
+///*   insert operation that follows the delete may access the original 
+///*   row values for any new values for which sqlite3_value_nochange() returns
+///*   true. i.e. if the user executes:
+///*
+///*        CREATE VIRTUAL TABLE ft USING fts5(a, b, c, locale=1);
+///*        ...
+///*        UPDATE fts SET a=?, b=? WHERE rowid=?;
+///*
+///*   then the value passed to the xUpdate() method of this table as the 
+///*   new.c value is an sqlite3_value_nochange() value. So in this case it
+///*   must be read from the saved row stored in Fts5Storage.pSavedRow.
+///*
+///*   This is necessary - using sqlite3_value_nochange() instead of just having
+///*   SQLite pass the original value back via xUpdate() - so as not to discard
+///*   any locale information associated with such values.
+///*
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5Storage {
@@ -24,10 +58,12 @@ struct Fts5Storage {
     a_stmt: [*mut Sqlite3Stmt; 12],
 }
 
+#[allow(unused_doc_comments)]
 unsafe extern "C" fn fts5_exec_printf(db: *mut Sqlite3,
     pz_err_1: *mut *mut i8, z_format_1: *const i8, mut __va0: ...) -> i32 {
     let mut rc: i32 = 0;
     let mut ap: *mut i8 = core::ptr::null_mut();
+    /// ... printf arguments
     let mut z_sql: *mut i8 = core::ptr::null_mut();
     unsafe { ap = core::mem::transmute_copy(&__va0) };
     z_sql = unsafe { sqlite3_vmprintf(z_format_1, ap) };
@@ -45,6 +81,8 @@ unsafe extern "C" fn fts5_exec_printf(db: *mut Sqlite3,
     return rc;
 }
 
+///* Create the shadow table named zPost, with definition zDefn. Return
+///* SQLITE_OK if successful, or an SQLite error code otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_create_table(p_config: &Fts5Config,
     z_post: *const i8, z_defn: *const i8, b_without: i32,
@@ -72,9 +110,17 @@ pub extern "C" fn sqlite3_fts5_create_table(p_config: &Fts5Config,
     return rc;
 }
 
+///* Prepare the two insert statements - Fts5Storage.pInsertContent and
+///* Fts5Storage.pInsertDocsize - if they have not already been prepared.
+///* Return SQLITE_OK if successful, or an SQLite error code if an error
+///* occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_storage_get_stmt(p: &mut Fts5Storage, e_stmt_1: i32,
     pp_stmt_1: &mut *mut Sqlite3Stmt, pz_err_msg_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+
+    /// If there is no %_docsize table, there should be no requests for 
+    ///* statements to operate on it.
     if !(unsafe { (*(*p).p_config).b_columnsize } != 0 ||
                             e_stmt_1 != 7 && e_stmt_1 != 8 && e_stmt_1 != 9) as i32 as
                 i64 != 0 {
@@ -408,7 +454,12 @@ extern "C" fn fts5_storage_get_stmt(p: &mut Fts5Storage, e_stmt_1: i32,
                         }
                 };
             }
-            if rc == 1 && e_stmt_1 > 3 && e_stmt_1 < 11 { rc = 11; }
+            if rc == 1 && e_stmt_1 > 3 && e_stmt_1 < 11 {
+
+                /// One of the internal tables - not the %_content table - is missing.
+                ///* This counts as a corrupted table.
+                (rc = 11);
+            }
         }
     }
     *pp_stmt_1 = (*p).a_stmt[e_stmt_1 as usize];
@@ -447,6 +498,7 @@ pub extern "C" fn sqlite3_fts5_storage_config_value(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Close a handle opened by an earlier call to sqlite3Fts5StorageOpen().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_close(p: *mut Fts5Storage) -> i32 {
     let rc: i32 = 0;
@@ -474,24 +526,35 @@ pub extern "C" fn sqlite3_fts5_storage_close(p: *mut Fts5Storage) -> i32 {
     return rc;
 }
 
+///* Open a new Fts5Index handle. If the bCreate argument is true, create
+///* and initialize the underlying tables 
+///*
+///* If successful, set *pp to point to the new object and return SQLITE_OK.
+///* Otherwise, set *pp to NULL and return an SQLite error code.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_open(p_config: *mut Fts5Config,
     p_index: *mut Fts5Index, b_create: i32, pp: &mut *mut Fts5Storage,
     pz_err: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
     let mut p: *mut Fts5Storage = core::ptr::null_mut();
+    /// New object
     let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
-    n_byte =
+
+    /// Bytes of space to allocate
+    (n_byte =
         (core::mem::size_of::<Fts5Storage>() as u64 +
                 unsafe { (*p_config).n_col } as u64 *
-                    core::mem::size_of::<i64>() as u64) as Sqlite3Int64;
-    *pp =
+                    core::mem::size_of::<i64>() as u64) as Sqlite3Int64);
+
+    /// Fts5Storage.aTotalSize[]
+    (*pp =
         {
             p =
                 unsafe { sqlite3_malloc64(n_byte as Sqlite3Uint64) } as
                     *mut Fts5Storage;
             p
-        };
+        });
     if (p).is_null() as i32 != 0 { return 7; }
     unsafe { memset(p as *mut (), 0, n_byte as u64) };
     unsafe {
@@ -591,6 +654,11 @@ pub extern "C" fn sqlite3_fts5_storage_open(p_config: *mut Fts5Config,
     return rc;
 }
 
+///* Store the current contents of the p->nTotalRow and p->aTotalSize[] 
+///* variables in the "averages" record on disk.
+///*
+///* Return SQLITE_OK if successful, or an SQLite error code if an error
+///* occurs.
 extern "C" fn fts5_storage_save_totals(p: &Fts5Storage) -> i32 {
     let n_col: i32 = unsafe { (*(*p).p_config).n_col };
     let mut i: i32 = 0;
@@ -628,6 +696,7 @@ extern "C" fn fts5_storage_save_totals(p: &Fts5Storage) -> i32 {
     return rc;
 }
 
+///* Flush any data currently held in-memory to disk.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_sync(p: *mut Fts5Storage) -> i32 {
     let mut rc: i32 = 0;
@@ -687,6 +756,8 @@ pub extern "C" fn sqlite3_fts5_storage_rename(p_storage: *mut Fts5Storage,
     return rc;
 }
 
+///* Drop all shadow tables. Return SQLITE_OK if successful or an SQLite error
+///* code otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_drop_all(p_config: &Fts5Config) -> i32 {
     let mut rc: i32 =
@@ -716,6 +787,14 @@ pub extern "C" fn sqlite3_fts5_drop_all(p_config: &Fts5Config) -> i32 {
     return rc;
 }
 
+///* Load the contents of the "averages" record from disk into the 
+///* p->nTotalRow and p->aTotalSize[] variables. If successful, and if
+///* argument bCache is true, set the p->bTotalsValid flag to indicate
+///* that the contents of aTotalSize[] and nTotalRow are valid until
+///* further notice.
+///*
+///* Return SQLITE_OK if successful, or an SQLite error code if an error
+///* occurs.
 extern "C" fn fts5_storage_load_totals(p: &mut Fts5Storage, b_cache_1: i32)
     -> i32 {
     let mut rc: i32 = 0;
@@ -730,6 +809,11 @@ extern "C" fn fts5_storage_load_totals(p: &mut Fts5Storage, b_cache_1: i32)
     return rc;
 }
 
+///* This function is called to process a DELETE on a contentless_delete=1
+///* table. It adds the tombstone required to delete the entry with rowid 
+///* iDel. If successful, SQLITE_OK is returned. Or, if an error occurs,
+///* an SQLite error code.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_storage_contentless_delete(p: *mut Fts5Storage,
     i_del_1: i64) -> i32 {
     let mut i_origin: i64 = 0 as i64;
@@ -756,9 +840,12 @@ extern "C" fn fts5_storage_contentless_delete(p: *mut Fts5Storage,
                         as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
-    rc =
+
+    /// Look up the origin of the document in the %_docsize table. Store
+    ///* this in stack variable iOrigin.
+    (rc =
         fts5_storage_get_stmt(unsafe { &mut *p }, 9, &mut p_lookup,
-            core::ptr::null_mut());
+            core::ptr::null_mut()));
     if rc == 0 {
         unsafe { sqlite3_bind_int64(p_lookup, 1, i_del_1) };
         if 100 == unsafe { sqlite3_step(p_lookup) } {
@@ -776,6 +863,14 @@ extern "C" fn fts5_storage_contentless_delete(p: *mut Fts5Storage,
     return rc;
 }
 
+///* This function is used as part of an UPDATE statement that modifies the
+///* rowid of a row. In that case, this function is called first to set
+///* Fts5Storage.pSavedRow to point to a statement that may be used to 
+///* access the original values of the row being deleted - iDel.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+///* It is not considered an error if row iDel does not exist. In this case
+///* pSavedRow is not set and SQLITE_OK returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_find_delete_row(p: *mut Fts5Storage,
     i_del: i64) -> i32 {
@@ -810,6 +905,7 @@ struct Fts5InsertCtx {
     sz_col: i32,
 }
 
+///* Tokenization callback used when inserting tokens into the FTS index.
 extern "C" fn fts5_storage_insert_callback(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -832,13 +928,25 @@ extern "C" fn fts5_storage_insert_callback(p_context_1: *mut (), tflags: i32,
         };
 }
 
+///* If a row with rowid iDel is present in the %_content table, add the
+///* delete-markers to the FTS index necessary to delete it. Do not actually
+///* remove the %_content row at this time though.
+///*
+///* If parameter bSaveRow is true, then Fts5Storage.pSavedRow is left
+///* pointing to a statement (FTS5_STMT_LOOKUP2) that may be used to access
+///* the original values of the row being deleted. This is used by UPDATE
+///* statements.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_storage_delete_from_index(p: *mut Fts5Storage,
     i_del_1: i64, ap_val_1: *const *mut Sqlite3Value, b_save_row_1: i32)
     -> i32 {
     let p_config: *mut Fts5Config = unsafe { (*p).p_config };
     let mut p_seek: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// SELECT to read row iDel from %_data
     let mut rc: i32 = 0;
+    /// Return code
     let mut rc2: i32 = 0;
+    /// sqlite3_reset() return code
     let mut i_col: i32 = 0;
     let mut ctx: Fts5InsertCtx = unsafe { core::mem::zeroed() };
     if !(b_save_row_1 == 0 || ap_val_1 == core::ptr::null_mut()) as i32 as i64
@@ -933,12 +1041,16 @@ extern "C" fn fts5_storage_delete_from_index(p: *mut Fts5Storage,
                             };
                     } else {
                         if unsafe { sqlite3_value_type(p_val) } != 3 {
-                            p_free =
+
+                            /// Make a copy of the value to work with. This is because the call
+                            ///* to sqlite3_value_text() below forces the type of the value to
+                            ///* SQLITE_TEXT, and we may need to use it again later.
+                            (p_free =
                                 {
                                     p_val =
                                         unsafe { sqlite3_value_dup(p_val as *const Sqlite3Value) };
                                     p_val
-                                };
+                                });
                             if p_val == core::ptr::null_mut() { rc = 7; }
                         }
                         if rc == 0 {
@@ -1014,6 +1126,7 @@ extern "C" fn fts5_storage_delete_from_index(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Remove a row from the FTS table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_delete(p: *mut Fts5Storage, i_del: i64,
     ap_val: *mut *mut Sqlite3Value, b_save_row: i32) -> i32 {
@@ -1077,6 +1190,13 @@ pub extern "C" fn sqlite3_fts5_storage_delete(p: *mut Fts5Storage, i_del: i64,
     return rc;
 }
 
+///* Allocate a new rowid. This is used for "external content" tables when
+///* a NULL value is inserted into the rowid column. The new rowid is allocated
+///* by inserting a dummy row into the %_docsize table. The dummy will be
+///* overwritten later.
+///*
+///* If the %_docsize table does not exist, SQLITE_MISMATCH is returned. In
+///* this case the user is required to provide a rowid explicitly.
 extern "C" fn fts5_storage_new_rowid(p: *mut Fts5Storage,
     pi_rowid_1: &mut i64) -> i32 {
     let mut rc: i32 = 20;
@@ -1103,7 +1223,9 @@ extern "C" fn fts5_storage_new_rowid(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Insert a new row into the FTS content table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
     b_replace: i32, ap_val: *mut *mut Sqlite3Value, pi_rowid: *mut i64)
     -> i32 {
@@ -1123,7 +1245,10 @@ pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
         } else { rc = fts5_storage_new_rowid(p, unsafe { &mut *pi_rowid }); }
     } else {
         let mut p_insert: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Statement to write %_content table
         let mut i: i32 = 0;
+
+        /// Counter variable
         if !(4 + 1 == 5) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"sqlite3Fts5StorageContentInsert".as_ptr() as
@@ -1148,6 +1273,8 @@ pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
         if !(p_insert).is_null() {
             unsafe { sqlite3_clear_bindings(p_insert) };
         }
+
+        /// Bind the rowid value
         unsafe {
             sqlite3_bind_value(p_insert, 1,
                 unsafe { *ap_val.offset(1 as isize) } as *const Sqlite3Value)
@@ -1171,10 +1298,13 @@ pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
                             unsafe { *ap_val.offset(i as isize) };
                         if unsafe { sqlite3_value_nochange(p_val) } != 0 &&
                                 !(unsafe { (*p).p_saved_row }).is_null() {
-                            p_val =
+
+                            /// This is an UPDATE statement, and user-defined column (i-2) was not
+                            ///* modified.  Retrieve the value from Fts5Storage.pSavedRow.
+                            (p_val =
                                 unsafe {
                                     sqlite3_column_value(unsafe { (*p).p_saved_row }, i - 1)
-                                };
+                                });
                             if unsafe { (*p_config).b_locale } != 0 && b_unindexed == 0
                                 {
                                 unsafe {
@@ -1255,6 +1385,12 @@ pub extern "C" fn sqlite3_fts5_storage_content_insert(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Insert a record into the %_docsize table. Specifically, do:
+///*
+///*   INSERT OR REPLACE INTO %_docsize(id, sz) VALUES(iRowid, pBuf);
+///*
+///* If there is no %_docsize table (as happens if the columnsize=0 option
+///* is specified when the FTS5 table is created), this function is a no-op.
 extern "C" fn fts5_storage_insert_docsize(p: *mut Fts5Storage, i_rowid_1: i64,
     p_buf_1: &Fts5Buffer) -> i32 {
     let mut rc: i32 = 0;
@@ -1289,13 +1425,19 @@ extern "C" fn fts5_storage_insert_docsize(p: *mut Fts5Storage, i_rowid_1: i64,
     return rc;
 }
 
+///* Insert new entries into the FTS index and %_docsize table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_index_insert(p: *mut Fts5Storage,
     ap_val: *mut *mut Sqlite3Value, i_rowid: i64) -> i32 {
     let p_config: *mut Fts5Config = unsafe { (*p).p_config };
     let mut rc: i32 = 0;
+    /// Return code
     let mut ctx: Fts5InsertCtx = unsafe { core::mem::zeroed() };
+    /// Tokenization callback context object
     let mut buf: Fts5Buffer = unsafe { core::mem::zeroed() };
+
+    /// Buffer used to build up %_docsize blob
     unsafe {
         memset(&raw mut buf as *mut (), 0,
             core::mem::size_of::<Fts5Buffer>() as u64)
@@ -1323,9 +1465,13 @@ pub extern "C" fn sqlite3_fts5_storage_index_insert(p: *mut Fts5Storage,
                                     }
                             } as i32 == 0 {
                     let mut n_text: i32 = 0;
+                    /// Size of pText in bytes
                     let mut p_text: *const i8 = core::ptr::null();
+                    /// Pointer to buffer containing text value
                     let mut n_loc: i32 = 0;
+                    /// Size of pText in bytes
                     let mut p_loc: *const i8 = core::ptr::null();
+                    /// Pointer to buffer containing text value
                     let mut p_val: *mut Sqlite3Value =
                         unsafe { *ap_val.offset((ctx.i_col + 2) as isize) };
                     if !(unsafe { (*p).p_saved_row }).is_null() &&
@@ -1431,12 +1577,23 @@ extern "C" fn fts5_storage_decode_size_array(mut a_col_1: &mut [i32],
     return (i_off != a_blob_1.len() as i32) as i32;
 }
 
+///* Argument aCol points to an array of integers containing one entry for
+///* each table column. This function reads the %_docsize record for the
+///* specified rowid and populates aCol[] with the results.
+///*
+///* An SQLite error code is returned if an error occurs, or SQLITE_OK
+///* otherwise.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_docsize(p: *mut Fts5Storage,
     i_rowid: i64, a_col: *mut i32) -> i32 {
     let n_col: i32 = unsafe { (*unsafe { (*p).p_config }).n_col };
+    /// Number of user columns in table
     let mut p_lookup: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Statement to query %_docsize
     let mut rc: i32 = 0;
+
+    /// Return Code
     if (unsafe { (*unsafe { (*p).p_config }).b_columnsize } == 0) as i32 as
                 i64 != 0 {
         unsafe {
@@ -1496,6 +1653,7 @@ pub extern "C" fn sqlite3_fts5_storage_docsize(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Tokenization callback used by integrity check.
 extern "C" fn fts5_storage_integrity_callback(p_context_1: *mut (),
     tflags: i32, p_token_1: *const i8, mut n_token_1: i32, i_unused1_1: i32,
     i_unused2_1: i32) -> i32 {
@@ -1628,13 +1786,21 @@ extern "C" fn fts5_storage_count(p: &Fts5Storage, z_suffix_1: *const i8,
     return rc;
 }
 
+///* Check that the contents of the FTS index match that of the %_content
+///* table. Return SQLITE_OK if they do, or SQLITE_CORRUPT if not. Return
+///* some other SQLite error code if an error occurs while attempting to
+///* determine this.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_integrity(p: *mut Fts5Storage,
     i_arg: i32) -> i32 {
     let p_config: *mut Fts5Config = unsafe { (*p).p_config };
     let mut rc: i32 = 0;
+    /// Return code
     let mut a_col_size: *mut i32 = core::ptr::null_mut();
+    /// Array of size pConfig->nCol
     let mut a_total_size: *mut i64 = core::ptr::null_mut();
+    /// Array of size pConfig->nCol
     let mut ctx: Fts5IntegrityCtx = unsafe { core::mem::zeroed() };
     let mut p_scan: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut b_use_cksum: i32 = 0;
@@ -1664,9 +1830,12 @@ pub extern "C" fn sqlite3_fts5_storage_integrity(p: *mut Fts5Storage,
         (unsafe { (*p_config).e_content } == 0 ||
                 unsafe { (*p_config).e_content } == 2 && i_arg != 0) as i32;
     if b_use_cksum != 0 {
-        rc =
+
+        /// Generate the expected index checksum based on the contents of the
+        ///* %_content table. This block stores the checksum in ctx.cksum.
+        (rc =
             fts5_storage_get_stmt(unsafe { &mut *p }, 11, &mut p_scan,
-                core::ptr::null_mut());
+                core::ptr::null_mut()));
         if rc == 0 {
             let mut rc2: i32 = 0;
             while 100 == unsafe { sqlite3_step(p_scan) } {
@@ -1807,6 +1976,8 @@ pub extern "C" fn sqlite3_fts5_storage_integrity(p: *mut Fts5Storage,
     return rc;
 }
 
+///* Obtain an SQLite statement handle that may be used to read data from the
+///* %_content table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_stmt(p: *mut Fts5Storage, e_stmt: i32,
     pp: *mut *mut Sqlite3Stmt, pz_err_msg: *mut *mut i8) -> i32 {
@@ -1836,6 +2007,9 @@ pub extern "C" fn sqlite3_fts5_storage_stmt(p: *mut Fts5Storage, e_stmt: i32,
     return rc;
 }
 
+///* Release an SQLite statement handle obtained via an earlier call to
+///* sqlite3Fts5StorageStmt(). The eStmt parameter passed to this function
+///* must match that passed to the sqlite3Fts5StorageStmt() call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_stmt_release(p: &mut Fts5Storage,
     e_stmt: i32, p_stmt: *mut Sqlite3Stmt) -> () {
@@ -1887,11 +2061,18 @@ pub extern "C" fn sqlite3_fts5_storage_size(p: *mut Fts5Storage, i_col: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_row_count(p: *mut Fts5Storage,
     pn_row: &mut i64) -> i32 {
     let mut rc: i32 = fts5_storage_load_totals(unsafe { &mut *p }, 0);
     if rc == 0 {
-        *pn_row = unsafe { (*p).n_total_row };
+
+        /// nTotalRow being zero does not necessarily indicate a corrupt 
+        ///* database - it might be that the FTS5 table really does contain zero
+        ///* rows. However this function is only called from the xRowCount() API,
+        ///* and there is no way for that API to be invoked if the table contains
+        ///* no rows. Hence the FTS5_CORRUPT return.
+        (*pn_row = unsafe { (*p).n_total_row });
         if unsafe { (*p).n_total_row } <= 0 as i64 { rc = 11 | 1 << 8; }
     }
     return rc;
@@ -1903,21 +2084,25 @@ pub extern "C" fn sqlite3_fts5_storage_rollback(p: &mut Fts5Storage) -> i32 {
     return unsafe { sqlite3_fts5_index_rollback((*p).p_index) };
 }
 
+///* Delete all entries in the FTS5 index.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_delete_all(p: *mut Fts5Storage)
     -> i32 {
     let p_config: *const Fts5Config =
         unsafe { (*p).p_config } as *const Fts5Config;
     let mut rc: i32 = 0;
     unsafe { (*p).b_totals_valid = 0 };
-    rc =
+
+    /// Delete the contents of the %_data and %_docsize tables.
+    (rc =
         unsafe {
             fts5_exec_printf(unsafe { (*p_config).db }, core::ptr::null_mut(),
                 c"DELETE FROM %Q.\'%q_data\';DELETE FROM %Q.\'%q_idx\';".as_ptr()
                         as *mut i8 as *const i8, unsafe { (*p_config).z_db },
                 unsafe { (*p_config).z_name }, unsafe { (*p_config).z_db },
                 unsafe { (*p_config).z_name })
-        };
+        });
     if rc == 0 && unsafe { (*p_config).b_columnsize } != 0 {
         rc =
             unsafe {
@@ -1951,6 +2136,7 @@ pub extern "C" fn sqlite3_fts5_storage_delete_all(p: *mut Fts5Storage)
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_storage_rebuild(p: *mut Fts5Storage) -> i32 {
     let mut buf: Fts5Buffer =
         Fts5Buffer { p: core::ptr::null_mut(), n: 0, n_space: 0 };
@@ -1993,9 +2179,13 @@ pub extern "C" fn sqlite3_fts5_storage_rebuild(p: *mut Fts5Storage) -> i32 {
                                         }
                                 } as i32 == 0 {
                         let mut n_text: i32 = 0;
+                        /// Size of pText in bytes
                         let mut p_text: *const i8 = core::ptr::null();
+                        /// Pointer to buffer containing text value
                         let mut n_loc: i32 = 0;
+                        /// Size of pLoc in bytes
                         let mut p_loc: *const i8 = core::ptr::null();
+                        /// Pointer to buffer containing text value
                         let p_val: *mut Sqlite3Value =
                             unsafe { sqlite3_column_value(p_scan, ctx.i_col + 1) };
                         if unsafe { (*p_config).e_content } == 2 &&
@@ -2071,6 +2261,9 @@ pub extern "C" fn sqlite3_fts5_storage_reset(p: &Fts5Storage) -> i32 {
     return unsafe { sqlite3_fts5_index_reset((*p).p_index) };
 }
 
+///* Reset any saved statement pSavedRow. Zero pSavedRow as well. This
+///* should be called by the xUpdate() method of the fts5 table before 
+///* returning from any operation that may have set Fts5Storage.pSavedRow.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_storage_release_delete_row(p_storage:
         &mut Fts5Storage) -> () {

@@ -1,21 +1,36 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3recover_h;
-pub(crate) use crate::sqlite3recover_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite3recover_h::Sqlite3Recover;
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type TclWideInt = i64;
 
@@ -518,10 +533,24 @@ extern "C" fn get_db_pointer(interp: *mut TclInterp, p_obj_1: *mut TclObj,
     return 0;
 }
 
+///* Implementation of the command created by [sqlite3_recover_init]:
+///*
+///*     $cmd config OP ARG
+///*     $cmd run
+///*     $cmd errmsg
+///*     $cmd errcode
+///*     $cmd finalize
+#[allow(unused_doc_comments)]
 extern "C" fn test_recover_cmd(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
         unsafe {
+            /// 0
+            /// 1
+            /// 2
+            /// 3
+            /// 4
+            /// 5
             let mut rc: i32 = 0;
             let mut i_sub: i32 = 0;
             let p_test: *const TestRecover =
@@ -1045,6 +1074,7 @@ extern "C" fn test_recover_cmd(client_data_1: *mut (), interp: *mut TclInterp,
     }
 }
 
+///* sqlite3_recover_init DB DBNAME URI
 extern "C" fn test_sqlite3_dbdata_init(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();

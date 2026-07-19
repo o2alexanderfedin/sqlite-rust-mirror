@@ -1,13 +1,31 @@
+//!* 2006 August 23
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* Test extension for testing the sqlite3_auto_extension() function.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
 
+///* The sqr() SQL function returns the square of its input value.
 extern "C" fn sqr_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -23,6 +41,7 @@ extern "C" fn sqr_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* This is the entry point to register the extension for the sqr() function.
 extern "C" fn sqr_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -47,6 +66,7 @@ extern "C" fn sqr_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     }
 }
 
+///* The cube() SQL function returns the cube of its input value.
 extern "C" fn cube_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -64,6 +84,7 @@ extern "C" fn cube_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* This is the entry point to register the extension for the cube() function.
 extern "C" fn cube_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -88,6 +109,7 @@ extern "C" fn cube_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     }
 }
 
+///* This is a broken extension entry point
 extern "C" fn broken_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
@@ -104,6 +126,9 @@ extern "C" fn broken_init(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     }
 }
 
+///* tclcmd:   sqlite3_auto_extension_sqr
+///*
+///* Register the "sqr" extension to be loaded automatically.
 extern "C" fn auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -121,6 +146,9 @@ extern "C" fn auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_cancel_auto_extension_sqr
+///*
+///* Unregister the "sqr" extension.
 extern "C" fn cancel_auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -138,6 +166,9 @@ extern "C" fn cancel_auto_ext_sqr_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_auto_extension_cube
+///*
+///* Register the "cube" extension to be loaded automatically.
 extern "C" fn auto_ext_cube_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -155,6 +186,9 @@ extern "C" fn auto_ext_cube_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_cancel_auto_extension_cube
+///*
+///* Unregister the "cube" extension.
 extern "C" fn cancel_auto_ext_cube_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -172,6 +206,9 @@ extern "C" fn cancel_auto_ext_cube_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_auto_extension_broken
+///*
+///* Register the broken extension to be loaded automatically.
 extern "C" fn auto_ext_broken_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -189,6 +226,9 @@ extern "C" fn auto_ext_broken_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_cancel_auto_extension_broken
+///*
+///* Unregister the broken extension.
 extern "C" fn cancel_auto_ext_broken_obj_cmd(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -206,6 +246,9 @@ extern "C" fn cancel_auto_ext_broken_obj_cmd(client_data_1: *mut (),
     }
 }
 
+///* tclcmd:   sqlite3_reset_auto_extension
+///*
+///* Reset all auto-extensions
 extern "C" fn reset_auto_ext_obj_cmd(client_data_1: *mut (),
     interp: *const TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {

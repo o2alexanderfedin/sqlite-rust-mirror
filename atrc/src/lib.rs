@@ -1,8 +1,38 @@
+//!* This program generates a script that stresses the ALTER TABLE statement.
+//!* Compile like this:
+//!*
+//!*      gcc -g -c sqlite3.c
+//!*      gcc -g -o atrc atrc.c sqlite3.o -ldl -lpthread
+//!*
+//!* Run the program this way:
+//!*
+//!*      ./atrc DATABASE | ./sqlite3 DATABASE
+//!*
+//!* This program "atrc" generates a script that can be fed into an ordinary
+//!* command-line shell.  The script performs many ALTER TABLE statements,
+//!* runs ".schema --indent" and "PRAGMA integrity_check;", does more
+//!* ALTER TABLE statements to restore the original schema, and then
+//!* runs "PRAGMA integrity_check" again.  Every table and column has its
+//!* name changed.  The entire script is contained within BEGIN...ROLLBACK
+//!* so that no changes are ever actually made to the database.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+///* Generate the text of ALTER TABLE statements that will rename
+///* every column in table zTable to a generic name composed from
+///* zColPrefix and a sequential number.  The generated text is
+///* appended pConvert.  If pUndo is not NULL, then SQL text that
+///* will undo the change is appended to pUndo.
+///*
+///* The table to be converted must be in the "main" schema.
 #[unsafe(no_mangle)]
 pub extern "C" fn rename_all_columns_of_table(db: *mut Sqlite3,
     z_tab_1: *const i8, z_col_prefix_1: *const i8,
@@ -41,6 +71,7 @@ pub extern "C" fn rename_all_columns_of_table(db: *mut Sqlite3,
     return 0;
 }
 
+/// Rename all tables and their columns in the main database
 #[unsafe(no_mangle)]
 pub extern "C" fn rename_all_tables(db: *mut Sqlite3,
     p_convert_1: *mut Sqlite3Str, p_undo_1: *mut Sqlite3Str) -> i32 {
@@ -88,6 +119,15 @@ pub extern "C" fn rename_all_tables(db: *mut Sqlite3,
     return 0;
 }
 
+///* Generate a script that does this:
+///*
+///*   (1) Start a transaction
+///*   (2) Rename all tables and columns to use generic names.
+///*   (3) Print the schema after this rename
+///*   (4) Run pragma integrity_check
+///*   (5) Do more ALTER TABLE statements to change the names back
+///*   (6) Run pragma integrity_check again
+///*   (7) Rollback the transaction
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {

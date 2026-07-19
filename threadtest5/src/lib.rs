@@ -2,16 +2,26 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinPthreadT = *mut OpaquePthreadT;
 
 type PthreadT = DarwinPthreadT;
 
+/// Name of the in-memory database
 static mut z_db_name: *mut i8 = core::ptr::null_mut();
 
+/// True for debugging
 static mut e_verbose: i32 = 0;
 
+/// If rc is not SQLITE_OK, then print an error message and stop
+///* the test.
 extern "C" fn error_out(rc: i32, z_ctx_1: *const i8, lineno: i32) -> () {
     unsafe {
         if rc != 0 {
@@ -25,6 +35,7 @@ extern "C" fn error_out(rc: i32, z_ctx_1: *const i8, lineno: i32) -> () {
     }
 }
 
+/// Run the SQL in the second argument.
 unsafe extern "C" fn exec(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     z_format_1: *const i8, mut __va0: ...) -> i32 {
     unsafe {
@@ -58,6 +69,7 @@ unsafe extern "C" fn exec(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     }
 }
 
+/// Generate a perpared statement from the input SQL
 unsafe extern "C" fn prepare(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     z_format_1: *const i8, mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -92,6 +104,7 @@ unsafe extern "C" fn prepare(db: *mut Sqlite3, z_id_1: *const i8, lineno: i32,
     }
 }
 
+///* Wait for table zTable to exist in the schema.
 extern "C" fn wait_on_table(db: *mut Sqlite3, z_worker_1: *const i8,
     z_table_1: *const i8) -> () {
     loop {
@@ -112,6 +125,7 @@ extern "C" fn wait_on_table(db: *mut Sqlite3, z_worker_1: *const i8,
     }
 }
 
+///* Return true if x is  a prime number
 extern "C" fn is_prime(x: i32) -> i32 {
     let mut i: i32 = 0;
     if x < 2 { return 1; }
@@ -126,6 +140,7 @@ extern "C" fn is_prime(x: i32) -> i32 {
     return 1;
 }
 
+/// Each worker thread runs an instance of the following
 extern "C" fn worker(p_arg_1: *mut ()) -> *mut () {
     unsafe {
         let mut rc: i32 = 0;
@@ -243,6 +258,7 @@ extern "C" fn worker(p_arg_1: *mut ()) -> *mut () {
     }
 }
 
+/// Print a usage comment and die
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [options]\n".as_ptr() as *mut i8 as *const i8,
@@ -255,6 +271,7 @@ extern "C" fn usage(argv0: *const i8) -> () {
     unsafe { exit(1) };
 }
 
+///* Main routine
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {

@@ -1,11 +1,19 @@
 use super::*;
+use crate::sqlite3_h::{Sqlite3Context, Sqlite3Value};
+use crate::sqlite_int_h::{
+    CollSeq, FuncDef, Index, KeyInfo, Table, UnpackedRecord, VTable,
+};
 
+///* A single VDBE is an opaque structure named "Vdbe".  Only routines
+///* in the source file sqliteVdbe.c are allowed to see the insides
+///* of this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Vdbe {
     pub(crate) _opaque: [u8; 0],
 }
 
+///* A sub-routine used to implement a trigger program.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubProgram {
@@ -18,6 +26,9 @@ pub(crate) struct SubProgram {
     pub(crate) p_next: *mut SubProgram,
 }
 
+///* A single instruction of the virtual machine has an opcode
+///* and as many as three operands.  The instruction is recorded
+///* as an instance of the following structure:
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOp {
@@ -51,8 +62,12 @@ pub(crate) union P4union {
     pub(crate) p_idx: *mut Index,
 }
 
+///* The names of the following types declared in vdbeInt.h are required
+///* for the VdbeOp definition.
 pub(crate) type Mem = Sqlite3Value;
 
+///* A signature for a reusable subroutine that materializes the RHS of
+///* an IN operator.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubrtnSig {
@@ -67,6 +82,8 @@ pub(crate) struct SubrtnSig {
 pub(crate) type RecordCompare =
     unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord) -> i32;
 
+///* A smaller version of VdbeOp used for the VdbeAddOpList() function because
+///* it takes up less space.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOpList {

@@ -1,19 +1,56 @@
+//!* 2001 September 15
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* Main file for the SQLite library.  The routines in this file
+//!* implement the programmer interface to the library.  Routines in
+//!* other files are for internal use by SQLite and should not be
+//!* accessed by users of the library.
+//!* Execute SQL code.  Return one of the SQLITE_ success/failure
+//!* codes.  Also write an error message into memory obtained from
+//!* malloc() and make *pzErrMsg point to that message.
+//!*
+//!* If the SQL is a query, then for each row in the query result
+//!* the xCallback() function is called.  pArg becomes the first
+//!* argument to xCallback().  If xCallback=NULL then no callback
+//!* is invoked, even for queries.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,19 +428,88 @@ impl Parse {
     }
 }
 
+///* CAPI3REF: One-Step Query Execution Interface
+///* METHOD: sqlite3
+///*
+///* The sqlite3_exec() interface is a convenience wrapper around
+///* [sqlite3_prepare_v2()], [sqlite3_step()], and [sqlite3_finalize()],
+///* that allows an application to run multiple statements of SQL
+///* without having to use a lot of C code.
+///*
+///* ^The sqlite3_exec() interface runs zero or more UTF-8 encoded,
+///* semicolon-separated SQL statements passed into its 2nd argument,
+///* in the context of the [database connection] passed in as its 1st
+///* argument.  ^If the callback function of the 3rd argument to
+///* sqlite3_exec() is not NULL, then it is invoked for each result row
+///* coming out of the evaluated SQL statements.  ^The 4th argument to
+///* sqlite3_exec() is relayed through to the 1st argument of each
+///* callback invocation.  ^If the callback pointer to sqlite3_exec()
+///* is NULL, then no callback is ever invoked and result rows are
+///* ignored.
+///*
+///* ^If an error occurs while evaluating the SQL statements passed into
+///* sqlite3_exec(), then execution of the current statement stops and
+///* subsequent statements are skipped.  ^If the 5th parameter to sqlite3_exec()
+///* is not NULL then any error message is written into memory obtained
+///* from [sqlite3_malloc()] and passed back through the 5th parameter.
+///* To avoid memory leaks, the application should invoke [sqlite3_free()]
+///* on error message strings returned through the 5th parameter of
+///* sqlite3_exec() after the error message string is no longer needed.
+///* ^If the 5th parameter to sqlite3_exec() is not NULL and no errors
+///* occur, then sqlite3_exec() sets the pointer in its 5th parameter to
+///* NULL before returning.
+///*
+///* ^If an sqlite3_exec() callback returns non-zero, the sqlite3_exec()
+///* routine returns SQLITE_ABORT without invoking the callback again and
+///* without running any subsequent SQL statements.
+///*
+///* ^The 2nd argument to the sqlite3_exec() callback function is the
+///* number of columns in the result.  ^The 3rd argument to the sqlite3_exec()
+///* callback is an array of pointers to strings obtained as if from
+///* [sqlite3_column_text()], one for each column.  ^If an element of a
+///* result row is NULL then the corresponding string pointer for the
+///* sqlite3_exec() callback is a NULL pointer.  ^The 4th argument to the
+///* sqlite3_exec() callback is an array of pointers to strings where each
+///* entry represents the name of a corresponding result column as obtained
+///* from [sqlite3_column_name()].
+///*
+///* ^If the 2nd parameter to sqlite3_exec() is a NULL pointer, a pointer
+///* to an empty string, or a pointer that contains only whitespace and/or
+///* SQL comments, then no SQL statements are evaluated and the database
+///* is not changed.
+///*
+///* Restrictions:
+///*
+///* <ul>
+///* <li> The application must ensure that the 1st parameter to sqlite3_exec()
+///*      is a valid and open [database connection].
+///* <li> The application must not close the [database connection] specified by
+///*      the 1st parameter to sqlite3_exec() while sqlite3_exec() is running.
+///* <li> The application must not modify the SQL statement text passed into
+///*      the 2nd parameter of sqlite3_exec() while sqlite3_exec() is running.
+///* <li> The application must not dereference the arrays or string pointers
+///*       passed as the 3rd and 4th callback parameters after it returns.
+///* </ul>
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_exec(db: *mut Sqlite3, mut z_sql_1: *const i8,
     x_callback_1:
         Option<unsafe extern "C" fn(*mut (), i32, *mut *mut i8, *mut *mut i8)
             -> i32>, p_arg_1: *mut (), pz_err_msg_1: *mut *mut i8) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code
         let mut z_leftover: *const i8 = core::ptr::null();
+        /// Tail of unprocessed SQL
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The current SQL statement
         let mut az_cols: *mut *mut i8 = core::ptr::null_mut();
+        /// Names of result columns
         let mut callback_is_init: i32 = 0;
+        /// True if callback data is initialized
         let mut n_col: i32 = 0;
         let mut az_vals: *mut *mut i8 = core::ptr::null_mut();
+        /// this happens for a comment or white-space
         let mut i: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -664,6 +770,19 @@ pub extern "C" fn sqlite3_exec(db: *mut Sqlite3, mut z_sql_1: *const i8,
                 }
             }
         }
+
+        /// Return code
+        /// Tail of unprocessed SQL
+        /// The current SQL statement
+        /// Names of result columns
+        /// True if callback data is initialized
+        /// this happens for a comment or white-space
+        /// Invoke the callback function if required
+        /// sqlite3VdbeSetColName() installs column names as UTF8
+        ///* strings so there is no way for sqlite3_column_name() to fail.
+        /// EVIDENCE-OF: R-38229-40159 If the callback function to
+        ///* sqlite3_exec() returns non-zero, then sqlite3_exec() will
+        ///* return SQLITE_ABORT.
         unreachable!();
     }
 }

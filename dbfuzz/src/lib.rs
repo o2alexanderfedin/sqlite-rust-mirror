@@ -2,10 +2,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* Print sketchy documentation for this utility program
 extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe {
         printf(c"Usage: %s [options] DATABASE ...\n".as_ptr() as *mut i8 as
@@ -18,6 +25,7 @@ extern "C" fn show_help(z_argv0_1: *const i8) -> () {
     unsafe { exit(0) };
 }
 
+///* Print an error message and quit.
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -46,6 +54,7 @@ struct VHandle {
     p_v_file: *mut VFile,
 }
 
+///* All global variables are gathered into the "g" singleton.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -54,6 +63,7 @@ struct GlobalVars {
 
 static mut g: GlobalVars = unsafe { core::mem::zeroed() };
 
+///* Initialize the virtual file system.
 extern "C" fn format_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -74,6 +84,7 @@ extern "C" fn format_vfs() -> () {
     }
 }
 
+///* Erase all information in the virtual file system.
 extern "C" fn reformat_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -105,6 +116,7 @@ extern "C" fn reformat_vfs() -> () {
     }
 }
 
+///* Find a VFile by name
 extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
     unsafe {
         let mut i: i32 = 0;
@@ -133,6 +145,10 @@ extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
     }
 }
 
+///* Find a VFile called zName.  Initialize it to the content of
+///* disk file zDiskFile.
+///*
+///* Return NULL if the filesystem is full.
 extern "C" fn create_v_file(z_name_1: *const i8, z_disk_file_1: *const i8)
     -> *mut VFile {
     unsafe {
@@ -203,6 +219,7 @@ extern "C" fn create_v_file(z_name_1: *const i8, z_disk_file_1: *const i8)
     }
 }
 
+/// Methods for the VHandle object
 extern "C" fn inmem_close(p_file_1: *mut Sqlite3File) -> i32 {
     let p: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
     let p_v_file: *mut VFile = unsafe { (*p).p_v_file };
@@ -337,6 +354,7 @@ extern "C" fn inmem_device_characteristics(p_file_1: *mut Sqlite3File)
     return 512 | 2048 | 4096;
 }
 
+/// Method table for VHandle
 static mut v_handle_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -360,6 +378,8 @@ static mut v_handle_methods: Sqlite3IoMethods =
         x_unfetch: None,
     };
 
+///* Open a new file in the inmem VFS.  All files are anonymous and are
+///* delete-on-close.
 extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     p_file_1: *mut Sqlite3File, open_flags_1: i32, p_out_flags_1: *mut i32)
     -> i32 {
@@ -386,6 +406,7 @@ extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     }
 }
 
+///* Delete a file by name
 extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     syncdir: i32) -> i32 {
     let p_v_file: *mut VFile = find_v_file(z_filename_1);
@@ -401,6 +422,7 @@ extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     return 10 | 10 << 8;
 }
 
+/// Check for the existence of a file
 extern "C" fn inmem_access(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     let p_v_file: *const VFile = find_v_file(z_filename_1) as *const VFile;
@@ -408,6 +430,7 @@ extern "C" fn inmem_access(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     return 0;
 }
 
+/// Get the canonical pathname for a file
 extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8, n_out_1: i32, z_out_1: *mut i8) -> i32 {
     unsafe {
@@ -417,6 +440,7 @@ extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     return 0;
 }
 
+///* Register the VFS that reads from the g.aFile[] set of files.
 extern "C" fn inmem_vfs_register() -> () {
     unsafe {
         let p_default: *const Sqlite3Vfs =
@@ -438,8 +462,12 @@ extern "C" fn inmem_vfs_register() -> () {
     }
 }
 
+///* Set the an alarm to go off after N seconds.  Disable the alarm
+///* if N==0
 extern "C" fn set_alarm(n_1: i32) -> () { { let _ = n_1; }; }
 
+///************************************************************************
+///* String accumulator object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Str {
@@ -449,10 +477,12 @@ struct Str {
     oom_err: i32,
 }
 
+/// Initialize a Str object
 extern "C" fn str_init(p: *mut Str) -> () {
     unsafe { memset(p as *mut (), 0, core::mem::size_of::<Str>() as u64) };
 }
 
+/// Append text to the end of a Str object
 extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     let n: Sqlite3Uint64 = unsafe { strlen(z) } as Sqlite3Uint64;
     if unsafe { (*p).n } + n >= unsafe { (*p).n_alloc } {
@@ -484,13 +514,17 @@ extern "C" fn str_append(p: *mut Str, z: *const i8) -> () {
     unsafe { *unsafe { (*p).z.add(unsafe { (*p).n } as usize) } = 0 as i8 };
 }
 
+/// Return the current string content
 extern "C" fn str_str(p: &Str) -> *mut i8 { return (*p).z; }
 
+/// Free the string
 extern "C" fn str_free(p: *mut Str) -> () {
     unsafe { sqlite3_free(unsafe { (*p).z } as *mut ()) };
     str_init(p);
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -504,6 +538,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -593,6 +628,7 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     }
 }
 
+///* This callback is invoked by sqlite3_log().
 extern "C" fn sql_log(p_not_used_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     unsafe {
@@ -604,6 +640,12 @@ extern "C" fn sql_log(p_not_used_1: *mut (), i_err_code_1: i32,
     }
 }
 
+///* This an SQL progress handler.  After an SQL statement has run for
+///* many steps, we want to interrupt it.  This guards against infinite
+///* loops from recursive common table expressions.
+///*
+///* *pVdbeLimitFlag is true if the --limit-vdbe command-line option is used.
+///* In that case, hitting the progress handler is a fatal error.
 extern "C" fn progress_handler(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     if unsafe { *(p_vdbe_limit_flag_1 as *mut i32) } != 0 {
         unsafe {
@@ -614,6 +656,8 @@ extern "C" fn progress_handler(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     return 1;
 }
 
+///* Run multiple commands of SQL.  Similar to sqlite3_exec(), but does not
+///* stop if an error is encountered.
 extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     run_flags_1: u32) -> () {
     let mut z_more: *const i8 = core::ptr::null();
@@ -833,21 +877,34 @@ extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut i: i32 = 0;
+        /// Loop counter
         let mut n_db: i32 = 0;
+        /// Number of databases to fuzz
         let mut az_db: *mut *mut i8 = core::ptr::null_mut();
+        /// Names of the databases (limit: 20)
         let mut verbose_flag: i32 = 0;
+        /// True for extra output
         let mut no_lookaside: i32 = 0;
+        /// Disable lookaside if true
         let mut vdbe_limit_flag: i32 = 0;
+        /// Stop after 100,000 VDBE ops
         let mut n_heap: i32 = 0;
+        /// True for fixed heap size
         let mut i_timeout: i32 = 0;
+        /// Timeout delay in seconds
         let mut rc: i32 = 0;
+        /// Result code from SQLite3 API calls
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// A single SQL statement
         let mut sql: Str = unsafe { core::mem::zeroed() };
+        /// SQL to run
         let mut run_flags: u32 = 0 as u32;
         {
             i = 1;

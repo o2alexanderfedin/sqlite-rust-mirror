@@ -1,24 +1,46 @@
 type DarwinSizeT = u64;
 
+///* The six bytes at a[] are a big-endian unsigned integer which is the
+///* number of milliseconds since 1970.  Decode that value into an ISO 8601
+///* date/time string stored in static space and return a pointer to that
+///* string.
+#[allow(unused_doc_comments)]
 extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     unsafe {
         let mut ms: u64 = 0 as u64;
+        /// Milliseconds since 1970
         let mut days: u64 = 0 as u64;
+        /// Days since 1970-01-01
         let mut sod: u64 = 0 as u64;
+        /// Start of date specified by ms
         let mut z: u64 = 0 as u64;
+        /// Days since 0000-03-01
         let mut era: u64 = 0 as u64;
+        /// 400-year era
         let mut i: i32 = 0;
+        /// Loop counter
         let mut h: i32 = 0;
+        /// hour
         let mut m: i32 = 0;
+        /// minute
         let mut s: i32 = 0;
+        /// second
         let mut f: i32 = 0;
+        /// millisecond
         let mut y: i32 = 0;
+        /// year
         let mut m: i32 = 0;
+        /// month
         let mut d: i32 = 0;
+        /// day
         let mut y: i32 = 0;
+        /// year assuming March is first month
         let mut doe: u32 = 0 as u32;
+        /// day of 400-year era
         let mut yoe: u32 = 0 as u32;
+        /// year of 400-year era
         let mut doy: u32 = 0 as u32;
+        /// day of year
         let mut mp: u32 = 0 as u32;
         {
             { ({ ms = 0 as u64; ms }) as i32; i = 0 };
@@ -35,6 +57,9 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
             return c"                       ".as_ptr() as *mut i8 as
                     *const i8;
         } else if ms > 4102444800000i64 as u64 {
+
+            /// 2100-01-01 */
+            ///        /*  YYYY-MM-DD HH:MM:SS.SSS
             return c"      (bad date)       ".as_ptr() as *mut i8 as
                     *const i8;
         }
@@ -66,6 +91,9 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     }
 }
 
+///* Render a single 16-byte tmstmpvfs log record as a line to a CSV file.
+///*
+///* Columns: tmstmp,fileno,op,pid,pgno,frame,salt,txn
 extern "C" fn render_csv(i_file_1: i32, a: *const u8) -> () {
     let mut a2: u32 = 0 as u32;
     let mut a3: u32 = 0 as u32;
@@ -599,6 +627,8 @@ extern "C" fn render_csv(i_file_1: i32, a: *const u8) -> () {
     }
 }
 
+///* Render a single 16-byte tmstmpvfs log record as human-readable text
+///* on stdout.
 extern "C" fn render_text(a: *const u8) -> () {
     let mut a2: u32 = 0 as u32;
     let mut a3: u32 = 0 as u32;

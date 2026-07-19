@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -123,6 +129,8 @@ static mut g: GlobalData =
         a_page_tag: core::ptr::null_mut(),
     };
 
+///* Convert the var-int format into i64.  Return the number of bytes
+///* in the var-int.  Write the var-int value into *pVal.
 extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     let mut v: i64 = 0 as i64;
     let mut i: i32 = 0;
@@ -148,6 +156,7 @@ extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     return 9;
 }
 
+///* Extract a big-endian 32-bit integer
 extern "C" fn decode_int32(z: *const u8) -> u32 {
     return (((unsafe { *z.offset(0 as isize) } as i32) << 24) +
                         ((unsafe { *z.offset(1 as isize) } as i32) << 16) +
@@ -155,11 +164,13 @@ extern "C" fn decode_int32(z: *const u8) -> u32 {
                 unsafe { *z.offset(3 as isize) } as i32) as u32;
 }
 
+/// Report an out-of-memory error and die.
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
 
+///* Open a database connection.
 extern "C" fn open_database(z_prg_1: *const i8, z_name_1: *const i8)
     -> *mut Sqlite3 {
     unsafe {
@@ -183,6 +194,7 @@ extern "C" fn open_database(z_prg_1: *const i8, z_name_1: *const i8)
     }
 }
 
+///* Open the database file.
 extern "C" fn file_open(z_prg_1: *const i8, z_name_1: *const i8) -> () {
     unsafe {
         if !(g.dbfd < 0) as i32 as i64 != 0 {
@@ -223,6 +235,7 @@ extern "C" fn file_open(z_prg_1: *const i8, z_name_1: *const i8) -> () {
     }
 }
 
+///* Close the database file opened by fileOpen()
 extern "C" fn file_close() -> () {
     unsafe {
         if g.b_raw == 0 {
@@ -233,6 +246,10 @@ extern "C" fn file_close() -> () {
     }
 }
 
+///* Read content from the file.
+///*
+///* Space to hold the content is obtained from sqlite3_malloc() and needs 
+///* to be freed by the caller.
 extern "C" fn file_read(ofst: Sqlite3Int64, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -290,6 +307,7 @@ extern "C" fn file_read(ofst: Sqlite3Int64, n_byte_1: i32) -> *mut u8 {
     }
 }
 
+///* Return the size of the file in byte.
 extern "C" fn file_getsize() -> i64 {
     unsafe {
         let mut res: i64 = 0 as i64;
@@ -313,6 +331,7 @@ extern "C" fn file_getsize() -> i64 {
     }
 }
 
+///* Print a range of bytes as hex and as ascii.
 extern "C" fn print_byte_range(ofst: Sqlite3Int64, n_byte_1: i32,
     print_ofst_1: i32) -> *mut u8 {
     unsafe {
@@ -414,6 +433,7 @@ extern "C" fn print_byte_range(ofst: Sqlite3Int64, n_byte_1: i32,
     }
 }
 
+///* Print an entire page of content as hex
 extern "C" fn print_page(i_pg_1: u32) -> () {
     unsafe {
         let mut i_start: i64 = 0 as i64;
@@ -430,6 +450,7 @@ extern "C" fn print_page(i_pg_1: u32) -> () {
     }
 }
 
+/// Print a line of decoded output showing a 4-byte unsigned integer.
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -482,6 +503,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     };
 }
 
+///* Decode the database header.
 extern "C" fn print_db_header() -> () {
     let mut a_data: *mut u8 = core::ptr::null_mut();
     a_data = print_byte_range(0 as Sqlite3Int64, 100, 0);
@@ -537,6 +559,7 @@ extern "C" fn print_db_header() -> () {
     unsafe { sqlite3_free(a_data as *mut ()) };
 }
 
+///* Describe cell content.
 extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     mut z_desc_1: *mut i8) -> i64 {
     let mut n_desc: i64 = 0 as i64;
@@ -764,6 +787,9 @@ extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     return n_desc;
 }
 
+///* Compute the local payload size given the total payload size and
+///* the page size.
+#[allow(unused_doc_comments)]
 extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     unsafe {
         let mut max_local: i64 = 0 as i64;
@@ -771,7 +797,9 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
         let mut surplus: i64 = 0 as i64;
         let mut n_local: i64 = 0 as i64;
         if c_type_1 as i32 == 13 {
-            max_local = g.usablesize - 35 as i64;
+
+            /// Table leaf
+            (max_local = g.usablesize - 35 as i64);
             min_local =
                 (g.usablesize - 12 as i64) * 32 as i64 / 255 as i64 -
                     23 as i64;
@@ -795,6 +823,9 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     }
 }
 
+///* Create a description for a single cell.
+///*
+///* The return value is the local cell size.
 extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     show_cell_content_1: i32, pz_desc_1: &mut *mut i8) -> i64 {
     unsafe {
@@ -892,6 +923,8 @@ extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     }
 }
 
+/// Print an offset followed by nByte bytes.  Add extra white-space
+///* at the end so that subsequent text is aligned.
 extern "C" fn print_bytes(a_data_1: *mut u8, a_start_1: *mut u8,
     n_byte_1: i32) -> () {
     let mut j: i32 = 0;
@@ -919,6 +952,8 @@ extern "C" fn print_bytes(a_data_1: *mut u8, a_start_1: *mut u8,
     }
 }
 
+///* Write a full decode on stdout for the cell at a[ofst].
+///* Assume the page contains a header of size szPgHdr bytes.
 extern "C" fn decode_cell(a: *mut u8, pgno: u32, i_cell_1: i32,
     sz_pg_hdr_1: i32, ofst: i32) -> () {
     let mut i: i32 = 0;
@@ -1233,6 +1268,7 @@ extern "C" fn decode_cell(a: *mut u8, pgno: u32, i_cell_1: i32,
     }
 }
 
+///* Decode a btree page
 extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     mut z_args_1: *const i8) -> () {
     unsafe {
@@ -1448,6 +1484,7 @@ extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     }
 }
 
+///* Decode a freelist trunk page.
 extern "C" fn decode_trunk_page(mut pgno: u32, detail: i32, recursive: i32)
     -> () {
     unsafe {
@@ -1515,6 +1552,7 @@ extern "C" fn decode_trunk_page(mut pgno: u32, detail: i32, recursive: i32)
     }
 }
 
+///* Add a comment on the use of a page.
 unsafe extern "C" fn page_usage_msg(pgno: u32, z_format_1: *const i8,
     mut __va0: ...) -> () {
     unsafe {
@@ -1554,6 +1592,7 @@ unsafe extern "C" fn page_usage_msg(pgno: u32, z_format_1: *const i8,
     }
 }
 
+///* Find overflow pages of a cell and describe their usage.
 extern "C" fn page_usage_cell(c_type_1: u8, mut a: *mut u8, pgno: u32,
     cellno: i32) -> () {
     unsafe {
@@ -1613,6 +1652,7 @@ extern "C" fn page_usage_cell(c_type_1: u8, mut a: *mut u8, pgno: u32,
     }
 }
 
+///* True if the memory is all zeros
 extern "C" fn all_zero(mut a: *const u8, mut n: i32) -> i32 {
     while n != 0 &&
             unsafe {
@@ -1628,6 +1668,10 @@ extern "C" fn all_zero(mut a: *const u8, mut n: i32) -> i32 {
     return (n == 0) as i32;
 }
 
+///* Describe the usages of a b-tree page.
+///*
+///* If parent==0, then this is the root of a btree.  If parent<0 then
+///* this is an orphan page.
 extern "C" fn page_usage_btree(pgno: u32, parent: i32, idx: i32,
     z_name_1: *const i8) -> () {
     unsafe {
@@ -1792,6 +1836,7 @@ extern "C" fn page_usage_btree(pgno: u32, parent: i32, idx: i32,
     }
 }
 
+///* Determine page usage by the freelist
 extern "C" fn page_usage_freelist(mut pgno: u32) -> () {
     unsafe {
         let mut a: *mut u8 = core::ptr::null_mut();
@@ -1847,6 +1892,7 @@ extern "C" fn page_usage_freelist(mut pgno: u32) -> () {
     }
 }
 
+///* Determine pages used as PTRMAP pages
 extern "C" fn page_usage_ptrmap(a: *const u8) -> () {
     unsafe {
         if decode_int32(unsafe { a.offset(52 as isize) } as *const u8) != 0 {
@@ -1867,25 +1913,47 @@ extern "C" fn page_usage_ptrmap(a: *const u8) -> () {
     }
 }
 
+///* The six bytes at a[] are a big-endian unsigned integer which is the
+///* number of milliseconds since 1970.  Decode that value into an ISO 8601
+///* date/time string stored in static space and return a pointer to that
+///* string.
+#[allow(unused_doc_comments)]
 extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     unsafe {
         let mut ms: u64 = 0 as u64;
+        /// Milliseconds since 1970
         let mut days: u64 = 0 as u64;
+        /// Days since 1970-01-01
         let mut sod: u64 = 0 as u64;
+        /// Start of date specified by ms
         let mut z: u64 = 0 as u64;
+        /// Days since 0000-03-01
         let mut era: u64 = 0 as u64;
+        /// 400-year era
         let mut i: i32 = 0;
+        /// Loop counter
         let mut h: i32 = 0;
+        /// hour
         let mut m: i32 = 0;
+        /// minute
         let mut s: i32 = 0;
+        /// second
         let mut f: i32 = 0;
+        /// millisecond
         let mut y: i32 = 0;
+        /// year
         let mut m: i32 = 0;
+        /// month
         let mut d: i32 = 0;
+        /// day
         let mut y: i32 = 0;
+        /// year assuming March is first month
         let mut doe: u32 = 0 as u32;
+        /// day of 400-year era
         let mut yoe: u32 = 0 as u32;
+        /// year of 400-year era
         let mut doy: u32 = 0 as u32;
+        /// day of year
         let mut mp: u32 = 0 as u32;
         {
             { ({ ms = 0 as u64; ms }) as i32; i = 0 };
@@ -1902,6 +1970,9 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
             return c"                       ".as_ptr() as *mut i8 as
                     *const i8;
         } else if ms > 4102444800000i64 as u64 {
+
+            /// 2100-01-01 */
+            ///        /*  YYYY-MM-DD HH:MM:SS.SSS
             return c"      (bad date)       ".as_ptr() as *mut i8 as
                     *const i8;
         }
@@ -1933,6 +2004,8 @@ extern "C" fn decode_timestamp(a: *const u8) -> *const i8 {
     }
 }
 
+///* Try to figure out how every page in the database file is being used.
+#[allow(unused_doc_comments)]
 extern "C" fn page_usage_report(z_prg_1: *const i8, z_db_name_1: *const i8)
     -> () {
     unsafe {
@@ -1949,19 +2022,26 @@ extern "C" fn page_usage_report(z_prg_1: *const i8, z_db_name_1: *const i8)
             };
             return;
         }
-        db = open_database(z_prg_1, z_db_name_1);
-        g.z_page_use =
+
+        /// Open the database file
+        (db = open_database(z_prg_1, z_db_name_1));
+
+        /// Set up global variables g.zPageUse[] and g.mxPage to record page
+        ///* usages
+        (g.z_page_use =
             unsafe {
                     sqlite3_malloc64(core::mem::size_of::<*mut i8>() as u64 *
                             (g.mx_page + 1 as u32) as u64)
-                } as *mut *mut i8;
+                } as *mut *mut i8);
         if g.z_page_use == core::ptr::null_mut() { out_of_memory(); }
         unsafe {
             memset(g.z_page_use as *mut (), 0,
                 core::mem::size_of::<*mut i8>() as u64 *
                     (g.mx_page + 1 as u32) as u64)
         };
-        a = file_read(0 as Sqlite3Int64, 100);
+
+        /// Discover the usage of each page
+        (a = file_read(0 as Sqlite3Int64, 100));
         if g.b_tmstmp != 0 && unsafe { *a.offset(20 as isize) } as i32 == 16 {
             g.a_page_tag =
                 unsafe {
@@ -2226,6 +2306,8 @@ extern "C" fn page_usage_report(z_prg_1: *const i8, z_db_name_1: *const i8)
     }
 }
 
+///* Try to figure out how every page in the database file is being used.
+#[allow(unused_doc_comments)]
 extern "C" fn ptrmap_coverage_report(z_db_name_1: *const i8) -> () {
     unsafe {
         let mut pgno: u64 = 0 as u64;
@@ -2240,7 +2322,9 @@ extern "C" fn ptrmap_coverage_report(z_db_name_1: *const i8) -> () {
             };
             return;
         }
-        a_hdr = file_read(0 as Sqlite3Int64, 100);
+
+        /// Make sure PTRMAPs are used in this database
+        (a_hdr = file_read(0 as Sqlite3Int64, 100));
         if unsafe { *a_hdr.offset(55 as isize) } as i32 == 0 {
             unsafe {
                 printf(c"database does not use PTRMAP pages\n".as_ptr() as
@@ -2341,6 +2425,8 @@ extern "C" fn ptrmap_coverage_report(z_db_name_1: *const i8) -> () {
     }
 }
 
+///* Check the range validity for a page number.  Print an error and
+///* exit if the page is out of range.
 extern "C" fn check_page_validity(i_page_1: u32) -> () {
     unsafe {
         if i_page_1 < 1 as u32 || i_page_1 > g.mx_page {
@@ -2350,6 +2436,7 @@ extern "C" fn check_page_validity(i_page_1: u32) -> () {
     }
 }
 
+///* Print a usage comment
 extern "C" fn usage(argv0: *const i8) -> () {
     unsafe {
         unsafe {
@@ -2361,12 +2448,14 @@ extern "C" fn usage(argv0: *const i8) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut sz_file: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut z_pg_sz: *mut u8 = core::ptr::null_mut();
         let z_prg: *const i8 =
             unsafe { *argv.offset(0 as isize) } as *const i8;
+        /// Name of this executable
         let mut az_arg: *const *mut i8 = argv as *const *mut i8;
         let mut n_arg: i32 = argc;
         while n_arg > 1 &&

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 const TCL_QUEUE_TAIL: u32 = 0;
 
@@ -473,6 +488,7 @@ struct EvalEvent {
     interp: *mut TclInterp,
 }
 
+///* Handler for events of type EvalEvent.
 extern "C" fn tcl_script_event(ev_ptr_1: *mut TclEvent, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let p: *const EvalEvent = ev_ptr_1 as *mut EvalEvent as *const EvalEvent;
@@ -486,6 +502,15 @@ extern "C" fn tcl_script_event(ev_ptr_1: *mut TclEvent, flags: i32) -> i32 {
     return 1;
 }
 
+///* sqlthread parent SCRIPT
+///*
+///*     This can be called by spawned threads only. It sends the specified
+///*     script back to the parent thread for execution. The result of
+///*     evaluating the SCRIPT is returned. The parent thread must enter
+///*     the event loop for this to work - otherwise the caller will
+///*     block indefinitely.
+///*
+///*     NOTE: At the moment, this doesn't work. FIXME.
 extern "C" fn sqlthread_parent(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_event: *mut EvalEvent = core::ptr::null_mut();
@@ -531,6 +556,11 @@ extern "C" fn sqlthread_parent(client_data_1: ClientData,
     return 0;
 }
 
+///* The [clock_seconds] command. This is more or less the same as the
+///* regular tcl [clock seconds], except that it is available in testfixture
+///* when linked against both Tcl 8.4 and 8.5. Because [clock seconds] is
+///* implemented as a script in Tcl 8.5, it is not usually available to
+///* testfixture.
 extern "C" fn clock_seconds_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut now: TclTime = unsafe { core::mem::zeroed() };
@@ -544,6 +574,8 @@ extern "C" fn clock_seconds_proc(client_data_1: ClientData,
     return 0;
 }
 
+///* Register an EvalEvent to evaluate the script pScript in the
+///* parent interpreter/thread of SqlThread p.
 extern "C" fn post_to_parent(p: &SqlThread, p_script_1: *mut TclObj) -> () {
     let mut p_event: *mut EvalEvent = core::ptr::null_mut();
     let mut z_msg: *const i8 = core::ptr::null();
@@ -572,6 +604,7 @@ extern "C" fn post_to_parent(p: &SqlThread, p_script_1: *mut TclObj) -> () {
     unsafe { Tcl_ThreadAlert((*p).parent) };
 }
 
+///* The main function for threads created with [sqlthread spawn].
 extern "C" fn tcl_script_thread(p_sql_thread_1: ClientData) -> () {
     let mut interp: *mut TclInterp = core::ptr::null_mut();
     let mut p_res: *mut TclObj = core::ptr::null_mut();
@@ -676,6 +709,15 @@ extern "C" fn tcl_script_thread(p_sql_thread_1: ClientData) -> () {
     unsafe { Tcl_ExitThread(0) };
 }
 
+///* sqlthread spawn VARNAME SCRIPT
+///*
+///*     Spawn a new thread with its own Tcl interpreter and run the
+///*     specified SCRIPT(s) in it. The thread terminates after running
+///*     the script. The result of the script is stored in the variable
+///*     VARNAME.
+///*
+///*     The caller can wait for the script to terminate using [vwait VARNAME].
+#[allow(unused_doc_comments)]
 extern "C" fn sqlthread_spawn(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut x: TclThreadId = core::ptr::null_mut();
@@ -685,6 +727,7 @@ extern "C" fn sqlthread_spawn(client_data_1: ClientData,
     let mut z_varname: *const i8 = core::ptr::null();
     let mut n_script: i32 = 0;
     let mut z_script: *const i8 = core::ptr::null();
+    /// Parameters for thread creation
     let n_stack: i32 = 0 as i32;
     let flags: i32 = 0 as i32;
     { let _ = 0; };
@@ -751,6 +794,10 @@ extern "C" fn x_busy(p_arg_1: *mut (), n_busy_1: i32) -> i32 {
     return 1;
 }
 
+///* sqlthread open
+///*
+///*     Open a database handle and return the string representation of
+///*     the pointer value.
 extern "C" fn sqlthread_open(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut z_filename: *const i8 = core::ptr::null();
@@ -777,6 +824,10 @@ extern "C" fn sqlthread_open(client_data_1: ClientData,
     return 0;
 }
 
+///* sqlthread open
+///*
+///*     Return the current thread-id (Tcl_GetCurrentThread()) cast to
+///*     an integer.
 extern "C" fn sqlthread_id(client_data_1: ClientData, interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let id: *const Tcl_ThreadId_ =
@@ -790,6 +841,7 @@ extern "C" fn sqlthread_id(client_data_1: ClientData, interp: *mut TclInterp,
     return 0;
 }
 
+///* Dispatch routine for the sub-commands of [sqlthread].
 extern "C" fn sqlthread_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut a_sub: [SubCommandN10SubCommand; 5] =
@@ -859,6 +911,8 @@ extern "C" fn sqlthread_proc(client_data_1: ClientData,
         };
 }
 
+///* The [clock_milliseconds] command. This is more or less the same as the
+///* regular tcl [clock milliseconds].
 extern "C" fn clock_milliseconds_proc(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut now: TclTime = unsafe { core::mem::zeroed() };
@@ -876,6 +930,7 @@ extern "C" fn clock_milliseconds_proc(client_data_1: ClientData,
     return 0;
 }
 
+///* Register commands with the TCL interpreter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest_thread_init(interp: *mut TclInterp) -> i32 {
     let a_cmd: [TclCmdN6TclCmd; 3] =

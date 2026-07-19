@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -395,6 +410,8 @@ impl Parse {
     }
 }
 
+///* This structure is used to pass data from sqlite3_get_table() through
+///* to the callback function is uses to build the result.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TabResult {
@@ -407,14 +424,27 @@ struct TabResult {
     rc: i32,
 }
 
+///* This routine is called once for each row in the result table.  Its job
+///* is to fill in the TabResult structure appropriately, allocating new
+///* memory as necessary.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_get_table_cb(p_arg_1: *mut (), n_col_1: i32,
     argv: *mut *mut i8, colv: *mut *mut i8) -> i32 {
     unsafe {
         let mut p: *mut TabResult = core::ptr::null_mut();
+        /// Result accumulator
         let mut need: i32 = 0;
+        /// Slots needed in p->azResult[]
         let mut i: i32 = 0;
+        /// Loop counter
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// A single column of result
+        /// Make sure there is enough space in p->azResult to hold everything
+        ///* we need to remember from this invocation of the callback.
         let mut az_new: *mut *mut i8 = core::ptr::null_mut();
+        /// If this is the first row, then generate an extra row containing
+        ///* the names of all columns.
+        /// Copy over the row data
         let mut n: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -607,10 +637,21 @@ extern "C" fn sqlite3_get_table_cb(p_arg_1: *mut (), n_col_1: i32,
                 }
             }
         }
+
+        /// Result accumulator
+        /// Slots needed in p->azResult[]
+        /// Loop counter
+        /// A single column of result
+        /// Make sure there is enough space in p->azResult to hold everything
+        ///* we need to remember from this invocation of the callback.
+        /// If this is the first row, then generate an extra row containing
+        ///* the names of all columns.
+        /// Copy over the row data
         unreachable!();
     }
 }
 
+///* This routine frees the space the sqlite3_get_table() malloced.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_free_table(mut az_result: *mut *mut i8) -> () {
     if !(az_result).is_null() {
@@ -644,7 +685,79 @@ pub extern "C" fn sqlite3_free_table(mut az_result: *mut *mut i8) -> () {
     }
 }
 
+///* CAPI3REF: Convenience Routines For Running Queries
+///* METHOD: sqlite3
+///*
+///* This is a legacy interface that is preserved for backwards compatibility.
+///* Use of this interface is not recommended.
+///*
+///* Definition: A <b>result table</b> is a memory data structure created by the
+///* [sqlite3_get_table()] interface.  A result table records the
+///* complete query results from one or more queries.
+///*
+///* The table conceptually has a number of rows and columns.  But
+///* these numbers are not part of the result table itself.  These
+///* numbers are obtained separately.  Let N be the number of rows
+///* and M be the number of columns.
+///*
+///* A result table is an array of pointers to zero-terminated UTF-8 strings.
+///* There are (N+1)*M elements in the array.  The first M pointers point
+///* to zero-terminated strings that  contain the names of the columns.
+///* The remaining entries all point to query results.  NULL values result
+///* in NULL pointers.  All other values are in their UTF-8 zero-terminated
+///* string representation as returned by [sqlite3_column_text()].
+///*
+///* A result table might consist of one or more memory allocations.
+///* It is not safe to pass a result table directly to [sqlite3_free()].
+///* A result table should be deallocated using [sqlite3_free_table()].
+///*
+///* ^(As an example of the result table format, suppose a query result
+///* is as follows:
+///*
+///* <blockquote><pre>
+///*        Name        | Age
+///*        -----------------------
+///*        Alice       | 43
+///*        Bob         | 28
+///*        Cindy       | 21
+///* </pre></blockquote>
+///*
+///* There are two columns (M==2) and three rows (N==3).  Thus the
+///* result table has 8 entries.  Suppose the result table is stored
+///* in an array named azResult.  Then azResult holds this content:
+///*
+///* <blockquote><pre>
+///*        azResult&#91;0] = "Name";
+///*        azResult&#91;1] = "Age";
+///*        azResult&#91;2] = "Alice";
+///*        azResult&#91;3] = "43";
+///*        azResult&#91;4] = "Bob";
+///*        azResult&#91;5] = "28";
+///*        azResult&#91;6] = "Cindy";
+///*        azResult&#91;7] = "21";
+///* </pre></blockquote>)^
+///*
+///* ^The sqlite3_get_table() function evaluates one or more
+///* semicolon-separated SQL statements in the zero-terminated UTF-8
+///* string of its 2nd parameter and returns a result table to the
+///* pointer given in its 3rd parameter.
+///*
+///* After the application has finished with the result from sqlite3_get_table(),
+///* it must pass the result table pointer to sqlite3_free_table() in order to
+///* release the memory that was malloced.  Because of the way the
+///* [sqlite3_malloc()] happens within sqlite3_get_table(), the calling
+///* function must not try to call [sqlite3_free()] directly.  Only
+///* [sqlite3_free_table()] is able to release the memory properly and safely.
+///*
+///* The sqlite3_get_table() interface is implemented as a wrapper around
+///* [sqlite3_exec()].  The sqlite3_get_table() routine does not have access
+///* to any internal data structures of SQLite.  It uses only the public
+///* interface defined here.  As a consequence, errors that occur in the
+///* wrapper layer outside of the internal [sqlite3_exec()] call are not
+///* reflected in subsequent calls to [sqlite3_errcode()] or
+///* [sqlite3_errmsg()].
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_get_table(db: *mut Sqlite3, z_sql_1: *const i8,
     paz_result_1: &mut *mut *mut i8, pn_row_1: *mut i32,
     pn_column_1: *mut i32, pz_err_msg_1: *mut *mut i8) -> i32 {
@@ -703,6 +816,8 @@ pub extern "C" fn sqlite3_get_table(db: *mut Sqlite3, z_sql_1: *const i8,
                 unsafe { sqlite3_free(res.z_err_msg as *mut ()) };
             }
             unsafe { (*db).err_code = res.rc };
+
+            /// Assume 32-bit assignment is atomic
             return res.rc;
         }
         unsafe { sqlite3_free(res.z_err_msg as *mut ()) };

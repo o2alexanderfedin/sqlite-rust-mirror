@@ -1,4 +1,6 @@
 use super::*;
+use crate::fts5_h::{Fts5Tokenizer, Fts5TokenizerV2, fts5_tokenizer};
+use crate::sqlite3_h::{Sqlite3, Sqlite3Vtab};
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -6,6 +8,11 @@ pub(crate) struct Fts5Global {
     pub(crate) _opaque: [u8; 0],
 }
 
+/// If a NEAR() clump or phrase may only match a specific set of columns, 
+///* then an object of the following type is used to record the set of columns.
+///* Each entry in the aiCol[] array is a column that may be matched.
+///*
+///* This object is used by fts5_expr.c and fts5_index.c.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Colset {
@@ -13,6 +20,45 @@ pub(crate) struct Fts5Colset {
     pub(crate) ai_col: [i32; 0],
 }
 
+///* An instance of the following structure encodes all information that can
+///* be gleaned from the CREATE VIRTUAL TABLE statement.
+///*
+///* And all information loaded from the %_config table.
+///*
+///* nAutomerge:
+///*   The minimum number of segments that an auto-merge operation should
+///*   attempt to merge together. A value of 1 sets the object to use the 
+///*   compile time default. Zero disables auto-merge altogether.
+///*
+///* bContentlessDelete:
+///*   True if the contentless_delete option was present in the CREATE 
+///*   VIRTUAL TABLE statement.
+///*
+///* zContent:
+///*
+///* zContentRowid:
+///*   The value of the content_rowid= option, if one was specified. Or 
+///*   the string "rowid" otherwise. This text is not quoted - if it is
+///*   used as part of an SQL statement it needs to be quoted appropriately.
+///*
+///* zContentExprlist:
+///*
+///* pzErrmsg:
+///*   This exists in order to allow the fts5_index.c module to return a 
+///*   decent error message if it encounters a file-format version it does
+///*   not understand.
+///*
+///* bColumnsize:
+///*   True if the %_docsize table is created.
+///*
+///* bPrefixIndex:
+///*   This is only used for debugging. If set to false, any prefix indexes
+///*   are ignored. This value is configured using:
+///*
+///*       INSERT INTO tbl(tbl, rank) VALUES('prefix-index', $bPrefixIndex);
+///*
+///* bLocale:
+///*   Set to true if locale=1 was specified when the table was created.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Config {
@@ -90,12 +136,16 @@ pub(crate) struct Fts5PoslistWriter {
     pub(crate) i_prev: i64,
 }
 
+/// Bucket of terms object used by the integrity-check in offsets=0 mode.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Termset {
     pub(crate) _opaque: [u8; 0],
 }
 
+///***********************************************************************
+///* Interface to code in fts5_index.c. fts5_index.c contains contains code
+///* to access the data stored in the %_data table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Index {
@@ -119,12 +169,16 @@ pub(crate) struct Fts5Table {
     pub(crate) p_index: *mut Fts5Index,
 }
 
+///***********************************************************************
+///* Interface to code in fts5_hash.c.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Hash {
     pub(crate) _opaque: [u8; 0],
 }
 
+///***********************************************************************
+///* Interface to code in fts5_expr.c.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct Fts5Expr {

@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -152,6 +158,8 @@ struct ZipfileTab {
     sz_orig: i64,
 }
 
+///* Set the error message contained in context ctx to the results of
+///* vprintf(zFmt, ...).
 unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -163,6 +171,8 @@ unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     ();
 }
 
+///* If string zIn is quoted, dequote it in place. Otherwise, if the string
+///* is not quoted, do nothing.
 extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
     let mut q: i8 = unsafe { *z_in_1.offset(0 as isize) };
     if q as i32 == '\"' as i32 || q as i32 == '\'' as i32 ||
@@ -217,6 +227,13 @@ extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
     }
 }
 
+///* Construct a new ZipfileTab virtual table object.
+///* 
+///*   argv[0]   -> module name  ("zipfile")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> "column name" and other module argument fields.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -228,6 +245,15 @@ extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     let mut p_new: *mut ZipfileTab = core::ptr::null_mut();
     let mut rc: i32 = 0;
     { let _ = p_aux_1; };
+
+    /// If the table name is not "zipfile", require that the argument be
+    ///* specified. This stops zipfile tables from being created as:
+    ///*
+    ///*   CREATE VIRTUAL TABLE zzz USING zipfile();
+    ///*
+    ///* It does not prevent:
+    ///*
+    ///*   CREATE VIRTUAL TABLE zipfile USING zipfile();
     if !(0 ==
                             unsafe {
                                 sqlite3_stricmp(unsafe { *argv.offset(0 as isize) },
@@ -297,6 +323,7 @@ extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Free the ZipfileEntry structure indicated by the only argument.
 extern "C" fn zipfile_entry_free(p: *mut ZipfileEntry) -> () {
     if !(p).is_null() {
         unsafe { sqlite3_free(unsafe { (*p).cds.z_file } as *mut ()) };
@@ -304,6 +331,8 @@ extern "C" fn zipfile_entry_free(p: *mut ZipfileEntry) -> () {
     }
 }
 
+///* Release resources that should be freed at the end of a write 
+///* transaction.
 extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     let mut p_entry: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -329,6 +358,7 @@ extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     (*p_tab_1).sz_orig = 0 as i64;
 }
 
+///* This method is the destructor for zipfile vtab objects.
 extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     zipfile_cleanup_transaction(unsafe {
             &mut *(p_vtab_1 as *mut ZipfileTab)
@@ -337,6 +367,7 @@ extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Constructor for a new ZipfileCsr object.
 extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     pp_csr_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut ZipfileTab = p as *mut ZipfileTab;
@@ -364,6 +395,8 @@ extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset a cursor back to the state it was in when first returned
+///* by zipfileOpen().
 extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     let mut p: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -389,6 +422,7 @@ extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     (*p_csr_1).p_free_entry = core::ptr::null_mut();
 }
 
+///* Destructor for an ZipfileCsr.
 extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let p_tab: *mut ZipfileTab =
@@ -408,6 +442,8 @@ extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Set the error message for the virtual table associated with cursor
+///* pCsr to the results of vprintf(zFmt, ...).
 unsafe extern "C" fn zipfile_table_err(p_tab_1: &mut ZipfileTab,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -432,6 +468,14 @@ unsafe extern "C" fn zipfile_cursor_err(p_csr_1: &ZipfileCsr,
     ();
 }
 
+///* Read nRead bytes of data from offset iOff of file pFile into buffer
+///* aRead[]. Return SQLITE_OK if successful, or an SQLite error code
+///* otherwise. 
+///*
+///* If an error does occur, output variable (*pzErrmsg) may be set to point
+///* to an English language error message. It is the responsibility of the
+///* caller to eventually free this buffer using
+///* sqlite3_free().
 extern "C" fn zipfile_read_data(p_file_1: *mut FILE, a_read_1: *mut u8,
     n_read_1: i64, i_off_1: i64, pz_errmsg_1: &mut *mut i8) -> i32 {
     let mut n: u64 = 0 as u64;
@@ -478,11 +522,13 @@ extern "C" fn zipfile_append_data(p_tab_1: *mut ZipfileTab,
     return 0;
 }
 
+///* Read and return a 16-bit little-endian unsigned integer from buffer aBuf.
 extern "C" fn zipfile_get_u16(a_buf_1: *const u8) -> u16 {
     return (((unsafe { *a_buf_1.offset(1 as isize) } as i32) << 8) +
                 unsafe { *a_buf_1.offset(0 as isize) } as i32) as u16;
 }
 
+///* Read and return a 32-bit little-endian unsigned integer from buffer aBuf.
 extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
     if a_buf_1 == core::ptr::null() { return 0 as u32; }
     return ((unsafe { *a_buf_1.offset(3 as isize) } as u32) << 24) +
@@ -491,11 +537,13 @@ extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
             ((unsafe { *a_buf_1.offset(0 as isize) } as u32) << 0);
 }
 
+///* Write a 16-bit little endiate integer into buffer aBuf.
 extern "C" fn zipfile_put_u16(a_buf_1: *mut u8, val: u16) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val as i32 & 255) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val as i32 >> 8 & 255) as u8 };
 }
 
+///* Write a 32-bit little endiate integer into buffer aBuf.
 extern "C" fn zipfile_put_u32(a_buf_1: *mut u8, val: u32) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val & 255 as u32) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val >> 8 & 255 as u32) as u8 };
@@ -503,6 +551,8 @@ extern "C" fn zipfile_put_u32(a_buf_1: *mut u8, val: u32) -> () {
     unsafe { *a_buf_1.offset(3 as isize) = (val >> 24 & 255 as u32) as u8 };
 }
 
+///* Decode the CDS record in buffer aBuf into (*pCDS). Return SQLITE_ERROR
+///* if the record is not well-formed, or SQLITE_OK otherwise.
 extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     -> i32 {
     let mut a_read: *mut u8 = a_buf_1;
@@ -702,6 +752,8 @@ extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     return rc;
 }
 
+///* Decode the LFH record in buffer aBuf into (*pLFH). Return SQLITE_ERROR
+///* if the record is not well-formed, or SQLITE_OK otherwise.
 extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     -> i32 {
     let mut a_read: *const u8 = a_buffer_1 as *const u8;
@@ -824,6 +876,20 @@ extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     return rc;
 }
 
+///* Buffer aExtra (size nExtra bytes) contains zip archive "extra" fields.
+///* Scan through this buffer to find an "extra-timestamp" field. If one
+///* exists, extract the 32-bit modification-timestamp from it and store
+///* the value in output parameter *pmTime.
+///*
+///* Zero is returned if no extra-timestamp record could be found (and so
+///* *pmTime is left unchanged), or non-zero otherwise.
+///*
+///* The general format of an extra field is:
+///*
+///*   Header ID    2 bytes
+///*   Data Size    2 bytes
+///*   Data         N bytes
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     pm_time_1: &mut u32) -> i32 {
     let mut ret: i32 = 0;
@@ -861,9 +927,11 @@ extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
                     {
                         let b: u8 = unsafe { *p.offset(0 as isize) };
                         if b as i32 & 1 != 0 {
-                            *pm_time_1 =
+
+                            /// 0x01 -> modtime is present
+                            (*pm_time_1 =
                                 zipfile_get_u32(unsafe { &raw mut *p.offset(1 as isize) } as
-                                        *const u8);
+                                        *const u8));
                             ret = 1;
                         }
                         break '__s5;
@@ -881,6 +949,22 @@ extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     return ret;
 }
 
+///* Convert the standard MS-DOS timestamp stored in the mTime and mDate
+///* fields of the CDS structure passed as the only argument to a 32-bit
+///* UNIX seconds-since-the-epoch timestamp. Return the result.
+///*
+///* "Standard" MS-DOS time format:
+///*
+///*   File modification time:
+///*     Bits 00-04: seconds divided by 2
+///*     Bits 05-10: minute
+///*     Bits 11-15: hour
+///*   File modification date:
+///*     Bits 00-04: day
+///*     Bits 05-08: month (1-12)
+///*     Bits 09-15: years from 1980 
+///*
+///* https://msdn.microsoft.com/en-us/library/9kkf9tah.aspx
 extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
     let mut y: i32 = 0;
     let mut m: i32 = 0;
@@ -913,8 +997,13 @@ extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
     return (j_dsec - 24405875 as i64 * 8640 as i64) as u32;
 }
 
+///* The opposite of zipfileMtime(). This function populates the mTime and
+///* mDate fields of the CDS structure passed as the first argument according
+///* to the UNIX timestamp value passed as the second.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
     m_unix_time_1: u32) -> () {
+    /// Convert unix timestamp to JD (2440588 is noon on 1/1/1970)
     let jd: i64 =
         2440588 as i64 + (m_unix_time_1 / (24 * 60 * 60) as u32) as i64;
     let mut a: i32 = 0;
@@ -970,6 +1059,8 @@ extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
     } else { { let _ = 0; } };
 }
 
+///* Set (*pzErr) to point to a buffer from sqlite3_malloc() containing a 
+///* generic corruption message and return SQLITE_CORRUPT;
 extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
     unsafe { sqlite3_free(*pz_err_1 as *mut ()) };
     *pz_err_1 =
@@ -980,6 +1071,16 @@ extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
     return 11;
 }
 
+///* If aBlob is not NULL, then it is a pointer to a buffer (nBlob bytes in
+///* size) containing an entire zip archive image. Or, if aBlob is NULL,
+///* then pFile is a file-handle open on a zip file. In either case, this
+///* function creates a ZipfileEntry object based on the zip archive entry
+///* for which the CDS record is at offset iOff.
+///*
+///* If successful, SQLITE_OK is returned and (*ppEntry) set to point to
+///* the new object. Otherwise, an SQLite error code is returned and the
+///* final value of (*ppEntry) undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, i_off_1: i64,
     pp_entry_1: &mut *mut ZipfileEntry) -> i32 {
@@ -993,6 +1094,8 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
                 unsafe { &mut *pz_err });
     } else {
         if i_off_1 + 46 as i64 > n_blob_1 {
+
+            /// Not enough data for the CDS structure. Corruption.
             return zipfile_corrupt(unsafe { &mut *pz_err });
         }
         a_read =
@@ -1058,9 +1161,12 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
         if rc == 0 {
             let pt: *mut u32 = unsafe { &mut (*p_new).m_unix_time };
             unsafe {
-                (*p_new).cds.z_file =
+
+                /// aRead[0..nFile-1] might contain embedded \000 characters
+                ///* See Bug 2026-05-31T11:43:05Z
+                ((*p_new).cds.z_file =
                     unsafe { sqlite3_malloc64((n_file + 1) as Sqlite3Uint64) }
-                        as *mut i8
+                        as *mut i8)
             };
             if unsafe { (*p_new).cds.z_file } != core::ptr::null_mut() {
                 unsafe {
@@ -1163,6 +1269,7 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     return rc;
 }
 
+///* Advance an ZipfileCsr to its next row of output.
 extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let mut rc: i32 = 0;
@@ -1210,6 +1317,11 @@ extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
 
 extern "C" fn zipfile_free(p: *mut ()) -> () { unsafe { sqlite3_free(p) }; }
 
+///* Buffer aIn (size nIn bytes) contains compressed data. Uncompressed, the
+///* size is nOut bytes. This function uncompresses the data and sets the
+///* return value in context pCtx to the result (a blob).
+///*
+///* If an error occurs, an error code is left in pCtx instead.
 extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
     n_in_1: i32, n_out_1: i32) -> () {
     let mut a_res: *mut u8 =
@@ -1260,6 +1372,16 @@ extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
     }
 }
 
+///* Buffer aIn (size nIn bytes) contains uncompressed data. This function
+///* compresses it and sets (*ppOut) to point to a buffer containing the
+///* compressed data. The caller is responsible for eventually calling
+///* sqlite3_free() to release buffer (*ppOut). Before returning, (*pnOut) 
+///* is set to the size of buffer (*ppOut) in bytes.
+///*
+///* If no error occurs, SQLITE_OK is returned. Otherwise, an SQLite error
+///* code is returned and an error message left in virtual-table handle
+///* pTab. The values of (*ppOut) and (*pnOut) are left unchanged in this
+///* case.
 extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     pp_out_1: &mut *mut u8, pn_out_1: &mut i32, pz_err_1: &mut *mut i8)
     -> i32 {
@@ -1305,6 +1427,9 @@ extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     return rc;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
@@ -1334,6 +1459,8 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
             }
             2 => {
                 {
+
+                    /// mtime
                     unsafe {
                         sqlite3_result_int64(ctx,
                             unsafe { (*unsafe { (*p_csr).p_current }).m_unix_time } as
@@ -1406,6 +1533,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -1495,6 +1625,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -1575,6 +1708,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -1654,6 +1790,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -1700,16 +1839,28 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     return rc;
 }
 
+///* Return TRUE if the cursor is at EOF.
 extern "C" fn zipfile_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ZipfileCsr =
         cur as *mut ZipfileCsr as *const ZipfileCsr;
     return unsafe { (*p_csr).b_eof } as i32;
 }
 
+///* If aBlob is not NULL, then it points to a buffer nBlob bytes in size
+///* containing an entire zip archive image. Or, if aBlob is NULL, then pFile
+///* is guaranteed to be a file-handle open on a zip file.
+///*
+///* This function attempts to locate the EOCD record within the zip archive
+///* and populate *pEOCD with the results of decoding it. SQLITE_OK is
+///* returned if successful. Otherwise, an SQLite error code is returned and
+///* an English language error message may be left in virtual-table pTab.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, p_eocd_1: *mut ZipfileEOCD) -> i32 {
     let mut a_read: *mut u8 = unsafe { (*p_tab_1).a_buffer };
+    /// Temporary buffer
     let mut n_read: i64 = 0 as i64;
+    /// Bytes to read from file
     let mut rc: i32 = 0;
     unsafe {
         memset(p_eocd_1 as *mut (), 0,
@@ -1717,7 +1868,10 @@ extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     };
     if a_blob_1 == core::ptr::null() {
         let mut i_off: i64 = 0 as i64;
+        /// Offset to read from
         let mut sz_file: i64 = 0 as i64;
+
+        /// Total size of file in bytes
         unsafe { fseek(p_file_1, 0 as i64, 2) };
         sz_file = unsafe { ftell(p_file_1) } as i64;
         if sz_file == 0 as i64 { return 0; }
@@ -1849,6 +2003,10 @@ extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     return rc;
 }
 
+///* Add object pNew to the linked list that begins at ZipfileTab.pFirstEntry 
+///* and ends with pLastEntry. If argument pBefore is NULL, then pNew is added
+///* to the end of the list. Otherwise, it is added to the list immediately
+///* before pBefore (which is guaranteed to be a part of said list).
 extern "C" fn zipfile_add_entry(p_tab_1: &mut ZipfileTab,
     p_before_1: *mut ZipfileEntry, p_new_1: *mut ZipfileEntry) -> () {
     if !(((*p_tab_1).p_first_entry == core::ptr::null_mut()) as i32 ==
@@ -1940,15 +2098,25 @@ extern "C" fn zipfile_load_directory(p_tab_1: *mut ZipfileTab,
     return rc;
 }
 
+///* xFilter callback.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_tab: *mut ZipfileTab = unsafe { (*cur).p_vtab } as *mut ZipfileTab;
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let mut z_file: *const i8 = core::ptr::null();
+    /// Zip file to scan
     let mut rc: i32 = 0;
+    /// Return Code
     let mut b_in_memory: i32 = 0;
+
+    /// True for an in-memory zipfile
     { let _ = idx_str_1; };
+
+    /// True for an in-memory zipfile
     { let _ = argc; };
+
+    /// True for an in-memory zipfile
     zipfile_reset_cursor(unsafe { &mut *p_csr });
     if !(unsafe { (*p_tab).z_file }).is_null() {
         z_file = unsafe { (*p_tab).z_file } as *const i8;
@@ -2043,6 +2211,7 @@ extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+///* xBestIndex callback.
 extern "C" fn zipfile_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -2115,6 +2284,7 @@ extern "C" fn zipfile_new_entry(z_path_1: *const i8) -> *mut ZipfileEntry {
     return p_new;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let p_cds: *mut ZipfileCDS = &mut (*p_entry_1).cds;
@@ -2216,6 +2386,8 @@ extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
                     *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// Add the file name
     unsafe {
         memcpy(a as *mut (), unsafe { (*p_cds).z_file } as *const (),
             unsafe { (*p_cds).n_file } as i32 as u64)
@@ -2274,6 +2446,7 @@ extern "C" fn zipfile_append_entry(p_tab_1: *mut ZipfileTab,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
     p_mode_1: &mut u32, pz_err_1: &mut *mut i8) -> i32 {
     let mut z: *const i8 = core::ptr::null();
@@ -2393,9 +2566,15 @@ extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
             }
         }
     }
+
+    /// The "mode" attribute is a directory, but data has been specified.
+    ///* Or vice-versa - no data but "mode" is a file or symlink.
     unreachable!();
 }
 
+///* Both (const char*) arguments point to nul-terminated strings. Argument
+///* nB is the value of strlen(zB). This function returns 0 if the strings are
+///* identical, ignoring any trailing '/' character in either path.
 extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     mut n_b_1: i32) -> i32 {
     let mut n_a: i32 = unsafe { strlen(z_a_1) } as i32;
@@ -2418,6 +2597,7 @@ extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     return 1;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -2438,6 +2618,11 @@ extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
         };
         return 1;
     }
+
+    /// Open a write fd on the file. Also load the entire central directory
+    ///* structure into memory. During the transaction any new file data is 
+    ///* appended to the archive file, but the central directory is accumulated
+    ///* in main-memory until the transaction is committed.
     unsafe {
         (*p_tab).p_write_fd =
             unsafe {
@@ -2470,6 +2655,8 @@ extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+///* Return the current time as a 32-bit timestamp in UNIX epoch format (like
+///* time(2)).
 extern "C" fn zipfile_time() -> u32 {
     let p_vfs: *mut Sqlite3Vfs =
         unsafe { sqlite3_vfs_find(core::ptr::null()) };
@@ -2494,6 +2681,11 @@ extern "C" fn zipfile_time() -> u32 {
     return ret;
 }
 
+///* Return a 32-bit timestamp in UNIX epoch format.
+///*
+///* If the value passed as the only argument is either NULL or an SQL NULL,
+///* return the current time. Otherwise, return the value stored in (*pVal)
+///* cast to a 32-bit unsigned integer.
 extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     if p_val_1 == core::ptr::null_mut() ||
             unsafe { sqlite3_value_type(p_val_1) } == 5 {
@@ -2502,6 +2694,8 @@ extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     return unsafe { sqlite3_value_int64(p_val_1) } as u32;
 }
 
+///* Unless it is NULL, entry pOld is currently part of the pTab->pFirstEntry
+///* linked list.  Remove it from the list and free the object.
 extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
     p_old_1: *mut ZipfileEntry) -> () {
     if !(p_old_1).is_null() {
@@ -2534,34 +2728,61 @@ extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
     }
 }
 
+///* xUpdate method.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let mut p_tab: *mut ZipfileTab = core::ptr::null_mut();
     let mut rc: i32 = 0;
+    /// Return Code
     let mut p_new: *mut ZipfileEntry = core::ptr::null_mut();
+    /// New in-memory CDS entry
     let mut mode: u32 = 0 as u32;
+    /// Mode for new entry
     let mut m_time: u32 = 0 as u32;
+    /// Modification time for new entry
     let mut sz: i64 = 0 as i64;
+    /// Uncompressed size
     let mut z_path: *const i8 = core::ptr::null();
+    /// Path for new entry
     let mut n_path: i32 = 0;
+    /// strlen(zPath)
     let mut p_data: *const u8 = core::ptr::null();
+    /// Pointer to buffer containing content
     let mut n_data: i32 = 0;
+    /// Size of pData buffer in bytes
     let mut i_method: i32 = 0;
+    /// Compression method for new entry
     let mut p_free: *mut u8 = core::ptr::null_mut();
+    /// Free this
     let mut z_free: *mut i8 = core::ptr::null_mut();
+    /// Also free this
     let mut p_old: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_old2: *mut ZipfileEntry = core::ptr::null_mut();
     let mut b_update: i32 = 0;
+    /// True for an update that modifies "name"
     let mut b_is_dir: i32 = 0;
     let mut i_crc32: u32 = 0 as u32;
+    /// If this is a DELETE or UPDATE, find the archive entry to delete.
     let mut z_delete: *const i8 = core::ptr::null();
     let mut n_delete: i32 = 0;
     let mut z_update: *const i8 = core::ptr::null();
+    /// Check that "sz" and "rawdata" are both NULL:
+    /// data=NULL. A directory
+    /// Value specified for "data", and possibly "method". This must be
+    ///* a regular file or a symlink.
     let mut a_in: *const u8 = core::ptr::null();
     let mut n_in: i32 = 0;
     let mut b_auto: i32 = 0;
     let mut n_cmp: i32 = 0;
+    /// For a directory, check that the last character in the path is a
+    ///* '/'. This appears to be required for compatibility with info-zip
+    ///* (the unzip command on unix). It does not create directories
+    ///* otherwise.
+    /// Check that we're not inserting a duplicate entry -OR- updating an
+    ///* entry with a path, thereby making it into a duplicate.
     let mut p: *mut ZipfileEntry = core::ptr::null_mut();
+    /// Create the new CDS record.
     let mut p_csr: *mut ZipfileCsr = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -3023,9 +3244,36 @@ extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
             }
         }
     }
+
+    /// Return Code
+    /// New in-memory CDS entry
+    /// Mode for new entry
+    /// Modification time for new entry
+    /// Uncompressed size
+    /// Path for new entry
+    /// strlen(zPath)
+    /// Pointer to buffer containing content
+    /// Size of pData buffer in bytes
+    /// Compression method for new entry
+    /// Free this
+    /// Also free this
+    /// True for an update that modifies "name"
+    /// If this is a DELETE or UPDATE, find the archive entry to delete.
+    /// Check that "sz" and "rawdata" are both NULL:
+    /// data=NULL. A directory
+    /// Value specified for "data", and possibly "method". This must be
+    ///* a regular file or a symlink.
+    /// For a directory, check that the last character in the path is a
+    ///* '/'. This appears to be required for compatibility with info-zip
+    ///* (the unzip command on unix). It does not create directories
+    ///* otherwise.
+    /// Check that we're not inserting a duplicate entry -OR- updating an
+    ///* entry with a path, thereby making it into a duplicate.
+    /// Create the new CDS record.
     unreachable!();
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
     -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -3093,6 +3341,8 @@ extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
             *__p = unsafe { (*__p).offset(__n as isize) };
         };
     }
+
+    /// Size of trailing comment in bytes
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
 
@@ -3113,6 +3363,8 @@ extern "C" fn zipfile_append_eocd(p_tab_1: *mut ZipfileTab,
             unsafe { (*p_tab_1).a_buffer } as *const u8, n_buf);
 }
 
+///* Serialize the CDS structure into buffer aBuf[]. Return the number
+///* of bytes written.
 extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -3329,6 +3581,7 @@ extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -3354,7 +3607,9 @@ extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
                 p = unsafe { (*p).p_next };
             }
         }
-        eocd.i_disk = 0 as u16;
+
+        /// Write out the EOCD record
+        (eocd.i_disk = 0 as u16);
         eocd.i_first_disk = 0 as u16;
         eocd.n_entry = n_entry as u16;
         eocd.n_entry_total = n_entry as u16;
@@ -3444,6 +3699,7 @@ extern "C" fn zipfile_function_cds(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* xFindFunction method.
 extern "C" fn zipfile_find_function(p_vtab_1: *mut Sqlite3Vtab, n_arg_1: i32,
     z_name_1: *const i8,
     px_func_1:
@@ -3499,10 +3755,19 @@ extern "C" fn zipfile_buffer_grow(p_buf_1: &mut ZipfileBuffer, n_byte_1: i64)
     return 0;
 }
 
+///* xStep() callback for the zipfile() aggregate. This can be called in
+///* any of the following ways:
+///*
+///*   SELECT zipfile(name,data) ...
+///*   SELECT zipfile(name,mode,mtime,data) ...
+///*   SELECT zipfile(name,mode,mtime,data,method) ...
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut ZipfileCtx = core::ptr::null_mut();
+    /// Aggregate function context
     let mut e: ZipfileEntry = unsafe { core::mem::zeroed() };
+    /// New entry to add to zip archive
     let mut p_name: *mut Sqlite3Value = core::ptr::null_mut();
     let mut p_mode: *mut Sqlite3Value = core::ptr::null_mut();
     let mut p_mtime: *mut Sqlite3Value = core::ptr::null_mut();
@@ -3513,15 +3778,31 @@ extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     let mut rc: i32 = 0;
     let mut z_err: *mut i8 = core::ptr::null_mut();
     let mut i_method: i32 = 0;
+    /// Compression method to use (0 or 8)
     let mut a_data: *const u8 = core::ptr::null();
+    /// Possibly compressed data for new entry
     let mut n_data: i32 = 0;
+    /// Size of aData[] in bytes
     let mut sz_uncompressed: i32 = 0;
+    /// Size of data before compression
     let mut a_free: *mut u8 = core::ptr::null_mut();
+    /// Free this before returning
     let mut i_crc32: u32 = 0 as u32;
+    /// crc32 of uncompressed data
     let mut z_name: *mut i8 = core::ptr::null_mut();
+    /// Path (name) of new entry
     let mut n_name: i32 = 0;
+    /// Size of zName in bytes
     let mut z_free: *mut i8 = core::ptr::null_mut();
+    /// Free this before returning
     let mut n_byte: i64 = 0 as i64;
+    /// Martial the arguments into stack variables
+    /// Check that the 'name' parameter looks ok.
+    /// Inspect the 'method' parameter. This must be either 0 (store), 8 (use
+    ///* deflate compression) or NULL (choose automatically).
+    /// Now inspect the data. If this is NULL, then the new entry must be a
+    ///* directory.  Otherwise, figure out whether or not the data should
+    ///* be deflated or simply stored in the zip archive.
     let mut n_out: i32 = 0;
     let mut __state: i32 = 0;
     loop {
@@ -3938,6 +4219,7 @@ extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     }
 }
 
+///* xFinalize() callback for zipfile aggregate function.
 extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     let mut p: *const ZipfileCtx = core::ptr::null();
     let mut eocd: ZipfileEOCD = unsafe { core::mem::zeroed() };
@@ -3991,8 +4273,35 @@ extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     unsafe { sqlite3_free(unsafe { (*p).cds.a } as *mut ()) };
 }
 
+///* Register the "zipfile" virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollback
+        /// xShadowName
+        /// xIntegrity
         let mut rc: i32 =
             unsafe {
                 sqlite3_create_module(db,
@@ -4053,10 +4362,13 @@ extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_zipfile_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
+
+    /// Unused parameter
     return zipfile_register(db);
 }
 

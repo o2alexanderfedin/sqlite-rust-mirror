@@ -1,10 +1,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
+///* Definition of the sqlite3_intarray object.
+///*
+///* The internal representation of an intarray object is subject
+///* to change, is not externally visible, and should be used by
+///* the implementation of intarray only.  This object is opaque
+///* to users.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Intarray {
@@ -13,6 +25,7 @@ struct Sqlite3Intarray {
     x_free: Option<unsafe extern "C" fn(*mut ()) -> ()>,
 }
 
+/// An intarray table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntarrayVtab {
@@ -20,6 +33,7 @@ struct IntarrayVtab {
     p_content: *mut Sqlite3Intarray,
 }
 
+///* Table constructor for the intarray module.
 extern "C" fn intarray_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -46,17 +60,20 @@ extern "C" fn intarray_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Analyse the WHERE condition.
 extern "C" fn intarray_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     return 0;
 }
 
+///* Table destructor for the intarray module.
 extern "C" fn intarray_destroy(p: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut IntarrayVtab = p as *mut IntarrayVtab;
     unsafe { sqlite3_free(p_vtab as *mut ()) };
     return 0;
 }
 
+/// An intarray cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IntarrayCursor {
@@ -64,6 +81,7 @@ struct IntarrayCursor {
     i: i32,
 }
 
+///* Open a new cursor on the intarray table.
 extern "C" fn intarray_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 7;
@@ -84,12 +102,14 @@ extern "C" fn intarray_open(p_v_tab_1: *mut Sqlite3Vtab,
     return rc;
 }
 
+///* Close a intarray table cursor.
 extern "C" fn intarray_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut IntarrayCursor = cur as *mut IntarrayCursor;
     unsafe { sqlite3_free(p_cur as *mut ()) };
     return 0;
 }
 
+///* Reset a intarray table cursor.
 extern "C" fn intarray_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -98,6 +118,7 @@ extern "C" fn intarray_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Advance the cursor to the next row.
 extern "C" fn intarray_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut IntarrayCursor = cur as *mut IntarrayCursor;
     { let __p = unsafe { &mut (*p_cur).i }; let __t = *__p; *__p += 1; __t };
@@ -113,6 +134,7 @@ extern "C" fn intarray_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
                 unsafe { (*unsafe { (*p_vtab).p_content }).n }) as i32;
 }
 
+///* Retrieve a column of data.
 extern "C" fn intarray_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const IntarrayCursor =
@@ -136,6 +158,7 @@ extern "C" fn intarray_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Retrieve the current rowid.
 extern "C" fn intarray_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const IntarrayCursor =
@@ -144,6 +167,8 @@ extern "C" fn intarray_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* A virtual table module that merely echos method calls into TCL
+///* variables.
 static mut intarray_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -173,6 +198,7 @@ static mut intarray_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Free an sqlite3_intarray object.
 extern "C" fn intarray_free(p_x_1: *mut ()) -> () {
     let p: *mut Sqlite3Intarray = p_x_1 as *mut Sqlite3Intarray;
     if unsafe { (*p).x_free.is_some() } {
@@ -183,6 +209,15 @@ extern "C" fn intarray_free(p_x_1: *mut ()) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
 
+///* Invoke this routine to create a specific instance of an intarray object.
+///* The new intarray object is returned by the 3rd parameter.
+///*
+///* Each intarray object corresponds to a virtual table in the TEMP table
+///* with a name of zName.
+///*
+///* Destroy the intarray object by dropping the virtual table.  If not done
+///* explicitly by the application, the virtual table will be dropped implicitly
+///* by the system when the database connection is closed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intarray_create(db: *mut Sqlite3, z_name: *const i8,
     pp_return: &mut *mut Sqlite3Intarray) -> i32 {
@@ -232,6 +267,11 @@ pub extern "C" fn sqlite3_intarray_create(db: *mut Sqlite3, z_name: *const i8,
     }
 }
 
+///* Bind a new array array of integers to a specific intarray object.
+///*
+///* The array of integers bound must be unchanged for the duration of
+///* any query against the corresponding virtual table.  If the integer
+///* array does change or is deallocated undefined behavior will result.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intarray_bind(p_int_array: &mut Sqlite3Intarray,
     n_elements: i32, a_elements: *mut Sqlite3Int64,

@@ -1,13 +1,44 @@
+//!* 2025-10-14
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* Test the ability of run-time extension loading to use the
+//!* very latest interfaces.
+//!*
+//!* Compile something like this:
+//!*
+//!* Linux:  gcc -g -fPIC shared testloadext.c -o testloadext.so
+//!*
+//!* Mac:    cc -g -fPIC -dynamiclib testloadext.c -o testloadext.dylib
+//!*
+//!* Win11:  cl testloadext.c -link -dll -out:testloadext.dll
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 #[unsafe(no_mangle)]
 pub static mut sqlite3_api: *const Sqlite3ApiRoutines = core::ptr::null();
 
+///* Implementation of the set_errmsg(CODE,MSG) SQL function.
+///*
+///* Raise an error that has numeric code CODE and text message MSG
+///* using the sqlite3_set_errmsg() API.
 extern "C" fn seterrmsgfunc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -68,6 +99,9 @@ extern "C" fn seterrmsgfunc(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the tempbuf_spill() SQL function.
+///*
+///* Return the value of SQLITE_DBSTATUS_TEMPBUF_SPILL.
 extern "C" fn tempbuf_spill_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -110,13 +144,16 @@ extern "C" fn tempbuf_spill_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_testloadext_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         sqlite3_api = p_api_1;
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Unused parameter
+        (rc =
             unsafe {
                 (unsafe {
                         (*sqlite3_api).create_function.unwrap()
@@ -132,7 +169,7 @@ pub extern "C" fn sqlite3_testloadext_init(db: *mut Sqlite3,
                                 unsafe extern "C" fn(*mut Sqlite3Context)
                                     -> ()>(0 as *const ())
                     })
-            };
+            });
         if rc != 0 { return rc; }
         rc =
             unsafe {

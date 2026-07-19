@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3recover_h;
-pub(crate) use crate::sqlite3recover_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3MemMethods, Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+};
+use crate::sqlite3recover_h::Sqlite3Recover;
 
 type DarwinSizeT = u64;
 
@@ -34,6 +40,7 @@ struct Blob {
     a: [u8; 0],
 }
 
+///* All global variables are gathered into the "g" singleton.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -51,6 +58,7 @@ struct GlobalVars {
 
 static mut g: GlobalVars = unsafe { core::mem::zeroed() };
 
+///* Print an error message and quit.
 unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -80,8 +88,16 @@ unsafe extern "C" fn fatal_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Set the an alarm to go off after N seconds.  Disable the alarm
+///* if N==0
 extern "C" fn set_alarm(n_1: i32) -> () { { let _ = n_1; }; }
 
+///* This an SQL progress handler.  After an SQL statement has run for
+///* many steps, we want to interrupt it.  This guards against infinite
+///* loops from recursive common table expressions.
+///*
+///* *pVdbeLimitFlag is true if the --limit-vdbe command-line option is used.
+///* In that case, hitting the progress handler is a fatal error.
 extern "C" fn progress_handler_1(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     if unsafe { *(p_vdbe_limit_flag_1 as *mut i32) } != 0 {
         unsafe {
@@ -92,6 +108,7 @@ extern "C" fn progress_handler_1(p_vdbe_limit_flag_1: *mut ()) -> i32 {
     return 1;
 }
 
+///* Reallocate memory.  Show an error and quit if unable.
 extern "C" fn safe_realloc(p_old_1: *mut (), sz_new_1: i32) -> *mut () {
     let p_new: *mut () =
         unsafe {
@@ -106,6 +123,7 @@ extern "C" fn safe_realloc(p_old_1: *mut (), sz_new_1: i32) -> *mut () {
     return p_new;
 }
 
+///* Initialize the virtual file system.
 extern "C" fn format_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -126,6 +144,7 @@ extern "C" fn format_vfs() -> () {
     }
 }
 
+///* Erase all information in the virtual file system.
 extern "C" fn reformat_vfs() -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -157,6 +176,7 @@ extern "C" fn reformat_vfs() -> () {
     }
 }
 
+///* Find a VFile by name
 extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
     unsafe {
         let mut i: i32 = 0;
@@ -185,6 +205,10 @@ extern "C" fn find_v_file(z_name_1: *const i8) -> *mut VFile {
     }
 }
 
+///* Find a VFile by name.  Create it if it does not already exist and
+///* initialize it to the size and content given.
+///*
+///* Return NULL only if the filesystem is full.
 extern "C" fn create_v_file(z_name_1: *const i8, sz: i32, p_data_1: *const u8)
     -> *mut VFile {
     unsafe {
@@ -227,6 +251,7 @@ extern "C" fn create_v_file(z_name_1: *const i8, sz: i32, p_data_1: *const u8)
     }
 }
 
+/// Return true if the line is all zeros
 extern "C" fn all_zero(a_line_1: *const u8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -243,6 +268,9 @@ extern "C" fn all_zero(a_line_1: *const u8) -> i32 {
     return (i == 16) as i32;
 }
 
+///* Render a database and query as text that can be input into
+///* the CLI.
+#[allow(unused_doc_comments)]
 extern "C" fn render_db_sql_for_cli(out: *mut FILE, z_file_1: *const i8,
     a_db_1: *mut u8, n_db_1: i32, z_sql_1: *mut u8, n_sql_1: i32) -> () {
     unsafe {
@@ -254,12 +282,20 @@ extern "C" fn render_db_sql_for_cli(out: *mut FILE, z_file_1: *const i8,
         if n_db_1 > 100 {
             let mut i: i32 = 0;
             let mut j: i32 = 0;
+            /// Loop counters
             let mut pgsz: i32 = 0;
+            /// Size of each page
             let mut last_page: i32 = 0;
+            /// Last page number shown
             let mut i_page: i32 = 0;
+            /// Current page number
             let mut a_line: *mut u8 = core::ptr::null_mut();
+            /// Single line to display
             let mut buf: [u8; 16] = [0; 16];
+            /// Fake line
             let mut b_show: [u8; 256] = [0; 256];
+
+            /// Characters ok to display
             unsafe {
                 memset(&raw mut b_show[0 as usize] as *mut u8 as *mut (),
                     '.' as i32, core::mem::size_of::<[u8; 256]>() as u64)
@@ -390,6 +426,7 @@ extern "C" fn render_db_sql_for_cli(out: *mut FILE, z_file_1: *const i8,
     }
 }
 
+///* Find the tail (the last component) of a pathname.
 extern "C" fn path_tail(mut z_path_1: *const i8) -> *const i8 {
     let mut z_tail: *const i8 = z_path_1;
     while unsafe { *z_path_1.offset(0 as isize) } != 0 {
@@ -411,6 +448,11 @@ extern "C" fn path_tail(mut z_path_1: *const i8) -> *const i8 {
     return z_tail;
 }
 
+///* Read the complete content of a file into memory.  Add a 0x00 terminator
+///* and return a pointer to the result.
+///*
+///* The file content is held in memory obtained from sqlite_malloc64() which
+///* should be freed by the caller.
 extern "C" fn read_file(z_filename_1: *const i8, sz: &mut i64) -> *mut i8 {
     let mut in_: *mut FILE = core::ptr::null_mut();
     let mut n_in: i64 = 0 as i64;
@@ -442,6 +484,9 @@ extern "C" fn read_file(z_filename_1: *const i8, sz: &mut i64) -> *mut i8 {
     return core::ptr::null_mut();
 }
 
+///* Implementation of the "readfile(X)" SQL function.  The entire content
+///* of the file named X is read and returned as a BLOB.  NULL is returned
+///* if the file does not exist or is unreadable.
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n_in: i64 = 0 as i64;
@@ -459,6 +504,10 @@ extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the "readtextfile(X)" SQL function.  The text content
+///* of the file named X through the end of the file or to the first \000
+///* character, whichever comes first, is read and returned as TEXT.  NULL
+///* is returned if the file does not exist or is unreadable.
 extern "C" fn readtextfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
@@ -490,6 +539,10 @@ extern "C" fn readtextfile_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { fclose(in_) };
 }
 
+///* Implementation of the "writefile(X,Y)" SQL function.  The argument Y
+///* is written into file X.  The number of bytes written is returned.  Or
+///* NULL is returned if something goes wrong, such as being unable to open
+///* file X for writing.
 extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut out: *mut FILE = core::ptr::null_mut();
@@ -521,6 +574,7 @@ extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int64(context, rc) };
 }
 
+///* Load a list of Blob objects from the database
 extern "C" fn blob_list_load_from_db(db: *mut Sqlite3, z_sql_1: *const i8,
     first_id_1: i32, last_id_1: i32, p_n_1: &mut i32,
     pp_list_1: &mut *mut Blob) -> () {
@@ -591,6 +645,7 @@ extern "C" fn blob_list_load_from_db(db: *mut Sqlite3, z_sql_1: *const i8,
     }
 }
 
+///* Free a list of Blob objects
 extern "C" fn blob_list_free(mut p: *mut Blob) -> () {
     let mut p_next: *mut Blob = core::ptr::null_mut();
     while !(p).is_null() {
@@ -600,6 +655,11 @@ extern "C" fn blob_list_free(mut p: *mut Blob) -> () {
     }
 }
 
+/// Return the current wall-clock time
+///*
+///* The number of milliseconds since the julian epoch.
+///* 1907-01-01 00:00:00  ->  210866716800000
+///* 2021-01-01 00:00:00  ->  212476176000000
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -629,6 +689,8 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
     }
 }
 
+/// An instance of the following object is passed by pointer as the
+///* client data to various callbacks.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzCtx {
@@ -642,33 +704,49 @@ struct FuzzCtx {
     timeout_hit: i32,
 }
 
+/// Verbosity level for the dbsqlfuzz test runner
 static mut e_verbosity: i32 = 0;
 
+/// True to activate PRAGMA vdbe_debug=on
 static mut b_vdbe_debug: i32 = 0;
 
+/// Defaults to 10 seconds
 static mut gi_timeout: i32 = 10000;
 
+/// Maximum number of progress handler callbacks
 static mut mx_progress_cb: u32 = 2000 as u32;
 
+/// Maximum string length in SQLite
 static mut length_limit: i32 = 1000000;
 
+/// Maximum expression depth
 static mut depth_limit: i32 = 500;
 
+/// Limit on the amount of heap memory that can be used
 static mut heap_limit: Sqlite3Int64 = 100000000 as Sqlite3Int64;
 
+/// Maximum byte-code program length in SQLite
 static mut vdbe_op_limit: i32 = 25000;
 
+/// Maximum size of the in-memory database
 static mut max_db_size: Sqlite3Int64 = 104857600 as Sqlite3Int64;
 
+/// Simulate OOM when equals 1
 static mut oom_counter: u32 = 0 as u32;
 
+/// Number of OOMs in a row
 static mut oom_repeat: u32 = 0 as u32;
 
+/// The low-level malloc routine
 static mut default_malloc: Option<unsafe extern "C" fn(i32) -> *mut ()> =
     None;
 
+/// Enable recovery
 static mut b_no_recover: i32 = 0;
 
+/// This routine is called when a simulated OOM occurs.  It is broken
+///* out as a separate routine to make it easy to set a breakpoint on
+///* the OOM
 #[unsafe(no_mangle)]
 pub extern "C" fn oom_fault() -> () {
     unsafe {
@@ -686,6 +764,8 @@ pub extern "C" fn oom_fault() -> () {
     }
 }
 
+/// This routine is a replacement malloc() that is used to simulate
+///* Out-Of-Memory (OOM) errors for testing purposes.
 extern "C" fn oom_malloc(n_byte_1: i32) -> *mut () {
     unsafe {
         if oom_counter != 0 {
@@ -705,6 +785,8 @@ extern "C" fn oom_malloc(n_byte_1: i32) -> *mut () {
     }
 }
 
+/// Register the OOM simulator.  This must occur before any memory
+///* allocations
 extern "C" fn register_oom_simulator() -> () {
     unsafe {
         let mut mem: Sqlite3MemMethods = unsafe { core::mem::zeroed() };
@@ -716,15 +798,27 @@ extern "C" fn register_oom_simulator() -> () {
     }
 }
 
+/// Turn off any pending OOM simulation
 extern "C" fn disable_oom() -> () {
     unsafe { oom_counter = 0 as u32; oom_repeat = 0 as u32; }
 }
 
+///* Translate a single byte of Hex into an integer.
+///* This routine only works if h really is a valid hexadecimal
+///* character:  0..9a..fA..F
+#[allow(unused_doc_comments)]
 extern "C" fn hex_to_int(mut h: u32) -> u8 {
     h += 9 as u32 * (1 as u32 & h >> 6);
+
+    /// ASCII
     return (h & 15 as u32) as u8;
 }
 
+///* The first character of buffer zIn[0..nIn-1] is a '['.  This routine
+///* checked to see if the buffer holds "[NNNN]" or "[+NNNN]" and if it
+///* does it makes corresponding changes to the *pK value and *pI value
+///* and returns true.  If the input buffer does not match the patterns,
+///* no changes are made to either *pK or *pI and this routine returns false.
 extern "C" fn is_offset(z_in_1: &[u8], p_k_1: &mut u32, p_i_1: *mut u32)
     -> i32 {
     let mut i: i32 = 0;
@@ -753,17 +847,34 @@ extern "C" fn is_offset(z_in_1: &[u8], p_k_1: &mut u32, p_i_1: *mut u32)
     return 1;
 }
 
+///* Decode the text starting at zIn into a binary database file.
+///* The maximum length of zIn is nIn bytes.  Store the binary database
+///* file in space obtained from sqlite3_malloc().
+///*
+///* Return the number of bytes of zIn consumed.  Or return -1 if there
+///* is an error.  One potential error is that the recipe specifies a
+///* database file larger than MX_FILE_SZ bytes.
+///*
+///* Abort on an OOM.
+#[allow(unused_doc_comments)]
 extern "C" fn decode_database(z_in_1: *const u8, n_in_1: i32,
     pa_decode_1: &mut *mut u8, pn_decode_1: &mut i32) -> i32 {
     unsafe {
         let mut a: *mut u8 = core::ptr::null_mut();
         let mut a_new: *mut u8 = core::ptr::null_mut();
+        /// Database under construction
         let mut mx: i32 = 0;
+        /// Current size of the database
         let mut n_alloc: Sqlite3Uint64 = 4096 as Sqlite3Uint64;
+        /// Space allocated in a[]
         let mut i: u32 = 0 as u32;
+        /// Next byte of zIn[] to read
         let mut j: u32 = 0 as u32;
+        /// Temporary integer
         let mut k: u32 = 0 as u32;
+        /// half-byte cursor index for output
         let mut n: u32 = 0 as u32;
+        /// Number of bytes of input
         let mut b: u8 = 0 as u8;
         if n_in_1 < 4 { return -1; }
         n = n_in_1 as u32;
@@ -873,6 +984,10 @@ extern "C" fn decode_database(z_in_1: *const u8, n_in_1: i32,
     }
 }
 
+///* Progress handler callback.
+///*
+///* The argument is the cutoff-time after which all processing should
+///* stop.  So return non-zero if the cut-off time is exceeded.
 extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     unsafe {
         let p: *mut FuzzCtx = p_client_data_1 as *mut FuzzCtx;
@@ -905,6 +1020,12 @@ extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     }
 }
 
+///* Disallow debugging pragmas such as "PRAGMA vdbe_debug" and
+///* "PRAGMA parser_trace" since they can dramatically increase the
+///* amount of output without actually testing anything useful.
+///*
+///* Also block ATTACH if attaching a file from the filesystem.
+#[allow(unused_doc_comments)]
 extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8,
     z_arg4_1: *const i8) -> i32 {
@@ -935,6 +1056,10 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                                         sqlite3_stricmp(c"reverse_unordered_selects".as_ptr() as
                                                     *mut i8 as *const i8, z_arg1_1)
                                     } == 0 {
+
+                            /// BTS_BADPRAGMA is sticky.  A hard_heap_limit or
+                            ///* revert_unordered_selects should inhibit all future attempts
+                            ///* at verifying query invariants
                             unsafe { *p_bts_flags |= 8 as u32 };
                         } else if e_verbosity == 0 {
                             if unsafe {
@@ -962,6 +1087,9 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                         break '__s14;
                     }
                     {
+
+                        /// Deny the ATTACH if it is attaching anything other than an in-memory
+                        ///* database.
                         unsafe { *p_bts_flags |= 2 as u32 };
                         if z_arg1_1 == core::ptr::null() { return 1; }
                         if unsafe {
@@ -1011,11 +1139,18 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                         }
                         break '__s14;
                     }
-                    { break '__s14; }
+                    {
+
+                        /// Benign
+                        break '__s14;
+                    }
                     { unsafe { *p_bts_flags |= 2 as u32 }; }
                 }
                 24 => {
                     {
+
+                        /// Deny the ATTACH if it is attaching anything other than an in-memory
+                        ///* database.
                         unsafe { *p_bts_flags |= 2 as u32 };
                         if z_arg1_1 == core::ptr::null() { return 1; }
                         if unsafe {
@@ -1065,7 +1200,11 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                         }
                         break '__s14;
                     }
-                    { break '__s14; }
+                    {
+
+                        /// Benign
+                        break '__s14;
+                    }
                     { unsafe { *p_bts_flags |= 2 as u32 }; }
                 }
                 21 => {
@@ -1098,7 +1237,11 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                         }
                         break '__s14;
                     }
-                    { break '__s14; }
+                    {
+
+                        /// Benign
+                        break '__s14;
+                    }
                     { unsafe { *p_bts_flags |= 2 as u32 }; }
                 }
                 31 => {
@@ -1130,11 +1273,19 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
                         }
                         break '__s14;
                     }
-                    { break '__s14; }
+                    {
+
+                        /// Benign
+                        break '__s14;
+                    }
                     { unsafe { *p_bts_flags |= 2 as u32 }; }
                 }
                 20 => {
-                    { break '__s14; }
+                    {
+
+                        /// Benign
+                        break '__s14;
+                    }
                     { unsafe { *p_bts_flags |= 2 as u32 }; }
                 }
                 _ => { { unsafe { *p_bts_flags |= 2 as u32 }; } }
@@ -1144,6 +1295,8 @@ extern "C" fn block_troublesome_sql(p_client_data_1: *mut (), e_code_1: i32,
     }
 }
 
+///* This function is used as a callback by the recover extension. Simply
+///* print the supplied SQL statement to stdout.
 extern "C" fn recover_sql_cb(p_ctx_1: *mut (), z_sql_1: *const i8) -> i32 {
     unsafe {
         if e_verbosity >= 2 && !(z_sql_1).is_null() {
@@ -1155,21 +1308,30 @@ extern "C" fn recover_sql_cb(p_ctx_1: *mut (), z_sql_1: *const i8) -> i32 {
     }
 }
 
+///* This function is called to recover data from the database.
+#[allow(unused_doc_comments)]
 extern "C" fn recover_database(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code from this routine
         let z_recovery_db: *const i8 = c"".as_ptr() as *mut i8 as *const i8;
+        /// Name of "recovery" database
         let z_laf: *const i8 =
             c"lost_and_found".as_ptr() as *mut i8 as *const i8;
+        /// Name of "lost_and_found" table
         let mut b_freelist: i32 = 1;
+        /// True to scan the freelist
         let mut b_rowids: i32 = 1;
+        /// True to restore ROWID values
         let mut p: *mut Sqlite3Recover = core::ptr::null_mut();
-        p =
+
+        /// The recovery object
+        (p =
             unsafe {
                 sqlite3_recover_init_sql(db,
                     c"main".as_ptr() as *mut i8 as *const i8,
                     Some(recover_sql_cb), core::ptr::null_mut())
-            };
+            });
         unsafe { sqlite3_recover_config(p, 789, z_recovery_db as *mut ()) };
         unsafe { sqlite3_recover_config(p, 1, z_laf as *mut ()) };
         unsafe { sqlite3_recover_config(p, 3, &raw mut b_rowids as *mut ()) };
@@ -1198,6 +1360,12 @@ extern "C" fn recover_database(db: *mut Sqlite3) -> i32 {
     }
 }
 
+///* Special parameter binding, for testing and debugging purposes.
+///*
+///*     $int_NNN        ->   integer value NNN
+///*     $text_TTTT      ->   floating point value TTT with destructor
+///*     $carray_clr     ->   First argument to carray() for color names
+///*     $carray_primes  ->   First argument to carray() for prime numbers
 extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
     let n_var: i32 = unsafe { sqlite3_bind_parameter_count(p_stmt_1) };
     let mut i: i32 = 0;
@@ -1243,6 +1411,8 @@ extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
     }
 }
 
+///* Run the SQL text
+#[allow(unused_doc_comments)]
 extern "C" fn run_db_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     p_bts_flags_1: &mut u32, db_opt_1: u32) -> i32 {
     unsafe {
@@ -1548,6 +1718,8 @@ extern "C" fn run_db_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
                             { let __p = &mut j; let __t = *__p; *__p += 1; __t };
                         }
                     }
+
+                    /// End for()
                     unsafe { printf(c"\n".as_ptr() as *mut i8 as *const i8) };
                     unsafe { fflush(__stdoutp) };
                 }
@@ -1614,10 +1786,17 @@ extern "C" fn run_db_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
             };
             unsafe { fflush(__stdoutp) };
         }
+
+        /// End if( SQLITE_OK )
         return unsafe { sqlite3_finalize(p_stmt) };
     }
 }
 
+/// Mappings into dbconfig settings for bits taken from bytes 72..75 of
+///* the input database.
+///*
+///* This should be the same as in dbsqlfuzz.c.  Make sure those codes stay
+///* in sync.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -1693,6 +1872,7 @@ static mut a_db_config_settings: [AnonS0; 13] =
                 z_name: c"trusted_schema".as_ptr() as *mut i8,
             }];
 
+/// Toggle a dbconfig setting
 extern "C" fn toggle_db_config(db: *mut Sqlite3, i_setting_1: i32) -> () {
     let mut v: i32 = 0;
     unsafe { sqlite3_db_config(db, i_setting_1, -1, &raw mut v as *mut i32) };
@@ -1700,27 +1880,57 @@ extern "C" fn toggle_db_config(db: *mut Sqlite3, i_setting_1: i32) -> () {
     unsafe { sqlite3_db_config(db, i_setting_1, v, 0) };
 }
 
+/// Invoke this routine to run a single test case
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn run_combined_db_sql_input(a_data_1: *const u8,
     n_byte_1: u64, i_timeout_1: i32, b_script_1: i32, i_sql_id_1: i32)
     -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// SQLite API return value
         let mut i_sql: i32 = 0;
+        /// Index in aData[] of start of SQL
         let mut a_db: *mut u8 = core::ptr::null_mut();
+        /// Decoded database content
         let mut n_db: i32 = 0;
+        /// Size of the decoded database
         let mut i: i32 = 0;
+        /// Loop counter
         let mut j: i32 = 0;
+        /// Start of current SQL statement
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// SQL text to run
         let mut n_sql: i32 = 0;
+        /// Bytes of SQL text
         let mut cx: FuzzCtx = unsafe { core::mem::zeroed() };
+        /// Fuzzing context
         let mut bts_flags: u32 = 0 as u32;
+        /// Parsing flags
         let mut db_flags: u32 = 0 as u32;
+        /// Flag values from db offset 72..75
         let mut db_opt: u32 = 0 as u32;
+        /// Flag values from db offset 76..79
         let mut n_alloc: i32 = 0;
         let mut n_not_used: i32 = 0;
         let mut z_name: [i8; 100] = [0; 100];
+        /// Invoke the progress handler frequently to check to see if we
+        ///* are taking too long.  The progress handler will return true
+        ///* (which will block further processing) if more than giTimeout seconds have
+        ///* elapsed since the start of the test.
+        /// Set a limit on the maximum size of a prepared statement, and the
+        ///* maximum length of a string or blob
         let mut x: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// For high debugging levels, turn on debug mode
+        /// Block debug pragmas and ATTACH/DETACH.  But wait until after
+        ///* deserialize to do this because deserialize depends on ATTACH
+        /// Add the vt02 virtual table
+        /// Activate extensions
+        /// Add support for sqlite_dbdata and sqlite_dbptr virtual tables used
+        ///* by the recovery API
+        /// Consistent PRNG seed
+        /// Run recovery on the initial database, just to make sure recovery
+        ///* works.
         let mut c_saved: i8 = 0 as i8;
         let mut n_alloc_1: i32 = 0;
         let mut n_not_used_1: i32 = 0;
@@ -2298,10 +2508,42 @@ pub extern "C" fn run_combined_db_sql_input(a_data_1: *const u8,
                 }
             }
         }
+
+        /// SQLite API return value
+        /// Index in aData[] of start of SQL
+        /// Decoded database content
+        /// Size of the decoded database
+        /// Loop counter
+        /// Start of current SQL statement
+        /// SQL text to run
+        /// Bytes of SQL text
+        /// Fuzzing context
+        /// Parsing flags
+        /// Flag values from db offset 72..75
+        /// Flag values from db offset 76..79
+        /// Invoke the progress handler frequently to check to see if we
+        ///* are taking too long.  The progress handler will return true
+        ///* (which will block further processing) if more than giTimeout seconds have
+        ///* elapsed since the start of the test.
+        /// Set a limit on the maximum size of a prepared statement, and the
+        ///* maximum length of a string or blob
+        /// For high debugging levels, turn on debug mode
+        /// Block debug pragmas and ATTACH/DETACH.  But wait until after
+        ///* deserialize to do this because deserialize depends on ATTACH
+        /// Add the vt02 virtual table
+        /// Activate extensions
+        /// Add support for sqlite_dbdata and sqlite_dbptr virtual tables used
+        ///* by the recovery API
+        /// Consistent PRNG seed
+        /// Run recovery on the initial database, just to make sure recovery
+        ///* works.
         unreachable!();
     }
 }
 
+/// Look at a SQL text and try to determine if it begins with a database
+///* description, such as would be found in a dbsqlfuzz test case.  Return
+///* true if this does appear to be a dbsqlfuzz test case and false otherwise.
 extern "C" fn is_db_sql(mut a: *const u8, mut n: i32) -> i32 {
     let mut buf: [u8; 12] = [0; 12];
     let mut i: i32 = 0;
@@ -2356,6 +2598,7 @@ extern "C" fn is_db_sql(mut a: *const u8, mut n: i32) -> i32 {
     return 0;
 }
 
+/// Implementation of the isdbsql(TEXT) SQL function.
 extern "C" fn is_db_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let n: i32 =
@@ -2370,6 +2613,7 @@ extern "C" fn is_db_sql_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Methods for the VHandle object
 extern "C" fn inmem_close(p_file_1: *mut Sqlite3File) -> i32 {
     let p: *const VHandle = p_file_1 as *mut VHandle as *const VHandle;
     let p_v_file: *mut VFile = unsafe { (*p).p_v_file };
@@ -2504,6 +2748,7 @@ extern "C" fn inmem_device_characteristics(p_file_1: *mut Sqlite3File)
     return 512 | 2048 | 4096;
 }
 
+/// Method table for VHandle
 static mut v_handle_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 1,
@@ -2527,6 +2772,8 @@ static mut v_handle_methods: Sqlite3IoMethods =
         x_unfetch: None,
     };
 
+///* Open a new file in the inmem VFS.  All files are anonymous and are
+///* delete-on-close.
 extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     p_file_1: *mut Sqlite3File, open_flags_1: i32, p_out_flags_1: *mut i32)
     -> i32 {
@@ -2554,6 +2801,7 @@ extern "C" fn inmem_open(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     }
 }
 
+///* Delete a file by name
 extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     syncdir: i32) -> i32 {
     let p_v_file: *mut VFile = find_v_file(z_filename_1);
@@ -2569,6 +2817,7 @@ extern "C" fn inmem_delete(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     return 10 | 10 << 8;
 }
 
+/// Check for the existence of a file
 extern "C" fn inmem_access(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     let p_v_file: *const VFile = find_v_file(z_filename_1) as *const VFile;
@@ -2576,6 +2825,7 @@ extern "C" fn inmem_access(p_vfs_1: *mut Sqlite3Vfs, z_filename_1: *const i8,
     return 0;
 }
 
+/// Get the canonical pathname for a file
 extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_filename_1: *const i8, n_out_1: i32, z_out_1: *mut i8) -> i32 {
     unsafe {
@@ -2585,6 +2835,7 @@ extern "C" fn inmem_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     return 0;
 }
 
+/// Always use the same random see, for repeatability.
 extern "C" fn inmem_randomness(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     z_buf_1: *mut i8) -> i32 {
     unsafe {
@@ -2599,6 +2850,7 @@ extern "C" fn inmem_randomness(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     }
 }
 
+///* Register the VFS that reads from the g.aFile[] set of files.
 extern "C" fn inmem_vfs_register(make_default_1: i32) -> () {
     unsafe {
         let p_default: *const Sqlite3Vfs =
@@ -2620,6 +2872,8 @@ extern "C" fn inmem_vfs_register(make_default_1: i32) -> () {
     }
 }
 
+///* Run multiple commands of SQL.  Similar to sqlite3_exec(), but does not
+///* stop if an error is encountered.
 extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     run_flags_1: u32) -> () {
     let mut z_more: *const i8 = core::ptr::null();
@@ -2824,6 +3078,11 @@ extern "C" fn run_sql(db: *mut Sqlite3, mut z_sql_1: *const i8,
     }
 }
 
+///* Rebuild the database file.
+///*
+///*    (1)  Remove duplicate entries
+///*    (2)  Put all entries in order
+///*    (3)  Vacuum
 extern "C" fn rebuild_database(db: *mut Sqlite3, db_sql_only_1: i32) -> () {
     let mut rc: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -2849,6 +3108,8 @@ extern "C" fn rebuild_database(db: *mut Sqlite3, db_sql_only_1: i32) -> () {
     }
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -2862,6 +3123,7 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -2951,6 +3213,8 @@ extern "C" fn integer_value(mut z_arg_1: *const i8) -> i32 {
     }
 }
 
+///* Return the number of "v" characters in a string.  Return 0 if there
+///* are any characters in the string other than "v".
 extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     let mut n: i32 = 0;
     while unsafe { *z.offset(0 as isize) } != 0 &&
@@ -2966,6 +3230,7 @@ extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     return if unsafe { *z.offset(0 as isize) } as i32 == 0 { n } else { 0 };
 }
 
+///* Print sketchy documentation for this utility program
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -2979,79 +3244,151 @@ extern "C" fn show_help() -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut i_begin: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Start time of this program
         let mut quiet_flag: i32 = 0;
+        /// True if --quiet or -q
         let mut brief_flag: i32 = 0;
+        /// Output summary report at the end
         let mut verbose_flag: i32 = 0;
+        /// True if --verbose or -v
         let mut z_ins_sql: *mut i8 = core::ptr::null_mut();
+        /// SQL statement for --load-db or --load-sql
         let mut i_first_ins_arg: i32 = 0;
+        /// First argv[] for --load-db or --load-sql
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The open database connection
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// A prepared statement
         let mut rc: i32 = 0;
+        /// Result code from SQLite interface calls
         let mut p_sql: *mut Blob = core::ptr::null_mut();
+        /// For looping over SQL scripts
         let mut p_db: *mut Blob = core::ptr::null_mut();
+        /// For looping over template databases
         let mut i: i32 = 0;
+        /// Loop index for the argv[] loop
         let mut db_sql_only: i32 = 0;
+        /// Only use scripts that are dbsqlfuzz
         let mut first_sqlid: i32 = 0;
+        /// First --sqlid range
         let mut last_sqlid: i32 = 0;
+        /// Last --sqlid range
         let mut first_dbid: i32 = 0;
+        /// --dbid
         let mut last_dbid: i32 = 0;
+        /// --dbid end
         let mut native_flag: i32 = 0;
+        /// --native-vfs
         let mut rebuild_flag: i32 = 0;
+        /// --rebuild
         let mut vdbe_limit_flag: i32 = 0;
+        /// --limit-vdbe
         let mut info_flag: i32 = 0;
+        /// --info
         let mut n_skip: i32 = 0;
+        /// --skip
         let mut b_script: i32 = 0;
+        /// --script
         let mut b_spinner: i32 = 0;
+        /// True for --spinner
         let mut timeout_test: i32 = 0;
+        /// undocumented --timeout-test flag
         let mut run_flags: i32 = 0;
+        /// Flags sent to runSql()
         let mut z_msg: *mut i8 = core::ptr::null_mut();
+        /// Add this message
         let mut n_src_db: i32 = 0;
+        /// Number of source databases
         let mut az_src_db: *mut *mut i8 = core::ptr::null_mut();
+        /// Array of source database names
         let mut i_src_db: i32 = 0;
+        /// Loop over all source databases
         let mut n_test: i32 = 0;
+        /// Total number of tests performed
         let mut n_slice_skip: i32 = 0;
+        /// Skipped due to --slice
         let mut z_db_name: *mut i8 = core::ptr::null_mut();
+        /// Appreviated name of a source database
         let mut z_fail_code: *const i8 = core::ptr::null();
+        /// Value of the TEST_FAILURE env variable
         let mut cell_sz_ck_flag: i32 = 0;
+        /// --cell-size-check
         let mut sql_fuzz: i32 = 0;
+        /// True for SQL fuzz. False for DB fuzz
         let mut i_timeout: i32 = 0;
+        /// Default 120-second timeout
         let mut n_mem: i32 = 0;
+        /// Memory limit override
         let mut n_mem_this_db: i32 = 0;
+        /// Memory limit set by the CONFIG table
         let mut z_exp_db: *const i8 = core::ptr::null();
+        /// Write Databases to files in this directory
         let mut z_exp_sql: *const i8 = core::ptr::null();
+        /// Write SQL to files in this directory
         let mut p_heap: *mut () = core::ptr::null_mut();
+        /// Heap for use by SQLite
         let mut oss_fuzz: i32 = 0;
+        /// enable OSS-FUZZ testing
         let mut oss_fuzz_this_db: i32 = 0;
+        /// ossFuzz value for this particular database
         let mut native_malloc: i32 = 0;
+        /// Turn off MEMSYS3/5 and lookaside if true
         let mut p_dflt_vfs: *const Sqlite3Vfs = core::ptr::null();
+        /// The default VFS
         let mut open_flags4_data: i32 = 0;
+        /// Flags for sqlite3_open_v2()
         let mut b_timer: i32 = 0;
+        /// Show elapse time for each test
         let mut n_v: i32 = 0;
+        /// How much to increase verbosity with -vvvv
         let mut tm_start: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Start of each test
         let mut i_est_time: i32 = 0;
+        /// LPF for the time-to-go
         let mut i_slice_sz: i32 = 0;
+        /// Divide the test space into this many pieces
         let mut i_slice_idx: i32 = 0;
+        /// Only run the piece with this index
         let mut z: *const i8 = core::ptr::null();
         let mut z_dot_dot: *const i8 = core::ptr::null();
+        /// --slice implices --brief
         let mut z_dot_dot_1: *const i8 = core::ptr::null();
         let mut ii: i32 = 0;
         let mut zz: *const i8 = core::ptr::null();
         let mut i_delay: i32 = 0;
+        ///exit-by-break
         let mut n_data: i64 = 0 as i64;
         let mut a_data: *mut i8 = core::ptr::null_mut();
+        /// Process each source database separately
         let mut z_raw_data: *mut i8 = core::ptr::null_mut();
         let mut n_raw_data: i64 = 0 as i64;
+        /// Print the description, if there is one
         let mut n: i32 = 0;
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// If the CONFIG(name,value) table exists, read db-specific settings
+        ///* from that table
         let mut z_name: *const i8 = core::ptr::null();
+        /// A filename of "-" means read multiple filenames from stdin
         let mut z_line: [i8; 2000] = [0; 2000];
         let mut kk: u64 = 0 as u64;
         let mut z_ex_db: *const i8 = core::ptr::null();
         let mut z_ex_sql: *const i8 = core::ptr::null();
+        /// Load all SQL script content and all initial database images from the
+        ///* source db
+        /// Print the description, if there is one
+        /// Rebuild the database, if requested
+        /// Close the source database.  Verify that no SQLite memory allocations are
+        ///* outstanding.
+        /// Limit available memory, if requested
+        /// Disable lookaside with the --native-malloc option
+        /// Reset the in-memory virtual filesystem
+        /// Run a test using each SQL script against each database.
+        /// No progress output
         let mut n_total: i32 = 0;
         let mut idx: i32 = 0;
         let mut i_to_go: i32 = 0;
@@ -3063,14 +3400,24 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         let mut tm_end: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut open_flags: i32 = 0;
         let mut z_vfs: *const i8 = core::ptr::null();
+        /// No progress output
         let mut n_total_1: i32 = 0;
         let mut idx__2: i32 = 0;
         let mut idx__3: i32 = 0;
         let mut amt__1: i32 = 0;
         let mut z_name_1: [i8; 100] = [0; 100];
+        /// Enable test functions
         let mut tm_end_1: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Simulate an error if the TEST_FAILURE environment variable is "5".
+        ///* This is used to verify that automated test script really do spot
+        ///* errors that occur in this test program.
+        /// If TEST_FAILURE is something other than 5, just exit the test
+        ///* early
         let mut i_elapse: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// No progress output
         let mut n_total_2: i32 = 0;
+        /// Clean up at the end of processing a single source database
+        /// End loop over all source databases
         let mut i_elapse_1: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut __state: i32 = 0;
         loop {
@@ -5650,6 +5997,88 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 }
             }
         }
+
+        /// Start time of this program
+        /// True if --quiet or -q
+        /// Output summary report at the end
+        /// True if --verbose or -v
+        /// SQL statement for --load-db or --load-sql
+        /// First argv[] for --load-db or --load-sql
+        /// The open database connection
+        /// A prepared statement
+        /// Result code from SQLite interface calls
+        /// For looping over SQL scripts
+        /// For looping over template databases
+        /// Loop index for the argv[] loop
+        /// Only use scripts that are dbsqlfuzz
+        /// First --sqlid range
+        /// Last --sqlid range
+        /// --dbid
+        /// --dbid end
+        /// --native-vfs
+        /// --rebuild
+        /// --limit-vdbe
+        /// --info
+        /// --skip
+        /// --script
+        /// True for --spinner
+        /// undocumented --timeout-test flag
+        /// Flags sent to runSql()
+        /// Add this message
+        /// Number of source databases
+        /// Array of source database names
+        /// Loop over all source databases
+        /// Total number of tests performed
+        /// Skipped due to --slice
+        /// Appreviated name of a source database
+        /// Value of the TEST_FAILURE env variable
+        /// --cell-size-check
+        /// True for SQL fuzz. False for DB fuzz
+        /// Default 120-second timeout
+        /// Memory limit override
+        /// Memory limit set by the CONFIG table
+        /// Write Databases to files in this directory
+        /// Write SQL to files in this directory
+        /// Heap for use by SQLite
+        /// enable OSS-FUZZ testing
+        /// ossFuzz value for this particular database
+        /// Turn off MEMSYS3/5 and lookaside if true
+        /// The default VFS
+        /// Flags for sqlite3_open_v2()
+        /// Show elapse time for each test
+        /// How much to increase verbosity with -vvvv
+        /// Start of each test
+        /// LPF for the time-to-go
+        /// Divide the test space into this many pieces
+        /// Only run the piece with this index
+        /// --slice implices --brief
+        ///exit-by-break
+        /// Process each source database separately
+        /// Print the description, if there is one
+        /// If the CONFIG(name,value) table exists, read db-specific settings
+        ///* from that table
+        /// A filename of "-" means read multiple filenames from stdin
+        /// Load all SQL script content and all initial database images from the
+        ///* source db
+        /// Print the description, if there is one
+        /// Rebuild the database, if requested
+        /// Close the source database.  Verify that no SQLite memory allocations are
+        ///* outstanding.
+        /// Limit available memory, if requested
+        /// Disable lookaside with the --native-malloc option
+        /// Reset the in-memory virtual filesystem
+        /// Run a test using each SQL script against each database.
+        /// No progress output
+        /// No progress output
+        /// Enable test functions
+        /// Simulate an error if the TEST_FAILURE environment variable is "5".
+        ///* This is used to verify that automated test script really do spot
+        ///* errors that occur in this test program.
+        /// If TEST_FAILURE is something other than 5, just exit the test
+        ///* early
+        /// No progress output
+        /// Clean up at the end of processing a single source database
+        /// End loop over all source databases
         unreachable!();
         return Ok(());
     }

@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type Int32T = i32;
 
@@ -9,8 +15,10 @@ type DarwinPidT = Int32T;
 
 type PidT = DarwinPidT;
 
+///* Process ID of the parent
 static mut parent_pid: PidT = 0;
 
+///* Return either "parent" or "child", as appropriate.
 extern "C" fn who_am_i() -> *const i8 {
     unsafe {
         return if unsafe { getpid() } == parent_pid {
@@ -19,6 +27,7 @@ extern "C" fn who_am_i() -> *const i8 {
     }
 }
 
+///* This is an sqlite3_exec() callback routine that prints all results.
 extern "C" fn exec_callback(p_not_used_1: *mut (), n_col_1: i32,
     a_val_1: *mut *mut i8, a_col_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -53,6 +62,7 @@ extern "C" fn exec_callback(p_not_used_1: *mut (), n_col_1: i32,
     }
 }
 
+///* Execute one or more SQL statements.
 extern "C" fn sql_exec(db: *mut Sqlite3, z_sql_1: *const i8,
     b_callback_1: i32) -> () {
     unsafe {
@@ -86,6 +96,7 @@ extern "C" fn sql_exec(db: *mut Sqlite3, z_sql_1: *const i8,
     }
 }
 
+///* Trace callback for the vfstrace extension.
 extern "C" fn vfs_trace_callback(z_msg_1: *const i8, p_not_used_1: *mut ())
     -> i32 {
     unsafe {
@@ -98,6 +109,7 @@ extern "C" fn vfs_trace_callback(z_msg_1: *const i8, p_not_used_1: *mut ())
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -183,6 +195,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             };
             return Err(1);
         }
+
+        ///  Step 1 *
         unsafe { printf(c"Step 1:\n".as_ptr() as *mut i8 as *const i8) };
         parent_pid = unsafe { getpid() };
         unsafe { unlink(z_filename) };
@@ -206,6 +220,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 *const i8, 0);
         sql_exec(db, c"SELECT x FROM t1;".as_ptr() as *mut i8 as *const i8,
             1);
+
+        ///  Step 2 *
         unsafe { printf(c"Step 2:\n".as_ptr() as *mut i8 as *const i8) };
         sql_exec(db, c"BEGIN IMMEDIATE;".as_ptr() as *mut i8 as *const i8, 0);
         sql_exec(db,
@@ -216,6 +232,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         if b_commit_before_fork != 0 {
             sql_exec(db, c"COMMIT".as_ptr() as *mut i8 as *const i8, 0);
         }
+
+        ///  Step 3 *
         unsafe { printf(c"Step 3:\n".as_ptr() as *mut i8 as *const i8) };
         unsafe { fflush(__stdoutp) };
         child = unsafe { fork() };
@@ -264,12 +282,21 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 }
             }
             unsafe { sqlite3_close(db) };
+
+            ///* End of special close procedures for SQLite database connections
+            ///* inherited via fork().
+            ///*********************************************************************
             unsafe {
                 printf(c"%s: database connection closed\n".as_ptr() as *mut i8
                         as *const i8, who_am_i())
             };
             unsafe { fflush(__stdoutp) };
-        } else { unsafe { sleep(1 as u32) }; }
+        } else {
+
+            /// Pause the parent briefly to give the child a chance to close its
+            ///* database connection
+            unsafe { sleep(1 as u32) };
+        }
         if n_delay_after4 > 0 {
             unsafe {
                 printf(c"%s: Delay for %d seconds\n".as_ptr() as *mut i8 as
@@ -306,6 +333,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             }
             sql_exec(db,
                 c"SELECT * FROM t1;".as_ptr() as *mut i8 as *const i8, 1);
+
+            /// Step 8 *
             sql_exec(db,
                 c"INSERT INTO t1 VALUES(\'Third row\');".as_ptr() as *mut i8
                     as *const i8, 0);

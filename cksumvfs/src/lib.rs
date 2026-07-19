@@ -1,14 +1,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///* Forward declaration of objects used by this utility
 type CksmVfs = Sqlite3Vfs;
 
+/// An open file
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CksmFile {
@@ -19,6 +27,7 @@ struct CksmFile {
     p_partner: *mut CksmFile,
 }
 
+///* Methods for CksmFile
 extern "C" fn cksm_close(mut p_file: *mut Sqlite3File) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
     if !(unsafe { (*p).p_partner }).is_null() {
@@ -46,6 +55,8 @@ extern "C" fn cksm_close(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Set the computeCkSm and verifyCksm flags, if they need to be
+///* changed.
 extern "C" fn cksm_set_flags(p: &mut CksmFile,
     has_correct_reserve_size_1: i32) -> () {
     if has_correct_reserve_size_1 != (*p).compute_cksm as i32 {
@@ -67,6 +78,7 @@ extern "C" fn cksm_set_flags(p: &mut CksmFile,
     }
 }
 
+/// Compute a checksum on a buffer
 extern "C" fn cksm_compute(a: *mut u8, n_byte_1: i32, a_out_1: *mut u8)
     -> () {
     let mut s1: u32 = 0 as u32;
@@ -167,6 +179,7 @@ extern "C" fn cksm_compute(a: *mut u8, n_byte_1: i32, a_out_1: *mut u8)
     };
 }
 
+///* Read data from a cksm-file.
 extern "C" fn cksm_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -224,6 +237,7 @@ extern "C" fn cksm_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     return rc;
 }
 
+///* Write data to a cksm-file.
 extern "C" fn cksm_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
@@ -261,6 +275,7 @@ extern "C" fn cksm_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
         };
 }
 
+///* Truncate a cksm-file.
 extern "C" fn cksm_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     p_file =
@@ -273,6 +288,7 @@ extern "C" fn cksm_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
         };
 }
 
+///* Sync a cksm-file.
 extern "C" fn cksm_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -284,6 +300,7 @@ extern "C" fn cksm_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
         };
 }
 
+///* Return the current file-size of a cksm-file.
 extern "C" fn cksm_file_size(mut p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let p: *mut CksmFile = p_file as *mut CksmFile;
@@ -297,6 +314,7 @@ extern "C" fn cksm_file_size(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* Lock a cksm-file.
 extern "C" fn cksm_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -308,6 +326,7 @@ extern "C" fn cksm_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Unlock a cksm-file.
 extern "C" fn cksm_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -319,6 +338,7 @@ extern "C" fn cksm_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Check if another file-handle holds a RESERVED lock on a cksm-file.
 extern "C" fn cksm_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -333,6 +353,8 @@ extern "C" fn cksm_check_reserved_lock(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* File control method. For custom operations on a cksm-file.
+#[allow(unused_doc_comments)]
 extern "C" fn cksm_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let mut rc: i32 = 0;
@@ -397,6 +419,8 @@ extern "C" fn cksm_file_control(mut p_file: *mut Sqlite3File, op: i32,
                         sqlite3_stricmp(unsafe { *az_arg.offset(1 as isize) } as
                                 *const i8, c"page_size".as_ptr() as *mut i8 as *const i8)
                     } == 0 {
+
+            /// Do not allow page size changes on a checksum database
             return 0;
         }
     }
@@ -418,6 +442,7 @@ extern "C" fn cksm_file_control(mut p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for a cksm-file.
 extern "C" fn cksm_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -429,6 +454,7 @@ extern "C" fn cksm_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Return the device characteristic flags supported by a cksm-file.
 extern "C" fn cksm_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     let mut devchar: i32 = 0;
@@ -446,6 +472,7 @@ extern "C" fn cksm_device_characteristics(mut p_file: *mut Sqlite3File)
     return devchar & !32768;
 }
 
+/// Create a shared memory file mapping
 extern "C" fn cksm_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
     b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -458,6 +485,7 @@ extern "C" fn cksm_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
         };
 }
 
+/// Perform locking on a shared-memory segment
 extern "C" fn cksm_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
     flags: i32) -> i32 {
     p_file =
@@ -470,6 +498,7 @@ extern "C" fn cksm_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
         };
 }
 
+/// Memory barrier operation on shared memory
 extern "C" fn cksm_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut CksmFile).offset(1 as isize) } as
@@ -481,6 +510,7 @@ extern "C" fn cksm_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     };
 }
 
+/// Unmap a shared memory segment
 extern "C" fn cksm_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -493,6 +523,7 @@ extern "C" fn cksm_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
         };
 }
 
+/// Fetch a page of a memory-mapped file
 extern "C" fn cksm_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     let p: *const CksmFile = p_file as *mut CksmFile as *const CksmFile;
@@ -515,6 +546,7 @@ extern "C" fn cksm_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     return 0;
 }
 
+/// Release a memory-mapped page
 extern "C" fn cksm_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     p_file =
@@ -554,6 +586,7 @@ static cksm_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(cksm_unfetch),
     };
 
+///* Methods for CksmVfs
 extern "C" fn cksm_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -595,6 +628,7 @@ extern "C" fn cksm_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     return rc;
 }
 
+///* All other VFS methods are pass-thrus.
 extern "C" fn cksm_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     return unsafe {
@@ -797,6 +831,11 @@ static mut cksm_vfs: Sqlite3Vfs =
         x_next_system_call: Some(cksm_next_system_call),
     };
 
+///* SQL function:    verify_checksum(BLOB)
+///*
+///* Return 0 or 1 if the checksum is invalid or valid.  Or return
+///* NULL if the input is not a BLOB that is the right size for a
+///* database page.
 extern "C" fn cksm_verify_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n_byte: i32 = 0;
@@ -828,6 +867,7 @@ extern "C" fn cksm_verify_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Register the verify_checksum() SQL function.
 extern "C" fn cksm_register_func(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
@@ -842,6 +882,9 @@ extern "C" fn cksm_register_func(db: *mut Sqlite3, pz_err_msg_1: *mut *mut i8,
     return rc;
 }
 
+///* Register the cksum VFS as the default VFS for the system.
+///* Also make arrangements to automatically register the "verify_checksum()"
+///* SQL function on each new database connection.
 extern "C" fn cksm_register_vfs() -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -868,13 +911,20 @@ extern "C" fn cksm_register_vfs() -> i32 {
     }
 }
 
+/// 
+///* This routine is called by sqlite3_load_extension() when the
+///* extension is first loaded.
+///*
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_cksumvfs_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc = cksm_register_func(db, core::ptr::null_mut(), core::ptr::null());
+
+    /// not used
+    (rc = cksm_register_func(db, core::ptr::null_mut(), core::ptr::null()));
     if rc == 0 { rc = cksm_register_vfs(); }
     if rc == 0 { rc = 0 | 1 << 8; }
     return rc;

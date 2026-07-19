@@ -2,10 +2,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* All global variables are gathered into the "g" singleton.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -21,12 +28,15 @@ struct GlobalVars {
 #[unsafe(no_mangle)]
 pub static mut g: GlobalVars = unsafe { core::mem::zeroed() };
 
+///* Clear and free an sqlite3_str object
 extern "C" fn str_free(p_str_1: *mut Sqlite3Str) -> () {
     unsafe {
         sqlite3_free(unsafe { sqlite3_str_finish(p_str_1) } as *mut ())
     };
 }
 
+///* Print an error resulting from faulting command-line arguments and
+///* abort the program.
 unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -50,6 +60,8 @@ unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Print an error message for an error that occurs at runtime, then
+///* abort the program.
 unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -68,6 +80,12 @@ unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+/// Safely quote an SQL identifier.  Use the minimum amount of transformation
+///* necessary to allow the string to be used with %s.
+///*
+///* Space to hold the returned string is obtained from sqlite3_malloc().  The
+///* caller is responsible for ensuring this space is freed when no longer
+///* needed.
 extern "C" fn safe_id(z_id_1: *const i8) -> *mut i8 {
     let mut i: i32 = 0;
     let mut x: i32 = 0;
@@ -114,6 +132,8 @@ extern "C" fn safe_id(z_id_1: *const i8) -> *mut i8 {
         };
 }
 
+///* Prepare a new SQL statement.  Print an error and abort if anything
+///* goes wrong.
 extern "C" fn db_vprepare(z_format_1: *const i8, ap: *mut i8)
     -> *mut Sqlite3Stmt {
     unsafe {
@@ -154,6 +174,7 @@ unsafe extern "C" fn db_prepare(z_format_1: *const i8, mut __va0: ...)
     return p_stmt;
 }
 
+///* Free a list of strings
 extern "C" fn namelist_free(az: *mut *mut i8) -> () {
     if !(az).is_null() {
         let mut i: i32 = 0;
@@ -176,23 +197,79 @@ extern "C" fn namelist_free(az: *mut *mut i8) -> () {
     }
 }
 
+///* Return a list of column names [a] for the table zDb.zTab.  Space to
+///* hold the list is obtained from sqlite3_malloc() and should released
+///* using namelistFree() when no longer needed.
+///*
+///* Primary key columns are listed first, followed by data columns.
+///* The number of columns in the primary key is returned in *pnPkey.
+///*
+///* Normally [a], the "primary key" in the previous sentence is the true
+///* primary key - the rowid or INTEGER PRIMARY KEY for ordinary tables
+///* or the declared PRIMARY KEY for WITHOUT ROWID tables.  However, if
+///* the g.bSchemaPK flag is set, then the schema-defined PRIMARY KEY is
+///* used in all cases.  In that case, entries that have NULL values in
+///* any of their primary key fields will be excluded from the analysis.
+///*
+///* If the primary key for a table is the rowid but rowid is inaccessible,
+///* then this routine returns a NULL pointer.
+///*
+///* [a. If the lone, named table is "sqlite_schema", "rootpage" column is
+///*  omitted and the "type" and "name" columns are made to be the PK.]
+///*
+///* Examples:
+///*    CREATE TABLE t1(a INT UNIQUE, b INTEGER, c TEXT, PRIMARY KEY(c));
+///*    *pnPKey = 1;
+///*    az = { "rowid", "a", "b", "c", 0 }  // Normal case
+///*    az = { "c", "a", "b", 0 }           // g.bSchemaPK==1
+///*
+///*    CREATE TABLE t2(a INT UNIQUE, b INTEGER, c TEXT, PRIMARY KEY(b));
+///*    *pnPKey = 1;
+///*    az = { "b", "a", "c", 0 }
+///*
+///*    CREATE TABLE t3(x,y,z,PRIMARY KEY(y,z));
+///*    *pnPKey = 1                         // Normal case
+///*    az = { "rowid", "x", "y", "z", 0 }  // Normal case
+///*    *pnPKey = 2                         // g.bSchemaPK==1
+///*    az = { "y", "x", "z", 0 }           // g.bSchemaPK==1
+///*
+///*    CREATE TABLE t4(x,y,z,PRIMARY KEY(y,z)) WITHOUT ROWID;
+///*    *pnPKey = 2
+///*    az = { "y", "z", "x", 0 }
+///*
+///*    CREATE TABLE t5(rowid,_rowid_,oid);
+///*    az = 0     // The rowid is not accessible
+#[allow(unused_doc_comments)]
 extern "C" fn column_names(z_db_1: *const i8, z_tab_1: *const i8,
     pn_p_key_1: &mut i32, pb_rowid_1: *mut i32) -> *mut *mut i8 {
     unsafe {
         let mut az: *mut *mut i8 = core::ptr::null_mut();
+        /// List of column names to be returned
         let mut naz: i64 = 0 as i64;
+        /// Number of entries in az[]
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// SQL statement being run
         let mut z_pk_idx_name: *mut i8 = core::ptr::null_mut();
+        /// Name of the PRIMARY KEY index
         let mut true_pk: i32 = 0;
+        /// PRAGMA table_info identifies the PK to use
         let mut n_pk: i64 = 0 as i64;
+        /// Number of PRIMARY KEY columns
         let mut i: i64 = 0 as i64;
         let mut j: i64 = 0 as i64;
         if g.b_schema_pk == 0 {
-            p_stmt =
+
+            /// Normal case:  Figure out what the true primary key is for the table.
+            ///*   *  For WITHOUT ROWID tables, the true primary key is the same as
+            ///*      the schema PRIMARY KEY, which is guaranteed to be present.
+            ///*   *  For rowid tables with an INTEGER PRIMARY KEY, the true primary
+            ///*      key is the INTEGER PRIMARY KEY.
+            ///*   *  For all other rowid tables, the rowid is the true primary key.
+            (p_stmt =
                 unsafe {
                     db_prepare(c"PRAGMA %s.index_list=%Q".as_ptr() as *mut i8 as
                             *const i8, z_db_1, z_tab_1)
-                };
+                });
             while 100 == unsafe { sqlite3_step(p_stmt) } {
                 if unsafe {
                             sqlite3_stricmp(unsafe { sqlite3_column_text(p_stmt, 3) } as
@@ -239,7 +316,11 @@ extern "C" fn column_names(z_db_1: *const i8, z_tab_1: *const i8,
                             *const i8, z_db_1, z_tab_1)
                 };
         } else {
-            n_pk = 0 as i64;
+
+            /// The g.bSchemaPK==1 case:  Use whatever primary key is declared
+            ///* in the schema.  The "rowid" will still be used as the primary key
+            ///* if the table definition does not contain a PRIMARY KEY.
+            (n_pk = 0 as i64);
             p_stmt =
                 unsafe {
                     db_prepare(c"PRAGMA %s.table_info=%Q".as_ptr() as *mut i8 as
@@ -270,7 +351,9 @@ extern "C" fn column_names(z_db_1: *const i8, z_tab_1: *const i8,
                                 as *mut i8 as *const i8)
                 }
             } else { { let _ = 0; } };
-            n_pk = 2 as i64;
+
+            /// For sqlite_schema, will use type and name as the PK.
+            (n_pk = 2 as i64);
             true_pk = 0;
         }
         *pn_p_key_1 = n_pk as i32;
@@ -433,6 +516,8 @@ extern "C" fn column_names(z_db_1: *const i8, z_tab_1: *const i8,
     }
 }
 
+///* Print the sqlite3_value X as an SQL literal.
+#[allow(unused_doc_comments)]
 extern "C" fn print_quoted(out: *mut FILE, x_1: *mut Sqlite3Value) -> () {
     '__s9:
         {
@@ -487,6 +572,8 @@ extern "C" fn print_quoted(out: *mut FILE, x_1: *mut Sqlite3Value) -> () {
                             fprintf(out, c"\'".as_ptr() as *mut i8 as *const i8)
                         };
                     } else {
+
+                        /// Could be an OOM, could be a zero-byte blob
                         unsafe {
                             fprintf(out, c"X\'\'".as_ptr() as *mut i8 as *const i8)
                         };
@@ -602,6 +689,8 @@ extern "C" fn print_quoted(out: *mut FILE, x_1: *mut Sqlite3Value) -> () {
                             fprintf(out, c"\'".as_ptr() as *mut i8 as *const i8)
                         };
                     } else {
+
+                        /// Could be an OOM, could be a zero-byte blob
                         unsafe {
                             fprintf(out, c"X\'\'".as_ptr() as *mut i8 as *const i8)
                         };
@@ -710,6 +799,8 @@ extern "C" fn print_quoted(out: *mut FILE, x_1: *mut Sqlite3Value) -> () {
                             fprintf(out, c"\'".as_ptr() as *mut i8 as *const i8)
                         };
                     } else {
+
+                        /// Could be an OOM, could be a zero-byte blob
                         unsafe {
                             fprintf(out, c"X\'\'".as_ptr() as *mut i8 as *const i8)
                         };
@@ -878,21 +969,32 @@ extern "C" fn print_quoted(out: *mut FILE, x_1: *mut Sqlite3Value) -> () {
     }
 }
 
+///* Output SQL that will recreate the aux.zTab table.
+#[allow(unused_doc_comments)]
 extern "C" fn dump_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     unsafe {
         let z_id: *mut i8 = safe_id(z_tab_1);
+        /// Name of the table
         let mut az: *mut *mut i8 = core::ptr::null_mut();
+        /// List of columns
         let mut n_pk: i32 = 0;
+        /// Number of true primary key columns
         let mut n_col: i32 = 0;
+        /// Number of data columns
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// SQL statement
         let mut z_sep: *const i8 = core::ptr::null();
+        /// Separator string
         let mut p_ins: *mut Sqlite3Str = core::ptr::null_mut();
-        p_stmt =
+
+        /// Beginning of the INSERT statement
+        (p_stmt =
             unsafe {
                 db_prepare(c"SELECT sql FROM aux.sqlite_schema WHERE name=%Q".as_ptr()
                             as *mut i8 as *const i8, z_tab_1)
-            };
+            });
         if 100 == unsafe { sqlite3_step(p_stmt) } {
             unsafe {
                 fprintf(out, c"%s;\n".as_ptr() as *mut i8 as *const i8,
@@ -1023,11 +1125,13 @@ extern "C" fn dump_table(z_tab_1: *const i8, out: *mut FILE) -> () {
             unsafe { sqlite3_finalize(p_stmt) };
             str_free(p_ins);
         }
-        p_stmt =
+
+        /// endif !g.bSchemaOnly
+        (p_stmt =
             unsafe {
                 db_prepare(c"SELECT sql FROM aux.sqlite_schema WHERE type=\'index\' AND tbl_name=%Q AND sql IS NOT NULL".as_ptr()
                             as *mut i8 as *const i8, z_tab_1)
-            };
+            });
         while 100 == unsafe { sqlite3_step(p_stmt) } {
             unsafe {
                 fprintf(out, c"%s;\n".as_ptr() as *mut i8 as *const i8,
@@ -1039,23 +1143,47 @@ extern "C" fn dump_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     }
 }
 
+///* Compute all differences for a single table, except if the
+///* table name is sqlite_schema, ignore the rootpage column.
+#[allow(unused_doc_comments)]
 extern "C" fn diff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     unsafe {
         let mut z_id: *mut i8 = core::ptr::null_mut();
+        /// Name of table (translated for us in SQL)
         let mut az: *mut *mut i8 = core::ptr::null_mut();
+        /// Columns in main
         let mut az2: *mut *mut i8 = core::ptr::null_mut();
+        /// Columns in aux
         let mut n_pk: i32 = 0;
+        /// Primary key columns in main
         let mut n_pk2: i32 = 0;
+        /// Primary key columns in aux
         let mut n: i32 = 0;
+        /// Number of columns in main
         let mut n2: i32 = 0;
+        /// Number of columns in aux
         let mut n_q: i32 = 0;
+        /// Number of output columns in the diff query
         let mut i: i32 = 0;
+        /// Loop counter
         let mut z_sep: *const i8 = core::ptr::null();
+        /// Separator string
         let mut p_sql: *mut Sqlite3Str = core::ptr::null_mut();
+        /// Comparison query
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Query statement to do the diff
         let mut z_lead: *const i8 = core::ptr::null();
+        /// Simply run columnNames() on all tables of the origin
+        ///* database and show the results.  This is used for testing
+        ///* and debugging of the columnNames() function.
+        /// Table missing from second database.
+        /// Table missing from source
+        /// Schema mismatch
+        /// Build the comparison query
         let mut z_n_tab: *mut i8 = core::ptr::null_mut();
+        /// Drop indexes that are missing in the destination
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// Run the query and output differences
         let mut i_type: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -1976,6 +2104,10 @@ extern "C" fn diff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     }
 }
 
+///* Check that table zTab exists and has the same schema in both the "main"
+///* and "aux" databases currently opened by the global db handle. If they
+///* do not, output an error message on stderr and exit(1). Otherwise, if
+///* the schemas do match, return control to the caller.
 extern "C" fn check_schemas_match(z_tab_1: *const i8) -> () {
     let p_stmt: *mut Sqlite3Stmt =
         unsafe {
@@ -2007,6 +2139,7 @@ struct Hash {
     z: [i8; 16],
 }
 
+///* Initialize the rolling hash using the first NHASH characters of z[]
 extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     let mut a: u16 = 0 as u16;
     let mut b: u16 = 0 as u16;
@@ -2033,6 +2166,7 @@ extern "C" fn hash_init(p_hash_1: &mut Hash, z: *const i8) -> () {
     (*p_hash_1).i = 0 as u16;
 }
 
+///* Advance the rolling hash by a single character "c"
 extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
     let old: u16 = (*p_hash_1).z[(*p_hash_1).i as usize] as u16;
     (*p_hash_1).z[(*p_hash_1).i as usize] = c as i8;
@@ -2044,12 +2178,16 @@ extern "C" fn hash_next(p_hash_1: &mut Hash, c: i32) -> () {
             u16;
 }
 
+///* Return a 32-bit hash value
 extern "C" fn hash_32bit(p_hash_1: &Hash) -> u32 {
     return ((*p_hash_1).a as i32 & 65535) as u32 |
             (((*p_hash_1).b as i32 & 65535) as u32) << 16;
 }
 
+///* Write an base-64 integer into the given buffer.
+#[allow(unused_doc_comments)]
 extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
+    ///  123456789 123456789 123456789 123456789 123456789 123456789 123
     let mut i: i32 = 0;
     let mut j: i32 = 0;
     let mut z_buf: [i8; 20] = [0; 20];
@@ -2098,6 +2236,7 @@ extern "C" fn put_int(mut v: u32, pz: &mut *mut i8) -> () {
     }
 }
 
+///* Return the number digits in the base-64 representation of a positive integer
 extern "C" fn digit_count(v: i32) -> i32 {
     let mut i: u32 = 0 as u32;
     let mut x: u32 = 0 as u32;
@@ -2115,6 +2254,7 @@ extern "C" fn digit_count(v: i32) -> i32 {
     return i as i32;
 }
 
+///* Compute a 32-bit checksum on the N-byte buffer.  Return the result.
 extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     let mut z: *const u8 = z_in_1 as *const u8;
     let mut sum0: u32 = 0 as u32;
@@ -2189,6 +2329,67 @@ extern "C" fn checksum(z_in_1: *const i8, mut n_1: u64) -> u32 {
     return sum3;
 }
 
+///* Create a new delta.
+///*
+///* The delta is written into a preallocated buffer, zDelta, which
+///* should be at least 60 bytes longer than the target file, zOut.
+///* The delta string will be NUL-terminated, but it might also contain
+///* embedded NUL characters if either the zSrc or zOut files are
+///* binary.  This function returns the length of the delta string
+///* in bytes, excluding the final NUL terminator character.  Return 0
+///* if an OOM occurs.
+///*
+///* Output Format:
+///*
+///* The delta begins with a base64 number followed by a newline.  This
+///* number is the number of bytes in the TARGET file.  Thus, given a
+///* delta file z, a program can compute the size of the output file
+///* simply by reading the first line and decoding the base-64 number
+///* found there.  The delta_output_size() routine does exactly this.
+///*
+///* After the initial size number, the delta consists of a series of
+///* literal text segments and commands to copy from the SOURCE file.
+///* A copy command looks like this:
+///*
+///*     NNN@MMM,
+///*
+///* where NNN is the number of bytes to be copied and MMM is the offset
+///* into the source file of the first byte (both base-64).   If NNN is 0
+///* it means copy the rest of the input file.  Literal text is like this:
+///*
+///*     NNN:TTTTT
+///*
+///* where NNN is the number of bytes of text (base-64) and TTTTT is the text.
+///*
+///* The last term is of the form
+///*
+///*     NNN;
+///*
+///* In this case, NNN is a 32-bit bigendian checksum of the output file
+///* that can be used to verify that the delta applied correctly.  All
+///* numbers are in base-64.
+///*
+///* Pure text files generate a pure text delta.  Binary files generate a
+///* delta that may contain some binary data.
+///*
+///* Algorithm:
+///*
+///* The encoder first builds a hash table to help it find matching
+///* patterns in the source file.  16-byte chunks of the source file
+///* sampled at evenly spaced intervals are used to populate the hash
+///* table.
+///*
+///* Next we begin scanning the target file using a sliding 16-byte
+///* window.  The hash of the 16-byte window in the target is used to
+///* search for a matching section in the source file.  When a match
+///* is found, a copy command is added to the delta.  An effort is
+///* made to extend the matching section to regions that come before
+///* and after the 16-byte hash window.  A copy command is only issued
+///* if the result would use less space that just quoting the text
+///* literally. Literal text is added to the delta for sections that
+///* do not match or which can not be encoded efficiently using copy
+///* commands.
+#[allow(unused_doc_comments)]
 extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
     z_out_1: *const i8, len_out_1: u32, mut z_delta_1: *mut i8) -> i32 {
     let mut i: u32 = 0 as u32;
@@ -2196,9 +2397,15 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
     let z_orig_delta: *const i8 = z_delta_1 as *const i8;
     let mut h: Hash = unsafe { core::mem::zeroed() };
     let mut n_hash: i64 = 0 as i64;
+    /// Number of hash table entries
     let mut landmark: *mut i32 = core::ptr::null_mut();
+    /// Primary hash table
     let mut collide: *mut i32 = core::ptr::null_mut();
+    /// Collision chain
     let mut last_read: i32 = -1;
+
+    /// Last byte of zSrc read by a COPY command
+    /// Add the target file size to the beginning of the delta
     put_int(len_out_1, &mut z_delta_1);
     unsafe {
         *{
@@ -2238,7 +2445,10 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
         };
         return unsafe { z_delta_1.offset_from(z_orig_delta) } as i64 as i32;
     }
-    n_hash = (len_src_1 / 16 as u32) as i64;
+
+    /// Compute the hash table used to locate matching sections in the
+    ///* source file.
+    (n_hash = (len_src_1 / 16 as u32) as i64);
     collide =
         unsafe {
                 sqlite3_malloc64((n_hash * 2 as i64) as u64 *
@@ -2274,7 +2484,10 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
             i += 16 as u32;
         }
     }
-    base = 0 as u32;
+
+    /// Begin scanning the target file and generating copy commands and
+    ///* literal sections of the delta.
+    (base = 0 as u32);
     while (base + 16 as u32) < len_out_1 {
         let mut i_src: i32 = 0;
         let mut i_block: i32 = 0;
@@ -2283,7 +2496,9 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
         let mut best_litsz: i32 = 0;
         hash_init(&mut h, unsafe { &*z_out_1.add(base as usize) });
         i = 0 as u32;
-        best_cnt = 0;
+
+        /// Trying to match a landmark against zOut[base+i]
+        (best_cnt = 0);
         loop {
             let mut hv: i32 = 0;
             let mut limit: i32 = 250;
@@ -2292,6 +2507,19 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
             while i_block >= 0 &&
                     { let __p = &mut limit; let __t = *__p; *__p -= 1; __t } > 0
                 {
+                ///* The hash window has identified a potential match against
+                ///* landmark block iBlock.  But we need to investigate further.
+                ///*
+                ///* Look for a region in zOut that matches zSrc. Anchor the search
+                ///* at zSrc[iSrc] and zOut[base+i].  Do not include anything prior to
+                ///* zOut[base] or after zOut[outLen] nor anything after zSrc[srcLen].
+                ///*
+                ///* Set cnt equal to the length of the match and set ofst so that
+                ///* zSrc[ofst] is the first element of the match.  litsz is the number
+                ///* of characters between zOut[base] and the beginning of the match.
+                ///* sz will be the overhead (in bytes) needed to encode the copy
+                ///* command.  Only generate copy command if the overhead of the
+                ///* copy command is less than the amount of literal text to be copied.
                 let mut cnt: i32 = 0;
                 let mut ofst: i32 = 0;
                 let mut litsz: i32 = 0;
@@ -2300,7 +2528,10 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
                 let mut x: i32 = 0;
                 let mut y: i32 = 0;
                 let mut sz: i32 = 0;
-                i_src = i_block * 16;
+
+                /// Beginning at iSrc, match forwards as far as we can.  j counts
+                ///* the number of characters that match
+                (i_src = i_block * 16);
                 {
                     { { j = 0; x = i_src }; y = (base + i) as i32 };
                     '__b31: loop {
@@ -2341,21 +2572,34 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
                     }
                 }
                 { let __p = &mut k; let __t = *__p; *__p -= 1; __t };
-                ofst = i_src - k;
+
+                /// Compute the offset and size of the matching region
+                (ofst = i_src - k);
                 cnt = j + k + 1;
                 litsz = (i - k as u32) as i32;
-                sz =
+
+                /// Number of bytes of literal text before the copy */
+                ///        /* sz will hold the number of bytes needed to encode the "insert"
+                ///* command and the copy command, not counting the "insert" text
+                (sz =
                     digit_count((i - k as u32) as i32) + digit_count(cnt) +
-                            digit_count(ofst) + 3;
+                            digit_count(ofst) + 3);
                 if cnt >= sz && cnt > best_cnt {
-                    best_cnt = cnt;
+
+                    /// Remember this match only if it is the best so far and it
+                    ///* does not increase the file size
+                    (best_cnt = cnt);
                     best_ofst = i_src - k;
                     best_litsz = litsz;
                 }
-                i_block = unsafe { *collide.offset(i_block as isize) };
+
+                /// Check the next matching block
+                (i_block = unsafe { *collide.offset(i_block as isize) });
             }
             if best_cnt > 0 {
                 if best_litsz > 0 {
+
+                    /// Add an insert command before the copy
                     put_int(best_litsz as u32, &mut z_delta_1);
                     unsafe {
                         *{
@@ -2403,6 +2647,9 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
                 break;
             }
             if base + i + 16 as u32 >= len_out_1 {
+
+                /// We have reached the end of the file and have not found any
+                ///* matches.  Do an "insert" for everything that does not match
                 put_int(len_out_1 - base, &mut z_delta_1);
                 unsafe {
                     *{
@@ -2425,6 +2672,8 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
                 base = len_out_1;
                 break;
             }
+
+            /// Advance the hash by one character.  Keep looking for a match
             hash_next(&mut h,
                 unsafe { *z_out_1.add((base + i + 16 as u32) as usize) } as
                     i32);
@@ -2452,6 +2701,8 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
             *__p = unsafe { (*__p).add(__n as usize) };
         };
     }
+
+    /// Output the final checksum record.
     put_int(checksum(z_out_1, len_out_1 as u64), &mut z_delta_1);
     unsafe {
         *{
@@ -2465,6 +2716,8 @@ extern "C" fn rbu_delta_create(z_src_1: *const i8, len_src_1: u32,
     return unsafe { z_delta_1.offset_from(z_orig_delta) } as i64 as i32;
 }
 
+///* End of code copied from fossil.
+///************************************************************************
 extern "C" fn str_printf_array(p_str_1: *mut Sqlite3Str, z_sep_1: *const i8,
     z_fmt_1: *const i8, az: &[*mut i8]) -> () {
     let mut i: i32 = 0;
@@ -2493,9 +2746,12 @@ extern "C" fn str_printf_array(p_str_1: *mut Sqlite3Str, z_sep_1: *const i8,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
     n_pk_1: i32, b_ota_rowid_1: i32, p_sql_1: *mut Sqlite3Str) -> () {
     let mut i: i32 = 0;
+
+    /// First the newly inserted rows: *
     unsafe {
         sqlite3_str_appendf(p_sql_1,
             c"SELECT ".as_ptr() as *mut i8 as *const i8)
@@ -2512,6 +2768,8 @@ extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
         sqlite3_str_appendf(p_sql_1,
             c", 0, ".as_ptr() as *mut i8 as *const i8)
     };
+
+    /// Set ota_control to 0 for an insert
     str_printf_array(p_sql_1, c", ".as_ptr() as *mut i8 as *const i8,
         c"NULL".as_ptr() as *mut i8 as *const i8,
         unsafe {
@@ -2553,6 +2811,8 @@ extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
                 &[]
             } else { core::slice::from_raw_parts(__p, n_pk_1 as usize) }
         });
+
+    /// Deleted rows:
     unsafe {
         sqlite3_str_appendf(p_sql_1,
             c"\nUNION ALL\nSELECT ".as_ptr() as *mut i8 as *const i8)
@@ -2585,6 +2845,8 @@ extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
         sqlite3_str_appendf(p_sql_1,
             c", 1, ".as_ptr() as *mut i8 as *const i8)
     };
+
+    /// Set ota_control to 1 for a delete
     str_printf_array(p_sql_1, c", ".as_ptr() as *mut i8 as *const i8,
         c"NULL".as_ptr() as *mut i8 as *const i8,
         unsafe {
@@ -2734,6 +2996,8 @@ extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
                     *const i8)
         };
     }
+
+    /// Now add an ORDER BY clause to sort everything by PK.
     unsafe {
         sqlite3_str_appendf(p_sql_1,
             c"\nORDER BY ".as_ptr() as *mut i8 as *const i8)
@@ -2757,26 +3021,41 @@ extern "C" fn get_rbudiff_query(z_tab_1: *const i8, az_col_1: *mut *mut i8,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     unsafe {
         let mut b_ota_rowid: i32 = 0;
+        /// True to use an ota_rowid column
         let mut n_pk: i32 = 0;
+        /// Number of primary key columns in table
         let mut az_col: *mut *mut i8 = core::ptr::null_mut();
+        /// NULL terminated array of col names
         let mut i: i32 = 0;
         let mut n_col: i32 = 0;
         let mut p_ct: *mut Sqlite3Str = core::ptr::null_mut();
+        /// The "CREATE TABLE data_xxx" statement
         let mut p_sql: *mut Sqlite3Str = core::ptr::null_mut();
+        /// Query to find differences
         let mut p_insert: *mut Sqlite3Str = core::ptr::null_mut();
+        /// First part of output INSERT statement
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut n_row: i32 = 0;
-        g.b_schema_pk = 1;
+
+        /// Total rows in data_xxx table
+        /// --rbu mode must use real primary keys.
+        (g.b_schema_pk = 1);
         p_ct = unsafe { sqlite3_str_new(core::ptr::null_mut()) };
         p_sql = unsafe { sqlite3_str_new(core::ptr::null_mut()) };
         p_insert = unsafe { sqlite3_str_new(core::ptr::null_mut()) };
+
+        /// Check that the schemas of the two tables match. Exit early otherwise.
         check_schemas_match(z_tab_1);
-        az_col =
+
+        /// Grab the column names and PK details for the table(s). If no usable PK
+        ///* columns are found, bail out early.
+        (az_col =
             column_names(c"main".as_ptr() as *mut i8 as *const i8, z_tab_1,
-                &mut n_pk, &mut b_ota_rowid);
+                &mut n_pk, &mut b_ota_rowid));
         if az_col == core::ptr::null_mut() {
             unsafe {
                 runtime_error(c"table %s has no usable PK columns".as_ptr() as
@@ -2793,6 +3072,8 @@ extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
                 { let __p = &mut n_col; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Build and output the CREATE TABLE statement for the data_xxx table
         unsafe {
             sqlite3_str_appendf(p_ct,
                 c"CREATE TABLE IF NOT EXISTS \'data_%q\'(".as_ptr() as *mut i8
@@ -2818,7 +3099,12 @@ extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
             sqlite3_str_appendf(p_ct,
                 c", rbu_control);".as_ptr() as *mut i8 as *const i8)
         };
+
+        /// Get the SQL for the query to retrieve data from the two databases
         get_rbudiff_query(z_tab_1, az_col, n_pk, b_ota_rowid, p_sql);
+
+        /// Build the first part of the INSERT statement output for each row
+        ///* in the data_xxx table.
         unsafe {
             sqlite3_str_appendf(p_insert,
                 c"INSERT INTO \'data_%q\' (".as_ptr() as *mut i8 as *const i8,
@@ -2857,6 +3143,8 @@ extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
                 };
                 unsafe { sqlite3_str_reset(p_ct) };
             }
+
+            /// Output the first part of the INSERT statement
             unsafe {
                 fprintf(out, c"%s".as_ptr() as *mut i8 as *const i8,
                     unsafe { sqlite3_str_value(p_insert) })
@@ -2969,6 +3257,8 @@ extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
                 };
                 unsafe { sqlite3_free(z_ota_control as *mut ()) };
             }
+
+            /// And the closing bracket of the insert statement
             unsafe { fprintf(out, c");\n".as_ptr() as *mut i8 as *const i8) };
         }
         unsafe { sqlite3_finalize(p_stmt) };
@@ -2992,22 +3282,44 @@ extern "C" fn rbudiff_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     }
 }
 
+///* Display a summary of differences between two versions of the same
+///* table table.
+///*
+///*   *  Number of rows changed
+///*   *  Number of rows added
+///*   *  Number of rows deleted
+///*   *  Number of identical rows
+#[allow(unused_doc_comments)]
 extern "C" fn summarize_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     unsafe {
         let mut z_id: *mut i8 = core::ptr::null_mut();
+        /// Name of table (translated for us in SQL)
         let mut az: *mut *mut i8 = core::ptr::null_mut();
+        /// Columns in main
         let mut az2: *mut *mut i8 = core::ptr::null_mut();
+        /// Columns in aux
         let mut n_pk: i32 = 0;
+        /// Primary key columns in main
         let mut n_pk2: i32 = 0;
+        /// Primary key columns in aux
         let mut n: i32 = 0;
+        /// Number of columns in main
         let mut n2: i32 = 0;
+        /// Number of columns in aux
         let mut i: i32 = 0;
+        /// Loop counter
         let mut z_sep: *const i8 = core::ptr::null();
+        /// Separator string
         let mut p_sql: *mut Sqlite3Str = core::ptr::null_mut();
+        /// Comparison query
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Query statement to do the diff
         let mut n_update: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Number of updated rows
         let mut n_unchanged: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Number of unmodified rows
         let mut n_delete: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Number of deleted rows
         let mut n_insert: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut __state: i32 = 0;
         loop {
@@ -3449,6 +3761,7 @@ extern "C" fn summarize_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     }
 }
 
+///* Write a 64-bit signed integer as a varint onto out
 extern "C" fn puts_varint(out: *mut FILE, mut v: Sqlite3Uint64) -> () {
     let mut i: i32 = 0;
     let mut n: i32 = 0;
@@ -3497,6 +3810,7 @@ extern "C" fn puts_varint(out: *mut FILE, mut v: Sqlite3Uint64) -> () {
     }
 }
 
+///* Write an SQLite value onto out.
 extern "C" fn put_value(out: *mut FILE, p_stmt_1: *mut Sqlite3Stmt, k: i32)
     -> () {
     let i_d_type: i32 = unsafe { sqlite3_column_type(p_stmt_1, k) };
@@ -3574,19 +3888,32 @@ extern "C" fn put_value(out: *mut FILE, p_stmt_1: *mut Sqlite3Stmt, k: i32)
     }
 }
 
+///* Generate a CHANGESET for all differences from main.zTab to aux.zTab.
+#[allow(unused_doc_comments)]
 extern "C" fn changeset_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// SQL statment
         let mut z_id: *mut i8 = core::ptr::null_mut();
+        /// Escaped name of the table
         let mut az_col: *mut *mut i8 = core::ptr::null_mut();
+        /// List of escaped column names
         let mut n_col: i64 = 0 as i64;
+        /// Number of columns
         let mut ai_flg: *mut i32 = core::ptr::null_mut();
+        /// 0 if column is not part of PK
         let mut ai_pk: *mut i32 = core::ptr::null_mut();
+        /// Column numbers for each PK column
         let mut n_pk: i64 = 0 as i64;
+        /// Number of PRIMARY KEY columns
         let mut p_sql: *mut Sqlite3Str = core::ptr::null_mut();
+        /// SQL for the diff query
         let mut i: i32 = 0;
         let mut k: i32 = 0;
+        /// Loop counters
         let mut z_sep: *const i8 = core::ptr::null();
+        /// List separator
+        /// Check that the schemas of the two tables match. Exit early otherwise.
         let mut i_type: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -4296,11 +4623,17 @@ extern "C" fn changeset_one_table(z_tab_1: *const i8, out: *mut FILE) -> () {
     }
 }
 
+///* Return true if the ascii character passed as the only argument is a
+///* whitespace character. Otherwise return false.
 extern "C" fn is_whitespace(x: i8) -> i32 {
     return (x as i32 == ' ' as i32 || x as i32 == '\t' as i32 ||
                     x as i32 == '\n' as i32 || x as i32 == '\r' as i32) as i32;
 }
 
+///* Extract the next SQL keyword or quoted string from buffer zIn and copy it
+///* (or a prefix of it if it will not fit) into buffer zBuf, size nBuf bytes.
+///* Return a pointer to the character within zIn immediately following 
+///* the token or quoted string just extracted.
 extern "C" fn gobble_token(z_in_1: *const i8, z_buf_1: *mut i8, n_buf_1: i32)
     -> *const i8 {
     let mut p: *const i8 = z_in_1;
@@ -4387,6 +4720,14 @@ extern "C" fn gobble_token(z_in_1: *const i8, z_buf_1: *mut i8, n_buf_1: i32)
     return p;
 }
 
+///* This function is the implementation of SQL scalar function "module_name":
+///*
+///*   module_name(SQL)
+///*
+///* The only argument should be an SQL statement of the type that may appear
+///* in the sqlite_schema table. If the statement is a "CREATE VIRTUAL TABLE"
+///* statement, then the value returned is the name of the module that it
+///* uses. Otherwise, if the statement is not a CVT, NULL is returned.
 extern "C" fn module_name_func(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const i8 = core::ptr::null();
@@ -4459,6 +4800,8 @@ extern "C" fn module_name_func(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     };
 }
 
+///* Return the text of an SQL statement that itself returns the list of
+///* tables to process within the database.
 #[unsafe(no_mangle)]
 pub extern "C" fn all_tables_sql() -> *const i8 {
     unsafe {
@@ -4500,6 +4843,7 @@ pub extern "C" fn all_tables_sql() -> *const i8 {
     }
 }
 
+///* Print sketchy documentation for this utility program
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -4515,6 +4859,7 @@ extern "C" fn show_help() -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -4819,11 +5164,13 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         if !(z_tab).is_null() {
             unsafe { x_diff.unwrap()(z_tab as *const i8, out as *mut SFILE) };
         } else {
-            p_stmt =
+
+            /// Handle tables one by one
+            (p_stmt =
                 unsafe {
                     db_prepare(c"%s".as_ptr() as *mut i8 as *const i8,
                         all_tables_sql())
-                };
+                });
             while 100 == unsafe { sqlite3_step(p_stmt) } {
                 unsafe {
                     x_diff.unwrap()(unsafe { sqlite3_column_text(p_stmt, 0) } as
@@ -4838,6 +5185,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                     c"COMMIT;\n".as_ptr() as *mut i8 as *const i8)
             };
         }
+
+        /// TBD: Handle trigger differences */
+        ///  /* TBD: Handle view differences
         unsafe { sqlite3_close(g.db) };
         return Ok(());
     }

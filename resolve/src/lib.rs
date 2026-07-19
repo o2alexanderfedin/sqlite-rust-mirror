@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,21 @@ impl Parse {
     }
 }
 
+///* Subqueries store the original database, table and column names for their
+///* result sets in ExprList.a[].zSpan, in the form "DATABASE.TABLE.COLUMN",
+///* and mark the expression-list item by setting ExprList.a[].fg.eEName
+///* to ENAME_TAB.
+///*
+///* Check to see if the zSpan/eEName of the expression-list item passed to this
+///* routine matches the zDb, zTab, and zCol.  If any of zDb, zTab, and zCol are
+///* NULL then those fields will match anything. Return true if there is a match,
+///* or false otherwise.
+///*
+///* SF_NestedFrom subqueries also store an entry for the implicit rowid (or
+///* _rowid_, or oid) column by setting ExprList.a[].fg.eEName to ENAME_ROWID,
+///* and setting zSpan to "DATABASE.TABLE.<rowid-alias>". This type of pItem
+///* argument matches if zCol is a rowid alias. If it is not NULL, (*pbRowid)
+///* is set to 1 if there is this kind of match.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_match_e_name(p_item: &ExprListItem,
     z_col: *const i8, z_tab: *const i8, z_db: *const i8, pb_rowid: *mut i32)
@@ -461,6 +491,8 @@ pub extern "C" fn sqlite3_match_e_name(p_item: &ExprListItem,
     return 1;
 }
 
+///* The argument is guaranteed to be a non-NULL Expr node of type TK_COLUMN.
+///* return the appropriate colUsed mask.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_col_used(p_expr: &Expr) -> Bitmask {
     unsafe {
@@ -494,6 +526,20 @@ pub extern "C" fn sqlite3_expr_col_used(p_expr: &Expr) -> Bitmask {
     }
 }
 
+///* Report an error that an expression is not valid for some set of
+///* pNC->ncFlags values determined by validMask.
+///*
+///* static void notValid(
+///*   Parse *pParse,       // Leave error message here
+///*   NameContext *pNC,    // The name context
+///*   const char *zMsg,    // Type of error
+///*   int validMask,       // Set of contexts for which prohibited
+///*   Expr *pExpr          // Invalidate this expression on error
+///* ){...}
+///*
+///* As an optimization, since the conditional is almost always false
+///* (because errors are rare), the conditional is moved outside of the
+///* function call using a macro.
 extern "C" fn not_valid_impl(p_parse_1: *mut Parse, p_nc_1: &NameContext,
     z_msg_1: *const i8, p_expr_1: *mut Expr, p_error_1: *const Expr) -> () {
     let mut z_in: *const i8 =
@@ -517,6 +563,10 @@ extern "C" fn not_valid_impl(p_parse_1: *mut Parse, p_nc_1: &NameContext,
     };
 }
 
+///* Create a new expression term for the column specified by pMatch and
+///* iColumn.  Append this new expression term to the FULL JOIN Match set
+///* in *ppList.  Create a new *ppList if this is the first term in the
+///* set.
 extern "C" fn extend_fj_match(p_parse_1: *mut Parse,
     pp_list_1: &mut *mut ExprList, p_match_1: &SrcItem, i_column_1: i16)
     -> () {
@@ -540,6 +590,7 @@ extern "C" fn extend_fj_match(p_parse_1: *mut Parse,
     }
 }
 
+///* Return TRUE (non-zero) if zTab is a valid name for the schema table pTab.
 extern "C" fn is_valid_schema_table_name(z_tab_1: *const i8, p_tab_1: &Table,
     z_db_1: *const i8) -> i32 {
     let mut z_legacy: *const i8 = core::ptr::null();
@@ -601,6 +652,15 @@ extern "C" fn is_valid_schema_table_name(z_tab_1: *const i8, p_tab_1: &Table,
     return 0;
 }
 
+///* Walk the expression tree pExpr and increase the aggregate function
+///* depth (the Expr.op2 field) by N on every TK_AGG_FUNCTION node.
+///* This needs to occur when copying a TK_AGG_FUNCTION node from an
+///* outer query into an inner subquery.
+///*
+///* incrAggFunctionDepth(pExpr,n) is the main routine.  incrAggDepth(..)
+///* is a helper function - a callback for the tree walker.
+///*
+///* See also the sqlite3WindowExtraAggFuncDepth() routine in window.c
 extern "C" fn incr_agg_depth(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -626,12 +686,34 @@ extern "C" fn incr_agg_function_depth(p_expr_1: *mut Expr, n_1: i32) -> () {
     }
 }
 
+///* Turn the pExpr expression into an alias for the iCol-th column of the
+///* result set in pEList.
+///*
+///* If the reference is followed by a COLLATE operator, then make sure
+///* the COLLATE operator is preserved.  For example:
+///*
+///*     SELECT a+b, c+d FROM t1 ORDER BY 1 COLLATE nocase;
+///*
+///* Should be transformed into:
+///*
+///*     SELECT a+b, c+d FROM t1 ORDER BY (a+b) COLLATE nocase;
+///*
+///* The nSubquery parameter specifies how many levels of subquery the
+///* alias is removed from the original expression.  The usual value is
+///* zero but it might be more if the alias is contained within a subquery
+///* of the original expression.  The Expr.op2 field of TK_AGG_FUNCTION
+///* structures must be increased by the nSubquery amount.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_alias(p_parse_1: *mut Parse, p_e_list_1: &ExprList,
     i_col_1: i32, p_expr_1: *mut Expr, n_subquery_1: i32) -> () {
     unsafe {
         let mut p_orig: *const Expr = core::ptr::null();
+        /// The iCol-th column of the result set
         let mut p_dup: *mut Expr = core::ptr::null_mut();
+        /// Copy of pOrig
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+
+        /// The database connection
         { let _ = 0; };
         p_orig =
             unsafe {
@@ -681,6 +763,8 @@ extern "C" fn resolve_alias(p_parse_1: *mut Parse, p_e_list_1: &ExprList,
     }
 }
 
+///* Return TRUE if the double-quoted string  mis-feature should be supported.
+#[allow(unused_doc_comments)]
 extern "C" fn are_double_quoted_strings_enabled(db: *mut Sqlite3,
     p_top_nc_1: &NameContext) -> i32 {
     if unsafe { (*db).init.busy } != 0 { return 1; }
@@ -691,39 +775,178 @@ extern "C" fn are_double_quoted_strings_enabled(db: *mut Sqlite3,
         }
         return (unsafe { (*db).flags } & 536870912 as u64 != 0 as u64) as i32;
     } else {
+
+        /// Currently parsing a DML statement
         return (unsafe { (*db).flags } & 1073741824 as u64 != 0 as u64) as
                 i32;
     }
 }
 
+///* Given the name of a column of the form X.Y.Z or Y.Z or just Z, look up
+///* that name in the set of source tables in pSrcList and make the pExpr
+///* expression node refer back to that source column.  The following changes
+///* are made to pExpr:
+///*
+///*    pExpr->iDb           Set the index in db->aDb[] of the database X
+///*                         (even if X is implied).
+///*    pExpr->iTable        Set to the cursor number for the table obtained
+///*                         from pSrcList.
+///*    pExpr->y.pTab        Points to the Table structure of X.Y (even if
+///*                         X and/or Y are implied.)
+///*    pExpr->iColumn       Set to the column number within the table.
+///*    pExpr->op            Set to TK_COLUMN.
+///*    pExpr->pLeft         Any expression this points to is deleted
+///*    pExpr->pRight        Any expression this points to is deleted.
+///*
+///* The zDb variable is the name of the database (the "X").  This value may be
+///* NULL meaning that name is of the form Y.Z or Z.  Any available database
+///* can be used.  The zTable variable is the name of the table (the "Y").  This
+///* value can be NULL if zDb is also NULL.  If zTable is NULL it
+///* means that the form of the name is Z and that columns from any table
+///* can be used.
+///*
+///* If the name cannot be resolved unambiguously, leave an error message
+///* in pParse and return WRC_Abort.  Return WRC_Prune on success.
+#[allow(unused_doc_comments)]
 extern "C" fn lookup_name(p_parse_1: *mut Parse, mut z_db_1: *const i8,
     z_tab_1: *const i8, p_right_1: &Expr, mut p_nc_1: *mut NameContext,
     mut p_expr_1: *mut Expr) -> i32 {
     unsafe {
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut cnt: i32 = 0;
+        /// Number of matching column names
         let mut cnt_tab: i32 = 0;
+        /// Number of potential "rowid" matches
         let mut n_subquery: i32 = 0;
+        /// How many levels of subquery
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut p_item: *mut SrcItem = core::ptr::null_mut();
+        /// Use for looping over pSrcList items
         let mut p_match: *mut SrcItem = core::ptr::null_mut();
+        /// The matching pSrcList item
         let mut p_top_nc: *mut NameContext = core::ptr::null_mut();
+        /// First namecontext in the list
         let mut p_schema: *mut Schema = core::ptr::null_mut();
+        /// Schema of the expression
         let mut e_new_expr_op: i32 = 0;
+        /// New value for pExpr->op on success
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// Table holding the row
         let mut p_fj_match: *mut ExprList = core::ptr::null_mut();
+        /// Matches for FULL JOIN .. USING
         let mut z_col: *const i8 = core::ptr::null();
+        /// the name context cannot be NULL.
+        /// The Z in X.Y.Z cannot be NULL
+        /// Initialize the node to no-match
+        /// Translate the schema name in zDb into a pointer to the corresponding
+        ///* schema.  If not found, pSchema will remain NULL and nothing will match
+        ///* resulting in an appropriate error message toward the end of this routine
+        /// Silently ignore database qualifiers inside CHECK constraints and
+        ///* partial indices.  Do not raise errors because that might break
+        ///* legacy and because it does not hurt anything to just ignore the
+        ///* database name.
+        /// This branch is taken when the main database has been renamed
+        ///* using SQLITE_DBCONFIG_MAINDBNAME.
+        /// Start at the inner-most context and move outward until a match is found
         let mut p_e_list: *mut ExprList = core::ptr::null_mut();
         let mut p_src_list: *mut SrcList = core::ptr::null_mut();
+        /// In this case, pItem is a subquery that has been formed from a
+        ///* parenthesized subset of the FROM clause terms.  Example:
+        ///*   .... FROM t1 LEFT JOIN (t2 RIGHT JOIN t3 USING(x)) USING(y) ...
+        ///*                          \_________________________/
+        ///*             This pItem -------------^
         let mut hit: i32 = 0;
         let mut p_sel: *const Select = core::ptr::null();
         let mut b_rowid: i32 = 0;
+        /// True if possible rowid match
+        /// Two or more tables have the same column name which is
+        ///* not joined by USING. Or, a single table has two columns
+        ///* that match a USING term (if pMatch==pItem). These are both
+        ///* "ambiguous column name" errors. Signal as much by clearing
+        ///* pFJMatch and letting cnt go above 1.
+        /// An INNER or LEFT JOIN.  Use the left-most table
+        /// A RIGHT JOIN.  Use the right-most table
+        /// For a FULL JOIN, we must construct a coalesce() func
+        /// This is a potential rowid match, but there has already been
+        ///* a real match found. So this can be ignored.
+        /// rowid cannot be part of a USING clause - assert() this.
+        /// Two or more tables have the same column name which is
+        ///* not joined by USING.  This is an error.  Signal as much
+        ///* by clearing pFJMatch and letting cnt go above 1.
+        /// An INNER or LEFT JOIN.  Use the left-most table
+        /// A RIGHT JOIN.  Use the right-most table
+        /// For a FULL JOIN, we must construct a coalesce() func
+        /// Substitute the rowid (column -1) for the INTEGER PRIMARY KEY
+        /// pTab is a potential ROWID match.  Keep track of it and match
+        ///* the ROWID later if that seems appropriate.  (Search for "cntTab"
+        ///* to find related code.)  Only allow a ROWID match if there is
+        ///* a single ROWID match candidate.
+        /// The (much more common) non-SQLITE_ALLOW_ROWID_IN_VIEW case is
+        ///* simpler since we require exactly one candidate, which will
+        ///* always be a non-VIEW
+        /// if( pSrcList )
+        /// If we have not already resolved the name, then maybe
+        ///* it is a new.* or old.* trigger argument reference.  Or
+        ///* maybe it is an excluded.* from an upsert.  Or maybe it is
+        ///* a reference in the RETURNING clause to a table being modified.
         let mut op: i32 = 0;
+        /// SQLITE_OMIT_TRIGGER
         let mut p_upsert: *const Upsert = core::ptr::null();
+        /// SQLITE_OMIT_UPSERT
         let mut i_col: i32 = 0;
+        /// SQLITE_OMIT_UPSERT
+        /// SQLITE_OMIT_TRIGGER
+        /// !defined(SQLITE_OMIT_TRIGGER) || !defined(SQLITE_OMIT_UPSERT)
+        ///* Perhaps the name is a reference to the ROWID
+        ///* If the input is of the form Z (not Y.Z or X.Y.Z) then the name Z
+        ///* might refer to an result-set alias.  This happens, for example, when
+        ///* we are resolving names in the WHERE clause of the following command:
+        ///*
+        ///*     SELECT a+b AS x FROM table WHERE x<10;
+        ///*
+        ///* In cases like this, replace pExpr with a copy of the expression that
+        ///* forms the result set entry ("a+b" in the example) and return immediately.
+        ///* Note that the expression in the result set should have already been
+        ///* resolved by the time the WHERE clause is resolved.
+        ///*
+        ///* The ability to use an output result-set column in the WHERE, GROUP BY,
+        ///* or HAVING clauses, or as part of a larger expression in the ORDER BY
+        ///* clause is not standard SQL.  This is a (goofy) SQLite extension, that
+        ///* is supported for backwards compatibility only. Hence, we issue a warning
+        ///* on sqlite3_log() whenever the capability is used.
         let mut z_as: *mut i8 = core::ptr::null_mut();
         let mut p_orig: *const Expr = core::ptr::null();
+        /// Advance to the next name context.  The loop will exit when either
+        ///* we have a match (cnt>0) or when we run out of name contexts.
+        ///* If X and Y are NULL (in other words if only the column name Z is
+        ///* supplied) and the value of Z is enclosed in double-quotes, then
+        ///* Z is a string literal if it doesn't match any column names.  In that
+        ///* case, we need to return right away and not make any changes to
+        ///* pExpr.
+        ///*
+        ///* Because no reference was made to outer contexts, the pNC->nRef
+        ///* fields are not changed in any context.
+        /// If a double-quoted identifier does not match any known column name,
+        ///* then treat it as a string.
+        ///*
+        ///* This hack was added in the early days of SQLite in a misguided attempt
+        ///* to be compatible with MySQL 3.x, which used double-quotes for strings.
+        ///* I now sorely regret putting in this hack. The effect of this hack is
+        ///* that misspelled identifier names are silently converted into strings
+        ///* rather than causing an error, to the frustration of countless
+        ///* programmers. To all those frustrated programmers, my apologies.
+        ///*
+        ///* Someday, I hope to get rid of this hack. Unfortunately there is
+        ///* a huge amount of legacy SQL that uses it. So for now, we just
+        ///* issue a warning.
+        ///* cnt==0 means there was not match.
+        ///* cnt>1 means there were two or more matches.
+        ///*
+        ///* cnt==0 is always an error.  cnt>1 is often an error, but might
+        ///* be multiple matches for a NATURAL OUTER JOIN or a OUTER JOIN USING.
         let mut z_err: *const i8 = core::ptr::null();
         let mut __state: i32 = 0;
         loop {
@@ -1921,10 +2144,141 @@ extern "C" fn lookup_name(p_parse_1: *mut Parse, mut z_db_1: *const i8,
                 }
             }
         }
+
+        /// Loop counters
+        /// Number of matching column names
+        /// Number of potential "rowid" matches
+        /// How many levels of subquery
+        /// The database connection
+        /// Use for looping over pSrcList items
+        /// The matching pSrcList item
+        /// First namecontext in the list
+        /// Schema of the expression
+        /// New value for pExpr->op on success
+        /// Table holding the row
+        /// Matches for FULL JOIN .. USING
+        /// the name context cannot be NULL.
+        /// The Z in X.Y.Z cannot be NULL
+        /// Initialize the node to no-match
+        /// Translate the schema name in zDb into a pointer to the corresponding
+        ///* schema.  If not found, pSchema will remain NULL and nothing will match
+        ///* resulting in an appropriate error message toward the end of this routine
+        /// Silently ignore database qualifiers inside CHECK constraints and
+        ///* partial indices.  Do not raise errors because that might break
+        ///* legacy and because it does not hurt anything to just ignore the
+        ///* database name.
+        /// This branch is taken when the main database has been renamed
+        ///* using SQLITE_DBCONFIG_MAINDBNAME.
+        /// Start at the inner-most context and move outward until a match is found
+        /// In this case, pItem is a subquery that has been formed from a
+        ///* parenthesized subset of the FROM clause terms.  Example:
+        ///*   .... FROM t1 LEFT JOIN (t2 RIGHT JOIN t3 USING(x)) USING(y) ...
+        ///*                          \_________________________/
+        ///*             This pItem -------------^
+        /// True if possible rowid match
+        /// Two or more tables have the same column name which is
+        ///* not joined by USING. Or, a single table has two columns
+        ///* that match a USING term (if pMatch==pItem). These are both
+        ///* "ambiguous column name" errors. Signal as much by clearing
+        ///* pFJMatch and letting cnt go above 1.
+        /// An INNER or LEFT JOIN.  Use the left-most table
+        /// A RIGHT JOIN.  Use the right-most table
+        /// For a FULL JOIN, we must construct a coalesce() func
+        /// This is a potential rowid match, but there has already been
+        ///* a real match found. So this can be ignored.
+        /// rowid cannot be part of a USING clause - assert() this.
+        /// Two or more tables have the same column name which is
+        ///* not joined by USING.  This is an error.  Signal as much
+        ///* by clearing pFJMatch and letting cnt go above 1.
+        /// An INNER or LEFT JOIN.  Use the left-most table
+        /// A RIGHT JOIN.  Use the right-most table
+        /// For a FULL JOIN, we must construct a coalesce() func
+        /// Substitute the rowid (column -1) for the INTEGER PRIMARY KEY
+        /// pTab is a potential ROWID match.  Keep track of it and match
+        ///* the ROWID later if that seems appropriate.  (Search for "cntTab"
+        ///* to find related code.)  Only allow a ROWID match if there is
+        ///* a single ROWID match candidate.
+        /// The (much more common) non-SQLITE_ALLOW_ROWID_IN_VIEW case is
+        ///* simpler since we require exactly one candidate, which will
+        ///* always be a non-VIEW
+        /// if( pSrcList )
+        /// If we have not already resolved the name, then maybe
+        ///* it is a new.* or old.* trigger argument reference.  Or
+        ///* maybe it is an excluded.* from an upsert.  Or maybe it is
+        ///* a reference in the RETURNING clause to a table being modified.
+        /// SQLITE_OMIT_TRIGGER
+        /// SQLITE_OMIT_UPSERT
+        /// SQLITE_OMIT_UPSERT
+        /// SQLITE_OMIT_TRIGGER
+        /// !defined(SQLITE_OMIT_TRIGGER) || !defined(SQLITE_OMIT_UPSERT)
+        ///* Perhaps the name is a reference to the ROWID
+        ///* If the input is of the form Z (not Y.Z or X.Y.Z) then the name Z
+        ///* might refer to an result-set alias.  This happens, for example, when
+        ///* we are resolving names in the WHERE clause of the following command:
+        ///*
+        ///*     SELECT a+b AS x FROM table WHERE x<10;
+        ///*
+        ///* In cases like this, replace pExpr with a copy of the expression that
+        ///* forms the result set entry ("a+b" in the example) and return immediately.
+        ///* Note that the expression in the result set should have already been
+        ///* resolved by the time the WHERE clause is resolved.
+        ///*
+        ///* The ability to use an output result-set column in the WHERE, GROUP BY,
+        ///* or HAVING clauses, or as part of a larger expression in the ORDER BY
+        ///* clause is not standard SQL.  This is a (goofy) SQLite extension, that
+        ///* is supported for backwards compatibility only. Hence, we issue a warning
+        ///* on sqlite3_log() whenever the capability is used.
+        /// Advance to the next name context.  The loop will exit when either
+        ///* we have a match (cnt>0) or when we run out of name contexts.
+        ///* If X and Y are NULL (in other words if only the column name Z is
+        ///* supplied) and the value of Z is enclosed in double-quotes, then
+        ///* Z is a string literal if it doesn't match any column names.  In that
+        ///* case, we need to return right away and not make any changes to
+        ///* pExpr.
+        ///*
+        ///* Because no reference was made to outer contexts, the pNC->nRef
+        ///* fields are not changed in any context.
+        /// If a double-quoted identifier does not match any known column name,
+        ///* then treat it as a string.
+        ///*
+        ///* This hack was added in the early days of SQLite in a misguided attempt
+        ///* to be compatible with MySQL 3.x, which used double-quotes for strings.
+        ///* I now sorely regret putting in this hack. The effect of this hack is
+        ///* that misspelled identifier names are silently converted into strings
+        ///* rather than causing an error, to the frustration of countless
+        ///* programmers. To all those frustrated programmers, my apologies.
+        ///*
+        ///* Someday, I hope to get rid of this hack. Unfortunately there is
+        ///* a huge amount of legacy SQL that uses it. So for now, we just
+        ///* issue a warning.
+        ///* cnt==0 means there was not match.
+        ///* cnt>1 means there were two or more matches.
+        ///*
+        ///* cnt==0 is always an error.  cnt>1 is often an error, but might
+        ///* be multiple matches for a NATURAL OUTER JOIN or a OUTER JOIN USING.
+        /// Remove all substructure from pExpr
+        /// If a column from a table in pSrcList is referenced, then record
+        ///* this fact in the pSrcList.a[].colUsed bitmask.  Column 0 causes
+        ///* bit 0 to be set.  Column 1 sets bit 1.  And so forth.  Bit 63 is
+        ///* set if the 63rd or any subsequent column is used.
+        ///*
+        ///* The colUsed mask is an optimization used to help determine if an
+        ///* index is a covering index.  The correct answer is still obtained
+        ///* if the mask contains extra set bits.  However, it is important to
+        ///* avoid setting bits beyond the maximum column number of the table.
+        ///* (See ticket [b92e5e8ec2cdbaa1]).
+        ///*
+        ///* If a generated column is referenced, set bits for every column
+        ///* of the table.
+        /// Increment the nRef value on all name contexts from TopNC up to
+        ///* the point where the name matched.
         unreachable!();
     }
 }
 
+///* Expression p should encode a floating point value between 1.0 and 0.0.
+///* Return 134,217,728 (2^27) times this value.  Or return -1 if p is not
+///* a floating point value between 1.0 and 0.0.
 extern "C" fn expr_probability(p: &Expr) -> i32 {
     unsafe {
         let mut r: f64 = -1.0;
@@ -1937,6 +2291,10 @@ extern "C" fn expr_probability(p: &Expr) -> i32 {
     }
 }
 
+///* Set the EP_SubtArg property on every expression inside of
+///* pList.  If any subexpression is actually a subquery, then
+///* also set the EP_SubtArg property on the first result-set
+///* column of that subquery.
 extern "C" fn resolve_set_expr_subtype_arg(p_list_1: *const ExprList) -> () {
     unsafe {
         let mut nn: i32 = 0;
@@ -1971,6 +2329,16 @@ extern "C" fn resolve_set_expr_subtype_arg(p_list_1: *const ExprList) -> () {
     }
 }
 
+///* This routine is callback for sqlite3WalkExpr().
+///*
+///* Resolve symbolic names into TK_COLUMN operators for the current
+///* node in the expression tree.  Return 0 to continue the search down
+///* the tree or 2 to abort the tree walk.
+///*
+///* This routine also does error checking and name resolution for
+///* function names.  The operator for aggregate functions is changed
+///* to TK_AGG_FUNCTION.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -2041,6 +2409,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     sqlite3_expr_can_be_null(unsafe { (*p_expr_1).p_left } as
                                             *const Expr)
                                 } != 0 {
+
+                            /// The expression can be NULL.  So the optimization does not apply
                             return 1;
                         }
                         {
@@ -2059,8 +2429,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                         }
                         { let _ = 0; };
                         unsafe {
-                            (*p_expr_1).u.i_value =
-                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32
+
+                            /// TREETRACE_ENABLED
+                            ((*p_expr_1).u.i_value =
+                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32)
                         };
                         unsafe { (*p_expr_1).flags |= 2048 as u32 };
                         unsafe { (*p_expr_1).op = 156 as u8 };
@@ -2138,13 +2510,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                     }
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -2204,6 +2584,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -2244,10 +2634,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -2256,6 +2658,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -2264,7 +2668,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -2377,6 +2790,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -2427,6 +2844,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -2465,6 +2884,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -2612,6 +3034,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     sqlite3_expr_can_be_null(unsafe { (*p_expr_1).p_left } as
                                             *const Expr)
                                 } != 0 {
+
+                            /// The expression can be NULL.  So the optimization does not apply
                             return 1;
                         }
                         {
@@ -2630,8 +3054,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                         }
                         { let _ = 0; };
                         unsafe {
-                            (*p_expr_1).u.i_value =
-                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32
+
+                            /// TREETRACE_ENABLED
+                            ((*p_expr_1).u.i_value =
+                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32)
                         };
                         unsafe { (*p_expr_1).flags |= 2048 as u32 };
                         unsafe { (*p_expr_1).op = 156 as u8 };
@@ -2709,13 +3135,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                     }
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -2775,6 +3209,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -2815,10 +3259,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -2827,6 +3283,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -2835,7 +3293,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -2948,6 +3415,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -2998,6 +3469,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -3036,6 +3509,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -3183,6 +3659,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     sqlite3_expr_can_be_null(unsafe { (*p_expr_1).p_left } as
                                             *const Expr)
                                 } != 0 {
+
+                            /// The expression can be NULL.  So the optimization does not apply
                             return 1;
                         }
                         {
@@ -3201,8 +3679,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                         }
                         { let _ = 0; };
                         unsafe {
-                            (*p_expr_1).u.i_value =
-                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32
+
+                            /// TREETRACE_ENABLED
+                            ((*p_expr_1).u.i_value =
+                                (unsafe { (*p_expr_1).op } as i32 == 52) as i32)
                         };
                         unsafe { (*p_expr_1).flags |= 2048 as u32 };
                         unsafe { (*p_expr_1).op = 156 as u8 };
@@ -3280,13 +3760,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                     }
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -3346,6 +3834,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -3386,10 +3884,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -3398,6 +3908,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -3406,7 +3918,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -3519,6 +4040,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -3569,6 +4094,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -3607,6 +4134,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -3769,13 +4299,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                     }
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -3835,6 +4373,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -3875,10 +4423,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -3887,6 +4447,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -3895,7 +4457,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -4008,6 +4579,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -4058,6 +4633,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -4096,6 +4673,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -4258,13 +4838,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                     }
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -4324,6 +4912,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -4364,10 +4962,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -4376,6 +4986,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -4384,7 +4996,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -4497,6 +5118,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -4547,6 +5172,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -4585,6 +5212,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -4701,13 +5331,21 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                 172 => {
                     {
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
+                        /// The argument list
                         let mut n: i32 = 0;
+                        /// Number of arguments
                         let mut no_such_func: i32 = 0;
+                        /// True if no such function exists
                         let mut wrong_num_args: i32 = 0;
+                        /// True if wrong number of arguments
                         let mut is_agg: i32 = 0;
+                        /// True if is an aggregate function
                         let mut z_id: *const i8 = core::ptr::null();
+                        /// The function name.
                         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+                        /// Information about the function
                         let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
+                        /// The database encoding
                         let saved_allow_flags: i32 =
                             unsafe { (*p_nc).nc_flags } & (1 | 16384);
                         let p_win: *mut Window =
@@ -4767,6 +5405,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                         };
                                     }
                                 } else {
+
+                                    /// EVIDENCE-OF: R-61304-29449 The unlikely(X) function is
+                                    ///* equivalent to likelihood(X, 0.0625).
+                                    ///* EVIDENCE-OF: R-01283-11636 The unlikely(X) function is
+                                    ///* short-hand for likelihood(X,0.0625).
+                                    ///* EVIDENCE-OF: R-36850-34127 The likely(X) function is short-hand
+                                    ///* for likelihood(X,0.9375).
+                                    ///* EVIDENCE-OF: R-53436-40973 The likely(X) function is equivalent
+                                    ///* to likelihood(X,0.9375). */
+                                    ///            /* TUNING: unlikely() probability is 0.0625.  likely() is 0.9375
                                     unsafe {
                                         (*p_expr_1).i_table =
                                             if unsafe { *unsafe { (*p_def).z_name.offset(0 as isize) } }
@@ -4807,10 +5455,22 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             if unsafe { (*p_def).func_flags } & (2048 | 8192) as u32 !=
                                     0 {
+
+                                /// For the purposes of the EP_ConstFunc flag, date and time
+                                ///* functions and other functions that change slowly are considered
+                                ///* constant because they are constant for the duration of one query.
+                                ///* This allows them to be factored out of inner loops.
                                 unsafe { (*p_expr_1).flags |= 1048576 as u32 };
                             }
                             if unsafe { (*p_def).func_flags } & 2048 as u32 == 0 as u32
                                 {
+
+                                /// Clearly non-deterministic functions like random(), but also
+                                ///* date/time functions that use 'now', and other functions like
+                                ///* sqlite_version() that might change over time cannot be used
+                                ///* in an index or generated column.  Curiously, they can be used
+                                ///* in a CHECK constraint.  SQLServer, MySQL, and PostgreSQL all
+                                ///* allow this.
                                 { let _ = 0; };
                                 if unsafe { (*p_nc).nc_flags } & (32 | 2 | 8) != 0 {
                                     not_valid_impl(p_parse, unsafe { &*p_nc },
@@ -4819,6 +5479,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 }
                             } else {
                                 { let _ = 0; };
+
+                                /// Must fit in 8 bits
                                 unsafe {
                                     (*p_expr_1).op2 = (unsafe { (*p_nc).nc_flags } & 46) as u8
                                 };
@@ -4827,7 +5489,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                             0 as u32 && unsafe { (*p_parse).nested } as i32 == 0 &&
                                     unsafe { (*unsafe { (*p_parse).db }).m_db_flags } &
                                             32 as u32 == 0 as u32 {
-                                no_such_func = 2;
+
+                                /// Internal-use-only functions are disallowed unless the
+                                ///* SQL is being compiled using sqlite3NestedParse() or
+                                ///* the SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test-control has be
+                                ///* used to activate internal functions for testing purposes.
+                                ///*
+                                ///* The 2 value for no_such_func means that the function is
+                                ///* an internal-use-only function which should be treated as a
+                                ///* non-existant function for name resolution purposes.
+                                (no_such_func = 2);
                                 p_def = core::ptr::null_mut();
                             } else if unsafe { (*p_def).func_flags } &
                                             (524288 | 2097152) as u32 != 0 as u32 &&
@@ -4940,6 +5611,10 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 };
                             }
                             if is_agg != 0 {
+
+                                /// Window functions may not be arguments of aggregate functions.
+                                ///* Or arguments of other window functions. But aggregate functions
+                                ///* may be arguments for window functions.
                                 unsafe {
                                     (*p_nc).nc_flags &=
                                         !(16384 | if (p_win).is_null() as i32 != 0 { 1 } else { 0 })
@@ -4990,6 +5665,8 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 unsafe { (*p_nc).nc_flags |= 32768 };
                             } else {
                                 let mut p_nc2: *mut NameContext = core::ptr::null_mut();
+
+                                /// For looping up thru outer contexts
                                 unsafe { (*p_expr_1).op = 169 as u8 };
                                 unsafe { (*p_expr_1).op2 = 0 as u8 };
                                 if unsafe { (*p_expr_1).flags } & 16777216 as u32 !=
@@ -5028,6 +5705,9 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             }
                             unsafe { (*p_nc).nc_flags |= saved_allow_flags };
                         }
+
+                        /// FIX ME:  Compute pExpr->affinity based on the expected return
+                        ///* type of the function
                         return 1;
                     }
                     {
@@ -6094,6 +6774,16 @@ extern "C" fn resolve_expr_step(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     }
 }
 
+///* Resolve all names in all expressions of a SELECT and in all
+///* descendants of the SELECT, including compounds off of p->pPrior,
+///* subqueries in expressions, and subqueries used as FROM clause
+///* terms.
+///*
+///* See sqlite3ResolveExprNames() for a description of the kinds of
+///* transformations that occur.
+///*
+///* All SELECT statements should have been expanded using
+///* sqlite3SelectExpand() prior to invoking this routine.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_select_names(p_parse: *mut Parse,
     p: *mut Select, p_outer_nc: *mut NameContext) -> () {
@@ -6109,6 +6799,12 @@ pub extern "C" fn sqlite3_resolve_select_names(p_parse: *mut Parse,
     }
 }
 
+///* Resolve all names for all expression in an expression list.  This is
+///* just like sqlite3ResolveExprNames() except that it works for an expression
+///* list rather than a single expression.
+///*
+///* The return value is SQLITE_OK (0) for success or SQLITE_ERROR (1) for a
+///* failure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_expr_list_names(p_nc: *mut NameContext,
     p_list: *mut ExprList) -> i32 {
@@ -6175,10 +6871,23 @@ pub extern "C" fn sqlite3_resolve_expr_list_names(p_nc: *mut NameContext,
     }
 }
 
+///* pEList is a list of expressions which are really the result set of the
+///* a SELECT statement.  pE is a term in an ORDER BY or GROUP BY clause.
+///* This routine checks to see if pE is a simple identifier which corresponds
+///* to the AS-name of one of the terms of the expression list.  If it is,
+///* this routine return an integer between 1 and N where N is the number of
+///* elements in pEList, corresponding to the matching entry.  If there is
+///* no match, or if pE is not a simple identifier, then this routine
+///* return 0.
+///*
+///* pEList has been resolved.  pE has not.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_as_name(p_parse_1: *const Parse, p_e_list_1: &ExprList,
     p_e_1: &Expr) -> i32 {
     unsafe {
         let mut i: i32 = 0;
+
+        /// Loop counter
         { let _ = p_parse_1; };
         if (*p_e_1).op as i32 == 60 {
             let mut z_col: *const i8 = core::ptr::null();
@@ -6211,6 +6920,7 @@ extern "C" fn resolve_as_name(p_parse_1: *const Parse, p_e_list_1: &ExprList,
     }
 }
 
+///* Generate an ORDER BY or GROUP BY term out-of-range error.
 extern "C" fn resolve_out_of_range_error(p_parse_1: *mut Parse,
     z_type_1: *const i8, i: i32, mx: i32, p_error_1: *const Expr) -> () {
     unsafe {
@@ -6224,6 +6934,7 @@ extern "C" fn resolve_out_of_range_error(p_parse_1: *mut Parse,
     };
 }
 
+///* Walker callback for windowRemoveExprFromSelect().
 extern "C" fn resolve_remove_windows_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -6236,6 +6947,8 @@ extern "C" fn resolve_remove_windows_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Remove any Window objects owned by the expression pExpr from the
+///* Select.pWin list of Select object pSelect.
 extern "C" fn window_remove_expr_from_select(p_select_1: *mut Select,
     p_expr_1: *mut Expr) -> () {
     unsafe {
@@ -6252,6 +6965,14 @@ extern "C" fn window_remove_expr_from_select(p_select_1: *mut Select,
     }
 }
 
+///* Check every term in the ORDER BY or GROUP BY clause pOrderBy of
+///* the SELECT statement pSelect.  If any term is reference to a
+///* result set expression (as determined by the ExprList.a.u.x.iOrderByCol
+///* field) then convert that term into a copy of the corresponding result set
+///* column.
+///*
+///* If any errors are detected, add an error message to pParse and
+///* return non-zero.  Return zero if no errors are seen.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_order_group_by(p_parse: *mut Parse,
     p_select: &Select, p_order_by: *mut ExprList, z_type: *const i8) -> i32 {
@@ -6313,16 +7034,39 @@ pub extern "C" fn sqlite3_resolve_order_group_by(p_parse: *mut Parse,
     }
 }
 
+///* pOrderBy is an ORDER BY or GROUP BY clause in SELECT statement pSelect.
+///* The Name context of the SELECT statement is pNC.  zType is either
+///* "ORDER" or "GROUP" depending on which type of clause pOrderBy is.
+///*
+///* This routine resolves each term of the clause into an expression.
+///* If the order-by term is an integer I between 1 and N (where N is the
+///* number of columns in the result set of the SELECT) then the expression
+///* in the resolution is a copy of the I-th result-set expression.  If
+///* the order-by term is an identifier that corresponds to the AS-name of
+///* a result-set expression, then the term resolves to a copy of the
+///* result-set expression.  Otherwise, the expression is resolved in
+///* the usual way - using sqlite3ResolveExprNames().
+///*
+///* This routine returns the number of errors.  If errors occur, then
+///* an appropriate error message might be left in pParse.  (OOM errors
+///* excepted.)
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
     p_select_1: *mut Select, p_order_by_1: *mut ExprList, z_type_1: *const i8)
     -> i32 {
     unsafe {
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut i_col: i32 = 0;
+        /// Column number
         let mut p_item: *mut ExprListItem = core::ptr::null_mut();
+        /// A term of the ORDER BY clause
         let mut p_parse: *mut Parse = core::ptr::null_mut();
+        /// Parsing context
         let mut n_result: i32 = 0;
+
+        /// Number of terms in the result set
         { let _ = 0; };
         n_result = unsafe { (*unsafe { (*p_select_1).p_e_list }).n_expr };
         p_parse = unsafe { (*p_nc_1).p_parse };
@@ -6346,7 +7090,19 @@ extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
                                 unsafe { &*unsafe { (*p_select_1).p_e_list } },
                                 unsafe { &*p_e2 });
                         if i_col > 0 {
-                            unsafe { (*p_item).u.x.i_order_by_col = i_col as u16 };
+                            unsafe {
+
+                                /// If an AS-name match is found, mark this ORDER BY column as being
+                                ///* a copy of the iCol-th result-set column.  The subsequent call to
+                                ///* sqlite3ResolveOrderGroupBy() will convert the expression to a
+                                ///* copy of the iCol-th result-set expression.
+                                ((*p_item).u.x.i_order_by_col = i_col as u16)
+                            };
+
+                            /// If an AS-name match is found, mark this ORDER BY column as being
+                            ///* a copy of the iCol-th result-set column.  The subsequent call to
+                            ///* sqlite3ResolveOrderGroupBy() will convert the expression to a
+                            ///* copy of the iCol-th result-set expression.
                             break '__c13;
                         }
                     }
@@ -6362,7 +7118,11 @@ extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
                         unsafe { (*p_item).u.x.i_order_by_col = i_col as u16 };
                         break '__c13;
                     }
-                    unsafe { (*p_item).u.x.i_order_by_col = 0 as u16 };
+                    unsafe {
+
+                        /// Otherwise, treat the ORDER BY term as an ordinary expression
+                        ((*p_item).u.x.i_order_by_col = 0 as u16)
+                    };
                     if sqlite3_resolve_expr_names(p_nc_1, p_e) != 0 {
                         return 1;
                     }
@@ -6382,6 +7142,10 @@ extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
                                                                         } as *mut ExprListItem).offset(j as isize)).p_expr
                                                     } as *const Expr, -1)
                                         } == 0 {
+
+                                    /// Since this expression is being changed into a reference
+                                    ///* to an identical expression in the result set, remove all Window
+                                    ///* objects belonging to the expression from the Select.pWin list.
                                     window_remove_expr_from_select(p_select_1, p_e);
                                     unsafe { (*p_item).u.x.i_order_by_col = (j + 1) as u16 };
                                 }
@@ -6408,17 +7172,43 @@ extern "C" fn resolve_order_group_by(p_nc_1: *mut NameContext,
     }
 }
 
+///* pE is a pointer to an expression which is a single term in the
+///* ORDER BY of a compound SELECT.  The expression has not been
+///* name resolved.
+///*
+///* At the point this routine is called, we already know that the
+///* ORDER BY term is not an integer index into the result set.  That
+///* case is handled by the calling routine.
+///*
+///* Attempt to match pE against result set columns in the left-most
+///* SELECT statement.  Return the index i of the matching column,
+///* as an indication to the caller that it should sort by the i-th column.
+///* The left-most column is 1.  In other words, the value returned is the
+///* same integer value that would be used in the SQL statement to indicate
+///* the column.
+///*
+///* If there is no match, return 0.  Return -1 if an error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_order_by_term_to_expr_list(p_parse_1: *mut Parse,
     p_select_1: &Select, p_e_1: *mut Expr) -> i32 {
     unsafe {
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_e_list: *mut ExprList = core::ptr::null_mut();
+        /// The columns of the result set
         let mut nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context for resolving pE
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Database connection
         let mut rc: i32 = 0;
+        /// Return code from subprocedures
         let mut saved_supp_err: u8 = 0 as u8;
+
+        /// Saved value of db->suppressErr
         { let _ = 0; };
         p_e_list = (*p_select_1).p_e_list;
+
+        /// Resolve all names in the ORDER BY term expression
         unsafe {
             memset(&raw mut nc as *mut (), 0,
                 core::mem::size_of::<NameContext>() as u64)
@@ -6453,10 +7243,26 @@ extern "C" fn resolve_order_by_term_to_expr_list(p_parse_1: *mut Parse,
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// If no match, return 0.
         return 0;
     }
 }
 
+///* Analyze the ORDER BY clause in a compound SELECT statement.   Modify
+///* each term of the ORDER BY clause is a constant integer between 1
+///* and N where N is the number of columns in the compound SELECT.
+///*
+///* ORDER BY terms that are already an integer between 1 and N are
+///* unmodified.  ORDER BY terms that are integers outside the range of
+///* 1 through N generate an error.  ORDER BY terms that are expressions
+///* are matched against result set expressions of compound SELECT
+///* beginning with the left-most SELECT and working toward the right.
+///* At the first match, the ORDER BY expression is transformed into
+///* the integer column number.
+///*
+///* Return the number of errors seen.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_compound_order_by(p_parse_1: *mut Parse,
     mut p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -6539,8 +7345,20 @@ extern "C" fn resolve_compound_order_by(p_parse_1: *mut Parse,
                                 resolve_as_name(p_parse_1 as *const Parse,
                                     unsafe { &*p_e_list }, unsafe { &*p_e });
                             if i_col == 0 {
-                                p_dup =
-                                    unsafe { sqlite3_expr_dup(db, p_e as *const Expr, 0) };
+
+                                /// Now test if expression pE matches one of the values returned
+                                ///* by pSelect. In the usual case this is done by duplicating the
+                                ///* expression, resolving any symbols in it, and then comparing
+                                ///* it against each expression returned by the SELECT statement.
+                                ///* Once the comparisons are finished, the duplicate expression
+                                ///* is deleted.
+                                ///*
+                                ///* If this is running as part of an ALTER TABLE operation and
+                                ///* the symbols resolve successfully, also resolve the symbols in the
+                                ///* actual expression. This allows the code in alter.c to modify
+                                ///* column references within the ORDER BY expression as required.
+                                (p_dup =
+                                    unsafe { sqlite3_expr_dup(db, p_e as *const Expr, 0) });
                                 if (unsafe { (*db).malloc_failed } == 0) as i32 != 0 {
                                     { let _ = 0; };
                                     i_col =
@@ -6618,18 +7436,30 @@ extern "C" fn resolve_compound_order_by(p_parse_1: *mut Parse,
     }
 }
 
+///* Resolve names in the SELECT statement p and all of its descendants.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
     -> i32 {
     unsafe {
         let mut p_outer_nc: *mut NameContext = core::ptr::null_mut();
+        /// Context that contains this SELECT
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context of this SELECT
         let mut is_compound: i32 = 0;
+        /// True if p is a compound select
         let mut n_compound: i32 = 0;
+        /// Number of compound terms processed so far
         let mut p_parse: *mut Parse = core::ptr::null_mut();
+        /// Parsing context
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_group_by: *mut ExprList = core::ptr::null_mut();
+        /// The GROUP BY clause
         let mut p_leftmost: *mut Select = core::ptr::null_mut();
+        /// Left-most of SELECT of a compound
         let mut db: *const Sqlite3 = core::ptr::null();
+
+        /// Database connection
         { let _ = 0; };
         if unsafe { (*p).sel_flags } & 4 as u32 != 0 { return 1; }
         p_outer_nc = unsafe { (*p_walker_1).u.p_nc };
@@ -6647,6 +7477,9 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
             { let _ = 0; };
             { let _ = 0; };
             unsafe { (*p).sel_flags |= 4 as u32 };
+
+            /// Resolve the expressions in the LIMIT and OFFSET clauses. These
+            ///* are not allowed to refer to any names, so pass an empty NameContext.
             unsafe {
                 memset(&raw mut s_nc as *mut (), 0,
                     core::mem::size_of::<NameContext>() as u64)
@@ -6742,7 +7575,10 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
                     __t
                 };
             }
-            s_nc.nc_flags = 1 | 16384;
+
+            /// Set up the local name-context to pass to sqlite3ResolveExprNames() to
+            ///* resolve the result-set expression list.
+            (s_nc.nc_flags = 1 | 16384);
             s_nc.p_src_list = unsafe { (*p).p_src };
             s_nc.p_next = p_outer_nc;
             if sqlite3_resolve_expr_list_names(&mut s_nc,
@@ -6750,6 +7586,9 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
                 return 2;
             }
             s_nc.nc_flags &= !16384;
+
+            /// If there are no aggregate functions in the result-set, and no GROUP BY
+            ///* expression, do not allow aggregates in any of the other expressions.
             { let _ = 0; };
             p_group_by = unsafe { (*p).p_group_by };
             if !(p_group_by).is_null() || s_nc.nc_flags & 16 != 0 {
@@ -6760,6 +7599,14 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
                         (8 | s_nc.nc_flags & (4096 | 134217728)) as u32
                 };
             } else { s_nc.nc_flags &= !1; }
+
+            /// Add the output column list to the name-context before parsing the
+            ///* other expressions in the SELECT statement. This is so that
+            ///* expressions in the WHERE clause (etc.) can refer to expressions by
+            ///* aliases in the result set.
+            ///*
+            ///* Minor point: If this is the case, then the expression will be
+            ///* re-evaluated for each reference to it.
             { let _ = 0; };
             s_nc.u_nc.p_e_list = unsafe { (*p).p_e_list };
             s_nc.nc_flags |= 128;
@@ -6902,7 +7749,9 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
                 unsafe { sqlite3_select_check_on_clauses(p_parse, p) };
                 if unsafe { (*p_parse).n_err } != 0 { return 2; }
             }
-            p = unsafe { (*p).p_prior };
+
+            /// Advance to the next term of the compound
+            (p = unsafe { (*p).p_prior });
             { let __p = &mut n_compound; let __t = *__p; *__p += 1; __t };
         }
         if is_compound != 0 &&
@@ -6913,6 +7762,52 @@ extern "C" fn resolve_select_step(p_walker_1: *mut Walker, mut p: *mut Select)
     }
 }
 
+///* This routine walks an expression tree and resolves references to
+///* table columns and result-set columns.  At the same time, do error
+///* checking on function usage and set a flag if any aggregate functions
+///* are seen.
+///*
+///* To resolve table columns references we look for nodes (or subtrees) of the
+///* form X.Y.Z or Y.Z or just Z where
+///*
+///*      X:   The name of a database.  Ex:  "main" or "temp" or
+///*           the symbolic name assigned to an ATTACH-ed database.
+///*
+///*      Y:   The name of a table in a FROM clause.  Or in a trigger
+///*           one of the special names "old" or "new".
+///*
+///*      Z:   The name of a column in table Y.
+///*
+///* The node at the root of the subtree is modified as follows:
+///*
+///*    Expr.op        Changed to TK_COLUMN
+///*    Expr.pTab      Points to the Table object for X.Y
+///*    Expr.iColumn   The column index in X.Y.  -1 for the rowid.
+///*    Expr.iTable    The VDBE cursor number for X.Y
+///*
+///*
+///* To resolve result-set references, look for expression nodes of the
+///* form Z (with no X and Y prefix) where the Z matches the right-hand
+///* size of an AS clause in the result-set of a SELECT.  The Z expression
+///* is replaced by a copy of the left-hand side of the result-set expression.
+///* Table-name and function resolution occurs on the substituted expression
+///* tree.  For example, in:
+///*
+///*      SELECT a+b AS x, c+d AS y FROM t1 ORDER BY x;
+///*
+///* The "x" term of the order by is replaced by "a+b" to render:
+///*
+///*      SELECT a+b AS x, c+d AS y FROM t1 ORDER BY a+b;
+///*
+///* Function calls are checked to make sure that the function is
+///* defined and that the correct number of arguments are specified.
+///* If the function is an aggregate function, then the NC_HasAgg flag is
+///* set and the opcode is changed from TK_FUNCTION to TK_AGG_FUNCTION.
+///* If an expression contains aggregate functions then the EP_Agg
+///* property on the expression is set.
+///*
+///* An error message is left in pParse if anything is amiss.  The number
+///* if errors is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_resolve_expr_names(p_nc: *mut NameContext,
     p_expr: *mut Expr) -> i32 {
@@ -6953,13 +7848,32 @@ pub extern "C" fn sqlite3_resolve_expr_names(p_nc: *mut NameContext,
     }
 }
 
+///* Resolve names in expressions that can only reference a single table
+///* or which cannot reference any tables at all.  Examples:
+///*
+///*                                                    "type" flag
+///*                                                    ------------
+///*    (1)   CHECK constraints                         NC_IsCheck
+///*    (2)   WHERE clauses on partial indices          NC_PartIdx
+///*    (3)   Expressions in indexes on expressions     NC_IdxExpr
+///*    (4)   Expression arguments to VACUUM INTO.      0
+///*    (5)   GENERATED ALWAYS as expressions           NC_GenCol
+///*
+///* In all cases except (4), the Expr.iTable value for Expr.op==TK_COLUMN
+///* nodes of the expression is set to -1 and the Expr.iColumn value is
+///* set to the column number.  In case (4), TK_COLUMN nodes cause an error.
+///*
+///* Any errors cause an error message to be set in pParse.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_resolve_self_reference(p_parse: *mut Parse,
     p_tab: *mut Table, mut type_: i32, p_expr: *mut Expr,
     p_list: *mut ExprList) -> i32 {
     unsafe {
         let mut p_src: *mut SrcList = core::ptr::null_mut();
+        /// Fake SrcList for pParse->pNewTable
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// Name context for pParse->pNewTable
         let mut rc: i32 = 0;
         let mut u_src:
                 Sqlite3ResolveSelfReferenceU0N33sqlite3ResolveSelfReferenceU0 =
@@ -6993,7 +7907,10 @@ pub extern "C" fn sqlite3_resolve_self_reference(p_parse: *mut Parse,
                                     (*unsafe { (*p_parse).db }).a_db.offset(1 as isize)
                                 }).p_schema
                     } {
-                type_ |= 262144;
+
+                /// Cause EP_FromDDL to be set on TK_FUNCTION nodes of non-TEMP
+                ///* schema elements
+                (type_ |= 262144);
             }
         }
         s_nc.p_parse = p_parse;
@@ -7009,6 +7926,8 @@ pub extern "C" fn sqlite3_resolve_self_reference(p_parse: *mut Parse,
     }
 }
 
+///* Allocate and return a pointer to an expression to load the column iCol
+///* from datasource iSrc in SrcList pSrc.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_column_expr(db: *mut Sqlite3,
     p_src: &mut SrcList, i_src: i32, i_col: i32) -> *mut Expr {

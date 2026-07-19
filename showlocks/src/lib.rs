@@ -22,6 +22,8 @@ struct Flock {
     l_whence: i16,
 }
 
+///* Print all locks on the inode of "fd" that occur in between
+///* lwr and upr, inclusive.
 extern "C" fn show_locks_in_range(fd: i32, mut lwr: OffT, mut upr: OffT)
     -> i32 {
     unsafe {

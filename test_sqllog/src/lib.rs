@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type Int32T = i32;
 
@@ -13,6 +19,8 @@ type DarwinSizeT = u64;
 
 extern "C" fn get_process_id() -> i32 { return unsafe { getpid() } as i32; }
 
+/// There is one instance of this object for each SQLite database connection
+///* that is being logged.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SLConn {
@@ -22,6 +30,7 @@ struct SLConn {
     fd: *mut FILE,
 }
 
+/// This object is a singleton that keeps track of all data loggers.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SLGlobal {
@@ -40,6 +49,7 @@ struct SLGlobal {
 
 static mut sqllogglobal: SLGlobal = unsafe { core::mem::zeroed() };
 
+///* Return true if c is an ASCII whitespace character.
 extern "C" fn sqllog_isspace(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                             c as i32 == '\n' as i32 || c as i32 == '\u{b}' as i32 ||
@@ -47,6 +57,12 @@ extern "C" fn sqllog_isspace(c: i8) -> i32 {
             i32;
 }
 
+///* The first argument points to a nul-terminated string containing an SQL
+///* command. Before returning, this function sets *pz to point to the start
+///* of the first token in this command, and *pn to the number of bytes in 
+///* the token. This is used to check if the SQL command is an "ATTACH" or 
+///* not.
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_tokenize(z: *const i8, pz: &mut *const i8, pn: &mut i32)
     -> () {
     let mut p: *const i8 = z;
@@ -59,7 +75,9 @@ extern "C" fn sqllog_tokenize(z: *const i8, pz: &mut *const i8, pn: &mut i32)
             __t
         };
     }
-    *pz = p;
+
+    /// Figure out how long the first token is
+    (*pz = p);
     n = 0;
     while unsafe { *p.offset(n as isize) } as i32 >= 'a' as i32 &&
                 unsafe { *p.offset(n as isize) } as i32 <= 'z' as i32 ||
@@ -70,15 +88,24 @@ extern "C" fn sqllog_tokenize(z: *const i8, pz: &mut *const i8, pn: &mut i32)
     *pn = n;
 }
 
+///* Check if the logs directory already contains a copy of database file 
+///* zFile. If so, return a pointer to the full path of the copy. Otherwise,
+///* return NULL.
+///*
+///* If a non-NULL value is returned, then the caller must arrange to 
+///* eventually free it using sqlite3_free().
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_find_file(z_file_1: *const i8) -> *mut i8 {
     unsafe {
         let mut z_ret: *mut i8 = core::ptr::null_mut();
         let mut fd: *mut FILE = core::ptr::null_mut();
-        fd =
+
+        /// Open the index file for reading
+        (fd =
             unsafe {
                 fopen(&raw mut sqllogglobal.z_idx[0 as usize] as *mut i8 as
                         *const i8, c"r".as_ptr() as *mut i8 as *const i8)
-            };
+            });
         if fd == core::ptr::null_mut() {
             unsafe {
                 sqlite3_log(10,
@@ -167,11 +194,16 @@ extern "C" fn sqllog_find_file(z_file_1: *const i8) -> *mut i8 {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_find_attached(db: *mut Sqlite3, z_search_1: *const i8,
     z_name_1: *mut i8, z_file_1: *mut i8) -> i32 {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut rc: i32 = 0;
+
+        /// The "PRAGMA database_list" command returns a list of databases in the
+        ///* order that they were attached. So a newly attached database is 
+        ///* described by the last row returned.
         if !(sqllogglobal.b_rec == 0) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"sqllogFindAttached".as_ptr() as *const i8,
@@ -229,11 +261,31 @@ extern "C" fn sqllog_find_attached(db: *mut Sqlite3, z_search_1: *const i8,
     }
 }
 
+///* Parameter zSearch is the name of a database attached to the database 
+///* connection associated with the first argument. This function creates
+///* a backup of this database in the logs directory.
+///*
+///* The name used for the backup file is automatically generated. Call
+///* it zFile.
+///*
+///* If the bLog parameter is true, then a statement of the following form
+///* is written to the log file associated with *p:
+///*
+///*    ATTACH 'zFile' AS 'zName';
+///*
+///* Otherwise, if bLog is false, a comment is added to the log file:
+///*
+///*    -- Main database file is 'zFile'
+///*
+///* The SLGlobal.mutex mutex is always held when this function is called.
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
     -> () {
     unsafe {
         let mut z_name: [i8; 512] = [0; 512];
+        /// Attached database name
         let mut z_file: [i8; 512] = [0; 512];
+        /// Database file name
         let mut z_free: *mut i8 = core::ptr::null_mut();
         let mut z_init: *mut i8 = core::ptr::null_mut();
         let mut rc: i32 = 0;
@@ -257,19 +309,23 @@ extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
                 let mut rc: i32 = 0;
                 let mut copy: *mut Sqlite3 = core::ptr::null_mut();
                 let mut i_db: i32 = 0;
-                i_db =
+
+                /// Generate a file-name to use for the copy of this database
+                (i_db =
                     {
                         let __p = &mut sqllogglobal.i_next_db;
                         let __t = *__p;
                         *__p += 1;
                         __t
-                    };
+                    });
                 z_init =
                     unsafe {
                         sqlite3_mprintf(c"%s_%02d.db".as_ptr() as *mut i8 as
                                 *const i8,
                             &raw mut sqllogglobal.z_prefix[0 as usize] as *mut i8, i_db)
                     };
+
+                /// Create the backup
                 if !(sqllogglobal.b_rec == 0) as i32 as i64 != 0 {
                     unsafe {
                         __assert_rtn(c"sqllogCopydb".as_ptr() as *const i8,
@@ -300,6 +356,7 @@ extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
                 }
                 sqllogglobal.b_rec = 0;
                 if rc == 0 {
+                    /// Write an entry into the database index file
                     let fd: *mut FILE =
                         unsafe {
                             fopen(&raw mut sqllogglobal.z_idx[0 as usize] as *mut i8 as
@@ -349,6 +406,10 @@ extern "C" fn sqllog_copydb(p: &SLConn, z_search_1: *const i8, b_log_1: i32)
     }
 }
 
+///* If it is not already open, open the log file for connection *p. 
+///*
+///* The SLGlobal.mutex mutex is always held when this function is called.
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_openlog(p: &mut SLConn) -> () {
     unsafe {
         if (*p).fd == core::ptr::null_mut() {
@@ -396,13 +457,15 @@ extern "C" fn sqllog_openlog(p: &mut SLConn) -> () {
                     };
                 if !(fd).is_null() { unsafe { fclose(fd) }; }
             }
-            z_log =
+
+            /// Open the log file
+            (z_log =
                 unsafe {
                     sqlite3_mprintf(c"%s_%05d.sql".as_ptr() as *mut i8 as
                             *const i8,
                         &raw mut sqllogglobal.z_prefix[0 as usize] as *mut i8,
                         (*p).i_log)
-                };
+                });
             (*p).fd =
                 unsafe {
                     fopen(z_log as *const i8,
@@ -420,10 +483,17 @@ extern "C" fn sqllog_openlog(p: &mut SLConn) -> () {
     }
 }
 
+///* This function is called if the SQLLOG callback is invoked to report
+///* execution of an SQL statement. Parameter p is the connection the statement
+///* was executed by and parameter zSql is the text of the statement itself.
+#[allow(unused_doc_comments)]
 extern "C" fn test_sqllog_stmt(p: *mut SLConn, z_sql_1: *const i8) -> () {
     unsafe {
         let mut z_first: *const i8 = core::ptr::null();
+        /// Pointer to first token in zSql
         let mut n_first: i32 = 0;
+
+        /// Size of token zFirst in bytes
         sqllog_tokenize(z_sql_1, &mut z_first, &mut n_first);
         if n_first != 6 ||
                 0 !=
@@ -431,6 +501,8 @@ extern "C" fn test_sqllog_stmt(p: *mut SLConn, z_sql_1: *const i8) -> () {
                         sqlite3_strnicmp(c"ATTACH".as_ptr() as *mut i8 as *const i8,
                             z_first, 6)
                     } {
+
+            /// Not an ATTACH statement. Write this directly to the log.
             unsafe {
                 fprintf(unsafe { (*p).fd },
                     c"%s; -- clock=%d\n".as_ptr() as *mut i8 as *const i8,
@@ -442,15 +514,27 @@ extern "C" fn test_sqllog_stmt(p: *mut SLConn, z_sql_1: *const i8) -> () {
                         __t
                     })
             };
-        } else { sqllog_copydb(unsafe { &*p }, core::ptr::null(), 1); }
+        } else {
+
+            /// This is an ATTACH statement. Copy the database.
+            sqllog_copydb(unsafe { &*p }, core::ptr::null(), 1);
+        }
     }
 }
 
+///* The database handle passed as the only argument has just been opened.
+///* Return true if this module should log initial databases and SQL 
+///* statements for this connection, or false otherwise.
+///*
+///* If an error occurs, sqlite3_log() is invoked to report it to the user
+///* and zero returned.
+#[allow(unused_doc_comments)]
 extern "C" fn sqllog_trace_db(db: *mut Sqlite3) -> i32 {
     unsafe {
         let mut b_ret: i32 = 1;
         if sqllogglobal.b_conditional != 0 {
             let mut z_file: [i8; 512] = [0; 512];
+            /// Attached database name
             let rc: i32 =
                 sqllog_find_attached(db,
                     c"main".as_ptr() as *mut i8 as *const i8,
@@ -485,6 +569,26 @@ extern "C" fn sqllog_trace_db(db: *mut Sqlite3) -> i32 {
     }
 }
 
+///* The SQLITE_CONFIG_SQLLOG callback registered by sqlite3_init_sqllog().
+///*
+///* The eType parameter has the following values:
+///*
+///*    0:  Opening a new database connection.  zSql is the name of the
+///*        file being opened.  db is a pointer to the newly created database
+///*        connection.
+///*
+///*    1:  An SQL statement has run to completion.  zSql is the text of the
+///*        SQL statement with all parameters expanded to their actual values.
+///*
+///*    2:  Closing a database connection.  zSql is NULL.  The db pointer to
+///*        the database connection being closed has already been shut down
+///*        and cannot be used for any further SQL.
+///*
+///* The pCtx parameter is a copy of the pointer that was originally passed
+///* into the sqlite3_config(SQLITE_CONFIG_SQLLOG) statement.  In this
+///* particular implementation, pCtx is always a pointer to the 
+///* sqllogglobal global variable define above.
+#[allow(unused_doc_comments)]
 extern "C" fn test_sqllog(p_ctx_1: *mut (), db: *mut Sqlite3,
     z_sql_1: *const i8, e_type_1: i32) -> () {
     unsafe {
@@ -535,6 +639,8 @@ extern "C" fn test_sqllog(p_ctx_1: *mut (), db: *mut Sqlite3,
                         }
                 };
                 unsafe { sqlite3_mutex_leave(mainmtx) };
+
+                /// Open the log and take a copy of the main database file
                 sqllog_openlog(unsafe { &mut *p });
                 if !(unsafe { (*p).fd }).is_null() {
                     sqllog_copydb(unsafe { &*p },
@@ -599,6 +705,10 @@ extern "C" fn test_sqllog(p_ctx_1: *mut (), db: *mut Sqlite3,
     }
 }
 
+///* This function is called either before sqlite3_initialized() or by it.
+///* It checks if the SQLITE_SQLLOG_DIR variable is defined, and if so 
+///* registers an SQLITE_CONFIG_SQLLOG callback to record the applications
+///* database activity.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_init_sqllog() -> () {
     unsafe {

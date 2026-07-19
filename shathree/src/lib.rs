@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -25,6 +31,7 @@ union SHA3ContextU0 {
     x: [u8; 1600],
 }
 
+///* A single step of the Keccak mixing function for a 1600-bit state
 extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -552,6 +559,10 @@ extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     }
 }
 
+///* Initialize a new hash.  iSize determines the size of the hash
+///* in bits and should be one of 224, 256, 384, or 512.  Or iSize
+///* can be zero to use the default hash size of 256 bits.
+#[allow(unused_doc_comments)]
 extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -566,12 +577,20 @@ extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
         } else { unsafe { (*p).n_rate = ((1600 - 2 * 256) / 8) as u32 }; }
         {
             if 1 == unsafe { *(&raw mut one as *mut u8) } as i32 {
+
+                /// Little endian.  No byte swapping.
                 unsafe { (*p).ix_mask = 0 as u32 };
-            } else { unsafe { (*p).ix_mask = 7 as u32 }; }
+            } else {
+
+                /// Big endian.  Byte swap.
+                unsafe { (*p).ix_mask = 7 as u32 };
+            }
         }
     }
 }
 
+///* Make consecutive calls to the SHA3Update function to add new content
+///* to the hash
 extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
     n_data_1: u32) -> () {
     unsafe {
@@ -604,6 +623,9 @@ extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
     }
 }
 
+///* After all content has been added, invoke SHA3Final() to compute
+///* the final hash.  The function returns a pointer to the binary
+///* hash value.
 extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -635,6 +657,13 @@ extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     }
 }
 
+///* Implementation of the sha3(X,SIZE) function.
+///*
+///* Return a BLOB which is the SIZE-bit SHA3 hash of X.  The default
+///* size is 256.  If X is a BLOB, it is hashed as is.  
+///* For all other non-NULL types of input, X is converted into a UTF-8 string
+///* and the string is hashed without the trailing 0x00 terminator.  The hash
+///* of a NULL value is NULL.
 extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA3Context = unsafe { core::mem::zeroed() };
@@ -680,6 +709,8 @@ extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Compute a string using sqlite3_vsnprintf() with a maximum length
+///* of 50 bytes and add it to the hash.
 unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -698,6 +729,7 @@ unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
         n as u32);
 }
 
+///* Update a SHA3Context using a single sqlite3_value.
 extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
     p_val_1: *mut Sqlite3Value) -> () {
     '__s3:
@@ -949,6 +981,37 @@ extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
     }
 }
 
+///* Implementation of the sha3_query(SQL,SIZE) function.
+///*
+///* This function compiles and runs the SQL statement(s) given in the
+///* argument. The results are hashed using a SIZE-bit SHA3.  The default
+///* size is 256.
+///*
+///* The format of the byte stream that is hashed is summarized as follows:
+///*
+///*       S<n>:<sql>
+///*       R
+///*       N
+///*       I<int>
+///*       F<ieee-float>
+///*       B<size>:<bytes>
+///*       T<size>:<text>
+///*
+///* <sql> is the original SQL text for each statement run and <n> is
+///* the size of that text.  The SQL text is UTF-8.  A single R character
+///* occurs before the start of each row.  N means a NULL value.
+///* I mean an 8-byte little-endian integer <int>.  F is a floating point
+///* number with an 8-byte little-endian IEEE floating point value <ieee-float>.
+///* B means blobs of <size> bytes.  T means text rendered as <size>
+///* bytes of UTF-8.  The <n> and <size> values are expressed as an ASCII
+///* text integers.
+///*
+///* For each SQL statement in the X input, there is one S segment.  Each
+///* S segment is followed by zero or more R segments, one for each row in the
+///* result set.  After each R, there are one or more N, I, F, B, or T segments,
+///* one for each column in the result set.  Segments are concatentated directly
+///* with no delimiters of any kind.
+#[allow(unused_doc_comments)]
 extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -957,7 +1020,9 @@ extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
             *const i8;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_col: i32 = 0;
+    /// Number of columns in the result set
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: i32 = 0;
     let mut n: i32 = 0;
     let mut z: *const i8 = core::ptr::null();
@@ -1046,6 +1111,7 @@ extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* xStep function for sha3_agg().
 extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
@@ -1069,6 +1135,7 @@ extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     sha3_update_from_value(p, unsafe { *argv.offset(0 as isize) });
 }
 
+///* xFinal function for sha3_agg().
 extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
     p =
@@ -1091,18 +1158,21 @@ extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_shathree_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"sha3".as_ptr() as *mut i8 as *const i8, 1,
                 1 | 2097152 | 2048, core::ptr::null_mut(), Some(sha3_func),
                 None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

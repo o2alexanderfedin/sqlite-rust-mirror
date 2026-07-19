@@ -1,10 +1,38 @@
+//!* 2020-01-08
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* This SQLite extension implements a noop() function used for testing.
+//!*
+//!* Variants:
+//!*
+//!*    noop(X)           The default.  Deterministic.
+//!*    noop_i(X)         Deterministic and innocuous.
+//!*    noop_do(X)        Deterministic and direct-only.
+//!*    noop_nd(X)        Non-deterministic.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* Implementation of the noop() function.
+///*
+///* The function returns its argument, unchanged.
 extern "C" fn noopfunc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -19,6 +47,11 @@ extern "C" fn noopfunc(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* Implementation of the multitype_text() function.
+///*
+///* The function returns its argument.  The result will always have a
+///* TEXT value.  But if the original input is numeric, it will also
+///* have that numeric value.
 extern "C" fn multitype_text_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -41,17 +74,20 @@ extern "C" fn multitype_text_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_noop_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"noop".as_ptr() as *mut i8 as *const i8, 1, 1 | 2048,
                 core::ptr::null_mut(), Some(noopfunc), None, None)
-        };
+        });
     if rc != 0 { return rc; }
     rc =
         unsafe {

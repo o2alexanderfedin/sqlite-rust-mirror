@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,13 @@ impl Parse {
     }
 }
 
+///* An open write-ahead log file is represented by an instance of the
+///* following object.
+///*
+///* writeLock:
+///*   This is usually set to 1 whenever the WRITER lock is held. However,
+///*   if it is set to 2, then the WRITER lock is held but must be released
+///*   by walHandleException() if a SEH exception is thrown.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Wal {
@@ -422,6 +444,17 @@ struct Wal {
     n_ckpt: u32,
 }
 
+///* The following object holds a copy of the wal-index header content.
+///*
+///* The actual header in the wal-index consists of two copies of this
+///* object followed by one instance of the WalCkptInfo object.
+///* For all versions of SQLite through 3.10.0 and probably beyond,
+///* the locking bytes (WalCkptInfo.aLock) start at offset 120 and
+///* the total header size is 136 bytes.
+///*
+///* The szPage value can be any power of 2 between 512 and 32768, inclusive.
+///* Or it can be 1 to represent a 65536-byte page.  The latter case was
+///* added in 3.7.1 when support for 64K pages was added.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalIndexHdr {
@@ -438,6 +471,7 @@ struct WalIndexHdr {
     a_cksum: [u32; 2],
 }
 
+///* Close an open wal-index.
 extern "C" fn wal_index_close(p_wal_1: &Wal, is_delete_1: i32) -> () {
     if (*p_wal_1).exclusive_mode as i32 == 2 ||
             (*p_wal_1).b_shm_unreliable != 0 {
@@ -467,13 +501,30 @@ extern "C" fn wal_index_close(p_wal_1: &Wal, is_delete_1: i32) -> () {
     }
 }
 
+/// Open and close a connection to a write-ahead log.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_open(p_vfs: *mut Sqlite3Vfs,
     p_db_fd: *mut Sqlite3File, z_wal_name: *const i8, b_no_shm: i32,
     mx_wal_size: i64, pp_wal: &mut *mut Wal) -> i32 {
     let mut rc: i32 = 0;
+    /// Return Code
     let mut p_ret: *mut Wal = core::ptr::null_mut();
+    /// Object to allocate and return
     let mut flags: i32 = 0;
+
+    /// Flags passed to OsOpen()
+    { let _ = 0; };
+    { let _ = 0; };
+
+    /// Verify the values of various constants.  Any changes to the values
+    ///* of these constants would result in an incompatible on-disk format
+    ///* for the -shm file.  Any change that causes one of these asserts to
+    ///* fail is a backward compatibility problem, even if the change otherwise
+    ///* works.
+    ///*
+    ///* This table also serves as a helpful cross-reference when trying to
+    ///* interpret hex dumps of the -shm file.
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -495,9 +546,14 @@ pub extern "C" fn sqlite3_wal_open(p_vfs: *mut Sqlite3Vfs,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
-    { let _ = 0; };
-    { let _ = 0; };
-    *pp_wal = core::ptr::null_mut();
+
+    /// In the amalgamation, the os_unix.c and os_win.c source files come before
+    ///* this source file.  Verify that the #defines of the locking byte offsets
+    ///* in os_unix.c and os_win.c agree with the WALINDEX_LOCK_OFFSET value.
+    ///* For that matter, if the lock offset ever changes from its initial design
+    ///* value of 120, we need to know that so there is an assert() to check it.
+    /// Allocate an instance of struct Wal to return.
+    (*pp_wal = core::ptr::null_mut());
     p_ret =
         unsafe {
                 sqlite3_malloc_zero(core::mem::size_of::<Wal>() as u64 +
@@ -518,7 +574,9 @@ pub extern "C" fn sqlite3_wal_open(p_vfs: *mut Sqlite3Vfs,
     unsafe {
         (*p_ret).exclusive_mode = if b_no_shm != 0 { 2 } else { 0 } as u8
     };
-    flags = 2 | 4 | 524288;
+
+    /// Open file handle on the write-ahead log file.
+    (flags = 2 | 4 | 524288);
     rc =
         unsafe {
             sqlite3_os_open(p_vfs, z_wal_name, unsafe { (*p_ret).p_wal_fd },
@@ -551,6 +609,10 @@ extern "C" fn wal_lock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
     return rc;
 }
 
+///* Attempt to obtain the exclusive WAL lock defined by parameters lockIdx and
+///* n. If the attempt fails and parameter xBusy is not NULL, then it is a
+///* busy-handler function. Invoke it and retry the lock until either the
+///* lock is successfully obtained or the busy-handler returns 0.
 extern "C" fn wal_busy_lock(p_wal_1: *mut Wal,
     x_busy_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
     p_busy_arg_1: *mut (), lock_idx_1: i32, n: i32) -> i32 {
@@ -568,8 +630,27 @@ extern "C" fn wal_busy_lock(p_wal_1: *mut Wal,
     return rc;
 }
 
+///* Each page of the wal-index mapping contains a hash-table made up of
+///* an array of HASHTABLE_NSLOT elements of the following type.
 type HtSlot = u16;
 
+///* Obtain a pointer to the iPage'th page of the wal-index. The wal-index
+///* is broken into pages of WALINDEX_PGSZ bytes. Wal-index pages are
+///* numbered from zero.
+///*
+///* If the wal-index is currently smaller the iPage pages then the size
+///* of the wal-index might be increased, but only if it is safe to do
+///* so.  It is safe to enlarge the wal-index if pWal->writeLock is true
+///* or pWal->exclusiveMode==WAL_HEAPMEMORY_MODE.
+///*
+///* Three possible result scenarios:
+///*
+///*   (1)  rc==SQLITE_OK    and *ppPage==Requested-Wal-Index-Page
+///*   (2)  rc>=SQLITE_ERROR and *ppPage==NULL
+///*   (3)  rc==SQLITE_OK    and *ppPage==NULL  // only if iPage==0
+///*
+///* Scenario (3) can only occur when pWal->writeLock is false and iPage==0
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_page_realloc(p_wal_1: &mut Wal, i_page_1: i32,
     pp_page_1: &mut *mut u32) -> i32 {
     let mut rc: i32 = 0;
@@ -597,6 +678,8 @@ extern "C" fn wal_index_page_realloc(p_wal_1: &mut Wal, i_page_1: i32,
         (*p_wal_1).ap_wi_data = ap_new;
         (*p_wal_1).n_wi_data = i_page_1 + 1;
     }
+
+    /// Request a pointer to the required page from the VFS
     { let _ = 0; };
     if (*p_wal_1).exclusive_mode as i32 == 2 {
         unsafe {
@@ -656,6 +739,7 @@ extern "C" fn wal_index_page(p_wal_1: *mut Wal, i_page_1: i32,
     return 0;
 }
 
+///* Return a pointer to the WalIndexHdr structure in the wal-index.
 extern "C" fn wal_index_hdr(p_wal_1: &Wal) -> *mut WalIndexHdr {
     { let _ = 0; };
     { let _ = 0; };
@@ -663,12 +747,22 @@ extern "C" fn wal_index_hdr(p_wal_1: &Wal) -> *mut WalIndexHdr {
             *mut WalIndexHdr;
 }
 
+///* If there is the possibility of concurrent access to the SHM file
+///* from multiple threads and/or processes, then do a memory barrier.
 extern "C" fn wal_shm_barrier(p_wal_1: &Wal) -> () {
     if (*p_wal_1).exclusive_mode as i32 != 2 {
         unsafe { sqlite3_os_shm_barrier((*p_wal_1).p_db_fd) };
     }
 }
 
+///* Generate or extend an 8 byte checksum based on the data in
+///* array aByte[] and the initial values of aIn[0] and aIn[1] (or
+///* initial values of 0 and 0 if aIn==NULL).
+///*
+///* The checksum is written back into aOut[] before returning.
+///*
+///* nByte must be a positive multiple of 8.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_checksum_bytes(native_cksum_1: i32, a: *mut u8,
     n_byte_1: i32, a_in_1: *const u32, a_out_1: *mut u32) -> () {
     let mut s1: u32 = 0 as u32;
@@ -680,6 +774,8 @@ extern "C" fn wal_checksum_bytes(native_cksum_1: i32, a: *mut u8,
         s1 = unsafe { *a_in_1.offset(0 as isize) } as u32;
         s2 = unsafe { *a_in_1.offset(1 as isize) } as u32;
     } else { s1 = { s2 = 0 as u32; s2 }; }
+
+    /// nByte is a multiple of 8 between 8 and 65536
     { let _ = 0; };
     if (native_cksum_1 == 0) as i32 != 0 {
         '__b2: loop {
@@ -893,19 +989,58 @@ extern "C" fn wal_checksum_bytes(native_cksum_1: i32, a: *mut u8,
     unsafe { *a_out_1.offset(1 as isize) = s2 };
 }
 
+///* Try to read the wal-index header.  Return 0 on success and 1 if
+///* there is a problem.
+///*
+///* The wal-index is in shared memory.  Another thread or process might
+///* be writing the header at the same time this procedure is trying to
+///* read it, which might result in inconsistency.  A dirty read is detected
+///* by verifying that both copies of the header are the same and also by
+///* a checksum on the header.
+///*
+///* If and only if the read is consistent and the header is different from
+///* pWal->hdr, then pWal->hdr is updated to the content of the new header
+///* and *pChanged is set to 1.
+///*
+///* If the checksum cannot be verified return non-zero. If the header
+///* is read successfully and the checksum verified, return zero.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_try_hdr(p_wal_1: *mut Wal, p_changed_1: &mut i32)
     -> i32 {
     let mut a_cksum: [u32; 2] = [0; 2];
+    /// Checksum on the header content
     let mut h1: WalIndexHdr = unsafe { core::mem::zeroed() };
     let mut h2: WalIndexHdr = unsafe { core::mem::zeroed() };
+    /// Two copies of the header content
     let mut a_hdr: *mut WalIndexHdr = core::ptr::null_mut();
+
+    /// Header in shared memory
+    /// The first page of the wal-index must be mapped at this point.
     { let _ = 0; };
-    a_hdr = wal_index_hdr(unsafe { &*p_wal_1 });
+
+    /// Read the header. This might happen concurrently with a write to the
+    ///* same area of shared memory on a different CPU in a SMP,
+    ///* meaning it is possible that an inconsistent snapshot is read
+    ///* from the file. If this happens, return non-zero.
+    ///*
+    ///* tag-20200519-1:
+    ///* There are two copies of the header at the beginning of the wal-index.
+    ///* When reading, read [0] first then [1].  Writes are in the reverse order.
+    ///* Memory barriers are used to prevent the compiler or the hardware from
+    ///* reordering the reads and writes.  TSAN and similar tools can sometimes
+    ///* give false-positive warnings about these accesses because the tools do not
+    ///* account for the double-read and the memory barrier. The use of mutexes
+    ///* here would be problematic as the memory being accessed is potentially
+    ///* shared among multiple processes and not all mutex implementations work
+    ///* reliably in that environment.
+    (a_hdr = wal_index_hdr(unsafe { &*p_wal_1 }));
     unsafe {
         memcpy(&raw mut h1 as *mut (),
             unsafe { &raw mut *a_hdr.offset(0 as isize) } as *mut () as
                 *const (), core::mem::size_of::<WalIndexHdr>() as u64)
     };
+
+    /// Possible TSAN false-positive
     wal_shm_barrier(unsafe { &*p_wal_1 });
     unsafe {
         memcpy(&raw mut h2 as *mut (),
@@ -945,9 +1080,16 @@ extern "C" fn wal_index_try_hdr(p_wal_1: *mut Wal, p_changed_1: &mut i32)
                     u32
         };
     }
+
+    /// The header was successfully read. Return zero.
     return 0;
 }
 
+///* Set or release locks on the WAL.  Locks are either shared or exclusive.
+///* A lock cannot be moved directly between shared and exclusive - it must go
+///* through the unlocked state first.
+///*
+///* In locking_mode=EXCLUSIVE, all of these routines become no-ops.
 extern "C" fn wal_lock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> i32 {
     let mut rc: i32 = 0;
     if (*p_wal_1).exclusive_mode != 0 { return 0; }
@@ -968,6 +1110,63 @@ extern "C" fn wal_unlock_shared(p_wal_1: &Wal, lock_idx_1: i32) -> () {
     };
 }
 
+///* A copy of the following object occurs in the wal-index immediately
+///* following the second copy of the WalIndexHdr.  This object stores
+///* information used by checkpoint.
+///*
+///* nBackfill is the number of frames in the WAL that have been written
+///* back into the database. (We call the act of moving content from WAL to
+///* database "backfilling".)  The nBackfill number is never greater than
+///* WalIndexHdr.mxFrame.  nBackfill can only be increased by threads
+///* holding the WAL_CKPT_LOCK lock (which includes a recovery thread).
+///* However, a WAL_WRITE_LOCK thread can move the value of nBackfill from
+///* mxFrame back to zero when the WAL is reset.
+///*
+///* nBackfillAttempted is the largest value of nBackfill that a checkpoint
+///* has attempted to achieve.  Normally nBackfill==nBackfillAtempted, however
+///* the nBackfillAttempted is set before any backfilling is done and the
+///* nBackfill is only set after all backfilling completes.  So if a checkpoint
+///* crashes, nBackfillAttempted might be larger than nBackfill.  The
+///* WalIndexHdr.mxFrame must never be less than nBackfillAttempted.
+///*
+///* The aLock[] field is a set of bytes used for locking.  These bytes should
+///* never be read or written.
+///*
+///* There is one entry in aReadMark[] for each reader lock.  If a reader
+///* holds read-lock K, then the value in aReadMark[K] is no greater than
+///* the mxFrame for that reader.  The value READMARK_NOT_USED (0xffffffff)
+///* for any aReadMark[] means that entry is unused.  aReadMark[0] is
+///* a special case; its value is never used and it exists as a place-holder
+///* to avoid having to offset aReadMark[] indexes by one.  Readers holding
+///* WAL_READ_LOCK(0) always ignore the entire WAL and read all content
+///* directly from the database.
+///*
+///* The value of aReadMark[K] may only be changed by a thread that
+///* is holding an exclusive lock on WAL_READ_LOCK(K).  Thus, the value of
+///* aReadMark[K] cannot changed while there is a reader is using that mark
+///* since the reader will be holding a shared lock on WAL_READ_LOCK(K).
+///*
+///* The checkpointer may only transfer frames from WAL to database where
+///* the frame numbers are less than or equal to every aReadMark[] that is
+///* in use (that is, every aReadMark[j] for which there is a corresponding
+///* WAL_READ_LOCK(j)).  New readers (usually) pick the aReadMark[] with the
+///* largest value and will increase an unused aReadMark[] to mxFrame if there
+///* is not already an aReadMark[] equal to mxFrame.  The exception to the
+///* previous sentence is when nBackfill equals mxFrame (meaning that everything
+///* in the WAL has been backfilled into the database) then new readers
+///* will choose aReadMark[0] which has value 0 and hence such reader will
+///* get all their all content directly from the database file and ignore
+///* the WAL.
+///*
+///* Writers normally append new frames to the end of the WAL.  However,
+///* if nBackfill equals mxFrame (meaning that all WAL content has been
+///* written back into the database) and if no readers are using the WAL
+///* (in other words, if there are no WAL_READ_LOCK(i) where i>0) then
+///* the writer will first "reset" the WAL back to the beginning and start
+///* writing new content beginning at frame 1.
+///*
+///* We assume that 32-bit loads are atomic and so no locks are needed in
+///* order to read from any aReadMark[] entries.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalCkptInfo {
@@ -978,6 +1177,10 @@ struct WalCkptInfo {
     not_used0: u32,
 }
 
+///* Write the header information in pWal->hdr into the wal-index.
+///*
+///* The checksum on pWal->hdr is updated before it is written.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_write_hdr(p_wal_1: *mut Wal) -> () {
     let a_hdr: *mut WalIndexHdr = wal_index_hdr(unsafe { &*p_wal_1 });
     let n_cksum: i32 = core::mem::offset_of!(WalIndexHdr, a_cksum) as i32;
@@ -987,6 +1190,8 @@ extern "C" fn wal_index_write_hdr(p_wal_1: *mut Wal) -> () {
     wal_checksum_bytes(1, unsafe { &raw mut (*p_wal_1).hdr } as *mut u8,
         n_cksum, core::ptr::null(),
         unsafe { &raw mut (*p_wal_1).hdr.a_cksum[0 as usize] } as *mut u32);
+
+    /// Possible TSAN false-positive.  See tag-20200519-1
     unsafe {
         memcpy(unsafe { &raw mut *a_hdr.offset(1 as isize) } as *mut (),
             unsafe { &raw mut (*p_wal_1).hdr } as *const (),
@@ -1000,6 +1205,7 @@ extern "C" fn wal_index_write_hdr(p_wal_1: *mut Wal) -> () {
     };
 }
 
+///* Return a pointer to the WalCkptInfo structure in the wal-index.
 extern "C" fn wal_ckpt_info(p_wal_1: &Wal) -> *mut WalCkptInfo {
     { let _ = 0; };
     { let _ = 0; };
@@ -1023,6 +1229,10 @@ extern "C" fn wal_unlock_exclusive(p_wal_1: &Wal, lock_idx_1: i32, n: i32)
     };
 }
 
+///* Return the number of the wal-index page that contains the hash-table
+///* and page-number array that contain entries corresponding to WAL frame
+///* iFrame. The wal-index is broken up into 32KB pages. Wal-index pages
+///* are numbered starting from 0.
 extern "C" fn wal_frame_page(i_frame_1: u32) -> i32 {
     let i_hash: i32 =
         (((i_frame_1 + 4096 as u32) as u64 -
@@ -1036,12 +1246,19 @@ extern "C" fn wal_frame_page(i_frame_1: u32) -> i32 {
     return i_hash;
 }
 
+///* Check to see if the frame with header in aFrame[] and content
+///* in aData[] is valid.  If it is a valid frame, fill *piPage and
+///* *pnTruncate and return true.  Return if the frame is not valid.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_decode_frame(p_wal_1: &mut Wal, pi_page_1: &mut u32,
     pn_truncate_1: &mut u32, a_data_1: *mut u8, a_frame_1: *mut u8) -> i32 {
     let mut native_cksum: i32 = 0;
+    /// True for native byte-order checksums
     let a_cksum: *mut u32 =
         &raw mut (*p_wal_1).hdr.a_frame_cksum[0 as usize] as *mut u32;
     let mut pgno: u32 = 0 as u32;
+
+    /// Page number of the frame
     { let _ = 0; };
     if unsafe {
                 memcmp(&raw mut (*p_wal_1).hdr.a_salt as *const (),
@@ -1050,14 +1267,21 @@ extern "C" fn wal_decode_frame(p_wal_1: &mut Wal, pi_page_1: &mut u32,
             } != 0 {
         return 0;
     }
-    pgno =
+
+    /// A frame is only valid if the page number is greater than zero.
+    (pgno =
         unsafe {
             sqlite3_get4byte(unsafe { &raw mut *a_frame_1.offset(0 as isize) }
                     as *const u8)
-        };
+        });
     if pgno == 0 as u32 { return 0; }
     if ((*p_wal_1).sz_page == 0) as i32 != 0 { return 0; }
-    native_cksum = ((*p_wal_1).hdr.big_end_cksum as i32 == 0) as i32;
+
+    /// A frame is only valid if a checksum of the WAL header,
+    ///* all prior frames, the first 16 bytes of this frame-header,
+    ///* and the frame-data matches the checksum in the last 8
+    ///* bytes of this frame-header.
+    (native_cksum = ((*p_wal_1).hdr.big_end_cksum as i32 == 0) as i32);
     wal_checksum_bytes(native_cksum, a_frame_1, 8, a_cksum as *const u32,
         a_cksum);
     wal_checksum_bytes(native_cksum, a_data_1, (*p_wal_1).sz_page as i32,
@@ -1074,9 +1298,14 @@ extern "C" fn wal_decode_frame(p_wal_1: &mut Wal, pi_page_1: &mut u32,
                                 &raw mut *a_frame_1.offset(20 as isize)
                             } as *const u8)
                 } {
+
+        /// Checksum failed.
         return 0;
     }
-    *pi_page_1 = pgno;
+
+    /// If we reach this point, the frame is valid.  Return the page number
+    ///* and the new database size.
+    (*pi_page_1 = pgno);
     *pn_truncate_1 =
         unsafe {
             sqlite3_get4byte(unsafe { &raw mut *a_frame_1.offset(4 as isize) }
@@ -1093,10 +1322,25 @@ struct WalHashLoc {
     i_zero: u32,
 }
 
+///* Return pointers to the hash table and page number array stored on
+///* page iHash of the wal-index. The wal-index is broken into 32KB pages
+///* numbered starting from 0.
+///*
+///* Set output variable pLoc->aHash to point to the start of the hash table
+///* in the wal-index file. Set pLoc->iZero to one less than the frame
+///* number of the first frame indexed by this hash table. If a
+///* slot in the hash table is set to N, it refers to frame number
+///* (pLoc->iZero+N) in the log.
+///*
+///* Finally, set pLoc->aPgno so that pLoc->aPgno[0] is the page number of the
+///* first frame indexed by the hash table, frame (pLoc->iZero).
+#[allow(unused_doc_comments)]
 extern "C" fn wal_hash_get(p_wal_1: *mut Wal, i_hash_1: i32,
     p_loc_1: &mut WalHashLoc) -> i32 {
     let mut rc: i32 = 0;
-    rc = wal_index_page(p_wal_1, i_hash_1, &mut (*p_loc_1).a_pgno);
+
+    /// Return code
+    (rc = wal_index_page(p_wal_1, i_hash_1, &mut (*p_loc_1).a_pgno));
     { let _ = 0; };
     if !((*p_loc_1).a_pgno).is_null() {
         (*p_loc_1).a_hash =
@@ -1123,20 +1367,44 @@ extern "C" fn wal_hash_get(p_wal_1: *mut Wal, i_hash_1: i32,
     return rc;
 }
 
+///* Remove entries from the hash table that point to WAL slots greater
+///* than pWal->hdr.mxFrame.
+///*
+///* This function is called whenever pWal->hdr.mxFrame is decreased due
+///* to a rollback or savepoint.
+///*
+///* At most only the hash table containing pWal->hdr.mxFrame needs to be
+///* updated.  Any later hash tables will be automatically cleared when
+///* pWal->hdr.mxFrame advances to the point where those hash tables are
+///* actually needed.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_cleanup_hash(p_wal_1: *mut Wal) -> () {
     let mut s_loc: WalHashLoc = unsafe { core::mem::zeroed() };
+    /// Hash table location
     let mut i_limit: i32 = 0;
+    /// Zero values greater than this
     let mut n_byte: i32 = 0;
+    /// Number of bytes to zero in aPgno[]
     let mut i: i32 = 0;
+
+    /// Used to iterate through aHash[]
     { let _ = 0; };
     if unsafe { (*p_wal_1).hdr.mx_frame } == 0 as u32 { return; }
+
+    /// Obtain pointers to the hash-table and page-number array containing
+    ///* the entry that corresponds to frame pWal->hdr.mxFrame. It is guaranteed
+    ///* that the page said hash-table and array reside on is already mapped.(1)
     { let _ = 0; };
     { let _ = 0; };
     i =
         wal_hash_get(p_wal_1,
             wal_frame_page(unsafe { (*p_wal_1).hdr.mx_frame }), &mut s_loc);
     if i != 0 { return; }
-    i_limit = (unsafe { (*p_wal_1).hdr.mx_frame } - s_loc.i_zero) as i32;
+
+    /// Defense-in-depth, in case (1) above is wrong
+    /// Zero all hash-table entries that correspond to frame numbers greater
+    ///* than pWal->hdr.mxFrame.
+    (i_limit = (unsafe { (*p_wal_1).hdr.mx_frame } - s_loc.i_zero) as i32);
     { let _ = 0; };
     {
         i = 0;
@@ -1152,13 +1420,19 @@ extern "C" fn wal_cleanup_hash(p_wal_1: *mut Wal) -> () {
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
-    n_byte =
+
+    /// Zero the entries in the aPgno array that correspond to frames with
+    ///* frame numbers greater than pWal->hdr.mxFrame.
+    (n_byte =
         unsafe {
                     (s_loc.a_hash as
                             *mut i8).offset_from(unsafe {
                                 &raw mut *s_loc.a_pgno.offset(i_limit as isize)
                             } as *mut i8)
-                } as i64 as i32;
+                } as i64 as i32);
+
+    /// Zero the entries in the aPgno array that correspond to frames with
+    ///* frame numbers greater than pWal->hdr.mxFrame.
     { let _ = 0; };
     unsafe {
         memset(unsafe { &raw mut *s_loc.a_pgno.offset(i_limit as isize) } as
@@ -1166,6 +1440,9 @@ extern "C" fn wal_cleanup_hash(p_wal_1: *mut Wal) -> () {
     };
 }
 
+///* Compute a hash on a page number.  The resulting hash value must land
+///* between 0 and (HASHTABLE_NSLOT-1).  The walNextHash() function advances
+///* the hash to the next value in the event of a collision.
 extern "C" fn wal_hash(i_page_1: u32) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
@@ -1176,16 +1453,26 @@ extern "C" fn wal_next_hash(i_prior_hash_1: i32) -> i32 {
     return i_prior_hash_1 + 1 & 4096 * 2 - 1;
 }
 
+///* Set an entry in the wal-index that will map database page number
+///* pPage into WAL frame iFrame.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_append(p_wal_1: *mut Wal, i_frame_1: u32,
     i_page_1: u32) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut s_loc: WalHashLoc = unsafe { core::mem::zeroed() };
-    rc = wal_hash_get(p_wal_1, wal_frame_page(i_frame_1), &mut s_loc);
+
+    /// Wal-index hash table location
+    (rc = wal_hash_get(p_wal_1, wal_frame_page(i_frame_1), &mut s_loc));
     if rc == 0 {
         let mut i_key: i32 = 0;
+        /// Hash table key
         let mut idx: i32 = 0;
+        /// Value to write to hash-table slot
         let mut n_collide: i32 = 0;
-        idx = (i_frame_1 - s_loc.i_zero) as i32;
+
+        /// Number of hash collisions
+        (idx = (i_frame_1 - s_loc.i_zero) as i32);
         { let _ = 0; };
         if idx == 1 {
             let n_byte: i32 =
@@ -1201,7 +1488,9 @@ extern "C" fn wal_index_append(p_wal_1: *mut Wal, i_frame_1: u32,
             wal_cleanup_hash(p_wal_1);
             { let _ = 0; };
         }
-        n_collide = idx;
+
+        /// Write the aPgno[] array entry and the hash-table slot.
+        (n_collide = idx);
         {
             i_key = wal_hash(i_page_1);
             '__b6: loop {
@@ -1236,31 +1525,81 @@ extern "C" fn wal_index_append(p_wal_1: *mut Wal, i_frame_1: u32,
     return rc;
 }
 
+///* Recover the wal-index by reading the write-ahead log file.
+///*
+///* This routine first tries to establish an exclusive lock on the
+///* wal-index to prevent other threads/processes from doing anything
+///* with the WAL or wal-index while recovery is running.  The
+///* WAL_RECOVER_LOCK is also held so that other threads will know
+///* that this thread is running recovery.  If unable to establish
+///* the necessary locks, this routine returns SQLITE_BUSY.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_recover(p_wal_1: *mut Wal) -> i32 {
     let mut rc: i32 = 0;
+    /// Return Code
     let mut n_size: i64 = 0 as i64;
+    /// Size of log file
     let mut a_frame_cksum: [u32; 2] = [0 as u32, 0 as u32];
     let mut i_lock: i32 = 0;
+    /// Lock offset to lock for checkpoint
+    /// Obtain an exclusive lock on all byte in the locking range not already
+    ///* locked by the caller. The caller is guaranteed to have locked the
+    ///* WAL_WRITE_LOCK byte, and may have also locked the WAL_CKPT_LOCK byte.
+    ///* If successful, the same bytes that are locked here are unlocked before
+    ///* this function returns.
     let mut a_buf: [u8; 32] = [0; 32];
+    /// Buffer to load WAL header into
     let mut a_private: *mut u32 = core::ptr::null_mut();
+    /// Heap copy of *-shm hash being populated
     let mut a_frame: *mut u8 = core::ptr::null_mut();
+    /// Malloc'd buffer to load entire frame
     let mut sz_frame: i32 = 0;
+    /// Number of bytes in buffer aFrame[]
     let mut a_data: *mut u8 = core::ptr::null_mut();
+    /// Pointer to data part of aFrame buffer
     let mut sz_page: i32 = 0;
+    /// Page size according to the log
     let mut magic: u32 = 0 as u32;
+    /// Magic value read from WAL header
     let mut version: u32 = 0 as u32;
+    /// Magic value read from WAL header
     let mut is_valid: i32 = 0;
+    /// True if this frame is valid
     let mut i_pg: u32 = 0 as u32;
+    /// Current 32KB wal-index page
     let mut i_last_frame: u32 = 0 as u32;
+    /// Last frame in wal, based on nSize alone
+    /// Read in the WAL header.
+    /// If the database page size is not a power of two, or is greater than
+    ///* SQLITE_MAX_PAGE_SIZE, conclude that the WAL file contains no valid
+    ///* data. Similarly, if the 'magic' value is invalid, ignore the whole
+    ///* WAL file.
+    /// Verify that the WAL header checksum is correct
+    /// Verify that the version number on the WAL format is one that
+    ///* are able to understand
+    /// Malloc a buffer to read frames into.
+    /// Read all frames from the log file.
     let mut a_share: *mut u32 = core::ptr::null_mut();
     let mut i_frame: u32 = 0 as u32;
+    /// Index of last frame read
     let mut i_last: u32 = 0 as u32;
     let mut i_first: u32 = 0 as u32;
     let mut n_hdr: u32 = 0 as u32;
     let mut n_hdr32: u32 = 0 as u32;
     let mut i_offset: i64 = 0 as i64;
     let mut pgno: u32 = 0 as u32;
+    /// Database page number for frame
     let mut n_truncate: u32 = 0 as u32;
+    /// dbsize field from frame header
+    /// Read and decode the next log frame.
+    /// If nTruncate is non-zero, this is a commit record.
+    /// Memcpy() should work fine here, on all reasonable implementations.
+    ///* Technically, memcpy() might change the destination to some
+    ///* intermediate value before setting to the final value, and that might
+    ///* cause a concurrent reader to malfunction.  Memcpy() is allowed to
+    ///* do that, according to the spec, but no memcpy() implementation that
+    ///* we know of actually does that, which is why we say that memcpy()
+    ///* is safe for this.  Memcpy() is certainly a lot faster.
     let mut p_info: *mut WalCkptInfo = core::ptr::null_mut();
     let mut i: i32 = 0;
     let mut __state: i32 = 0;
@@ -1748,19 +2087,92 @@ extern "C" fn wal_index_recover(p_wal_1: *mut Wal) -> i32 {
             }
         }
     }
+
+    /// Return Code
+    /// Size of log file
+    /// Lock offset to lock for checkpoint
+    /// Obtain an exclusive lock on all byte in the locking range not already
+    ///* locked by the caller. The caller is guaranteed to have locked the
+    ///* WAL_WRITE_LOCK byte, and may have also locked the WAL_CKPT_LOCK byte.
+    ///* If successful, the same bytes that are locked here are unlocked before
+    ///* this function returns.
+    /// Buffer to load WAL header into
+    /// Heap copy of *-shm hash being populated
+    /// Malloc'd buffer to load entire frame
+    /// Number of bytes in buffer aFrame[]
+    /// Pointer to data part of aFrame buffer
+    /// Page size according to the log
+    /// Magic value read from WAL header
+    /// Magic value read from WAL header
+    /// True if this frame is valid
+    /// Current 32KB wal-index page
+    /// Last frame in wal, based on nSize alone
+    /// Read in the WAL header.
+    /// If the database page size is not a power of two, or is greater than
+    ///* SQLITE_MAX_PAGE_SIZE, conclude that the WAL file contains no valid
+    ///* data. Similarly, if the 'magic' value is invalid, ignore the whole
+    ///* WAL file.
+    /// Verify that the WAL header checksum is correct
+    /// Verify that the version number on the WAL format is one that
+    ///* are able to understand
+    /// Malloc a buffer to read frames into.
+    /// Read all frames from the log file.
+    /// Index of last frame read
+    /// Database page number for frame
+    /// dbsize field from frame header
+    /// Read and decode the next log frame.
+    /// If nTruncate is non-zero, this is a commit record.
+    /// Memcpy() should work fine here, on all reasonable implementations.
+    ///* Technically, memcpy() might change the destination to some
+    ///* intermediate value before setting to the final value, and that might
+    ///* cause a concurrent reader to malfunction.  Memcpy() is allowed to
+    ///* do that, according to the spec, but no memcpy() implementation that
+    ///* we know of actually does that, which is why we say that memcpy()
+    ///* is safe for this.  Memcpy() is certainly a lot faster.
+    /// Reset the checkpoint-header. This is safe because this thread is
+    ///* currently holding locks that exclude all other writers and
+    ///* checkpointers. Then set the values of read-mark slots 1 through N.
+    /// If more than one frame was recovered from the log file, report an
+    ///* event via sqlite3_log(). This is to help with identifying performance
+    ///* problems caused by applications routinely shutting down without
+    ///* checkpointing the log file.
     unreachable!();
 }
 
+///* Read the wal-index header from the wal-index and into pWal->hdr.
+///* If the wal-header appears to be corrupt, try to reconstruct the
+///* wal-index from the WAL before returning.
+///*
+///* Set *pChanged to 1 if the wal-index header value in pWal->hdr is
+///* changed by this operation.  If pWal->hdr is unchanged, set *pChanged
+///* to 0.
+///*
+///* If the wal-index header is successfully read, return SQLITE_OK.
+///* Otherwise an SQLite error code.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_index_read_hdr(p_wal_1: *mut Wal, p_changed_1: *mut i32)
     -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut bad_hdr: i32 = 0;
+    /// True if a header read failed
     let mut page0: *mut u32 = core::ptr::null_mut();
+
+    /// Chunk of wal-index containing header
+    /// Ensure that page 0 of the wal-index (the page that contains the
+    ///* wal-index header) is mapped. Return early if an error occurs here.
     { let _ = 0; };
     rc = wal_index_page(p_wal_1, 0, &mut page0);
     if rc != 0 {
         { let _ = 0; };
         if rc == 8 | 5 << 8 {
+
+            /// The SQLITE_READONLY_CANTINIT return means that the shared-memory
+            ///* was openable but is not writable, and this thread is unable to
+            ///* confirm that another write-capable connection has the shared-memory
+            ///* open, and hence the content of the shared-memory is unreliable,
+            ///* since the shared-memory might be inconsistent with the WAL file
+            ///* and there is no writer on hand to fix it.
             { let _ = 0; };
             { let _ = 0; };
             { let _ = 0; };
@@ -1770,10 +2182,15 @@ extern "C" fn wal_index_read_hdr(p_wal_1: *mut Wal, p_changed_1: *mut i32)
         } else { return rc; }
     } else {}
     { let _ = 0; };
-    bad_hdr =
+
+    /// If the first page of the wal-index has been mapped, try to read the
+    ///* wal-index header immediately, without holding any lock. This usually
+    ///* works, but may fail if the wal-index header is corrupt or currently
+    ///* being modified by another thread or process.
+    (bad_hdr =
         if !(page0).is_null() {
             wal_index_try_hdr(p_wal_1, unsafe { &mut *p_changed_1 })
-        } else { 1 };
+        } else { 1 });
     if bad_hdr != 0 {
         if unsafe { (*p_wal_1).b_shm_unreliable } as i32 == 0 &&
                 unsafe { (*p_wal_1).read_only } as i32 & 2 != 0 {
@@ -1820,11 +2237,26 @@ extern "C" fn wal_index_read_hdr(p_wal_1: *mut Wal, p_changed_1: *mut i32)
     return rc;
 }
 
+///* The cache of the wal-index header must be valid to call this function.
+///* Return the page-size in bytes used by the database.
 extern "C" fn wal_pagesize(p_wal_1: &Wal) -> i32 {
     return ((*p_wal_1).hdr.sz_page as i32 & 65024) +
             (((*p_wal_1).hdr.sz_page as i32 & 1) << 16);
 }
 
+///* This structure is used to implement an iterator that loops through
+///* all frames in the WAL in database page order. Where two or more frames
+///* correspond to the same database page, the iterator visits only the
+///* frame most recently written to the WAL (in other words, the frame with
+///* the largest index).
+///*
+///* The internals of this structure are only accessed by:
+///*
+///*   walIteratorInit() - Create a new iterator,
+///*   walIteratorNext() - Step an iterator,
+///*   walIteratorFree() - Free an iterator.
+///*
+///* This functionality is used by the checkpoint code (see walCheckpoint()).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalIterator {
@@ -1843,12 +2275,37 @@ struct WalSegment {
     i_zero: i32,
 }
 
+///* This function merges two sorted lists into a single sorted list.
+///*
+///* aLeft[] and aRight[] are arrays of indices.  The sort key is
+///* aContent[aLeft[]] and aContent[aRight[]].  Upon entry, the following
+///* is guaranteed for all J<K:
+///*
+///*        aContent[aLeft[J]] < aContent[aLeft[K]]
+///*        aContent[aRight[J]] < aContent[aRight[K]]
+///*
+///* This routine overwrites aRight[] with a new (probably longer) sequence
+///* of indices such that the aRight[] contains every index that appears in
+///* either aLeft[] or the old aRight[] and such that the second condition
+///* above is still met.
+///*
+///* The aContent[aLeft[X]] values will be unique for all X.  And the
+///* aContent[aRight[X]] values will be unique too.  But there might be
+///* one or more combinations of X and Y such that
+///*
+///*      aLeft[X]!=aRight[Y]  &&  aContent[aLeft[X]] == aContent[aRight[Y]]
+///*
+///* When that happens, omit the aLeft[X] and use the aRight[Y] index.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_merge(a_content_1: *const u32, a_left_1: *mut HtSlot,
     n_left_1: i32, pa_right_1: &mut *mut HtSlot, pn_right_1: &mut i32,
     a_tmp_1: *mut HtSlot) -> () {
     let mut i_left: i32 = 0;
+    /// Current index in aLeft
     let mut i_right: i32 = 0;
+    /// Current index in aRight
     let mut i_out: i32 = 0;
+    /// Current index in output buffer
     let n_right: i32 = *pn_right_1;
     let a_right: *const HtSlot = *pa_right_1 as *const HtSlot;
     { let _ = 0; };
@@ -1915,14 +2372,39 @@ extern "C" fn wal_merge(a_content_1: *const u32, a_left_1: *mut HtSlot,
     };
 }
 
+///* Sort the elements in list aList using aContent[] as the sort key.
+///* Remove elements with duplicate keys, preferring to keep the
+///* larger aList[] values.
+///*
+///* The aList[] entries are indices into aContent[].  The values in
+///* aList[] are to be sorted so that for all J<K:
+///*
+///*      aContent[aList[J]] < aContent[aList[K]]
+///*
+///* For any X and Y such that
+///*
+///*      aContent[aList[X]] == aContent[aList[Y]]
+///*
+///* Keep the larger of the two values aList[X] and aList[Y] and discard
+///* the smaller.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_mergesort(a_content_1: *const u32, a_buffer_1: *mut HtSlot,
     a_list_1: *mut HtSlot, pn_list_1: &mut i32) -> () {
+    /// Number of elements in aList
+    /// Pointer to sub-list content
     let n_list: i32 = *pn_list_1 as i32;
+    /// Size of input list
     let mut n_merge: i32 = 0;
+    /// Number of elements in list aMerge
     let mut a_merge: *mut HtSlot = core::ptr::null_mut();
+    /// List to be merged
     let mut i_list: i32 = 0;
+    /// Index into input list
     let mut i_sub: u32 = 0 as u32;
+    /// Index into aSub array
     let mut a_sub: [SublistN7Sublist; 13] = unsafe { core::mem::zeroed() };
+
+    /// Array of sub-lists
     unsafe {
         memset(&raw mut a_sub[0 as usize] as *mut SublistN7Sublist as *mut (),
             0, core::mem::size_of::<[SublistN7Sublist; 13]>() as u64)
@@ -1990,22 +2472,47 @@ extern "C" fn wal_mergesort(a_content_1: *const u32, a_buffer_1: *mut HtSlot,
     *pn_list_1 = n_merge;
 }
 
+///* Free an iterator allocated by walIteratorInit().
 extern "C" fn wal_iterator_free(p: *mut WalIterator) -> () {
     unsafe { sqlite3_free(p as *mut ()) };
 }
 
+///* Construct a WalInterator object that can be used to loop over all
+///* pages in the WAL following frame nBackfill in ascending order. Frames
+///* nBackfill or earlier may be included - excluding them is an optimization
+///* only. The caller must hold the checkpoint lock.
+///*
+///* On success, make *pp point to the newly allocated WalInterator object
+///* return SQLITE_OK. Otherwise, return an error code. If this routine
+///* returns an error, the value of *pp is undefined.
+///*
+///* The calling routine should invoke walIteratorFree() to destroy the
+///* WalIterator object when it has finished with it.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_iterator_init(p_wal_1: *mut Wal, n_backfill_1: u32,
     pp: &mut *mut WalIterator) -> i32 {
     let mut p: *mut WalIterator = core::ptr::null_mut();
+    /// Return value
     let mut n_segment: i32 = 0;
+    /// Number of segments to merge
     let mut i_last: u32 = 0 as u32;
+    /// Last frame in log
     let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of bytes to allocate
     let mut i: i32 = 0;
+    /// Iterator variable
     let mut a_tmp: *mut HtSlot = core::ptr::null_mut();
+    /// Temp space used by merge-sort
     let mut rc: i32 = 0;
+
+    /// Return Code
+    /// This routine only runs while holding the checkpoint lock. And
+    ///* it only runs if there is actually content in the log (mxFrame>0).
     { let _ = 0; };
     i_last = unsafe { (*p_wal_1).hdr.mx_frame };
-    n_segment = wal_frame_page(i_last) + 1;
+
+    /// Allocate space for the WalIterator object.
+    (n_segment = wal_frame_page(i_last) + 1);
     n_byte =
         (core::mem::offset_of!(WalIterator, a_segment) as u64 +
                     n_segment as u64 * core::mem::size_of::<WalSegment>() as u64
@@ -2033,7 +2540,9 @@ extern "C" fn wal_iterator_init(p_wal_1: *mut Wal, n_backfill_1: u32,
                 rc = wal_hash_get(p_wal_1, i, &mut s_loc);
                 if rc == 0 {
                     let mut j: i32 = 0;
+                    /// Counter variable
                     let mut n_entry: i32 = 0;
+                    /// Number of entries in this segment
                     let mut a_index: *mut HtSlot = core::ptr::null_mut();
                     if i + 1 == n_segment {
                         n_entry = (i_last - s_loc.i_zero) as i32;
@@ -2099,12 +2608,25 @@ extern "C" fn wal_iterator_init(p_wal_1: *mut Wal, n_backfill_1: u32,
     return rc;
 }
 
+///* Find the smallest page number out of all pages held in the WAL that
+///* has not been returned by any prior invocation of this method on the
+///* same WalIterator object.   Write into *piFrame the frame index where
+///* that page was last written into the WAL.  Write into *piPage the page
+///* number.
+///*
+///* Return 0 on success.  If there are no pages in the WAL with a page
+///* number larger than *piPage, then return 1.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_iterator_next(p: &mut WalIterator, pi_page_1: &mut u32,
     pi_frame_1: &mut u32) -> i32 {
     let mut i_min: u32 = 0 as u32;
+    /// Result pgno must be greater than iMin
     let mut i_ret: u32 = 4294967295u32;
+    /// 0xffffffff is never a valid page number
     let mut i: i32 = 0;
-    i_min = (*p).i_prior;
+
+    /// For looping through segments
+    (i_min = (*p).i_prior);
     { let _ = 0; };
     {
         i = (*p).n_segment - 1;
@@ -2159,11 +2681,30 @@ extern "C" fn wal_iterator_next(p: &mut WalIterator, pi_page_1: &mut u32,
     return (i_ret == 4294967295u32) as i32;
 }
 
+///* The following is guaranteed when this function is called:
+///*
+///*   a) the WRITER lock is held,
+///*   b) the entire log file has been checkpointed, and
+///*   c) any existing readers are reading exclusively from the database
+///*      file - there are no readers that may attempt to read a frame from
+///*      the log file.
+///*
+///* This function updates the shared-memory structures so that the next
+///* client to write to the database (which may be this one) does so by
+///* writing frames into the start of the log file.
+///*
+///* The value of parameter salt1 is used as the aSalt[1] value in the
+///* new wal-index header. It should be passed a pseudo-random value (i.e.
+///* one obtained from sqlite3_randomness()).
+#[allow(unused_doc_comments)]
 extern "C" fn wal_restart_hdr(p_wal_1: *mut Wal, mut salt1: u32) -> () {
     let p_info: *mut WalCkptInfo = wal_ckpt_info(unsafe { &*p_wal_1 });
     let mut i: i32 = 0;
+    /// Loop counter
     let a_salt: *mut u32 =
         unsafe { &raw mut (*p_wal_1).hdr.a_salt[0 as usize] } as *mut u32;
+
+    /// Big-endian salt values
     {
         let __p = unsafe { &mut (*p_wal_1).n_ckpt };
         let __t = *__p;
@@ -2209,28 +2750,100 @@ extern "C" fn wal_restart_hdr(p_wal_1: *mut Wal, mut salt1: u32) -> () {
     { let _ = 0; };
 }
 
+///* Copy as much content as we can from the WAL back into the database file
+///* in response to an sqlite3_wal_checkpoint() request or the equivalent.
+///*
+///* The amount of information copies from WAL to database might be limited
+///* by active readers.  This routine will never overwrite a database page
+///* that a concurrent reader might be using.
+///*
+///* All I/O barrier operations (a.k.a fsyncs) occur in this routine when
+///* SQLite is in WAL-mode in synchronous=NORMAL.  That means that if
+///* checkpoints are always run by a background thread or background
+///* process, foreground threads will never block on a lengthy fsync call.
+///*
+///* Fsync is called on the WAL before writing content out of the WAL and
+///* into the database.  This ensures that if the new content is persistent
+///* in the WAL and can be recovered following a power-loss or hard reset.
+///*
+///* Fsync is also called on the database file if (and only if) the entire
+///* WAL content is copied into the database file.  This second fsync makes
+///* it safe to delete the WAL since the new content will persist in the
+///* database file.
+///*
+///* This routine uses and updates the nBackfill field of the wal-index header.
+///* This is the only routine that will increase the value of nBackfill.
+///* (A WAL reset or recovery will revert nBackfill to zero, but not increase
+///* its value.)
+///*
+///* The caller must be holding sufficient locks to ensure that no other
+///* checkpoint is running (in any other thread or process) at the same
+///* time.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_checkpoint(p_wal_1: *mut Wal, db: &mut Sqlite3,
     e_mode_1: i32, mut x_busy_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
     p_busy_arg_1: *mut (), sync_flags: i32, z_buf_1: *mut u8) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code
         let mut sz_page: i32 = 0;
+        /// Database page-size
         let mut p_iter: *mut WalIterator = core::ptr::null_mut();
+        /// Wal iterator context
         let mut i_dbpage: u32 = 0 as u32;
+        /// Next database page to write
         let mut i_frame: u32 = 0 as u32;
+        /// Wal frame containing data for iDbpage
         let mut mx_safe_frame: u32 = 0 as u32;
+        /// Max frame that can be backfilled
         let mut mx_page: u32 = 0 as u32;
+        /// Max database page to write
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_info: *mut WalCkptInfo = core::ptr::null_mut();
+        /// The checkpoint status information
+        /// EVIDENCE-OF: R-62920-47450 The busy-handler callback is never invoked
+        ///* in the SQLITE_CHECKPOINT_PASSIVE mode.
+        /// Compute in mxSafeFrame the index of the last frame of the WAL that is
+        ///* safe to write into the database.  Frames beyond mxSafeFrame might
+        ///* overwrite database pages that are in use by active readers and thus
+        ///* cannot be backfilled from the WAL.
         let mut y: u32 = 0 as u32;
         let mut i_mark: u32 = 0 as u32;
+        /// Allocate the iterator
         let mut n_backfill: u32 = 0 as u32;
         let mut p_live: *const WalIndexHdr = core::ptr::null();
+        /// Now that read-lock slot 0 is locked, check that the wal has not been
+        ///* wrapped since the header was read for this checkpoint. If it was, then
+        ///* there was no work to do anyway.  In this case the
+        ///* (pInfo->nBackfill<pWal->hdr.mxFrame) test above only passed because
+        ///* pInfo->nBackfill had already been set to 0 by the writer that wrapped
+        ///* the wal file. It would also be dangerous to proceed, as there may be
+        ///* fewer than pWal->hdr.mxFrame valid frames in the wal file.
         let mut b_chg: i32 = 0;
+        /// Sync the WAL to disk
+        /// If the database may grow as a result of this checkpoint, hint
+        ///* about the eventual size of the db file to the VFS layer.
         let mut n_req: i64 = 0 as i64;
         let mut n_size: i64 = 0 as i64;
+        /// Current size of database file
+        /// If the size of the final database is larger than the current
+        ///* database plus the amount of data in the wal file, plus the
+        ///* maximum size of the pending-byte page (65536 bytes), then
+        ///* must be corruption somewhere.
+        /// Iterate through the contents of the WAL, copying data to the 
+        ///* db file
         let mut i_offset: i64 = 0 as i64;
+        /// testcase( IS_BIG_INT(iOffset) ); // requires a 4GiB WAL file
+        /// If work was actually accomplished...
         let mut sz_db: i64 = 0 as i64;
+        /// Release the reader lock held while backfilling
+        /// Reset the return code so as not to report a checkpoint failure
+        ///* just because there are active readers.
+        /// If this is an SQLITE_CHECKPOINT_RESTART or TRUNCATE operation, and the
+        ///* entire wal file has been copied into the database file, then block
+        ///* until all readers have finished using the wal file. This ensures that
+        ///* the next process to write to the database restarts the wal file.
         let mut salt1: u32 = 0 as u32;
         let mut __state: i32 = 0;
         loop {
@@ -2629,10 +3242,68 @@ extern "C" fn wal_checkpoint(p_wal_1: *mut Wal, db: &mut Sqlite3,
                 }
             }
         }
+
+        /// Return code
+        /// Database page-size
+        /// Wal iterator context
+        /// Next database page to write
+        /// Wal frame containing data for iDbpage
+        /// Max frame that can be backfilled
+        /// Max database page to write
+        /// Loop counter
+        /// The checkpoint status information
+        /// EVIDENCE-OF: R-62920-47450 The busy-handler callback is never invoked
+        ///* in the SQLITE_CHECKPOINT_PASSIVE mode.
+        /// Compute in mxSafeFrame the index of the last frame of the WAL that is
+        ///* safe to write into the database.  Frames beyond mxSafeFrame might
+        ///* overwrite database pages that are in use by active readers and thus
+        ///* cannot be backfilled from the WAL.
+        /// Allocate the iterator
+        /// Now that read-lock slot 0 is locked, check that the wal has not been
+        ///* wrapped since the header was read for this checkpoint. If it was, then
+        ///* there was no work to do anyway.  In this case the
+        ///* (pInfo->nBackfill<pWal->hdr.mxFrame) test above only passed because
+        ///* pInfo->nBackfill had already been set to 0 by the writer that wrapped
+        ///* the wal file. It would also be dangerous to proceed, as there may be
+        ///* fewer than pWal->hdr.mxFrame valid frames in the wal file.
+        /// Sync the WAL to disk
+        /// If the database may grow as a result of this checkpoint, hint
+        ///* about the eventual size of the db file to the VFS layer.
+        /// Current size of database file
+        /// If the size of the final database is larger than the current
+        ///* database plus the amount of data in the wal file, plus the
+        ///* maximum size of the pending-byte page (65536 bytes), then
+        ///* must be corruption somewhere.
+        /// Iterate through the contents of the WAL, copying data to the 
+        ///* db file
+        /// testcase( IS_BIG_INT(iOffset) ); // requires a 4GiB WAL file
+        /// If work was actually accomplished...
+        /// Release the reader lock held while backfilling
+        /// Reset the return code so as not to report a checkpoint failure
+        ///* just because there are active readers.
+        /// If this is an SQLITE_CHECKPOINT_RESTART or TRUNCATE operation, and the
+        ///* entire wal file has been copied into the database file, then block
+        ///* until all readers have finished using the wal file. This ensures that
+        ///* the next process to write to the database restarts the wal file.
+        /// IMPLEMENTATION-OF: R-44699-57140 This mode works the same way as
+        ///* SQLITE_CHECKPOINT_RESTART with the addition that it also
+        ///* truncates the log file to zero bytes just prior to a
+        ///* successful return.
+        ///*
+        ///* In theory, it might be safe to do this without updating the
+        ///* wal-index header in shared memory, as all subsequent reader or
+        ///* writer clients should see that the entire log file has been
+        ///* checkpointed and behave accordingly. This seems unsafe though,
+        ///* as it would leave the system in a state where the contents of
+        ///* the wal-index header do not match the contents of the
+        ///* file-system. To avoid this, update the wal-index header to
+        ///* indicate that the log file contains zero valid frames.
         unreachable!();
     }
 }
 
+///* End a write transaction.  The commit has already been done.  This
+///* routine merely releases the lock.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_end_write_transaction(p_wal: *mut Wal) -> i32 {
     if unsafe { (*p_wal).write_lock } != 0 {
@@ -2644,18 +3315,28 @@ pub extern "C" fn sqlite3_wal_end_write_transaction(p_wal: *mut Wal) -> i32 {
     return 0;
 }
 
+/// Copy pages from the log to the database file
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3WalCheckpoint(p_wal: *mut Wal, db: *mut Sqlite3,
     e_mode: i32, x_busy: unsafe extern "C" fn(*mut ()) -> i32,
     p_busy_arg: *mut (), sync_flags: i32, n_buf: i32, z_buf: *mut u8,
     pn_log: *mut i32, pn_ckpt: *mut i32) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut is_changed: i32 = 0;
+    /// True if a new wal-index header is loaded
     let mut e_mode2: i32 = e_mode;
+    /// Mode to pass to walCheckpoint()
     let mut x_busy2: Option<unsafe extern "C" fn(*mut ()) -> i32> =
         Some(x_busy);
+
+    /// Busy handler for eMode2
     { let _ = 0; };
     { let _ = 0; };
+
+    /// EVIDENCE-OF: R-62920-47450 The busy-handler callback is never invoked
+    ///* in the SQLITE_CHECKPOINT_PASSIVE mode.
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p_wal).read_only } != 0 { return 8; }
@@ -2717,11 +3398,19 @@ pub extern "C" fn sqlite3WalCheckpoint(p_wal: *mut Wal, db: *mut Sqlite3,
     }
     { let _ = 0; };
     if is_changed != 0 {
+
+        /// If a new wal-index header was loaded before the checkpoint was
+        ///* performed, then the pager-cache associated with pWal is now
+        ///* out of date. So zero the cached wal-index header to ensure that
+        ///* next time the pager opens a snapshot on this database it knows that
+        ///* the cache needs to be reset.
         unsafe {
             memset(unsafe { &raw mut (*p_wal).hdr } as *mut (), 0,
                 core::mem::size_of::<WalIndexHdr>() as u64)
         };
     }
+
+    /// Release the locks.
     { let _ = sqlite3_wal_end_write_transaction(p_wal); };
     if unsafe { (*p_wal).ckpt_lock } != 0 {
         wal_unlock_exclusive(unsafe { &*p_wal }, 1, 1);
@@ -2730,6 +3419,8 @@ pub extern "C" fn sqlite3WalCheckpoint(p_wal: *mut Wal, db: *mut Sqlite3,
     return if rc == 0 && e_mode != e_mode2 { 5 } else { rc };
 }
 
+///* If the WAL file is currently larger than nMax bytes in size, truncate
+///* it to exactly nMax bytes. If an error occurs while doing so, ignore it.
 extern "C" fn wal_limit_size(p_wal_1: &Wal, n_max_1: i64) -> () {
     let mut sz: i64 = 0 as i64;
     let mut rx: i32 = 0;
@@ -2748,12 +3439,16 @@ extern "C" fn wal_limit_size(p_wal_1: &Wal, n_max_1: i64) -> () {
     }
 }
 
+///* Close a connection to a log file.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_close(p_wal: *mut Wal, db: *mut Sqlite3,
     sync_flags: i32, n_buf: i32, z_buf: *mut u8) -> i32 {
     let mut rc: i32 = 0;
     if !(p_wal).is_null() {
         let mut is_delete: i32 = 0;
+
+        /// True to unlink wal and wal-index files
         { let _ = 0; };
         if z_buf != core::ptr::null_mut() &&
                 0 ==
@@ -2779,8 +3474,19 @@ pub extern "C" fn sqlite3_wal_close(p_wal: *mut Wal, db: *mut Sqlite3,
                         10, &raw mut b_persist as *mut ())
                 };
                 if b_persist != 1 {
-                    is_delete = 1;
+
+                    /// Try to delete the WAL file if the checkpoint completed and
+                    ///* fsynced (rc==SQLITE_OK) and if we are not in persistent-wal
+                    ///* mode (!bPersist)
+                    (is_delete = 1);
                 } else if unsafe { (*p_wal).mx_wal_size } >= 0 as i64 {
+
+                    /// Try to truncate the WAL file to zero bytes if the checkpoint
+                    ///* completed and fsynced (rc==SQLITE_OK) and we are in persistent
+                    ///* WAL mode (bPersist) and if the PRAGMA journal_size_limit is a
+                    ///* non-negative value (pWal->mxWalSize>=0).  Note that we truncate
+                    ///* to zero bytes as truncating to the journal_size_limit might
+                    ///* leave a corrupt WAL file on disk.
                     wal_limit_size(unsafe { &*p_wal }, 0 as i64);
                 }
             }
@@ -2801,11 +3507,14 @@ pub extern "C" fn sqlite3_wal_close(p_wal: *mut Wal, db: *mut Sqlite3,
     return rc;
 }
 
+/// Set the limiting size of a WAL file.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_limit(p_wal: *mut Wal, i_limit: i64) -> () {
     if !(p_wal).is_null() { unsafe { (*p_wal).mx_wal_size = i_limit }; }
 }
 
+///* Finish with a read transaction.  All this does is release the
+///* read-lock.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_end_read_transaction(p_wal: *mut Wal) -> () {
     { let _ = 0; };
@@ -2817,19 +3526,105 @@ pub extern "C" fn sqlite3_wal_end_read_transaction(p_wal: *mut Wal) -> () {
     }
 }
 
+///* Open a transaction in a connection where the shared-memory is read-only
+///* and where we cannot verify that there is a separate write-capable connection
+///* on hand to keep the shared-memory up-to-date with the WAL file.
+///*
+///* This can happen, for example, when the shared-memory is implemented by
+///* memory-mapping a *-shm file, where a prior writer has shut down and
+///* left the *-shm file on disk, and now the present connection is trying
+///* to use that database but lacks write permission on the *-shm file.
+///* Other scenarios are also possible, depending on the VFS implementation.
+///*
+///* Precondition:
+///*
+///*    The *-wal file has been read and an appropriate wal-index has been
+///*    constructed in pWal->apWiData[] using heap memory instead of shared
+///*    memory.
+///*
+///* If this function returns SQLITE_OK, then the read transaction has
+///* been successfully opened. In this case output variable (*pChanged)
+///* is set to true before returning if the caller should discard the
+///* contents of the page cache before proceeding. Or, if it returns
+///* WAL_RETRY, then the heap memory wal-index has been discarded and
+///* the caller should retry opening the read transaction from the
+///* beginning (including attempting to map the *-shm file).
+///*
+///* If an error occurs, an SQLite error code is returned.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_begin_shm_unreliable(p_wal_1: *mut Wal,
     p_changed_1: &mut i32) -> i32 {
     let mut sz_wal: i64 = 0 as i64;
+    /// Size of wal file on disk in bytes
     let mut i_offset: i64 = 0 as i64;
+    /// Current offset when reading wal file
     let mut a_buf: [u8; 32] = [0; 32];
+    /// Buffer to load WAL header into
     let mut a_frame: *mut u8 = core::ptr::null_mut();
+    /// Malloc'd buffer to load entire frame
     let mut sz_frame: i32 = 0;
+    /// Number of bytes in buffer aFrame[]
     let mut a_data: *mut u8 = core::ptr::null_mut();
+    /// Pointer to data part of aFrame buffer
     let mut p_dummy: *mut () = core::ptr::null_mut();
+    /// Dummy argument for xShmMap
     let mut rc: i32 = 0;
+    /// Return code
     let mut a_save_cksum: [u32; 2] = [0; 2];
+    /// Saved copy of pWal->hdr.aFrameCksum
+    /// Take WAL_READ_LOCK(0). This has the effect of preventing any
+    ///* writers from running a checkpoint, but does not stop them
+    ///* from running recovery.
+    /// Check to see if a separate writer has attached to the shared-memory area,
+    ///* thus making the shared-memory "reliable" again.  Do this by invoking
+    ///* the xShmMap() routine of the VFS and looking to see if the return
+    ///* is SQLITE_READONLY instead of SQLITE_READONLY_CANTINIT.
+    ///*
+    ///* If the shared-memory is now "reliable" return WAL_RETRY, which will
+    ///* cause the heap-memory WAL-index to be discarded and the actual
+    ///* shared memory to be used in its place.
+    ///*
+    ///* This step is important because, even though this connection is holding
+    ///* the WAL_READ_LOCK(0) which prevents a checkpoint, a writer might
+    ///* have already checkpointed the WAL file and, while the current
+    ///* is active, wrap the WAL and start overwriting frames that this
+    ///* process wants to use.
+    ///*
+    ///* Once sqlite3OsShmMap() has been called for an sqlite3_file and has
+    ///* returned any SQLITE_READONLY value, it must return only SQLITE_READONLY
+    ///* or SQLITE_READONLY_CANTINIT or some error for all subsequent invocations,
+    ///* even if some external agent does a "chmod" to make the shared-memory
+    ///* writable by us, until sqlite3OsShmUnmap() has been called.
+    ///* This is a requirement on the VFS implementation.
+    /// SQLITE_OK not possible for read-only connection
+    /// We reach this point only if the real shared-memory is still unreliable.
+    ///* Assume the in-memory WAL-index substitute is correct and load it
+    ///* into pWal->hdr.
+    /// Make sure some writer hasn't come in and changed the WAL file out
+    ///* from under us, then disconnected, while we were not looking.
+    /// If the wal file is too small to contain a wal-header and the
+    ///* wal-index header has mxFrame==0, then it must be safe to proceed
+    ///* reading the database file only. However, the page cache cannot
+    ///* be trusted, as a read/write connection may have connected, written
+    ///* the db, run a checkpoint, truncated the wal file and disconnected
+    ///* since this client's last read transaction.
+    /// Check the salt keys at the start of the wal file still match.
+    /// Some writer has wrapped the WAL file while we were not looking.
+    ///* Return WAL_RETRY which will cause the in-memory WAL-index to be
+    ///* rebuilt.
+    /// Allocate a buffer to read frames into
+    /// Check to see if a complete transaction has been appended to the
+    ///* wal file since the heap-memory wal-index was created. If so, the
+    ///* heap-memory wal-index is discarded and WAL_RETRY returned to
+    ///* the caller.
     let mut pgno: u32 = 0 as u32;
+    /// Database page number for frame
     let mut n_truncate: u32 = 0 as u32;
+    /// dbsize field from frame header
+    /// Read and decode the next log frame.
+    /// If nTruncate is non-zero, then a complete transaction has been
+    ///* appended to this wal file. Set rc to WAL_RETRY and break out of
+    ///* the loop.
     let mut i: i32 = 0;
     let mut __state: i32 = 0;
     loop {
@@ -3062,18 +3857,152 @@ extern "C" fn wal_begin_shm_unreliable(p_wal_1: *mut Wal,
             }
         }
     }
+
+    /// Size of wal file on disk in bytes
+    /// Current offset when reading wal file
+    /// Buffer to load WAL header into
+    /// Malloc'd buffer to load entire frame
+    /// Number of bytes in buffer aFrame[]
+    /// Pointer to data part of aFrame buffer
+    /// Dummy argument for xShmMap
+    /// Return code
+    /// Saved copy of pWal->hdr.aFrameCksum
+    /// Take WAL_READ_LOCK(0). This has the effect of preventing any
+    ///* writers from running a checkpoint, but does not stop them
+    ///* from running recovery.
+    /// Check to see if a separate writer has attached to the shared-memory area,
+    ///* thus making the shared-memory "reliable" again.  Do this by invoking
+    ///* the xShmMap() routine of the VFS and looking to see if the return
+    ///* is SQLITE_READONLY instead of SQLITE_READONLY_CANTINIT.
+    ///*
+    ///* If the shared-memory is now "reliable" return WAL_RETRY, which will
+    ///* cause the heap-memory WAL-index to be discarded and the actual
+    ///* shared memory to be used in its place.
+    ///*
+    ///* This step is important because, even though this connection is holding
+    ///* the WAL_READ_LOCK(0) which prevents a checkpoint, a writer might
+    ///* have already checkpointed the WAL file and, while the current
+    ///* is active, wrap the WAL and start overwriting frames that this
+    ///* process wants to use.
+    ///*
+    ///* Once sqlite3OsShmMap() has been called for an sqlite3_file and has
+    ///* returned any SQLITE_READONLY value, it must return only SQLITE_READONLY
+    ///* or SQLITE_READONLY_CANTINIT or some error for all subsequent invocations,
+    ///* even if some external agent does a "chmod" to make the shared-memory
+    ///* writable by us, until sqlite3OsShmUnmap() has been called.
+    ///* This is a requirement on the VFS implementation.
+    /// SQLITE_OK not possible for read-only connection
+    /// We reach this point only if the real shared-memory is still unreliable.
+    ///* Assume the in-memory WAL-index substitute is correct and load it
+    ///* into pWal->hdr.
+    /// Make sure some writer hasn't come in and changed the WAL file out
+    ///* from under us, then disconnected, while we were not looking.
+    /// If the wal file is too small to contain a wal-header and the
+    ///* wal-index header has mxFrame==0, then it must be safe to proceed
+    ///* reading the database file only. However, the page cache cannot
+    ///* be trusted, as a read/write connection may have connected, written
+    ///* the db, run a checkpoint, truncated the wal file and disconnected
+    ///* since this client's last read transaction.
+    /// Check the salt keys at the start of the wal file still match.
+    /// Some writer has wrapped the WAL file while we were not looking.
+    ///* Return WAL_RETRY which will cause the in-memory WAL-index to be
+    ///* rebuilt.
+    /// Allocate a buffer to read frames into
+    /// Check to see if a complete transaction has been appended to the
+    ///* wal file since the heap-memory wal-index was created. If so, the
+    ///* heap-memory wal-index is discarded and WAL_RETRY returned to
+    ///* the caller.
+    /// Database page number for frame
+    /// dbsize field from frame header
+    /// Read and decode the next log frame.
+    /// If nTruncate is non-zero, then a complete transaction has been
+    ///* appended to this wal file. Set rc to WAL_RETRY and break out of
+    ///* the loop.
     unreachable!();
 }
 
+///* Attempt to start a read transaction.  This might fail due to a race or
+///* other transient condition.  When that happens, it returns WAL_RETRY to
+///* indicate to the caller that it is safe to retry immediately.
+///*
+///* On success return SQLITE_OK.  On a permanent failure (such an
+///* I/O error or an SQLITE_BUSY because another process is running
+///* recovery) return a positive error code.
+///*
+///* The useWal parameter is true to force the use of the WAL and disable
+///* the case where the WAL is bypassed because it has been completely
+///* checkpointed.  If useWal==0 then this routine calls walIndexReadHdr()
+///* to make a copy of the wal-index header into pWal->hdr.  If the
+///* wal-index header has changed, *pChanged is set to 1 (as an indication
+///* to the caller that the local page cache is obsolete and needs to be
+///* flushed.)  When useWal==1, the wal-index header is assumed to already
+///* be loaded and the pChanged parameter is unused.
+///*
+///* The caller must set the cnt parameter to the number of prior calls to
+///* this routine during the current read attempt that returned WAL_RETRY.
+///* This routine will start taking more aggressive measures to clear the
+///* race conditions after multiple WAL_RETRY returns, and after an excessive
+///* number of errors will ultimately return SQLITE_PROTOCOL.  The
+///* SQLITE_PROTOCOL return indicates that some other process has gone rogue
+///* and is not honoring the locking protocol.  There is a vanishingly small
+///* chance that SQLITE_PROTOCOL could be returned because of a run of really
+///* bad luck when there is lots of contention for the wal-index, but that
+///* possibility is so small that it can be safely neglected, we believe.
+///*
+///* On success, this routine obtains a read lock on
+///* WAL_READ_LOCK(pWal->readLock).  The pWal->readLock integer is
+///* in the range 0 <= pWal->readLock < WAL_NREADER.  If pWal->readLock==(-1)
+///* that means the Wal does not hold any read lock.  The reader must not
+///* access any database page that is modified by a WAL frame up to and
+///* including frame number aReadMark[pWal->readLock].  The reader will
+///* use WAL frames up to and including pWal->hdr.mxFrame if pWal->readLock>0
+///* Or if pWal->readLock==0, then the reader will ignore the WAL
+///* completely and get all content directly from the database file.
+///* If the useWal parameter is 1 then the WAL will never be ignored and
+///* this routine will always set pWal->readLock>0 on success.
+///* When the read transaction is completed, the caller must release the
+///* lock on WAL_READ_LOCK(pWal->readLock) and set pWal->readLock to -1.
+///*
+///* This routine uses the nBackfill and aReadMark[] fields of the header
+///* to select a particular WAL_READ_LOCK() that strives to let the
+///* checkpoint process do as much work as possible.  This routine might
+///* update values of the aReadMark[] array in the header, but if it does
+///* so it takes care to hold an exclusive lock on the corresponding
+///* WAL_READ_LOCK() while changing values.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
     use_wal_1: i32, p_cnt_1: &mut i32) -> i32 {
     let mut p_info: *mut WalCkptInfo = core::ptr::null_mut();
+    /// Checkpoint information in wal-index
     let mut rc: i32 = 0;
+
+    /// Return code
     { let _ = 0; };
+
+    /// Not currently locked
+    /// useWal may only be set for read/write connections
     { let _ = 0; };
+
+    /// Take steps to avoid spinning forever if there is a protocol error.
+    ///*
+    ///* Circumstances that cause a RETRY should only last for the briefest
+    ///* instances of time.  No I/O or other system calls are done while the
+    ///* locks are held, so the locks should not be held for very long. But
+    ///* if we are unlucky, another process that is holding a lock might get
+    ///* paged out or take a page-fault that is time-consuming to resolve,
+    ///* during the few nanoseconds that it is holding the lock.  In that case,
+    ///* it might take longer than normal for the lock to free.
+    ///*
+    ///* After 5 RETRYs, we begin calling sqlite3OsSleep().  The first few
+    ///* calls to sqlite3OsSleep() have a delay of 1 microsecond.  Really this
+    ///* is more of a scheduler yield than an actual delay.  But on the 10th
+    ///* an subsequent retries, the delays start becoming longer and longer,
+    ///* so that on the 100th (and last) RETRY we delay for 323 milliseconds.
+    ///* The total delay time before giving up is less than 10 seconds.
     { let __p = &mut *p_cnt_1; let __t = *__p; *__p += 1; __t };
     if *p_cnt_1 > 5 {
         let mut n_delay: i32 = 1;
+        /// Pause time in microseconds
         let cnt: i32 = *p_cnt_1 & !0;
         if cnt > 100 { return 15; }
         if *p_cnt_1 >= 10 { n_delay = (cnt - 9) * (cnt - 9) * 39; }
@@ -3086,10 +4015,25 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
             rc = wal_index_read_hdr(p_wal_1, p_changed_1);
         }
         if rc == 5 {
+
+            /// If there is not a recovery running in another thread or process
+            ///* then convert BUSY errors to WAL_RETRY.  If recovery is known to
+            ///* be running, convert BUSY to BUSY_RECOVERY.  There is a race here
+            ///* which might cause WAL_RETRY to be returned even if BUSY_RECOVERY
+            ///* would be technically correct.  But the race is benign since with
+            ///* WAL_RETRY this routine will be called again and will probably be
+            ///* right on the second iteration.
             { let _ = 0; };
             if unsafe { *unsafe { (*p_wal_1).ap_wi_data.offset(0 as isize) } }
                     == core::ptr::null_mut() {
-                rc = -1;
+
+                /// This branch is taken when the xShmMap() method returns SQLITE_BUSY.
+                ///* We assume this is a transient condition, so return WAL_RETRY. The
+                ///* xShmMap() implementation used by the default unix and win32 VFS
+                ///* modules may return SQLITE_BUSY due to a race condition in the
+                ///* code that determines whether or not the shared-memory region
+                ///* must be zeroed before the requested page is returned.
+                (rc = -1);
             } else if 0 ==
                     { rc = wal_lock_shared(unsafe { &*p_wal_1 }, 2); rc } {
                 wal_unlock_shared(unsafe { &*p_wal_1 }, 2);
@@ -3109,8 +4053,11 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
     { let _ = 0; };
     {
         let mut mx_read_mark: u32 = 0 as u32;
+        /// Largest aReadMark[] value
         let mut mx_i: i32 = 0;
+        /// Index of largest aReadMark[] value
         let mut i: i32 = 0;
+        /// Loop counter
         let mut mx_frame: u32 = 0 as u32;
         if (use_wal_1 == 0) as i32 != 0 &&
                 unsafe {
@@ -3118,7 +4065,10 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
                                         &raw mut (*p_info).n_backfill
                                     } as *mut u32).load(std::sync::atomic::Ordering::Relaxed)
                     } == unsafe { (*p_wal_1).hdr.mx_frame } {
-            rc = wal_lock_shared(unsafe { &*p_wal_1 }, 3 + 0);
+
+            /// The WAL has been completely backfilled (or it is empty).
+            ///* and can be safely ignored.
+            (rc = wal_lock_shared(unsafe { &*p_wal_1 }, 3 + 0));
             wal_shm_barrier(unsafe { &*p_wal_1 });
             if rc == 0 {
                 if unsafe {
@@ -3126,6 +4076,19 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
                                     *const (), unsafe { &raw mut (*p_wal_1).hdr } as *const (),
                                 core::mem::size_of::<WalIndexHdr>() as u64)
                         } != 0 {
+
+                    /// It is not safe to allow the reader to continue here if frames
+                    ///* may have been appended to the log before READ_LOCK(0) was obtained.
+                    ///* When holding READ_LOCK(0), the reader ignores the entire log file,
+                    ///* which implies that the database file contains a trustworthy
+                    ///* snapshot. Since holding READ_LOCK(0) prevents a checkpoint from
+                    ///* happening, this is usually correct.
+                    ///*
+                    ///* However, if frames have been appended to the log (or if the log
+                    ///* is wrapped and written for that matter) before the READ_LOCK(0)
+                    ///* is obtained, that is not necessarily true. A checkpointer may
+                    ///* have started to backfill the appended frames but crashed before
+                    ///* it finished. Leaving a corrupt image in the database file.
                     wal_unlock_shared(unsafe { &*p_wal_1 }, 3 + 0);
                     return -1;
                 }
@@ -3133,7 +4096,12 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
                 return 0;
             } else if rc != 5 { return rc; }
         }
-        mx_read_mark = 0 as u32;
+
+        /// If we get this far, it means that the reader will want to use
+        ///* the WAL to get at content from recent commits.  The job now is
+        ///* to select one of the aReadMark[] entries that is closest to
+        ///* but not exceeding pWal->hdr.mxFrame and lock that entry.
+        (mx_read_mark = 0 as u32);
         mx_i = 0;
         mx_frame = unsafe { (*p_wal_1).hdr.mx_frame };
         {
@@ -3198,6 +4166,40 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
             { let _ = 0; };
             return if rc & 255 == 5 { -1 } else { rc };
         }
+
+        /// Now that the read-lock has been obtained, check that neither the
+        ///* value in the aReadMark[] array or the contents of the wal-index
+        ///* header have changed.
+        ///*
+        ///* It is necessary to check that the wal-index header did not change
+        ///* between the time it was read and when the shared-lock was obtained
+        ///* on WAL_READ_LOCK(mxI) was obtained to account for the possibility
+        ///* that the log file may have been wrapped by a writer, or that frames
+        ///* that occur later in the log than pWal->hdr.mxFrame may have been
+        ///* copied into the database by a checkpointer. If either of these things
+        ///* happened, then reading the database with the current value of
+        ///* pWal->hdr.mxFrame risks reading a corrupted snapshot. So, retry
+        ///* instead.
+        ///*
+        ///* Before checking that the live wal-index header has not changed
+        ///* since it was read, set Wal.minFrame to the first frame in the wal
+        ///* file that has not yet been checkpointed. This client will not need
+        ///* to read any frames earlier than minFrame from the wal file - they
+        ///* can be safely read directly from the database file.
+        ///*
+        ///* Because a ShmBarrier() call is made between taking the copy of
+        ///* nBackfill and checking that the wal-header in shared-memory still
+        ///* matches the one cached in pWal->hdr, it is guaranteed that the
+        ///* checkpointer that set nBackfill was not working with a wal-index
+        ///* header newer than that cached in pWal->hdr. If it were, that could
+        ///* cause a problem. The checkpointer could omit to checkpoint
+        ///* a version of page X that lies before pWal->minFrame (call that version
+        ///* A) on the basis that there is a newer version (version B) of the same
+        ///* page later in the wal file. But if version B happens to like past
+        ///* frame pWal->hdr.mxFrame - then the client would incorrectly assume
+        ///* that it can read version A from the database file. However, since
+        ///* we can guarantee that the checkpointer that set nBackfill could not
+        ///* see any pages past pWal->hdr.mxFrame, this problem does not come up.
         unsafe {
             (*p_wal_1).min_frame =
                 unsafe {
@@ -3229,10 +4231,16 @@ extern "C" fn wal_try_begin_read(p_wal_1: *mut Wal, p_changed_1: *mut i32,
     return rc;
 }
 
+///* This function does the work of sqlite3WalBeginReadTransaction() (see 
+///* below). That function simply calls this one inside an SEH_TRY{...} block.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_begin_read_transaction(p_wal_1: *mut Wal,
     p_changed_1: *mut i32) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut cnt: i32 = 0;
+
+    /// Number of TryBeginRead attempts
     { let _ = 0; };
     { let _ = 0; };
     '__b24: loop {
@@ -3245,6 +4253,12 @@ extern "C" fn wal_begin_read_transaction(p_wal_1: *mut Wal,
     return rc;
 }
 
+/// Used by readers to open (lock) and close (unlock) a snapshot.  A 
+///* snapshot is like a read-transaction.  It is the state of the database
+///* at an instant in time.  sqlite3WalOpenSnapshot gets a read lock and
+///* preserves the current state even if the other threads or processes
+///* write to or checkpoint the WAL.  sqlite3WalCloseSnapshot() closes the
+///* transaction and releases the lock.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_begin_read_transaction(p_wal: *mut Wal,
     p_changed: *mut i32) -> i32 {
@@ -3254,12 +4268,24 @@ pub extern "C" fn sqlite3_wal_begin_read_transaction(p_wal: *mut Wal,
     return rc;
 }
 
+///* Search the wal file for page pgno. If found, set *piRead to the frame that
+///* contains the page. Otherwise, if pgno is not in the wal file, set *piRead
+///* to zero.
+///*
+///* Return SQLITE_OK if successful, or an error code if an error occurs. If an
+///* error does occur, the final value of *piRead is undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_find_frame(p_wal_1: *mut Wal, pgno: Pgno,
     pi_read_1: &mut u32) -> i32 {
     let mut i_read: u32 = 0 as u32;
+    /// If !=0, WAL frame to return data from
     let i_last: u32 = unsafe { (*p_wal_1).hdr.mx_frame };
+    /// Last page in WAL for this reader
     let mut i_hash: i32 = 0;
+    /// Used to loop through N hash tables
     let mut i_min_hash: i32 = 0;
+
+    /// This routine is only be called from within a read transaction.
     { let _ = 0; };
     if i_last == 0 as u32 ||
             unsafe { (*p_wal_1).read_lock } as i32 == 0 &&
@@ -3267,16 +4293,45 @@ extern "C" fn wal_find_frame(p_wal_1: *mut Wal, pgno: Pgno,
         *pi_read_1 = 0 as u32;
         return 0;
     }
-    i_min_hash = wal_frame_page(unsafe { (*p_wal_1).min_frame });
+
+    /// Search the hash table or tables for an entry matching page number
+    ///* pgno. Each iteration of the following for() loop searches one
+    ///* hash table (each hash table indexes up to HASHTABLE_NPAGE frames).
+    ///*
+    ///* This code might run concurrently to the code in walIndexAppend()
+    ///* that adds entries to the wal-index (and possibly to this hash
+    ///* table). This means the value just read from the hash
+    ///* slot (aHash[iKey]) may have been added before or after the
+    ///* current read transaction was opened. Values added after the
+    ///* read transaction was opened may have been written incorrectly -
+    ///* i.e. these slots may contain garbage data. However, we assume
+    ///* that any slots written before the current read transaction was
+    ///* opened remain unmodified.
+    ///*
+    ///* For the reasons above, the if(...) condition featured in the inner
+    ///* loop of the following block is more stringent that would be required
+    ///* if we had exclusive access to the hash-table:
+    ///*
+    ///*   (aPgno[iFrame]==pgno):
+    ///*     This condition filters out normal hash-table collisions.
+    ///*
+    ///*   (iFrame<=iLast):
+    ///*     This condition filters out entries that were added to the hash
+    ///*     table after the current read-transaction had started.
+    (i_min_hash = wal_frame_page(unsafe { (*p_wal_1).min_frame }));
     {
         i_hash = wal_frame_page(i_last);
         '__b25: loop {
             if !(i_hash >= i_min_hash) { break '__b25; }
             '__c25: loop {
                 let mut s_loc: WalHashLoc = unsafe { core::mem::zeroed() };
+                /// Hash table location
                 let mut i_key: i32 = 0;
+                /// Hash slot index
                 let mut n_collide: i32 = 0;
+                /// Number of hash collisions remaining
                 let mut rc: i32 = 0;
+                /// Error code
                 let mut i_h: u32 = 0 as u32;
                 rc = wal_hash_get(p_wal_1, i_hash, &mut s_loc);
                 if rc != 0 { return rc; }
@@ -3323,6 +4378,7 @@ extern "C" fn wal_find_frame(p_wal_1: *mut Wal, pgno: Pgno,
     return 0;
 }
 
+/// Read a page from the write-ahead log, if it is present.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_find_frame(p_wal: *mut Wal, pgno: Pgno,
     pi_read: *mut u32) -> i32 {
@@ -3332,7 +4388,11 @@ pub extern "C" fn sqlite3_wal_find_frame(p_wal: *mut Wal, pgno: Pgno,
     return rc;
 }
 
+///* Read the contents of frame iRead from the wal file into buffer pOut
+///* (which is nOut bytes in size). Return SQLITE_OK if successful, or an
+///* error code otherwise.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_read_frame(p_wal: &Wal, i_read: u32, n_out: i32,
     p_out: *mut u8) -> i32 {
     let mut sz: i32 = 0;
@@ -3341,12 +4401,15 @@ pub extern "C" fn sqlite3_wal_read_frame(p_wal: &Wal, i_read: u32, n_out: i32,
     sz = (sz & 65024) + ((sz & 1) << 16);
     i_offset =
         32 as i64 + (i_read - 1 as u32) as i64 * (sz + 24) as i64 + 24 as i64;
+
+    /// testcase( IS_BIG_INT(iOffset) ); // requires a 4GiB WAL
     return unsafe {
             sqlite3_os_read((*p_wal).p_wal_fd, p_out as *mut (),
                 if n_out > sz { sz } else { n_out }, i_offset)
         };
 }
 
+/// If the WAL is not empty, return the size of the database.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_dbsize(p_wal: *mut Wal) -> Pgno {
     if !(p_wal).is_null() && unsafe { (*p_wal).read_lock } as i32 >= 0 {
@@ -3355,14 +4418,22 @@ pub extern "C" fn sqlite3_wal_dbsize(p_wal: *mut Wal) -> Pgno {
     return 0 as Pgno;
 }
 
+/// Obtain or release the WRITER lock.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_begin_write_transaction(p_wal: *mut Wal)
     -> i32 {
     let mut rc: i32 = 0;
+
+    /// Cannot start a write transaction without first holding a read
+    ///* transaction.
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p_wal).read_only } != 0 { return 8; }
-    rc = wal_lock_exclusive(unsafe { &*p_wal }, 0, 1);
+
+    /// Only one writer allowed at a time.  Get the write lock.  Return
+    ///* SQLITE_BUSY if unable.
+    (rc = wal_lock_exclusive(unsafe { &*p_wal }, 0, 1));
     if rc != 0 { return rc; }
     unsafe { (*p_wal).write_lock = 1 as u8 };
     {
@@ -3382,6 +4453,7 @@ pub extern "C" fn sqlite3_wal_begin_write_transaction(p_wal: *mut Wal)
     return rc;
 }
 
+///* Return the page number associated with frame iFrame in this WAL.
 extern "C" fn wal_frame_pgno(p_wal_1: &Wal, i_frame_1: u32) -> u32 {
     let i_hash: i32 = wal_frame_page(i_frame_1);
     { let _ = 0; };
@@ -3409,7 +4481,9 @@ extern "C" fn wal_frame_pgno(p_wal_1: &Wal, i_frame_1: u32) -> u32 {
             } as u32;
 }
 
+/// Undo any frames written (but not committed) to the log
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
     x_undo: Option<unsafe extern "C" fn(*mut (), u32) -> i32>,
     p_undo_ctx: *mut ()) -> i32 {
@@ -3418,6 +4492,9 @@ pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
         let i_max: Pgno = unsafe { (*p_wal).hdr.mx_frame };
         let mut i_frame: Pgno = 0 as Pgno;
         {
+
+            /// Restore the clients cache of the wal-index header to the state it
+            ///* was in before the client began writing to the database.
             unsafe {
                 memcpy(unsafe { &raw mut (*p_wal).hdr } as *mut (),
                     wal_index_hdr(unsafe { &*p_wal }) as *mut () as *const (),
@@ -3428,6 +4505,17 @@ pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
                 '__b27: loop {
                     if !(rc == 0 && i_frame <= i_max) { break '__b27; }
                     '__c27: loop {
+
+                        /// This call cannot fail. Unless the page for which the page number
+                        ///* is passed as the second argument is (a) in the cache and
+                        ///* (b) has an outstanding reference, then xUndo is either a no-op
+                        ///* (if (a) is false) or simply expels the page from the cache (if (b)
+                        ///* is false).
+                        ///*
+                        ///* If the upper layer is doing a rollback, it is guaranteed that there
+                        ///* are no outstanding references to any page other than page 1. And
+                        ///* page 1 is never written to the log until the transaction is
+                        ///* committed. As a result, the call to xUndo may not fail.
                         { let _ = 0; };
                         rc =
                             unsafe {
@@ -3449,6 +4537,8 @@ pub extern "C" fn sqlite3_wal_undo(p_wal: *mut Wal,
     return rc;
 }
 
+/// Return an integer that records the current (uncommitted) write
+///* position in the WAL
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_savepoint(p_wal: &Wal, a_wal_data: *mut u32)
     -> () {
@@ -3465,7 +4555,10 @@ pub extern "C" fn sqlite3_wal_savepoint(p_wal: &Wal, a_wal_data: *mut u32)
     unsafe { *a_wal_data.offset(3 as isize) = (*p_wal).n_ckpt };
 }
 
+/// Move the write position of the WAL back to iFrame.  Called in
+///* response to a ROLLBACK TO command.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_savepoint_undo(p_wal: *mut Wal,
     a_wal_data: *mut u32) -> i32 {
     let rc: i32 = 0;
@@ -3473,6 +4566,10 @@ pub extern "C" fn sqlite3_wal_savepoint_undo(p_wal: *mut Wal,
     { let _ = 0; };
     if unsafe { *a_wal_data.offset(3 as isize) } != unsafe { (*p_wal).n_ckpt }
         {
+
+        /// This savepoint was opened immediately after the write-transaction
+        ///* was started. Right after that, the writer decided to wrap around
+        ///* to the start of the log. Update the savepoint values to match.
         unsafe { *a_wal_data.offset(0 as isize) = 0 as u32 };
         unsafe {
             *a_wal_data.offset(3 as isize) = unsafe { (*p_wal).n_ckpt }
@@ -3500,6 +4597,9 @@ pub extern "C" fn sqlite3_wal_savepoint_undo(p_wal: *mut Wal,
     return rc;
 }
 
+///* Information about the current state of the WAL file and where
+///* the next fsync should occur - passed from sqlite3WalFrames() into
+///* walWriteToLog().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WalWriter {
@@ -3510,6 +4610,17 @@ struct WalWriter {
     sz_page: i32,
 }
 
+///* This function is called just before writing a set of frames to the log
+///* file (see sqlite3WalFrames()). It checks to see if, instead of appending
+///* to the current log file, it is possible to overwrite the start of the
+///* existing log file with the new frames (i.e. "reset" the log). If so,
+///* it sets pWal->hdr.mxFrame to 0. Otherwise, pWal->hdr.mxFrame is left
+///* unchanged.
+///*
+///* SQLITE_OK is returned if no error is encountered (regardless of whether
+///* or not pWal->hdr.mxFrame is modified). An SQLite error code is returned
+///* if an error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_restart_log(p_wal_1: *mut Wal) -> i32 {
     let mut rc: i32 = 0;
     let mut cnt: i32 = 0;
@@ -3522,6 +4633,16 @@ extern "C" fn wal_restart_log(p_wal_1: *mut Wal) -> i32 {
             unsafe { sqlite3_randomness(4, &raw mut salt1 as *mut ()) };
             rc = wal_lock_exclusive(unsafe { &*p_wal_1 }, 3 + 1, 8 - 3 - 1);
             if rc == 0 {
+
+                /// If all readers are using WAL_READ_LOCK(0) (in other words if no
+                ///* readers are currently using the WAL), then the transactions
+                ///* frames will overwrite the start of the existing log. Update the
+                ///* wal-index header to reflect this.
+                ///*
+                ///* In theory it would be Ok to update the cache of the header only
+                ///* at this point. But updating the actual wal-index header is also
+                ///* safe and means there is no special case for sqlite3WalUndo()
+                ///* to handle if this transaction is rolled back.
                 wal_restart_hdr(p_wal_1, salt1);
                 wal_unlock_exclusive(unsafe { &*p_wal_1 }, 3 + 1, 8 - 3 - 1);
             } else if rc != 5 { return rc; }
@@ -3542,9 +4663,22 @@ extern "C" fn wal_restart_log(p_wal_1: *mut Wal) -> i32 {
     return rc;
 }
 
+///* This function encodes a single frame header and writes it to a buffer
+///* supplied by the caller. A frame-header is made up of a series of
+///* 4-byte big-endian integers, as follows:
+///*
+///*     0: Page number.
+///*     4: For commit records, the size of the database image in pages
+///*        after the commit. For all other records, zero.
+///*     8: Salt-1 (copied from the wal-header)
+///*    12: Salt-2 (copied from the wal-header)
+///*    16: Checksum-1.
+///*    20: Checksum-2.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_encode_frame(p_wal_1: &mut Wal, i_page_1: u32,
     n_truncate_1: u32, a_data_1: *mut u8, a_frame_1: *mut u8) -> () {
     let mut native_cksum: i32 = 0;
+    /// True for native byte-order checksums
     let a_cksum: *mut u32 =
         &raw mut (*p_wal_1).hdr.a_frame_cksum[0 as usize] as *mut u32;
     { let _ = 0; };
@@ -3584,6 +4718,12 @@ extern "C" fn wal_encode_frame(p_wal_1: &mut Wal, i_page_1: u32,
     }
 }
 
+///* Write iAmt bytes of content into the WAL file beginning at iOffset.
+///* Do a sync when crossing the p->iSyncPoint boundary.
+///*
+///* In other words, if iSyncPoint is in between iOffset and iOffset+iAmt,
+///* first write the part before iSyncPoint, then sync, then write the
+///* rest.
 extern "C" fn wal_write_to_log(p: &WalWriter, mut p_content_1: *mut (),
     mut i_amt_1: i32, mut i_offset_1: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -3613,12 +4753,18 @@ extern "C" fn wal_write_to_log(p: &WalWriter, mut p_content_1: *mut (),
     return rc;
 }
 
+///* Write out a single frame of the WAL
+#[allow(unused_doc_comments)]
 extern "C" fn wal_write_one_frame(p: *mut WalWriter, p_page_1: &PgHdr,
     n_truncate_1: i32, i_offset_1: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
+    /// Result code from subfunctions
     let mut p_data: *mut () = core::ptr::null_mut();
+    /// Data actually written
     let mut a_frame: [u8; 24] = [0; 24];
-    p_data = (*p_page_1).p_data;
+
+    /// Buffer to assemble frame-header in
+    (p_data = (*p_page_1).p_data);
     wal_encode_frame(unsafe { &mut *unsafe { (*p).p_wal } }, (*p_page_1).pgno,
         n_truncate_1 as u32, p_data as *mut u8,
         &raw mut a_frame[0 as usize] as *mut u8);
@@ -3627,22 +4773,42 @@ extern "C" fn wal_write_one_frame(p: *mut WalWriter, p_page_1: &PgHdr,
             &raw mut a_frame[0 as usize] as *mut u8 as *mut (),
             core::mem::size_of::<[u8; 24]>() as i32, i_offset_1);
     if rc != 0 { return rc; }
-    rc =
+
+    /// Write the page data
+    (rc =
         wal_write_to_log(unsafe { &*p }, p_data, unsafe { (*p).sz_page },
             (i_offset_1 as u64 + core::mem::size_of::<[u8; 24]>() as u64) as
-                Sqlite3Int64);
+                Sqlite3Int64));
     return rc;
 }
 
+///* This function is called as part of committing a transaction within which
+///* one or more frames have been overwritten. It updates the checksums for
+///* all frames written to the wal file by the current transaction starting
+///* with the earliest to have been overwritten.
+///*
+///* SQLITE_OK is returned if successful, or an SQLite error code otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn wal_rewrite_checksums(p_wal_1: *mut Wal, i_last_1: u32) -> i32 {
     let sz_page: i32 = unsafe { (*p_wal_1).sz_page } as i32;
+    /// Database page size
     let mut rc: i32 = 0;
+    /// Return code
     let mut a_buf: *mut u8 = core::ptr::null_mut();
+    /// Buffer to load data from wal file into
     let mut a_frame: [u8; 24] = [0; 24];
+    /// Buffer to assemble frame-headers in
     let mut i_read: u32 = 0 as u32;
+    /// Next frame to read from wal file
     let mut i_cksum_off: i64 = 0 as i64;
     a_buf = unsafe { sqlite3_malloc(sz_page + 24) } as *mut u8;
     if a_buf == core::ptr::null_mut() { return 7; }
+
+    /// Find the checksum values to use as input for the recalculating the
+    ///* first checksum. If the first frame is frame 1 (implying that the current
+    ///* transaction restarted the wal file), these values must be read from the
+    ///* wal-file header. Otherwise, read them from the frame header of the
+    ///* previous frame.
     { let _ = 0; };
     if unsafe { (*p_wal_1).i_re_cksum } == 1 as u32 {
         i_cksum_off = 24 as i64;
@@ -3713,21 +4879,38 @@ extern "C" fn wal_rewrite_checksums(p_wal_1: *mut Wal, i_last_1: u32) -> i32 {
     return rc;
 }
 
+///* Write a set of frames to the log. The caller must hold the write-lock
+///* on the log file (obtained using sqlite3WalBeginWriteTransaction()).
+#[allow(unused_doc_comments)]
 extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     p_list_1: *mut PgHdr, n_truncate_1: Pgno, is_commit_1: i32,
     sync_flags: i32) -> i32 {
     let mut rc: i32 = 0;
+    /// Used to catch return codes
     let mut i_frame: u32 = 0 as u32;
+    /// Next frame address
     let mut p: *mut PgHdr = core::ptr::null_mut();
+    /// Iterator to run through pList with.
     let mut p_last: *mut PgHdr = core::ptr::null_mut();
+    /// Last frame in list
     let mut n_extra: i32 = 0;
+    /// Number of extra copies of last page
     let mut sz_frame: i32 = 0;
+    /// The size of a single frame
     let mut i_offset: i64 = 0 as i64;
+    /// Next byte to write in WAL file
     let mut w: WalWriter = unsafe { core::mem::zeroed() };
+    /// The writer
     let mut i_first: u32 = 0 as u32;
+    /// First frame that may be overwritten
     let mut p_live: *mut WalIndexHdr = core::ptr::null_mut();
+
+    /// Pointer to shared header
     { let _ = 0; };
     { let _ = 0; };
+
+    /// If this frame set completes a transaction, then nTruncate>0.  If
+    ///* nTruncate==0 then this frame set does not complete the transaction.
     { let _ = 0; };
     p_live = wal_index_hdr(unsafe { &*p_wal_1 }) as *mut WalIndexHdr;
     if unsafe {
@@ -3738,10 +4921,17 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
         i_first = unsafe { (*p_live).mx_frame } + 1 as u32;
     }
     if 0 != { rc = wal_restart_log(p_wal_1); rc } { return rc; }
-    i_frame = unsafe { (*p_wal_1).hdr.mx_frame };
+
+    /// If this is the first frame written into the log, write the WAL
+    ///* header to the start of the WAL file. See comments at the top of
+    ///* this source file for a description of the WAL header format.
+    (i_frame = unsafe { (*p_wal_1).hdr.mx_frame });
     if i_frame == 0 as u32 {
         let mut a_wal_hdr: [u8; 32] = [0; 32];
+        /// Buffer to assemble wal-header in
         let mut a_cksum: [u32; 2] = [0; 2];
+
+        /// Checksum for wal-header
         unsafe {
             sqlite3_put4byte(&mut a_wal_hdr[0 as usize],
                 (931071618 | 0) as u32)
@@ -3805,7 +4995,9 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     if unsafe { (*p_wal_1).sz_page } as i32 != sz_page_1 {
         return unsafe { sqlite3_corrupt_error(4127) };
     }
-    w.p_wal = p_wal_1;
+
+    /// Setup information needed to write frames into the WAL
+    (w.p_wal = p_wal_1);
     w.p_fd = unsafe { (*p_wal_1).p_wal_fd };
     w.i_sync_point = 0 as Sqlite3Int64;
     w.sync_flags = sync_flags;
@@ -3910,7 +5102,12 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
         wal_limit_size(unsafe { &*p_wal_1 }, sz);
         unsafe { (*p_wal_1).truncate_on_commit = 0 as u8 };
     }
-    i_frame = unsafe { (*p_wal_1).hdr.mx_frame };
+
+    /// Append data to the wal-index. It is not necessary to lock the
+    ///* wal-index to do this as the SQLITE_SHM_WRITE lock held on the wal-index
+    ///* guarantees that there are no other writers, and no data that may
+    ///* be in use by existing readers is being overwritten.
+    (i_frame = unsafe { (*p_wal_1).hdr.mx_frame });
     {
         p = p_list_1;
         '__b32: loop {
@@ -3932,8 +5129,10 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     }
     if rc == 0 {
         unsafe {
-            (*p_wal_1).hdr.sz_page =
-                (sz_page_1 & 65280 | sz_page_1 >> 16) as u16
+
+            /// Update the private copy of the header.
+            ((*p_wal_1).hdr.sz_page =
+                (sz_page_1 & 65280 | sz_page_1 >> 16) as u16)
         };
         unsafe { (*p_wal_1).hdr.mx_frame = i_frame };
         if is_commit_1 != 0 {
@@ -3953,6 +5152,7 @@ extern "C" fn wal_frames(p_wal_1: *mut Wal, sz_page_1: i32,
     return rc;
 }
 
+/// Write a frame or frames to the log.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_frames(p_wal: *mut Wal, sz_page: i32,
     p_list: *mut PgHdr, n_truncate: Pgno, is_commit: i32, sync_flags: i32)
@@ -3967,6 +5167,10 @@ pub extern "C" fn sqlite3_wal_frames(p_wal: *mut Wal, sz_page: i32,
     return rc;
 }
 
+/// Return the value to pass to a sqlite3_wal_hook callback, the
+///* number of frames in the WAL at the point of the last commit since
+///* sqlite3WalCallback() was called.  If no commits have occurred since
+///* the last call, then return 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_callback(p_wal: *mut Wal) -> i32 {
     let mut ret: u32 = 0 as u32;
@@ -3977,12 +5181,21 @@ pub extern "C" fn sqlite3_wal_callback(p_wal: *mut Wal) -> i32 {
     return ret as i32;
 }
 
+/// Tell the wal layer that an EXCLUSIVE lock has been obtained (or released)
+///* by the pager layer on the database file.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_exclusive_mode(p_wal: *mut Wal, op: i32)
     -> i32 {
     let mut rc: i32 = 0;
     { let _ = 0; };
     { let _ = 0; };
+
+    /// pWal->readLock is usually set, but might be -1 if there was a
+    ///* prior error while attempting to acquire are read-lock. This cannot
+    ///* happen if the connection is actually in exclusive mode (as no xShmLock
+    ///* locks are taken in this case). Nor should the pager attempt to
+    ///* upgrade to exclusive-mode following such an error.
     { let _ = 0; };
     { let _ = 0; };
     if op == 0 {
@@ -3993,7 +5206,11 @@ pub extern "C" fn sqlite3_wal_exclusive_mode(p_wal: *mut Wal, op: i32)
                 unsafe { (*p_wal).exclusive_mode = 1 as u8 };
             }
             rc = (unsafe { (*p_wal).exclusive_mode } as i32 == 0) as i32;
-        } else { rc = 0; }
+        } else {
+
+            /// Already in locking_mode=NORMAL
+            (rc = 0);
+        }
     } else if op > 0 {
         { let _ = 0; };
         { let _ = 0; };
@@ -4005,12 +5222,16 @@ pub extern "C" fn sqlite3_wal_exclusive_mode(p_wal: *mut Wal, op: i32)
     return rc;
 }
 
+/// Return true if the argument is non-NULL and the WAL module is using
+///* heap-memory for the wal-index. Otherwise, if the argument is NULL or the
+///* WAL module is using shared-memory, return false.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_heap_memory(p_wal: *mut Wal) -> i32 {
     return (!(p_wal).is_null() &&
                 unsafe { (*p_wal).exclusive_mode } as i32 == 2) as i32;
 }
 
+/// Return the sqlite3_file object for the WAL file
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_file(p_wal: &Wal) -> *mut Sqlite3File {
     return (*p_wal).p_wal_fd;

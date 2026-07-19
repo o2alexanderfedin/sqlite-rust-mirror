@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3rbu_h;
-pub(crate) use crate::sqlite3rbu_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3rbu_h::Sqlite3rbu;
 
 type DarwinSizeT = u64;
 
+///* Print a usage message and exit.
 #[unsafe(no_mangle)]
 pub extern "C" fn usage(z_argv0_1: *const i8) -> () {
     unsafe {
@@ -64,17 +71,25 @@ pub extern "C" fn report_rbu_vfs(p_rbu_1: *mut Sqlite3rbu) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut i: i32 = 0;
         let mut z_target: *const i8 = core::ptr::null();
+        /// Target database to apply RBU to
         let mut z_rbu: *const i8 = core::ptr::null();
+        /// Database containing RBU
         let mut z_buf: [i8; 200] = [0; 200];
+        /// Buffer for printf()
         let mut z_errmsg: *mut i8 = core::ptr::null_mut();
+        /// Error message, if any
         let mut p_rbu: *mut Sqlite3rbu = core::ptr::null_mut();
+        /// RBU handle
         let mut n_step: i32 = 0;
+        /// Maximum number of step() calls
         let mut n_stat_step: i32 = 0;
+        /// Report stats after this many step calls
         let mut b_vacuum: i32 = 0;
         let mut z_pre_sql: *const i8 = core::ptr::null();
         let mut rc: i32 = 0;

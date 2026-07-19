@@ -1,19 +1,33 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, Schema, Select, SelectDest,
+    Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0,
+    SrcList, StrAccum, Subquery, Table, Token, Trigger, TriggerStep,
+    UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinPthreadT = *mut OpaquePthreadT;
 
@@ -397,6 +411,7 @@ impl Parse {
     }
 }
 
+/// A running thread
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SQLiteThread {
@@ -407,7 +422,9 @@ struct SQLiteThread {
     p_in: *mut (),
 }
 
+/// Create a new thread
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_thread_create(pp_thread_1: &mut *mut SQLiteThread,
     x_task_1: Option<unsafe extern "C" fn(*mut ()) -> *mut ()>,
     p_in_1: *mut ()) -> i32 {
@@ -415,6 +432,8 @@ pub extern "C" fn sqlite3_thread_create(pp_thread_1: &mut *mut SQLiteThread,
     let mut rc: i32 = 0;
     { let _ = 0; };
     { let _ = 0; };
+
+    /// This routine is never used in single-threaded mode
     { let _ = 0; };
     *pp_thread_1 = core::ptr::null_mut();
     p =
@@ -446,6 +465,7 @@ pub extern "C" fn sqlite3_thread_create(pp_thread_1: &mut *mut SQLiteThread,
     return 0;
 }
 
+/// Get the results of the thread
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_thread_join(p: *mut SQLiteThread,
     pp_out_1: *mut *mut ()) -> i32 {

@@ -1,21 +1,36 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod btree_int_h;
-pub(crate) use crate::btree_int_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::BtreePayload;
+use crate::btree_int_h::{BtCursor, Btree};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -395,6 +410,7 @@ impl Parse {
     }
 }
 
+///* Structure allocated for each backup operation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Backup {
@@ -413,6 +429,13 @@ struct Sqlite3Backup {
     p_next: *mut Sqlite3Backup,
 }
 
+///* Return a pointer corresponding to database zDb (i.e. "main", "temp")
+///* in connection handle pDb. If such a database cannot be found, return
+///* a NULL pointer and write an error message to pErrorDb.
+///*
+///* If the "temp" database is requested, it may need to be opened by this 
+///* function. If an error occurs while doing so, return 0 and write an 
+///* error message to pErrorDb.
 extern "C" fn find_btree(p_error_db_1: *mut Sqlite3, p_db_1: *mut Sqlite3,
     z_db_1: *const i8) -> *mut Btree {
     let mut i: i32 = 0;
@@ -446,6 +469,10 @@ extern "C" fn find_btree(p_error_db_1: *mut Sqlite3, p_db_1: *mut Sqlite3,
     return unsafe { (*unsafe { (*p_db_1).a_db.offset(i as isize) }).p_bt };
 }
 
+///* Check that there is no open read-transaction on the b-tree passed as the
+///* second argument. If there is not, return SQLITE_OK. Otherwise, if there
+///* is an open read-transaction, return SQLITE_ERROR and leave an error 
+///* message in database handle db.
 extern "C" fn check_read_transaction(db: *mut Sqlite3, p: *mut Btree) -> i32 {
     if unsafe { sqlite3_btree_txn_state(p) } != 0 {
         unsafe {
@@ -458,11 +485,215 @@ extern "C" fn check_read_transaction(db: *mut Sqlite3, p: *mut Btree) -> i32 {
     return 0;
 }
 
+///* CAPI3REF: Online Backup API.
+///*
+///* The backup API copies the content of one database into another.
+///* It is useful either for creating backups of databases or
+///* for copying in-memory databases to or from persistent files.
+///*
+///* See Also: [Using the SQLite Online Backup API]
+///*
+///* ^SQLite holds a write transaction open on the destination database file
+///* for the duration of the backup operation.
+///* ^The source database is read-locked only while it is being read;
+///* it is not locked continuously for the entire backup operation.
+///* ^Thus, the backup may be performed on a live source database without
+///* preventing other database connections from
+///* reading or writing to the source database while the backup is underway.
+///*
+///* ^(To perform a backup operation:
+///*   <ol>
+///*     <li><b>sqlite3_backup_init()</b> is called once to initialize the
+///*         backup,
+///*     <li><b>sqlite3_backup_step()</b> is called one or more times to transfer
+///*         the data between the two databases, and finally
+///*     <li><b>sqlite3_backup_finish()</b> is called to release all resources
+///*         associated with the backup operation.
+///*   </ol>)^
+///* There should be exactly one call to sqlite3_backup_finish() for each
+///* successful call to sqlite3_backup_init().
+///*
+///* [[sqlite3_backup_init()]] <b>sqlite3_backup_init()</b>
+///*
+///* ^The D and N arguments to sqlite3_backup_init(D,N,S,M) are the
+///* [database connection] associated with the destination database
+///* and the database name, respectively.
+///* ^The database name is "main" for the main database, "temp" for the
+///* temporary database, or the name specified after the AS keyword in
+///* an [ATTACH] statement for an attached database.
+///* ^The S and M arguments passed to
+///* sqlite3_backup_init(D,N,S,M) identify the [database connection]
+///* and database name of the source database, respectively.
+///* ^The source and destination [database connections] (parameters S and D)
+///* must be different or else sqlite3_backup_init(D,N,S,M) will fail with
+///* an error.
+///*
+///* ^A call to sqlite3_backup_init() will fail, returning NULL, if
+///* there is already a read or read-write transaction open on the
+///* destination database.
+///*
+///* ^If an error occurs within sqlite3_backup_init(D,N,S,M), then NULL is
+///* returned and an error code and error message are stored in the
+///* destination [database connection] D.
+///* ^The error code and message for the failed call to sqlite3_backup_init()
+///* can be retrieved using the [sqlite3_errcode()], [sqlite3_errmsg()], and/or
+///* [sqlite3_errmsg16()] functions.
+///* ^A successful call to sqlite3_backup_init() returns a pointer to an
+///* [sqlite3_backup] object.
+///* ^The [sqlite3_backup] object may be used with the sqlite3_backup_step() and
+///* sqlite3_backup_finish() functions to perform the specified backup
+///* operation.
+///*
+///* [[sqlite3_backup_step()]] <b>sqlite3_backup_step()</b>
+///*
+///* ^Function sqlite3_backup_step(B,N) will copy up to N pages between
+///* the source and destination databases specified by [sqlite3_backup] object B.
+///* ^If N is negative, all remaining source pages are copied.
+///* ^If sqlite3_backup_step(B,N) successfully copies N pages and there
+///* are still more pages to be copied, then the function returns [SQLITE_OK].
+///* ^If sqlite3_backup_step(B,N) successfully finishes copying all pages
+///* from source to destination, then it returns [SQLITE_DONE].
+///* ^If an error occurs while running sqlite3_backup_step(B,N),
+///* then an [error code] is returned. ^As well as [SQLITE_OK] and
+///* [SQLITE_DONE], a call to sqlite3_backup_step() may return [SQLITE_READONLY],
+///* [SQLITE_NOMEM], [SQLITE_BUSY], [SQLITE_LOCKED], or an
+///* [SQLITE_IOERR_ACCESS | SQLITE_IOERR_XXX] extended error code.
+///*
+///* ^(The sqlite3_backup_step() might return [SQLITE_READONLY] if
+///* <ol>
+///* <li> the destination database was opened read-only, or
+///* <li> the destination database is using write-ahead-log journaling
+///* and the destination and source page sizes differ, or
+///* <li> the destination database is an in-memory database and the
+///* destination and source page sizes differ.
+///* </ol>)^
+///*
+///* ^If sqlite3_backup_step() cannot obtain a required file-system lock, then
+///* the [sqlite3_busy_handler | busy-handler function]
+///* is invoked (if one is specified). ^If the
+///* busy-handler returns non-zero before the lock is available, then
+///* [SQLITE_BUSY] is returned to the caller. ^In this case the call to
+///* sqlite3_backup_step() can be retried later. ^If the source
+///* [database connection]
+///* is being used to write to the source database when sqlite3_backup_step()
+///* is called, then [SQLITE_LOCKED] is returned immediately. ^Again, in this
+///* case the call to sqlite3_backup_step() can be retried later on. ^(If
+///* [SQLITE_IOERR_ACCESS | SQLITE_IOERR_XXX], [SQLITE_NOMEM], or
+///* [SQLITE_READONLY] is returned, then
+///* there is no point in retrying the call to sqlite3_backup_step(). These
+///* errors are considered fatal.)^  The application must accept
+///* that the backup operation has failed and pass the backup operation handle
+///* to the sqlite3_backup_finish() to release associated resources.
+///*
+///* ^The first call to sqlite3_backup_step() obtains an exclusive lock
+///* on the destination file. ^The exclusive lock is not released until either
+///* sqlite3_backup_finish() is called or the backup operation is complete
+///* and sqlite3_backup_step() returns [SQLITE_DONE].  ^Every call to
+///* sqlite3_backup_step() obtains a [shared lock] on the source database that
+///* lasts for the duration of the sqlite3_backup_step() call.
+///* ^Because the source database is not locked between calls to
+///* sqlite3_backup_step(), the source database may be modified mid-way
+///* through the backup process.  ^If the source database is modified by an
+///* external process or via a database connection other than the one being
+///* used by the backup operation, then the backup will be automatically
+///* restarted by the next call to sqlite3_backup_step(). ^If the source
+///* database is modified by using the same database connection as is used
+///* by the backup operation, then the backup database is automatically
+///* updated at the same time.
+///*
+///* [[sqlite3_backup_finish()]] <b>sqlite3_backup_finish()</b>
+///*
+///* When sqlite3_backup_step() has returned [SQLITE_DONE], or when the
+///* application wishes to abandon the backup operation, the application
+///* should destroy the [sqlite3_backup] by passing it to sqlite3_backup_finish().
+///* ^The sqlite3_backup_finish() interfaces releases all
+///* resources associated with the [sqlite3_backup] object.
+///* ^If sqlite3_backup_step() has not yet returned [SQLITE_DONE], then any
+///* active write-transaction on the destination database is rolled back.
+///* The [sqlite3_backup] object is invalid
+///* and may not be used following a call to sqlite3_backup_finish().
+///*
+///* ^The value returned by sqlite3_backup_finish is [SQLITE_OK] if no
+///* sqlite3_backup_step() errors occurred, regardless of whether or not
+///* sqlite3_backup_step() completed.
+///* ^If an out-of-memory condition or IO error occurred during any prior
+///* sqlite3_backup_step() call on the same [sqlite3_backup] object, then
+///* sqlite3_backup_finish() returns the corresponding [error code].
+///*
+///* ^A return of [SQLITE_BUSY] or [SQLITE_LOCKED] from sqlite3_backup_step()
+///* is not a permanent error and does not affect the return value of
+///* sqlite3_backup_finish().
+///*
+///* [[sqlite3_backup_remaining()]] [[sqlite3_backup_pagecount()]]
+///* <b>sqlite3_backup_remaining() and sqlite3_backup_pagecount()</b>
+///*
+///* ^The sqlite3_backup_remaining() routine returns the number of pages still
+///* to be backed up at the conclusion of the most recent sqlite3_backup_step().
+///* ^The sqlite3_backup_pagecount() routine returns the total number of pages
+///* in the source database at the conclusion of the most recent
+///* sqlite3_backup_step().
+///* ^(The values returned by these functions are only updated by
+///* sqlite3_backup_step(). If the source database is modified in a way that
+///* changes the size of the source database or the number of pages remaining,
+///* those changes are not reflected in the output of sqlite3_backup_pagecount()
+///* and sqlite3_backup_remaining() until after the next
+///* sqlite3_backup_step().)^
+///*
+///* <b>Concurrent Usage of Database Handles</b>
+///*
+///* ^The source [database connection] may be used by the application for other
+///* purposes while a backup operation is underway or being initialized.
+///* ^If SQLite is compiled and configured to support threadsafe database
+///* connections, then the source database connection may be used concurrently
+///* from within other threads.
+///*
+///* However, the application must guarantee that the destination
+///* [database connection] is not passed to any other API (by any thread) after
+///* sqlite3_backup_init() is called and before the corresponding call to
+///* sqlite3_backup_finish().  SQLite does not currently check to see
+///* if the application incorrectly accesses the destination [database connection]
+///* and so no error code is reported, but the operations may malfunction
+///* nevertheless.  Use of the destination database connection while a
+///* backup is in progress might also cause a mutex deadlock.
+///*
+///* If running in [shared cache mode], the application must
+///* guarantee that the shared cache used by the destination database
+///* is not accessed while the backup is running. In practice this means
+///* that the application must guarantee that the disk file being
+///* backed up to is not accessed by any connection within the process,
+///* not just the specific connection that was passed to sqlite3_backup_init().
+///*
+///* The [sqlite3_backup] object itself is partially threadsafe. Multiple
+///* threads may safely make multiple concurrent calls to sqlite3_backup_step().
+///* However, the sqlite3_backup_remaining() and sqlite3_backup_pagecount()
+///* APIs are not strictly speaking threadsafe. If they are invoked at the
+///* same time as another thread is invoking sqlite3_backup_step() it is
+///* possible that they return invalid values.
+///*
+///* <b>Alternatives To Using The Backup API</b>
+///*
+///* Other techniques for safely creating a consistent backup of an SQLite
+///* database include:
+///*
+///* <ul>
+///* <li> The [VACUUM INTO] command.
+///* <li> The [sqlite3_rsync] utility program.
+///* </ul>
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
     z_dest_db_1: *const i8, p_src_db_1: *mut Sqlite3, z_src_db_1: *const i8)
     -> *mut Sqlite3Backup {
     let mut p: *mut Sqlite3Backup = core::ptr::null_mut();
+
+    /// Value to return
+    /// Lock the source database handle. The destination database
+    ///* handle is not locked in this routine, but it is locked in
+    ///* sqlite3_backup_step(). The user is required to ensure that no
+    ///* other thread accesses the destination handle for the duration
+    ///* of the backup operation.  Any attempt to use the destination
+    ///* database connection while a backup is in progress may cause
+    ///* a malfunction or a deadlock.
     unsafe { sqlite3_mutex_enter(unsafe { (*p_src_db_1).mutex }) };
     unsafe { sqlite3_mutex_enter(unsafe { (*p_dest_db_1).mutex }) };
     if p_src_db_1 == p_dest_db_1 {
@@ -474,11 +705,16 @@ pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
         p = core::ptr::null_mut();
     } else {
         let n_dest: i32 = unsafe { sqlite3_strlen30(z_dest_db_1) };
-        p =
+
+        /// Allocate space for a new sqlite3_backup object...
+        ///* EVIDENCE-OF: R-64852-21591 The sqlite3_backup object is created by a
+        ///* call to sqlite3_backup_init() and is destroyed by a call to
+        ///* sqlite3_backup_finish().
+        (p =
             unsafe {
                     sqlite3_malloc_zero(core::mem::size_of::<Sqlite3Backup>() as
                                     u64 + n_dest as u64 + 1 as u64)
-                } as *mut Sqlite3Backup;
+                } as *mut Sqlite3Backup);
         if (p).is_null() as i32 != 0 {
             unsafe { sqlite3_error(p_dest_db_1, 7) };
         } else {
@@ -493,6 +729,11 @@ pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
         }
     }
     if !(p).is_null() {
+        /// Do not store the pointer to the destination b-tree at this point.
+        ///* This is because there is nothing preventing it from being detached
+        ///* or otherwise freed before the first call to sqlite3_backup_step()
+        ///* on this object. The source b-tree does not have this problem, as
+        ///* incrementing Btree.nBackup (see below) effectively locks the object.
         let p_dest: *mut Btree =
             find_btree(p_dest_db_1, p_dest_db_1, z_dest_db_1);
         unsafe {
@@ -505,6 +746,12 @@ pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
         if core::ptr::null_mut() == unsafe { (*p).p_src } ||
                     core::ptr::null_mut() == p_dest ||
                 check_read_transaction(p_dest_db_1, p_dest) != 0 {
+
+            /// One (or both) of the named databases did not exist or an OOM
+            ///* error was hit. Or there is a transaction open on the destination
+            ///* database. The error has already been written into the pDestDb 
+            ///* handle. All that is left to do here is free the sqlite3_backup 
+            ///* structure.
             unsafe { sqlite3_free(p as *mut ()) };
             p = core::ptr::null_mut();
         }
@@ -522,10 +769,15 @@ pub extern "C" fn sqlite3_backup_init(p_dest_db_1: *mut Sqlite3,
     return p;
 }
 
+///* Argument rc is an SQLite error code. Return true if this error is 
+///* considered fatal if encountered during a backup operation. All errors
+///* are considered fatal except for SQLITE_BUSY and SQLITE_LOCKED.
 extern "C" fn is_fatal_error(rc: i32) -> i32 {
     return (rc != 0 && rc != 5 && rc != 6) as i32;
 }
 
+///* Attempt to set the page size of the destination to match the page size
+///* of the source.
 extern "C" fn set_dest_pgsz(p_dest_1: *mut Btree, p_src_1: *mut Btree)
     -> i32 {
     return unsafe {
@@ -534,6 +786,10 @@ extern "C" fn set_dest_pgsz(p_dest_1: *mut Btree, p_src_1: *mut Btree)
         };
 }
 
+///* Parameter zSrcData points to a buffer containing the data for 
+///* page iSrcPg from the source database. Copy this data into the 
+///* destination database.
+#[allow(unused_doc_comments)]
 extern "C" fn backup_one_page(p: &Sqlite3Backup, i_src_pg_1: Pgno,
     z_src_data_1: *const u8, b_update_1: i32) -> i32 {
     unsafe {
@@ -591,6 +847,13 @@ extern "C" fn backup_one_page(p: &Sqlite3Backup, i_src_pg_1: Pgno,
                                 &mut *z_dest_data.offset((i_off % n_dest_pgsz as i64) as
                                                 isize)
                             };
+
+                        /// Copy the data from the source page into the destination page.
+                        ///* Then clear the Btree layer MemPage.isInit flag. Both this module
+                        ///* and the pager code use this trick (clearing the first byte
+                        ///* of the page 'extra' space to invalidate the Btree layers
+                        ///* cached parse of the page). MemPage.isInit is marked 
+                        ///* "MUST BE FIRST" for this purpose.
                         unsafe {
                             memcpy(z_out as *mut (), z_in as *const (), n_copy as u64)
                         };
@@ -615,6 +878,8 @@ extern "C" fn backup_one_page(p: &Sqlite3Backup, i_src_pg_1: Pgno,
     }
 }
 
+///* Register this backup object with the associated source pager for
+///* callbacks when pages are changed or the cache invalidated.
 extern "C" fn attach_backup_object(p: *mut Sqlite3Backup) -> () {
     let mut pp: *mut *mut Sqlite3Backup = core::ptr::null_mut();
     { let _ = 0; };
@@ -629,6 +894,12 @@ extern "C" fn attach_backup_object(p: *mut Sqlite3Backup) -> () {
     unsafe { (*p).is_attached = 1 };
 }
 
+///* If pFile is currently larger than iSize bytes, then truncate it to
+///* exactly iSize bytes. If pFile is not larger than iSize bytes, then
+///* this function is a no-op.
+///*
+///* Return SQLITE_OK if everything is successful, or an SQLite error 
+///* code if an error occurs.
 extern "C" fn backup_truncate_file(p_file_1: *mut Sqlite3File, i_size_1: i64)
     -> i32 {
     let mut i_current: i64 = 0 as i64;
@@ -640,14 +911,20 @@ extern "C" fn backup_truncate_file(p_file_1: *mut Sqlite3File, i_size_1: i64)
     return rc;
 }
 
+///* Copy nPage pages from the source b-tree to the destination.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
     -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut dest_mode: i32 = 0;
+        /// Destination journal mode
         let mut pgsz_src: i32 = 0;
+        /// Source page size
         let mut pgsz_dest: i32 = 0;
+
+        /// Destination page size
         unsafe {
             sqlite3_mutex_enter(unsafe { (*unsafe { (*p).p_src_db }).mutex })
         };
@@ -663,10 +940,15 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
         if (is_fatal_error(rc) == 0) as i32 != 0 {
             let p_src_pager: *mut Pager =
                 unsafe { sqlite3_btree_pager(unsafe { (*p).p_src }) };
+            /// Source pager
             let mut p_dest: *mut Btree = core::ptr::null_mut();
+            /// Dest btree
             let mut p_dest_pager: *mut Pager = core::ptr::null_mut();
+            /// Dest pager
             let mut ii: i32 = 0;
+            /// Iterator variable
             let mut n_src_page: i32 = -1;
+            /// Size of source db in pages
             let mut b_close_trans: i32 = 0;
             if !(unsafe { (*p).p_dest_db }).is_null() &&
                     unsafe {
@@ -732,9 +1014,15 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                     rc = 8;
                 }
             }
-            n_src_page =
+
+            /// Now that there is a read-lock on the source database, query the
+            ///* source pager for the number of pages in the database.
+            (n_src_page =
                 unsafe { sqlite3_btree_last_page(unsafe { (*p).p_src }) } as
-                    i32;
+                    i32);
+
+            /// Now that there is a read-lock on the source database, query the
+            ///* source pager for the number of pages in the database.
             { let _ = 0; };
             {
                 ii = 0;
@@ -752,10 +1040,12 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                                                 (*unsafe { (*unsafe { (*p).p_src }).p_bt }).page_size
                                             } + 1 as u32) as Pgno {
                             let mut p_src_pg: *mut DbPage = core::ptr::null_mut();
-                            rc =
+
+                            /// Source page object
+                            (rc =
                                 unsafe {
                                     sqlite3_pager_get(p_src_pager, i_src_pg, &mut p_src_pg, 2)
-                                };
+                                });
                             if rc == 0 {
                                 rc =
                                     backup_one_page(unsafe { &*p }, i_src_pg,
@@ -817,6 +1107,18 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                 }
                 if rc == 0 {
                     let mut n_dest_truncate: i32 = 0;
+
+                    /// Set nDestTruncate to the final number of pages in the destination
+                    ///* database. The complication here is that the destination page
+                    ///* size may be different to the source page size. 
+                    ///*
+                    ///* If the source page size is smaller than the destination page size, 
+                    ///* round up. In this case the call to sqlite3OsTruncate() below will
+                    ///* fix the size of the file. However it is important to call
+                    ///* sqlite3PagerTruncateImage() here so that any pages in the 
+                    ///* destination file that lie beyond the nDestTruncate page mark are
+                    ///* journalled by PagerCommitPhaseOne() before they are destroyed
+                    ///* by the file truncation.
                     { let _ = 0; };
                     { let _ = 0; };
                     if pgsz_src < pgsz_dest {
@@ -839,6 +1141,14 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                     }
                     { let _ = 0; };
                     if pgsz_src < pgsz_dest {
+                        /// If the source page-size is smaller than the destination page-size,
+                        ///* two extra things may need to happen:
+                        ///*
+                        ///*   * The destination may need to be truncated, and
+                        ///*
+                        ///*   * Data stored on the pages immediately following the 
+                        ///*     pending-byte page in the source database may need to be
+                        ///*     copied into the destination database.
                         let i_size: i64 =
                             (pgsz_src as i64 * n_src_page as i64) as i64;
                         let p_file: *mut Sqlite3File =
@@ -849,6 +1159,13 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                         let mut i_end: i64 = 0 as i64;
                         { let _ = 0; };
                         { let _ = 0; };
+
+                        /// This block ensures that all data required to recreate the original
+                        ///* database has been stored in the journal for pDestPager and the
+                        ///* journal synced to disk. So at this point we may safely modify
+                        ///* the database file in any way, knowing that if a power failure
+                        ///* occurs, the original database will be reconstructed from the 
+                        ///* journal file.
                         unsafe {
                             sqlite3_pager_pagecount(p_dest_pager, &mut n_dst_page)
                         };
@@ -884,10 +1201,12 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
                                         core::ptr::null(), 1)
                                 };
                         }
-                        i_end =
+
+                        /// Write the extra pages and truncate the database file as required
+                        (i_end =
                             if ((sqlite3_pending_byte + pgsz_dest) as i64) < i_size {
                                 (sqlite3_pending_byte + pgsz_dest) as i64
-                            } else { i_size };
+                            } else { i_size });
                         {
                             i_off = (sqlite3_pending_byte + pgsz_src) as i64;
                             '__b3: loop {
@@ -976,10 +1295,14 @@ pub extern "C" fn sqlite3_backup_step(p: *mut Sqlite3Backup, n_page_1: i32)
     }
 }
 
+///* Release all resources associated with an sqlite3_backup* handle.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_backup_finish(p: *mut Sqlite3Backup) -> i32 {
     let mut pp: *mut *mut Sqlite3Backup = core::ptr::null_mut();
+    /// Ptr to head of pagers backup list
     let mut p_src_db: *mut Sqlite3 = core::ptr::null_mut();
+    /// Source database connection
     let mut rc: i32 = 0;
     if p == core::ptr::null_mut() { return 0; }
     p_src_db = unsafe { (*p).p_src_db };
@@ -1015,38 +1338,58 @@ pub extern "C" fn sqlite3_backup_finish(p: *mut Sqlite3Backup) -> i32 {
     if !(unsafe { (*p).p_dest }).is_null() {
         unsafe { sqlite3_btree_rollback(unsafe { (*p).p_dest }, 0, 0) };
     }
-    rc = if unsafe { (*p).rc } == 101 { 0 } else { unsafe { (*p).rc } };
+
+    /// Set the error code of the destination database handle.
+    (rc = if unsafe { (*p).rc } == 101 { 0 } else { unsafe { (*p).rc } });
     if !(unsafe { (*p).p_dest_db }).is_null() {
         unsafe { sqlite3_error(unsafe { (*p).p_dest_db }, rc) };
+
+        /// Exit the mutexes and free the backup context structure.
         unsafe {
             sqlite3_leave_mutex_and_close_zombie(unsafe { (*p).p_dest_db })
         };
     }
     unsafe { sqlite3_btree_leave(unsafe { (*p).p_src }) };
     if !(unsafe { (*p).p_dest_db }).is_null() {
+
+        /// EVIDENCE-OF: R-64852-21591 The sqlite3_backup object is created by a
+        ///* call to sqlite3_backup_init() and is destroyed by a call to
+        ///* sqlite3_backup_finish().
         unsafe { sqlite3_free(p as *mut ()) };
     }
     unsafe { sqlite3_leave_mutex_and_close_zombie(p_src_db) };
     return rc;
 }
 
+///* Return the number of pages still to be backed up as of the most recent
+///* call to sqlite3_backup_step().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_remaining(p: &Sqlite3Backup) -> i32 {
     return (*p).n_remaining as i32;
 }
 
+///* Return the total number of pages in the source database as of the most 
+///* recent call to sqlite3_backup_step().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_pagecount(p: &Sqlite3Backup) -> i32 {
     return (*p).n_pagecount as i32;
 }
 
+///* Copy the complete content of pBtFrom into pBtTo.  A transaction
+///* must be active for both files.
+///*
+///* The size of file pTo may be reduced by this operation. If anything 
+///* goes wrong, the transaction on pTo is rolled back. If successful, the 
+///* transaction is committed before returning.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
     p_from_1: *mut Btree) -> i32 {
     let mut rc: i32 = 0;
     '__b5: loop {
         '__c5: loop {
             let mut p_fd: *mut Sqlite3File = core::ptr::null_mut();
+            /// File descriptor for database pTo
             let mut b: Sqlite3Backup = unsafe { core::mem::zeroed() };
             unsafe { sqlite3_btree_enter(p_to_1) };
             unsafe { sqlite3_btree_enter(p_from_1) };
@@ -1067,6 +1410,11 @@ pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
                 if rc == 12 { rc = 0; }
                 if rc != 0 { break '__b5; }
             }
+
+            /// Set up an sqlite3_backup object. sqlite3_backup.pDestDb must be set
+            ///* to 0. This is used by the implementations of sqlite3_backup_step()
+            ///* and sqlite3_backup_finish() to detect that they are being called
+            ///* from this function, not directly by the user.
             unsafe {
                 memset(&raw mut b as *mut (), 0,
                     core::mem::size_of::<Sqlite3Backup>() as u64)
@@ -1075,6 +1423,13 @@ pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
             b.p_src = p_from_1;
             b.p_dest = p_to_1;
             b.i_next = 1 as Pgno;
+
+            /// 0x7FFFFFFF is the hard limit for the number of pages in a database
+            ///* file. By passing this as the number of pages to copy to
+            ///* sqlite3_backup_step(), we can guarantee that the copy finishes 
+            ///* within a single call (unless an error occurs). The assert() statement
+            ///* checks this assumption - (p->rc) should be set to either SQLITE_DONE 
+            ///* or an error code.
             sqlite3_backup_step(&mut b, 2147483647);
             { let _ = 0; };
             rc = sqlite3_backup_finish(&mut b);
@@ -1094,11 +1449,32 @@ pub extern "C" fn sqlite3_btree_copy_file(p_to_1: *mut Btree,
         }
         if !(false) { break '__b5; }
     }
+
+    /// File descriptor for database pTo
+    /// Set up an sqlite3_backup object. sqlite3_backup.pDestDb must be set
+    ///* to 0. This is used by the implementations of sqlite3_backup_step()
+    ///* and sqlite3_backup_finish() to detect that they are being called
+    ///* from this function, not directly by the user.
+    /// 0x7FFFFFFF is the hard limit for the number of pages in a database
+    ///* file. By passing this as the number of pages to copy to
+    ///* sqlite3_backup_step(), we can guarantee that the copy finishes 
+    ///* within a single call (unless an error occurs). The assert() statement
+    ///* checks this assumption - (p->rc) should be set to either SQLITE_DONE 
+    ///* or an error code.
     unsafe { sqlite3_btree_leave(p_from_1) };
     unsafe { sqlite3_btree_leave(p_to_1) };
     return rc;
 }
 
+///* Restart the backup process. This is called when the pager layer
+///* detects that the database has been modified by an external database
+///* connection. In this case there is no way of knowing which of the
+///* pages that have been copied into the destination database are still 
+///* valid and which are not, so the entire process needs to be restarted.
+///*
+///* It is assumed that the mutex associated with the BtShared object
+///* corresponding to the source database is held when this function is
+///* called.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_backup_restart(p_backup_1: *mut Sqlite3Backup)
     -> () {
@@ -1117,6 +1493,17 @@ pub extern "C" fn sqlite3_backup_restart(p_backup_1: *mut Sqlite3Backup)
     }
 }
 
+///* This function is called after the contents of page iPage of the
+///* source database have been modified. If page iPage has already been 
+///* copied into the destination database, then the data written to the
+///* destination is now invalidated. The destination copy of iPage needs
+///* to be updated with the new data before the backup operation is
+///* complete.
+///*
+///* It is assumed that the mutex associated with the BtShared object
+///* corresponding to the source database is held when this function is
+///* called.
+#[allow(unused_doc_comments)]
 extern "C" fn backup_update(mut p: *mut Sqlite3Backup, i_page_1: Pgno,
     a_data_1: *const u8) -> () {
     { let _ = 0; };
@@ -1125,6 +1512,9 @@ extern "C" fn backup_update(mut p: *mut Sqlite3Backup, i_page_1: Pgno,
             { let _ = 0; };
             if (is_fatal_error(unsafe { (*p).rc }) == 0) as i32 != 0 &&
                     i_page_1 < unsafe { (*p).i_next } {
+                /// The backup process p has already copied page iPage. But now it
+                ///* has been modified by a transaction on the source pager. Copy
+                ///* the new data into the backup.
                 let mut rc: i32 = 0;
                 { let _ = 0; };
                 unsafe {

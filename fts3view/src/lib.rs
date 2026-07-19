@@ -2,16 +2,24 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, SqliteInt64, SqliteUint64,
+};
 
 type DarwinSizeT = u64;
 
+///* Extra command-line arguments:
 #[unsafe(no_mangle)]
 pub static mut n_extra: i32 = unsafe { core::mem::zeroed() };
 
 #[unsafe(no_mangle)]
 pub static mut az_extra: *mut *mut i8 = unsafe { core::mem::zeroed() };
 
+///* Look for a command-line argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn find_option(z_name_1: *const i8, has_arg_1: i32,
     z_default_1: *const i8) -> *const i8 {
@@ -57,6 +65,7 @@ pub extern "C" fn find_option(z_name_1: *const i8, has_arg_1: i32,
     }
 }
 
+///* Prepare an SQL query
 unsafe extern "C" fn prepare(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> *mut Sqlite3Stmt {
     unsafe {
@@ -85,6 +94,7 @@ unsafe extern "C" fn prepare(db: *mut Sqlite3, z_format_1: *const i8,
     }
 }
 
+///* Run an SQL statement
 unsafe extern "C" fn run_sql(db: *mut Sqlite3, z_format_1: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -101,6 +111,7 @@ unsafe extern "C" fn run_sql(db: *mut Sqlite3, z_format_1: *const i8,
     return rc;
 }
 
+///* Show the table schema
 extern "C" fn show_schema(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt =
@@ -176,6 +187,10 @@ extern "C" fn show_schema(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe { sqlite3_finalize(p_stmt) };
 }
 
+/// 
+///* Read a 64-bit variable-length integer from memory starting at p[0].
+///* Return the number of bytes read, or 0 on error.
+///* The value is stored in *v.
 #[unsafe(no_mangle)]
 pub extern "C" fn get_varint(p: *const u8, v: &mut SqliteInt64) -> i32 {
     let mut q: *const u8 = p;
@@ -209,6 +224,7 @@ pub extern "C" fn get_varint(p: *const u8, v: &mut SqliteInt64) -> i32 {
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
 
+/// Show the content of the %_stat table
 extern "C" fn show_stat(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt =
@@ -275,6 +291,8 @@ extern "C" fn show_stat(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe { sqlite3_finalize(p_stmt) };
 }
 
+///* Report on the vocabulary.  This creates an fts4aux table with a random
+///* name, but deletes it in the end.
 extern "C" fn show_vocabulary(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut z_aux: *mut i8 = core::ptr::null_mut();
     let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -578,6 +596,7 @@ extern "C" fn show_vocabulary(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
 }
 
+///* Report on the number and sizes of segments
 extern "C" fn show_segment_stats(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_seg: i32 = 0;
@@ -814,6 +833,7 @@ extern "C" fn show_segment_stats(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
 }
 
+///* Print a single "tree" line of the segdir map output.
 extern "C" fn print_tree_line(i_lower_1: Sqlite3Int64,
     i_upper_1: Sqlite3Int64) -> () {
     unsafe {
@@ -830,6 +850,7 @@ extern "C" fn print_tree_line(i_lower_1: Sqlite3Int64,
     unsafe { printf(c"\n".as_ptr() as *mut i8 as *const i8) };
 }
 
+///* Check to see if the block of a %_segments entry is NULL.
 extern "C" fn is_null_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     i_block_id_1: Sqlite3Int64) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -847,6 +868,7 @@ extern "C" fn is_null_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     return rc;
 }
 
+///* Show a map of segments derived from the %_segdir table.
 extern "C" fn show_segdir_map(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut mx_index: i32 = 0;
     let mut i_index: i32 = 0;
@@ -974,6 +996,7 @@ extern "C" fn show_segdir_map(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe { sqlite3_finalize(p_stmt2) };
 }
 
+///* Decode a single segment block and display the results on stdout.
 extern "C" fn decode_segment(a_data_1: *const u8, n_data_1: i32) -> () {
     let mut i_child: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut i_prefix: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1042,6 +1065,7 @@ extern "C" fn decode_segment(a_data_1: *const u8, n_data_1: i32) -> () {
     }
 }
 
+///* Print a a blob as hex and ascii.
 extern "C" fn print_blob(a_data_1: &[u8]) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -1118,6 +1142,7 @@ extern "C" fn print_blob(a_data_1: &[u8]) -> () {
     }
 }
 
+///* Convert text to a 64-bit integer
 extern "C" fn atoi64(mut z: *const i8) -> Sqlite3Int64 {
     let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;
     while unsafe { *z.offset(0 as isize) } as i32 >= '0' as i32 &&
@@ -1136,6 +1161,10 @@ extern "C" fn atoi64(mut z: *const i8) -> Sqlite3Int64 {
     return v;
 }
 
+///* Return a prepared statement which, when stepped, will return in its
+///* first column the blob associated with segment zId.  If zId begins with
+///* 'r' then it is a rowid of a %_segdir entry.  Otherwise it is a
+///* %_segment entry.
 extern "C" fn prepare_to_get_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     z_id_1: *const i8) -> *mut Sqlite3Stmt {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -1158,6 +1187,14 @@ extern "C" fn prepare_to_get_segment(db: *mut Sqlite3, z_tab_1: *const i8,
     return p_stmt;
 }
 
+///* Print the content of a segment or of the root of a segdir.  The segment
+///* or root is identified by azExtra[0].  If the first character of azExtra[0]
+///* is 'r' then the remainder is the integer rowid of the %_segdir entry.
+///* If the first character of azExtra[0] is not 'r' then, then all of
+///* azExtra[0] is an integer which is the block number.
+///*
+///* If the --raw option is present in azExtra, then a hex dump is provided.
+///* Otherwise a decoding is shown.
 extern "C" fn show_segment(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe {
         let mut a_data: *const u8 = core::ptr::null();
@@ -1189,6 +1226,7 @@ extern "C" fn show_segment(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
 }
 
+///* Decode a single doclist and display the results on stdout.
 extern "C" fn decode_doclist(a_data_1: *const u8, n_data_1: i32) -> () {
     let mut i_prev_docid: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut i_docid: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1230,6 +1268,16 @@ extern "C" fn decode_doclist(a_data_1: *const u8, n_data_1: i32) -> () {
     }
 }
 
+///* Print the content of a doclist.  The segment or segdir-root is
+///* identified by azExtra[0].  If the first character of azExtra[0]
+///* is 'r' then the remainder is the integer rowid of the %_segdir entry.
+///* If the first character of azExtra[0] is not 'r' then, then all of
+///* azExtra[0] is an integer which is the block number.  The offset
+///* into the segment is identified by azExtra[1].  The size of the doclist
+///* is azExtra[2].
+///*
+///* If the --raw option is present in azExtra, then a hex dump is provided.
+///* Otherwise a decoding is shown.
 extern "C" fn show_doclist(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     unsafe {
         let mut a_data: *const u8 = core::ptr::null();
@@ -1270,6 +1318,7 @@ extern "C" fn show_doclist(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     }
 }
 
+///* Show the top N largest segments
 extern "C" fn list_big_segments(db: *mut Sqlite3, z_tab_1: *const i8) -> () {
     let mut n_top: i32 = 0;
     let mut i: i32 = 0;

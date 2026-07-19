@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3MemMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+///* This structure is used to encapsulate the global state variables used 
+///* by malloc() fault simulation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFault {
@@ -410,6 +427,8 @@ struct MemFault {
 
 static mut memfault: MemFault = unsafe { core::mem::zeroed() };
 
+///* This routine exists as a place to set a breakpoint that will
+///* fire on any simulated malloc() failure.
 extern "C" fn sqlite3_fault() -> () {
     unsafe {
         { let __p = &mut cnt; let __t = *__p; *__p += 1; __t };
@@ -417,6 +436,10 @@ extern "C" fn sqlite3_fault() -> () {
     }
 }
 
+///* This routine exists as a place to set a breakpoint that will
+///* fire the first time any malloc() fails on a single test case.
+///* The sqlite3Fault() routine above runs on every malloc() failure.
+///* This routine only runs on the first such failure.
 extern "C" fn sqlite3_first_fault() -> () {
     unsafe {
         { let __p = &mut cnt2; let __t = *__p; *__p += 1; __t };
@@ -424,6 +447,8 @@ extern "C" fn sqlite3_first_fault() -> () {
     }
 }
 
+///* Check to see if a fault should be simulated.  Return true to simulate
+///* the fault.  Return false if the fault should not be simulated.
 extern "C" fn faultsim_step() -> i32 {
     unsafe {
         if (memfault.enable == 0) as i32 != 0 {
@@ -467,6 +492,8 @@ extern "C" fn faultsim_step() -> i32 {
     }
 }
 
+///* A version of sqlite3_mem_methods.xMalloc() that includes fault simulation
+///* logic.
 extern "C" fn faultsim_malloc(n: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -477,6 +504,8 @@ extern "C" fn faultsim_malloc(n: i32) -> *mut () {
     }
 }
 
+///* A version of sqlite3_mem_methods.xRealloc() that includes fault simulation
+///* logic.
 extern "C" fn faultsim_realloc(p_old_1: *mut (), n: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -487,6 +516,11 @@ extern "C" fn faultsim_realloc(p_old_1: *mut (), n: i32) -> *mut () {
     }
 }
 
+///* This routine configures the malloc failure simulation.  After
+///* calling this routine, the next nDelay mallocs will succeed, followed
+///* by a block of nRepeat failures, after which malloc() calls will begin
+///* to succeed again.
+#[allow(unused_doc_comments)]
 extern "C" fn faultsim_config(n_delay_1: i32, n_repeat_1: i32) -> () {
     unsafe {
         memfault.i_countdown = n_delay_1;
@@ -496,18 +530,31 @@ extern "C" fn faultsim_config(n_delay_1: i32, n_repeat_1: i32) -> () {
         memfault.n_ok_before = 0;
         memfault.n_ok_after = 0;
         memfault.enable = (n_delay_1 >= 0) as u8;
-        memfault.is_benign_mode = 0;
+
+        /// Sometimes, when running multi-threaded tests, the isBenignMode 
+        ///* variable is not properly incremented/decremented so that it is
+        ///* 0 when not inside a benign malloc block. This doesn't affect
+        ///* the multi-threaded tests, as they do not use this system. But
+        ///* it does affect OOM tests run later in the same process. So
+        ///* zero the variable here, just to be sure.
+        (memfault.is_benign_mode = 0);
     }
 }
 
+///* Return the number of faults (both hard and benign faults) that have
+///* occurred since the injector was last configured.
 extern "C" fn faultsim_failures() -> i32 {
     unsafe { return memfault.n_fail; }
 }
 
+///* Return the number of benign faults that have occurred since the
+///* injector was last configured.
 extern "C" fn faultsim_benign_failures() -> i32 {
     unsafe { return memfault.n_benign; }
 }
 
+///* Return the number of successes that will occur before the next failure.
+///* If no failures are scheduled, return -1.
 extern "C" fn faultsim_pending() -> i32 {
     unsafe {
         if memfault.enable != 0 {
@@ -538,6 +585,9 @@ extern "C" fn faultsim_end_benign() -> () {
     }
 }
 
+///* Add or remove the fault-simulation layer using sqlite3_config(). If
+///* the argument is non-zero, the
+#[allow(unused_doc_comments)]
 extern "C" fn faultsim_install(mut install: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -576,6 +626,9 @@ extern "C" fn faultsim_install(mut install: i32) -> i32 {
         } else {
             let mut m2: Sqlite3MemMethods = unsafe { core::mem::zeroed() };
             { let _ = 0; };
+
+            /// One should be able to reset the default memory allocator by storing
+            ///* a zeroed allocator then calling GETMALLOC.
             unsafe {
                 memset(&raw mut m2 as *mut (), 0,
                     core::mem::size_of::<Sqlite3MemMethods>() as u64)

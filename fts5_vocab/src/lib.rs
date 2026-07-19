@@ -1,13 +1,24 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Storage, Fts5Table, Fts5Termset, Fts5Token,
+    Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
@@ -23,6 +34,10 @@ struct Fts5VocabTable {
     b_busy: u32,
 }
 
+///* Translate a string containing an fts5vocab table type to an 
+///* FTS5_VOCAB_XXX constant. If successful, set *peType to the output
+///* value and return SQLITE_OK. Otherwise, set *pzErr to an error message
+///* and return SQLITE_ERROR.
 extern "C" fn fts5_vocab_table_type(z_type_1: *const i8,
     pz_err_1: &mut *mut i8, pe_type_1: &mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -58,6 +73,26 @@ extern "C" fn fts5_vocab_table_type(z_type_1: *const i8,
     return rc;
 }
 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the FTS3 virtual table.
+///*
+///* The argv[] array contains the following:
+///*
+///*   argv[0]   -> module name  ("fts5vocab")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*
+///* then:
+///*
+///*   argv[3]   -> name of fts5 table
+///*   argv[4]   -> type of fts5vocab table
+///*
+///* or, for tables in the TEMP schema only.
+///*
+///*   argv[3]   -> name of fts5 tables database
+///*   argv[4]   -> name of fts5 table
+///*   argv[5]   -> type of fts5vocab table
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_vocab_init_vtab(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_v_tab_1: &mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -68,6 +103,7 @@ extern "C" fn fts5_vocab_init_vtab(db: *mut Sqlite3, p_aux_1: *mut (),
                     *const i8];
     let mut p_ret: *mut Fts5VocabTable = core::ptr::null_mut();
     let mut rc: i32 = 0;
+    /// Return code
     let mut b_db: i32 = 0;
     b_db =
         (argc == 6 &&
@@ -88,6 +124,7 @@ extern "C" fn fts5_vocab_init_vtab(db: *mut Sqlite3, p_aux_1: *mut (),
         rc = 1;
     } else {
         let mut n_byte: i64 = 0 as i64;
+        /// Bytes of space to allocate
         let z_db: *const i8 =
             if b_db != 0 {
                 unsafe { *argv.offset(3 as isize) }
@@ -167,6 +204,8 @@ extern "C" fn fts5_vocab_create_method(db: *mut Sqlite3, p_aux_1: *mut (),
             unsafe { &mut *pp_vtab_1 }, pz_err_1);
 }
 
+///* The xConnect() and xCreate() methods for the virtual table. All the
+///* work is done in function fts5VocabInitVtab().
 extern "C" fn fts5_vocab_connect_method(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -174,6 +213,17 @@ extern "C" fn fts5_vocab_connect_method(db: *mut Sqlite3, p_aux_1: *mut (),
             unsafe { &mut *pp_vtab_1 }, pz_err_1);
 }
 
+/// 
+///* Implementation of the xBestIndex method.
+///*
+///* Only constraints of the form:
+///*
+///*     term <= ?
+///*     term == ?
+///*     term >= ?
+///*
+///* are interpreted. Less-than and less-than-or-equal are treated 
+///* identically, as are greater-than and greater-than-or-equal.
 extern "C" fn fts5_vocab_best_index_method(p_unused_1: *mut Sqlite3Vtab,
     p_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -266,6 +316,7 @@ extern "C" fn fts5_vocab_best_index_method(p_unused_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* The xDisconnect() virtual table method.
 extern "C" fn fts5_vocab_disconnect_method(p_vtab_1: *mut Sqlite3Vtab)
     -> i32 {
     let p_tab: *mut Fts5VocabTable = p_vtab_1 as *mut Fts5VocabTable;
@@ -273,6 +324,7 @@ extern "C" fn fts5_vocab_disconnect_method(p_vtab_1: *mut Sqlite3Vtab)
     return 0;
 }
 
+///* The xDestroy() virtual table method.
 extern "C" fn fts5_vocab_destroy_method(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut Fts5VocabTable = p_vtab_1 as *mut Fts5VocabTable;
     unsafe { sqlite3_free(p_tab as *mut ()) };
@@ -300,6 +352,7 @@ struct Fts5VocabCursor {
     i_inst_off: i32,
 }
 
+///* Implementation of xOpen method.
 extern "C" fn fts5_vocab_open_method(p_v_tab_1: *mut Sqlite3Vtab,
     pp_csr_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut Fts5VocabTable = p_v_tab_1 as *mut Fts5VocabTable;
@@ -401,6 +454,8 @@ extern "C" fn fts5_vocab_open_method(p_v_tab_1: *mut Sqlite3Vtab,
     return rc;
 }
 
+///* Restore cursor pCsr to the state it was in immediately after being
+///* created by the xOpen() method.
 extern "C" fn fts5_vocab_reset_cursor(p_csr_1: &mut Fts5VocabCursor) -> () {
     let n_col: i32 =
         unsafe { (*unsafe { (*(*p_csr_1).p_fts5).p_config }).n_col };
@@ -427,6 +482,8 @@ extern "C" fn fts5_vocab_reset_cursor(p_csr_1: &mut Fts5VocabCursor) -> () {
     };
 }
 
+///* Close the cursor.  For additional information see the documentation
+///* on the xClose method of the virtual table interface.
 extern "C" fn fts5_vocab_close_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut Fts5VocabCursor = p_cursor_1 as *mut Fts5VocabCursor;
@@ -514,6 +571,8 @@ extern "C" fn fts5_vocab_instance_next(p_csr_1: *mut Fts5VocabCursor) -> i32 {
     return rc;
 }
 
+///* Advance the cursor to the next row in the table.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *mut Fts5VocabCursor = p_cursor_1 as *mut Fts5VocabCursor;
@@ -633,9 +692,13 @@ extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
                     };
                 let mut p_pos: *const u8 = core::ptr::null();
                 let mut n_pos: i32 = 0;
+                /// Position list
                 let mut i_pos: i64 = 0 as i64;
+                /// 64-bit position read from poslist
                 let mut i_off: i32 = 0;
-                p_pos = unsafe { (*unsafe { (*p_csr).p_iter }).p_data };
+
+                /// Current offset within position list
+                (p_pos = unsafe { (*unsafe { (*p_csr).p_iter }).p_data });
                 n_pos = unsafe { (*unsafe { (*p_csr).p_iter }).n_data };
                 '__s4:
                     {
@@ -686,6 +749,8 @@ extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
                                             }
                                         }
                                     } else {
+
+                                        /// An instance - increment pCsr->aCnt[]
                                         {
                                             let __p =
                                                 unsafe {
@@ -851,6 +916,7 @@ extern "C" fn fts5_vocab_next_method(p_cursor_1: *mut Sqlite3VtabCursor)
     return rc;
 }
 
+///* This is the xFilter implementation for the virtual table.
 extern "C" fn fts5_vocab_filter_method(p_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, z_unused_1: *const i8, n_unused_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> i32 {
@@ -969,6 +1035,9 @@ extern "C" fn fts5_vocab_filter_method(p_cursor_1: *mut Sqlite3VtabCursor,
     return rc;
 }
 
+/// 
+///* This is the xEof method of the virtual table. SQLite calls this 
+///* routine to find out if it has reached the end of a result set.
 extern "C" fn fts5_vocab_eof_method(p_cursor_1: *mut Sqlite3VtabCursor)
     -> i32 {
     let p_csr: *const Fts5VocabCursor =
@@ -1135,6 +1204,10 @@ extern "C" fn fts5_vocab_column_method(p_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// 
+///* This is the xRowid method. The SQLite core calls this routine to
+///* retrieve the rowid for the current row of the result set. The
+///* rowid should be written to *pRowid.
 extern "C" fn fts5_vocab_rowid_method(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const Fts5VocabCursor =
@@ -1143,9 +1216,37 @@ extern "C" fn fts5_vocab_rowid_method(p_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///***********************************************************************
+///* Interface to code in fts5_vocab.c.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_vocab_init(p_global: *mut Fts5Global,
     db: *mut Sqlite3) -> i32 {
+    /// iVersion
+    /// xCreate
+    /// xConnect
+    /// xBestIndex
+    /// xDisconnect
+    /// xDestroy
+    /// xOpen
+    /// xClose
+    /// xFilter
+    /// xNext
+    /// xEof
+    /// xColumn
+    /// xRowid
+    /// xUpdate
+    /// xBegin
+    /// xSync
+    /// xCommit
+    /// xRollback
+    /// xFindFunction
+    /// xRename
+    /// xSavepoint
+    /// xRelease
+    /// xRollbackTo
+    /// xShadowName
+    /// xIntegrity
     let p: *mut () = p_global as *mut ();
     return unsafe {
             sqlite3_create_module_v2(db,

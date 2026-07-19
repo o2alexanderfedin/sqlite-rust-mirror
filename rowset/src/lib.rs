@@ -1,19 +1,33 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, SQLiteThread, Schema, Select, SelectDest,
+    Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0,
+    SrcList, StrAccum, Subquery, Table, Token, Trigger, TriggerStep,
+    UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +407,9 @@ impl Parse {
     }
 }
 
+///* A RowSet in an instance of the following structure.
+///*
+///* A typedef of this structure if found in sqliteInt.h.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSet {
@@ -407,6 +424,10 @@ struct RowSet {
     i_batch: i32,
 }
 
+///* RowSetEntry objects are allocated in large chunks (instances of the
+///* following structure) to reduce memory allocation overhead.  The
+///* chunks are kept on a linked list so that they can be deallocated
+///* when the RowSet is destroyed.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSetChunk {
@@ -414,6 +435,12 @@ struct RowSetChunk {
     a_entry: [RowSetEntry; 42],
 }
 
+///* Each entry in a RowSet is an instance of the following object.
+///*
+///* This same object is reused to store a linked list of trees of RowSetEntry
+///* objects.  In that alternative use, pRight points to the next entry
+///* in the list, pLeft points to the tree, and v is unused.  The
+///* RowSet.pForest value points to the head of this forest list.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RowSetEntry {
@@ -422,6 +449,8 @@ struct RowSetEntry {
     p_left: *mut RowSetEntry,
 }
 
+///* Allocate a RowSet object.  Return NULL if a memory allocation
+///* error occurs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_init(db: *mut Sqlite3) -> *mut RowSet {
     let p: *mut RowSet =
@@ -457,6 +486,9 @@ pub extern "C" fn sqlite3_row_set_init(db: *mut Sqlite3) -> *mut RowSet {
     return p;
 }
 
+///* Deallocate all chunks from a RowSet.  This frees all memory that
+///* the RowSet has allocated over its lifetime.  This routine is
+///* the destructor for the RowSet.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_clear(p_arg: *mut ()) -> () {
     let p: *mut RowSet = p_arg as *mut RowSet;
@@ -484,6 +516,9 @@ pub extern "C" fn sqlite3_row_set_clear(p_arg: *mut ()) -> () {
     unsafe { (*p).rs_flags = 1 as u16 };
 }
 
+///* Deallocate all chunks from a RowSet.  This frees all memory that
+///* the RowSet has allocated over its lifetime.  This routine is
+///* the destructor for the RowSet.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_row_set_delete(p_arg: *mut ()) -> () {
     sqlite3_row_set_clear(p_arg);
@@ -492,9 +527,19 @@ pub extern "C" fn sqlite3_row_set_delete(p_arg: *mut ()) -> () {
     };
 }
 
+///* Allocate a new RowSetEntry object that is associated with the
+///* given RowSet.  Return a pointer to the new and completely uninitialized
+///* object.
+///*
+///* In an OOM situation, the RowSet.db->mallocFailed flag is set and this
+///* routine returns NULL.
+#[allow(unused_doc_comments)]
 extern "C" fn row_set_entry_alloc(p: &mut RowSet) -> *mut RowSetEntry {
     { let _ = 0; };
     if (*p).n_fresh as i32 == 0 {
+        ///OPTIMIZATION-IF-FALSE*/
+        ///    /* We could allocate a fresh RowSetEntry each time one is needed, but it
+        ///* is more efficient to pull a preallocated entry from the pool
         let mut p_new: *mut RowSetChunk = core::ptr::null_mut();
         p_new =
             unsafe {
@@ -520,10 +565,19 @@ extern "C" fn row_set_entry_alloc(p: &mut RowSet) -> *mut RowSetEntry {
         };
 }
 
+///* Insert a new value into a RowSet.
+///*
+///* The mallocFailed flag of the database connection is set if a
+///* memory allocation fails.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_row_set_insert(p: *mut RowSet, rowid: i64) -> () {
     let mut p_entry: *mut RowSetEntry = core::ptr::null_mut();
+    /// The new entry
     let mut p_last: *mut RowSetEntry = core::ptr::null_mut();
+
+    /// The last prior entry
+    /// This routine is never called after sqlite3RowSetNext()
     { let _ = 0; };
     p_entry = row_set_entry_alloc(unsafe { &mut *p });
     if p_entry == core::ptr::null_mut() { return; }
@@ -532,6 +586,10 @@ pub extern "C" fn sqlite3_row_set_insert(p: *mut RowSet, rowid: i64) -> () {
     p_last = unsafe { (*p).p_last };
     if !(p_last).is_null() {
         if rowid <= unsafe { (*p_last).v } {
+
+            ///OPTIMIZATION-IF-FALSE*/
+            ///      /* Avoid unnecessary sorts by preserving the ROWSET_SORTED flags
+            ///* where possible
             unsafe { (*p).rs_flags &= !1 as u16 };
         }
         unsafe { (*p_last).p_right = p_entry };
@@ -539,6 +597,10 @@ pub extern "C" fn sqlite3_row_set_insert(p: *mut RowSet, rowid: i64) -> () {
     unsafe { (*p).p_last = p_entry };
 }
 
+///* Merge two lists of RowSetEntry objects.  Remove duplicates.
+///*
+///* The input lists are connected via pRight pointers and are
+///* assumed to each already be in sorted order.
 extern "C" fn row_set_entry_merge(mut p_a_1: *mut RowSetEntry,
     mut p_b_1: *mut RowSetEntry) -> *mut RowSetEntry {
     let mut head: RowSetEntry = unsafe { core::mem::zeroed() };
@@ -582,6 +644,8 @@ extern "C" fn row_set_entry_merge(mut p_a_1: *mut RowSetEntry,
     return head.p_right;
 }
 
+///* Sort all elements on the list of RowSetEntry objects into order of
+///* increasing v.
 extern "C" fn row_set_entry_sort(mut p_in_1: *mut RowSetEntry)
     -> *mut RowSetEntry {
     let mut i: u32 = 0 as u32;
@@ -635,17 +699,44 @@ extern "C" fn row_set_entry_sort(mut p_in_1: *mut RowSetEntry)
     return p_in_1;
 }
 
+///* Convert a sorted list of elements (connected by pRight) into a binary
+///* tree with depth of iDepth.  A depth of 1 means the tree contains a single
+///* node taken from the head of *ppList.  A depth of 2 means a tree with
+///* three nodes.  And so forth.
+///*
+///* Use as many entries from the input list as required and update the
+///* *ppList to point to the unused elements of the list.  If the input
+///* list contains too few elements, then construct an incomplete tree
+///* and leave *ppList set to NULL.
+///*
+///* Return a pointer to the root of the constructed binary tree.
+#[allow(unused_doc_comments)]
 extern "C" fn row_set_n_deep_tree(pp_list_1: *mut *mut RowSetEntry,
     i_depth_1: i32) -> *mut RowSetEntry {
     let mut p: *mut RowSetEntry = core::ptr::null_mut();
+    /// Root of the new tree
     let mut p_left: *mut RowSetEntry = core::ptr::null_mut();
     if unsafe { *pp_list_1 } == core::ptr::null_mut() {
+
+        ///OPTIMIZATION-IF-TRUE*/
+        ///    /* Prevent unnecessary deep recursion when we run out of entries
         return core::ptr::null_mut();
     }
     if i_depth_1 > 1 {
-        p_left = row_set_n_deep_tree(pp_list_1, i_depth_1 - 1);
+
+        ///OPTIMIZATION-IF-TRUE*/
+        ///    /* This branch causes a *balanced* tree to be generated.  A valid tree
+        ///* is still generated without this branch, but the tree is wildly
+        ///* unbalanced and inefficient.
+        (p_left = row_set_n_deep_tree(pp_list_1, i_depth_1 - 1));
         p = unsafe { *pp_list_1 };
-        if p == core::ptr::null_mut() { return p_left; }
+        if p == core::ptr::null_mut() {
+
+            ///OPTIMIZATION-IF-FALSE*/
+            ///      /* It is safe to always return here, but the resulting tree
+            ///* would be unbalanced
+            return p_left;
+        }
         unsafe { (*p).p_left = p_left };
         unsafe { *pp_list_1 = unsafe { (*p).p_right } };
         unsafe {
@@ -665,11 +756,18 @@ extern "C" fn row_set_n_deep_tree(pp_list_1: *mut *mut RowSetEntry,
     return p;
 }
 
+///* Convert a sorted list of elements into a binary tree. Make the tree
+///* as deep as it needs to be in order to contain the entire list.
+#[allow(unused_doc_comments)]
 extern "C" fn row_set_list_to_tree(mut p_list_1: *mut RowSetEntry)
     -> *mut RowSetEntry {
     let mut i_depth: i32 = 0;
+    /// Depth of the tree so far
     let mut p: *mut RowSetEntry = core::ptr::null_mut();
+    /// Current tree root
     let mut p_left: *mut RowSetEntry = core::ptr::null_mut();
+
+    /// Left subtree
     { let _ = 0; };
     p = p_list_1;
     p_list_1 = unsafe { (*p).p_right };
@@ -700,6 +798,9 @@ extern "C" fn row_set_list_to_tree(mut p_list_1: *mut RowSetEntry)
     return p;
 }
 
+///* The input, pIn, is a binary tree (or subtree) of RowSetEntry objects.
+///* Convert this tree into a linked list connected by the pRight pointers
+///* and return pointers to the first and last elements of the new list.
 extern "C" fn row_set_tree_to_list(p_in_1: *mut RowSetEntry,
     pp_first_1: *mut *mut RowSetEntry, pp_last_1: *mut *mut RowSetEntry)
     -> () {
@@ -716,19 +817,33 @@ extern "C" fn row_set_tree_to_list(p_in_1: *mut RowSetEntry,
     { let _ = 0; };
 }
 
+///* Check to see if element iRowid was inserted into the rowset as
+///* part of any insert batch prior to iBatch.  Return 1 or 0.
+///*
+///* If this is the first test of a new batch and if there exist entries
+///* on pRowSet->pEntry, then sort those entries into the forest at
+///* pRowSet->pForest so that they can be tested.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_row_set_test(p_row_set_1: *mut RowSet,
     i_batch_1: i32, i_rowid_1: Sqlite3Int64) -> i32 {
     let mut p: *mut RowSetEntry = core::ptr::null_mut();
     let mut p_tree: *mut RowSetEntry = core::ptr::null_mut();
+
+    /// This routine is never called after sqlite3RowSetNext()
     { let _ = 0; };
     if i_batch_1 != unsafe { (*p_row_set_1).i_batch } {
-        p = unsafe { (*p_row_set_1).p_entry };
+
+        ///OPTIMIZATION-IF-FALSE
+        (p = unsafe { (*p_row_set_1).p_entry });
         if !(p).is_null() {
             let mut pp_prev_tree: *mut *mut RowSetEntry =
                 unsafe { &mut (*p_row_set_1).p_forest };
             if unsafe { (*p_row_set_1).rs_flags } as i32 & 1 == 0 {
-                p = row_set_entry_sort(p);
+
+                ///OPTIMIZATION-IF-FALSE*/
+                ///        /* Only sort the current set of entries if they need it
+                (p = row_set_entry_sort(p));
             }
             {
                 p_tree = unsafe { (*p_row_set_1).p_forest };
@@ -793,13 +908,27 @@ pub extern "C" fn sqlite3_row_set_test(p_row_set_1: *mut RowSet,
     return 0;
 }
 
+///* Extract the smallest element from the RowSet.
+///* Write the element into *pRowid.  Return 1 on success.  Return
+///* 0 if the RowSet is already empty.
+///*
+///* After this routine has been called, the sqlite3RowSetInsert()
+///* routine may not be called again.
+///*
+///* This routine may not be called after sqlite3RowSetTest() has
+///* been used.  Older versions of RowSet allowed that, but as the
+///* capability was not used by the code generator, it was removed
+///* for code economy.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_row_set_next(p: *mut RowSet, p_rowid_1: &mut i64)
     -> i32 {
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p).rs_flags } as i32 & 2 == 0 {
         if unsafe { (*p).rs_flags } as i32 & 1 == 0 {
+
+            ///OPTIMIZATION-IF-FALSE
             unsafe {
                 (*p).p_entry = row_set_entry_sort(unsafe { (*p).p_entry })
             };
@@ -812,6 +941,9 @@ pub extern "C" fn sqlite3_row_set_next(p: *mut RowSet, p_rowid_1: &mut i64)
             (*p).p_entry = unsafe { (*unsafe { (*p).p_entry }).p_right }
         };
         if unsafe { (*p).p_entry } == core::ptr::null_mut() {
+
+            ///OPTIMIZATION-IF-TRUE*/
+            ///      /* Free memory immediately, rather than waiting on sqlite3_finalize()
             sqlite3_row_set_clear(p as *mut ());
         }
         return 1;

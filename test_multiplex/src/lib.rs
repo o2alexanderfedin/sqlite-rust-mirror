@@ -1,12 +1,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+///********************** Global Variables **********************************/
+////*
+///* All global variables used by this file are containing within the following
+///* gMultiplex structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -19,6 +29,10 @@ struct AnonS0 {
 
 static mut g_multiplex: AnonS0 = unsafe { core::mem::zeroed() };
 
+///* An instance of the following object represents each open connection
+///* to a file that is multiplex'ed.  This object is a
+///* subclass of sqlite3_file.  The sqlite3_file object for the underlying
+///* VFS is appended to this structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MultiplexConn {
@@ -26,6 +40,12 @@ struct MultiplexConn {
     p_group: *mut MultiplexGroup,
 }
 
+///* A "multiplex group" is a collection of files that collectively
+///* makeup a single SQLite DB file.  This allows the size of the DB
+///* to exceed the limits imposed by the file system.
+///*
+///* There is an instance of the following object for each defined multiplex
+///* group.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MultiplexGroup {
@@ -46,6 +66,14 @@ struct MultiplexReal {
     z: *mut i8,
 }
 
+///********************** Utility Routines *********************************/
+////*
+///* Compute a string length that is limited to what can be stored in
+///* lower 30 bits of a 32-bit signed integer.
+///*
+///* The value returned will never be negative.  Nor will it ever be greater
+///* than the actual length of the string.  For very long strings (greater
+///* than 1GiB) the value returned might be less than the true string length.
 extern "C" fn multiplex_strlen30(z: *const i8) -> i32 {
     let mut z2: *const i8 = z;
     if z == core::ptr::null() { return 0; }
@@ -60,6 +88,29 @@ extern "C" fn multiplex_strlen30(z: *const i8) -> i32 {
     return 1073741823 & unsafe { z2.offset_from(z) } as i64 as i32;
 }
 
+///* Generate the file-name for chunk iChunk of the group with base name
+///* zBase. The file-name is written to buffer zOut before returning. Buffer
+///* zOut must be allocated by the caller so that it is at least (nBase+5)
+///* bytes in size, where nBase is the length of zBase, not including the
+///* nul-terminator.
+///*
+///* If iChunk is 0 (or 400 - the number for the first journal file chunk),
+///* the output is a copy of the input string. Otherwise, if
+///* SQLITE_ENABLE_8_3_NAMES is not defined or the input buffer does not contain
+///* a "." character, then the output is a copy of the input string with the
+///* three-digit zero-padded decimal representation if iChunk appended to it.
+///* For example:
+///*
+///*   zBase="test.db", iChunk=4  ->  zOut="test.db004"
+///*
+///* Or, if SQLITE_ENABLE_8_3_NAMES is defined and the input buffer contains
+///* a "." character, then everything after the "." is replaced by the
+///* three-digit representation of iChunk.
+///*
+///*   zBase="test.db", iChunk=4  ->  zOut="test.004"
+///*
+///* The output buffer string is terminated by 2 0x00 bytes. This makes it safe
+///* to pass to sqlite3_uri_parameter() and similar.
 extern "C" fn multiplex_filename(z_base_1: *const i8, n_base_1: i32,
     flags: i32, i_chunk_1: i32, z_out_1: *mut i8) -> () {
     let mut n: i32 = n_base_1;
@@ -84,6 +135,7 @@ extern "C" fn multiplex_filename(z_base_1: *const i8, n_base_1: i32,
     unsafe { *z_out_1.offset((n + 1) as isize) = '\u{0}' as i32 as i8 };
 }
 
+/// Compute the filename for the iChunk-th chunk
 extern "C" fn multiplex_sub_filename(p_group_1: &mut MultiplexGroup,
     i_chunk_1: i32) -> i32 {
     if i_chunk_1 >= (*p_group_1).n_real {
@@ -131,13 +183,22 @@ extern "C" fn multiplex_sub_filename(p_group_1: &mut MultiplexGroup,
     return 0;
 }
 
+/// Translate an sqlite3_file* that is really a multiplexGroup* into
+///* the sqlite3_file* for the underlying original VFS.
+///*
+///* For chunk 0, the pGroup->flags determines whether or not a new file
+///* is created if it does not already exist.  For chunks 1 and higher, the
+///* file is created only if createFlag is 1.
+#[allow(unused_doc_comments)]
 extern "C" fn multiplex_sub_open(p_group_1: *mut MultiplexGroup,
     i_chunk_1: i32, rc: &mut i32, p_out_flags_1: *mut i32, create_flag_1: i32)
     -> *mut Sqlite3File {
     unsafe {
         let mut p_sub_open: *mut Sqlite3File = core::ptr::null_mut();
         let p_orig_vfs: *mut Sqlite3Vfs = g_multiplex.p_orig_vfs;
-        *rc = multiplex_sub_filename(unsafe { &mut *p_group_1 }, i_chunk_1);
+
+        /// Real VFS
+        (*rc = multiplex_sub_filename(unsafe { &mut *p_group_1 }, i_chunk_1));
         if *rc == 0 &&
                 {
                         p_sub_open =
@@ -237,6 +298,9 @@ extern "C" fn multiplex_sub_open(p_group_1: *mut MultiplexGroup,
     }
 }
 
+///* Return the size, in bytes, of chunk number iChunk.  If that chunk
+///* does not exist, then return 0.  This function does not distinguish between
+///* non-existent files and zero-length files.
 extern "C" fn multiplex_sub_size(p_group_1: *mut MultiplexGroup,
     i_chunk_1: i32, rc: *mut i32) -> Sqlite3Int64 {
     let mut p_sub: *mut Sqlite3File = core::ptr::null_mut();
@@ -257,6 +321,7 @@ extern "C" fn multiplex_sub_size(p_group_1: *mut MultiplexGroup,
     return sz;
 }
 
+///* Close a single sub-file in the connection group.
 extern "C" fn multiplex_sub_close(p_group_1: &MultiplexGroup, i_chunk_1: i32,
     p_orig_vfs_1: *mut Sqlite3Vfs) -> () {
     let p_sub_open: *mut Sqlite3File =
@@ -298,6 +363,7 @@ extern "C" fn multiplex_sub_close(p_group_1: &MultiplexGroup, i_chunk_1: i32,
     };
 }
 
+///* Deallocate memory held by a multiplexGroup
 extern "C" fn multiplex_free_components(p_group_1: *mut MultiplexGroup)
     -> () {
     let mut i: i32 = 0;
@@ -318,14 +384,25 @@ extern "C" fn multiplex_free_components(p_group_1: *mut MultiplexGroup)
     unsafe { (*p_group_1).n_real = 0 };
 }
 
+///* This is the xOpen method used for the "multiplex" VFS.
+///*
+///* Most of the work is done by the underlying original VFS.  This method
+///* simply links the new file into the appropriate multiplex group if it is a
+///* file that needs to be tracked.
+#[allow(unused_doc_comments)]
 extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     p_conn_1: *mut Sqlite3File, flags: i32, p_out_flags_1: *mut i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Result code
         let mut p_multiplex_open: *mut MultiplexConn = core::ptr::null_mut();
+        /// The new multiplex file descriptor
         let mut p_group: *mut MultiplexGroup = core::ptr::null_mut();
+        /// Corresponding multiplexGroup object
         let mut p_sub_open: *mut Sqlite3File = core::ptr::null_mut();
+        /// Real file descriptor
         let p_orig_vfs: *mut Sqlite3Vfs = g_multiplex.p_orig_vfs;
+        /// Real VFS
         let mut n_name: i32 = 0;
         let mut sz: i32 = 0;
         let z_to_free: *mut i8 = core::ptr::null_mut();
@@ -342,23 +419,32 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                             *mut i8 as *const i8)
             }
         } else { { let _ = 0; } };
-        p_multiplex_open = p_conn_1 as *mut MultiplexConn;
+
+        /// We need to create a group structure and manage
+        ///* access to this group of files.
+        (p_multiplex_open = p_conn_1 as *mut MultiplexConn);
         if rc == 0 {
-            n_name =
+
+            /// allocate space for group
+            (n_name =
                 if !(z_name_1).is_null() {
                     multiplex_strlen30(z_name_1)
-                } else { 0 };
+                } else { 0 });
             sz =
                 (core::mem::size_of::<MultiplexGroup>() as u64 + n_name as u64
                         + 1 as u64) as i32;
-            p_group =
+
+            /// zName
+            (p_group =
                 unsafe { sqlite3_malloc64(sz as Sqlite3Uint64) } as
-                    *mut MultiplexGroup;
+                    *mut MultiplexGroup);
             if p_group == core::ptr::null_mut() { rc = 7; }
         }
         if rc == 0 {
             let z_uri: *const i8 =
                 if flags & 64 != 0 { z_name_1 } else { core::ptr::null() };
+
+            /// assign pointers to extra space allocated
             unsafe { memset(p_group as *mut (), 0, sz as u64) };
             unsafe { (*p_multiplex_open).p_group = p_group };
             unsafe { (*p_group).b_enabled = -1i32 as u8 };
@@ -421,6 +507,9 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                         unsafe { (*p_group).b_enabled = 0 as u8 };
                     } else if sz64 == 0 as i64 {
                         if flags & 2048 != 0 {
+                            /// If opening a main journal file and the first chunk is zero
+                            ///* bytes in size, delete any subsequent chunks from the
+                            ///* file-system.
                             let mut i_chunk: i32 = 1;
                             '__b3: loop {
                                 '__c3: loop {
@@ -455,7 +544,16 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                             }
                         }
                     } else {
-                        rc =
+
+                        /// If the first overflow file exists and if the size of the main file
+                        ///* is different from the chunk size, that means the chunk size is set
+                        ///* set incorrectly.  So fix it.
+                        ///*
+                        ///* Or, if the first overflow file does not exist and the main file is
+                        ///* larger than the chunk size, that means the chunk size is too small.
+                        ///* But we have no way of determining the intended chunk size, so
+                        ///* just disable the multiplexor all together.
+                        (rc =
                             unsafe {
                                 (unsafe {
                                         (*p_orig_vfs).x_access.unwrap()
@@ -463,7 +561,7 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
                                     unsafe {
                                             (*unsafe { (*p_group).a_real.offset(1 as isize) }).z
                                         } as *const i8, 0, &mut b_exists)
-                            };
+                            });
                         b_exists =
                             (multiplex_sub_size(p_group, 1, &mut rc) > 0 as i64) as i32;
                         if rc == 0 && b_exists != 0 &&
@@ -503,18 +601,25 @@ extern "C" fn multiplex_open(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     }
 }
 
+///* This is the xDelete method used for the "multiplex" VFS.
+///* It attempts to delete the filename specified.
+#[allow(unused_doc_comments)]
 extern "C" fn multiplex_delete(p_vfs_1: *mut Sqlite3Vfs, z_name_1: *const i8,
     sync_dir_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let p_orig_vfs: *mut Sqlite3Vfs = g_multiplex.p_orig_vfs;
-        rc =
+
+        /// Real VFS
+        (rc =
             unsafe {
                 (unsafe {
                         (*p_orig_vfs).x_delete.unwrap()
                     })(p_orig_vfs, z_name_1, sync_dir_1)
-            };
+            });
         if rc == 0 {
+            /// If the main chunk was deleted successfully, also delete any subsequent
+            ///* chunks - starting with the last (highest numbered).
             let n_name: i32 = unsafe { strlen(z_name_1) } as i32;
             let mut z: *mut i8 = core::ptr::null_mut();
             z =
@@ -702,6 +807,10 @@ extern "C" fn multiplex_current_time_int64(a: *mut Sqlite3Vfs,
     }
 }
 
+/// xClose requests get passed through to the original VFS.
+///* We loop over all open chunk handles and close them.
+///* The group structure for this file is unlinked from
+///* our list of groups and freed.
 extern "C" fn multiplex_close(p_conn_1: *mut Sqlite3File) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -712,6 +821,9 @@ extern "C" fn multiplex_close(p_conn_1: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+/// Pass xRead requests thru to the original VFS after
+///* determining the correct chunk to operate on.
+///* Break up reads across chunk boundaries.
 extern "C" fn multiplex_read(p_conn_1: *mut Sqlite3File, mut p_buf_1: *mut (),
     mut i_amt_1: i32, mut i_ofst_1: Sqlite3Int64) -> i32 {
     let p: *const MultiplexConn =
@@ -767,6 +879,9 @@ extern "C" fn multiplex_read(p_conn_1: *mut Sqlite3File, mut p_buf_1: *mut (),
     return rc;
 }
 
+/// Pass xWrite requests thru to the original VFS after
+///* determining the correct chunk to operate on.
+///* Break up writes across chunk boundaries.
 extern "C" fn multiplex_write(p_conn_1: *mut Sqlite3File,
     mut p_buf_1: *const (), mut i_amt_1: i32, mut i_ofst_1: Sqlite3Int64)
     -> i32 {
@@ -821,6 +936,9 @@ extern "C" fn multiplex_write(p_conn_1: *mut Sqlite3File,
     return rc;
 }
 
+/// Pass xTruncate requests thru to the original VFS after
+///* determining the correct chunk to operate on.  Delete any
+///* chunks above the truncate mark.
 extern "C" fn multiplex_truncate(p_conn_1: *mut Sqlite3File,
     size: Sqlite3Int64) -> i32 {
     unsafe {
@@ -894,6 +1012,7 @@ extern "C" fn multiplex_truncate(p_conn_1: *mut Sqlite3File,
     }
 }
 
+/// Pass xSync requests through to the original VFS without change
 extern "C" fn multiplex_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -927,6 +1046,8 @@ extern "C" fn multiplex_sync(p_conn_1: *mut Sqlite3File, flags: i32) -> i32 {
     return rc;
 }
 
+/// Pass xFileSize requests through to the original VFS.
+///* Aggregate the size of all the chunks before returning.
 extern "C" fn multiplex_file_size(p_conn_1: *mut Sqlite3File,
     p_size_1: *mut Sqlite3Int64) -> i32 {
     let p: *const MultiplexConn =
@@ -972,6 +1093,7 @@ extern "C" fn multiplex_file_size(p_conn_1: *mut Sqlite3File,
     return rc;
 }
 
+/// Pass xLock requests through to the original VFS unchanged.
 extern "C" fn multiplex_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -989,6 +1111,7 @@ extern "C" fn multiplex_lock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     return 5;
 }
 
+/// Pass xUnlock requests through to the original VFS unchanged.
 extern "C" fn multiplex_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -1006,6 +1129,7 @@ extern "C" fn multiplex_unlock(p_conn_1: *mut Sqlite3File, lock: i32) -> i32 {
     return 10 | 8 << 8;
 }
 
+/// Pass xCheckReservedLock requests through to the original VFS unchanged.
 extern "C" fn multiplex_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     let p: *const MultiplexConn =
@@ -1026,6 +1150,9 @@ extern "C" fn multiplex_check_reserved_lock(p_conn_1: *mut Sqlite3File,
     return 10 | 14 << 8;
 }
 
+/// Pass xFileControl requests through to the original VFS unchanged,
+///* except for any MULTIPLEX_CTRL_* requests here.
+#[allow(unused_doc_comments)]
 extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     unsafe {
@@ -1051,7 +1178,9 @@ extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
                         if sz_chunk < 1 as u32 {
                             rc = 21;
                         } else {
-                            sz_chunk = sz_chunk + (65536 - 1) as u32;
+
+                            /// Round up to nearest multiple of MAX_PAGE_SIZE.
+                            (sz_chunk = sz_chunk + (65536 - 1) as u32);
                             sz_chunk &= !(65536 - 1) as u32;
                             unsafe { (*p_group).sz_chunk = sz_chunk };
                             rc = 0;
@@ -1101,6 +1230,12 @@ extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
                                         unsafe { (*p_group).b_truncate = 0 as u8 };
                                     }
                                 }
+
+                                /// EVIDENCE-OF: R-27806-26076 The handler for an SQLITE_FCNTL_PRAGMA
+                                ///* file control can optionally make the first element of the char**
+                                ///* argument point to a string obtained from sqlite3_mprintf() or the
+                                ///* equivalent and that string will become the result of the pragma
+                                ///* or the error message if the pragma fails.
                                 unsafe {
                                     *a_fcntl.offset(0 as isize) =
                                         unsafe {
@@ -1228,6 +1363,7 @@ extern "C" fn multiplex_file_control(p_conn_1: *mut Sqlite3File, op: i32,
     }
 }
 
+/// Pass xSectorSize requests through to the original VFS unchanged.
 extern "C" fn multiplex_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -1248,6 +1384,7 @@ extern "C" fn multiplex_sector_size(p_conn_1: *mut Sqlite3File) -> i32 {
     return 4096;
 }
 
+/// Pass xDeviceCharacteristics requests through to the original VFS unchanged.
 extern "C" fn multiplex_device_characteristics(p_conn_1: *mut Sqlite3File)
     -> i32 {
     let p: *const MultiplexConn =
@@ -1268,6 +1405,7 @@ extern "C" fn multiplex_device_characteristics(p_conn_1: *mut Sqlite3File)
     return 0;
 }
 
+/// Pass xShmMap requests through to the original VFS unchanged.
 extern "C" fn multiplex_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     let p: *const MultiplexConn =
@@ -1286,6 +1424,7 @@ extern "C" fn multiplex_shm_map(p_conn_1: *mut Sqlite3File, i_region_1: i32,
     return 10;
 }
 
+/// Pass xShmLock requests through to the original VFS unchanged.
 extern "C" fn multiplex_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32,
     n: i32, flags: i32) -> i32 {
     let p: *const MultiplexConn =
@@ -1304,6 +1443,7 @@ extern "C" fn multiplex_shm_lock(p_conn_1: *mut Sqlite3File, ofst: i32,
     return 5;
 }
 
+/// Pass xShmBarrier requests through to the original VFS unchanged.
 extern "C" fn multiplex_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     let p: *const MultiplexConn =
         p_conn_1 as *mut MultiplexConn as *const MultiplexConn;
@@ -1320,6 +1460,7 @@ extern "C" fn multiplex_shm_barrier(p_conn_1: *mut Sqlite3File) -> () {
     }
 }
 
+/// Pass xShmUnmap requests through to the original VFS unchanged.
 extern "C" fn multiplex_shm_unmap(p_conn_1: *mut Sqlite3File,
     delete_flag_1: i32) -> i32 {
     let p: *const MultiplexConn =
@@ -1338,6 +1479,8 @@ extern "C" fn multiplex_shm_unmap(p_conn_1: *mut Sqlite3File,
     return 0;
 }
 
+///* This is the implementation of the multiplex_control() SQL function.
+#[allow(unused_doc_comments)]
 extern "C" fn multiplex_control_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut rc: i32 = 0;
@@ -1347,8 +1490,12 @@ extern "C" fn multiplex_control_func(context: *mut Sqlite3Context, argc: i32,
     if (db).is_null() as i32 != 0 || argc != 2 {
         rc = 1;
     } else {
-        op =
-            unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) };
+
+        /// extract params
+        (op =
+            unsafe {
+                sqlite3_value_int(unsafe { *argv.offset(0 as isize) })
+            });
         i_val =
             unsafe { sqlite3_value_int(unsafe { *argv.offset(1 as isize) }) };
         '__s15:
@@ -1371,6 +1518,8 @@ extern "C" fn multiplex_control_func(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_error_code(context, rc) };
 }
 
+///* This is the entry point to register the auto-extension for the
+///* multiplex_control() function.
 extern "C" fn multiplex_func_init(db: *mut Sqlite3,
     pz_err_msg_1: *mut *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
@@ -1384,6 +1533,33 @@ extern "C" fn multiplex_func_init(db: *mut Sqlite3,
     return rc;
 }
 
+///* CAPI: Initialize the multiplex VFS shim - sqlite3_multiplex_initialize()
+///*
+///* Use the VFS named zOrigVfsName as the VFS that does the actual work. 
+///* Use the default if zOrigVfsName==NULL. 
+///*
+///* The multiplex VFS shim is named "multiplex".  It will become the default
+///* VFS if makeDefault is non-zero.
+///*
+///* An auto-extension is registered which will make the function
+///* multiplex_control() available to database connections.  This
+///* function gives access to the xFileControl interface of the
+///* multiplex VFS shim.
+///*
+///* SELECT multiplex_control(<op>,<val>);
+///*
+///*   <op>=1 MULTIPLEX_CTRL_ENABLE
+///*   <val>=0 disable
+///*   <val>=1 enable
+///*
+///*   <op>=2 MULTIPLEX_CTRL_SET_CHUNK_SIZE
+///*   <val> int, chunk size
+///*
+///*   <op>=3 MULTIPLEX_CTRL_SET_MAX_CHUNKS
+///*   <val> int, max chunks
+///*
+///* THIS ROUTINE IS NOT THREADSAFE.  Call this routine exactly once
+///* during start-up.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multiplex_initialize(z_orig_vfs_name: *const i8,
     make_default: i32) -> i32 {
@@ -1463,6 +1639,13 @@ pub extern "C" fn sqlite3_multiplex_initialize(z_orig_vfs_name: *const i8,
     }
 }
 
+///* CAPI: Shutdown the multiplex system - sqlite3_multiplex_shutdown()
+///*
+///* All SQLite database connections must be closed before calling this
+///* routine.
+///*
+///* THIS ROUTINE IS NOT THREADSAFE.  Call this routine exactly once while
+///* shutting down in order to free all remaining multiplex groups.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multiplex_shutdown(e_force: i32) -> i32 {
     unsafe {

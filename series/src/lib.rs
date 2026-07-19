@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -22,6 +28,9 @@ struct SeriesCursor {
     b_done: u8,
 }
 
+///* Computed the difference between two 64-bit signed integers using a
+///* convoluted computation designed to work around the silly restriction
+///* against signed integer overflow in C.
 extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
     -> Sqlite3Uint64 {
     if !(a >= b) as i32 as i64 != 0 {
@@ -35,6 +44,8 @@ extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
             unsafe { *(&raw mut b as *mut Sqlite3Uint64) };
 }
 
+///* Add or substract an unsigned 64-bit integer from a signed 64-bit integer
+///* and return the new signed 64-bit integer.
 extern "C" fn add64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     let mut x: Sqlite3Uint64 =
         unsafe { core::ptr::read(&raw mut a as *mut Sqlite3Uint64) };
@@ -49,21 +60,43 @@ extern "C" fn sub64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     return unsafe { *(&raw mut x as *mut Sqlite3Int64) };
 }
 
+///* The seriesConnect() method is invoked to create a new
+///* series_vtab that describes the generate_series virtual table.
+///*
+///* Think of this routine as the constructor for series_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the series_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against generate_series will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     argc_unused_1: i32, argv_unused_1: *const *const i8,
     pp_vtab_1: *mut *mut Sqlite3Vtab, pz_err_unused_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut Sqlite3Vtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
+
+    /// Column numbers
     { let _ = p_unused_1; };
+
+    /// Column numbers
     { let _ = argc_unused_1; };
+
+    /// Column numbers
     { let _ = argv_unused_1; };
+
+    /// Column numbers
     { let _ = pz_err_unused_1; };
-    rc =
+
+    /// Column numbers
+    (rc =
         unsafe {
             sqlite3_declare_vtab(db,
                 c"CREATE TABLE x(value,start hidden,stop hidden,step hidden)".as_ptr()
                         as *mut i8 as *const i8)
-        };
+        });
     if rc == 0 {
         p_new =
             {
@@ -86,11 +119,13 @@ extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     return rc;
 }
 
+///* This method is the destructor for series_cursor objects.
 extern "C" fn series_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new series_cursor object.
 extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
@@ -109,11 +144,13 @@ extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a series_cursor.
 extern "C" fn series_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a series_cursor to its next row of output.
 extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut SeriesCursor = cur as *mut SeriesCursor;
     if unsafe { (*p_cur).i_value } == unsafe { (*p_cur).i_term } {
@@ -150,6 +187,8 @@ extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
 extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -168,6 +207,7 @@ extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* The rowid is the same as the value.
 extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -176,12 +216,16 @@ extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SeriesCursor =
         cur as *mut SeriesCursor as *const SeriesCursor;
     return unsafe { (*p_cur).b_done } as i32;
 }
 
+///* Return the number of steps between pCur->iBase and pCur->iTerm if
+///* the step width is pCur->iStep.
 extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
     if (*p_cur_1).b_desc != 0 {
         if !((*p_cur_1).i_base >= (*p_cur_1).i_term) as i32 as i64 != 0 {
@@ -208,10 +252,15 @@ extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
     }
 }
 
+///* Case 1 (the most common case):
+///* The standard math library is available so use ceil() and floor() from there.
 extern "C" fn series_ceil(r: f64) -> f64 { return unsafe { ceil(r) }; }
 
 extern "C" fn series_floor(r: f64) -> f64 { return unsafe { floor(r) }; }
 
+/// Convert a floating point value to its closest integer.  Do so in
+///* a way that avoids 'outside the range of representable values' warnings
+///* from UBSAN.
 extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     if r < -9.223372036854775e18 {
         return 9223372036854775808u64 as Sqlite3Int64;
@@ -222,21 +271,74 @@ extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     return r as Sqlite3Int64;
 }
 
+///* This method is called to "rewind" the series_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to seriesColumn() or seriesRowid() or
+///* seriesEof().
+///*
+///* The query plan selected by seriesBestIndex is passed in the idxNum
+///* parameter.  (idxStr is not used in this implementation.)  idxNum
+///* is a bitmask showing which constraints are available:
+///*
+///*   0x0001:    start=VALUE
+///*   0x0002:    stop=VALUE
+///*   0x0004:    step=VALUE
+///*   0x0008:    descending order
+///*   0x0010:    ascending order
+///*   0x0020:    LIMIT  VALUE
+///*   0x0040:    OFFSET  VALUE
+///*   0x0080:    value=VALUE
+///*   0x0100:    value>=VALUE
+///*   0x0200:    value>VALUE
+///*   0x1000:    value<=VALUE
+///*   0x2000:    value<VALUE
+///*
+///* This routine should initialize the cursor and position it so that it
+///* is pointing at the first row, or pointing off the end of the table
+///* (so that seriesEof() will return true) if the table is empty.
+#[allow(unused_doc_comments)]
 extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_unused_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
     let mut i_arg: i32 = 0;
+    /// Arguments used so far
     let mut i: i32 = 0;
+    /// Loop counter
     let mut i_min: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Smallest allowed output value
     let mut i_max: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Largest allowed output value
     let mut i_limit: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// if >0, the value of the LIMIT
     let mut i_offset: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// if >0, the value of the OFFSET
+    /// If any constraints have a NULL value, then return no rows.
+    ///* See ticket https://sqlite.org/src/info/fac496b61722daf2
+    /// Capture the three HIDDEN parameters to the virtual table and insert
+    ///* default values for any parameters that are omitted.
+    /// If there are constraints on the value column but there are
+    ///* no constraints on  the start, stop, and step columns, then
+    ///* initialize the default range to be the entire range of 64-bit signed
+    ///* integers.  This range will contracted by the value column constraints
+    ///* further below.
+    /// Extract the LIMIT and OFFSET values, but do not apply them yet.
+    ///* The range must first be constrained by the limits on value.
+    /// Narrow the range of iMin and iMax (the minimum and maximum outputs)
+    ///* based on equality and inequality constraints on the "value" column.
+    /// value=X
     let mut r: f64 = 0.0;
+    /// value>X (0x200) or value>=X (0x100)
     let mut r__1: f64 = 0.0;
+    /// value<X (0x2000) or value<=X (0x1000)
     let mut r__2: f64 = 0.0;
+    /// Try to reduce the range of values to be generated based on
+    ///* constraints on the "value" column.
     let mut span: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut span__1: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+    /// Adjust iTerm so that it is exactly the last value of the series.
+    /// Transform the series generator to output values in the requested
+    ///* order.
     let mut tmp: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut __state: i32 = 0;
     loop {
@@ -991,19 +1093,99 @@ extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
             }
         }
     }
+
+    /// Arguments used so far
+    /// Loop counter
+    /// Smallest allowed output value
+    /// Largest allowed output value
+    /// if >0, the value of the LIMIT
+    /// if >0, the value of the OFFSET
+    /// If any constraints have a NULL value, then return no rows.
+    ///* See ticket https://sqlite.org/src/info/fac496b61722daf2
+    /// Capture the three HIDDEN parameters to the virtual table and insert
+    ///* default values for any parameters that are omitted.
+    /// If there are constraints on the value column but there are
+    ///* no constraints on  the start, stop, and step columns, then
+    ///* initialize the default range to be the entire range of 64-bit signed
+    ///* integers.  This range will contracted by the value column constraints
+    ///* further below.
+    /// Extract the LIMIT and OFFSET values, but do not apply them yet.
+    ///* The range must first be constrained by the limits on value.
+    /// Narrow the range of iMin and iMax (the minimum and maximum outputs)
+    ///* based on equality and inequality constraints on the "value" column.
+    /// value=X
+    /// value>X (0x200) or value>=X (0x100)
+    /// value<X (0x2000) or value<=X (0x1000)
+    /// Try to reduce the range of values to be generated based on
+    ///* constraints on the "value" column.
+    /// Adjust iTerm so that it is exactly the last value of the series.
+    /// Transform the series generator to output values in the requested
+    ///* order.
+    /// Apply LIMIT and OFFSET constraints, if any
     unreachable!();
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the generate_series virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* In this implementation idxNum is used to represent the
+///* query plan.  idxStr is unused.
+///*
+///* The query plan is represented by bits in idxNum:
+///*
+///*   0x0001  start = $num
+///*   0x0002  stop = $num
+///*   0x0004  step = $num
+///*   0x0008  output is in descending order
+///*   0x0010  output is in ascending order
+///*   0x0020  LIMIT $num
+///*   0x0040  OFFSET $num
+///*   0x0080  value = $num
+///*   0x0100  value >= $num
+///*   0x0200  value > $num
+///*   0x1000  value <= $num
+///*   0x2000  value < $num
+///*
+///* Only one of 0x0100 or 0x0200 will be returned.  Similarly, only
+///* one of 0x1000 or 0x2000 will be returned.  If the 0x0080 is set, then
+///* none of the 0xff00 bits will be set.
+///*
+///* The order of parameters passed to xFilter is as follows:
+///*
+///*    * The argument to start= if bit 0x0001 is in the idxNum mask
+///*    * The argument to stop= if bit 0x0002 is in the idxNum mask
+///*    * The argument to step= if bit 0x0004 is in the idxNum mask
+///*    * The argument to LIMIT if bit 0x0020 is in the idxNum mask
+///*    * The argument to OFFSET if bit 0x0040 is in the idxNum mask
+///*    * The argument to value=, or value>= or value> if any of
+///*      bits 0x0380 are in the idxNum mask
+///*    * The argument to value<= or value< if either of bits 0x3000
+///*      are in the mask
+///*
+#[allow(unused_doc_comments)]
 extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    /// Loop over constraints
     let mut idx_num: i32 = 0;
+    /// The query plan bitmask
     let mut b_start_seen: i32 = 0;
+    /// EQ constraint seen on the START column
     let mut unusable_mask: i32 = 0;
+    /// Mask of unusable constraints
     let mut n_arg: i32 = 0;
+    /// Number of arguments that seriesFilter() expects
     let mut a_idx: [i32; 7] = [0; 7];
+    /// Constraints on start, stop, step, LIMIT, OFFSET,
+    ///* and value.  aIdx[5] covers value=, value>=, and
+    ///* value>,  aIdx[6] covers value<= and value<
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
+
+    /// This implementation assumes that the start, stop, and step columns
+    ///* are the last three columns in the virtual table.
     if !(2 == 1 + 1) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"seriesBestIndex".as_ptr() as *const i8,
@@ -1051,7 +1233,9 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             if !(i < unsafe { (*p_idx_info_1).n_constraint }) { break '__b3; }
             '__c3: loop {
                 let mut i_col: i32 = 0;
+                /// 0 for start, 1 for stop, 2 for step
                 let mut i_mask: i32 = 0;
+                /// bitmask for those column
                 let op: i32 = unsafe { (*p_constraint).op } as i32;
                 if op >= 73 && op <= 74 {
                     if unsafe { (*p_constraint).usable } as i32 == 0
@@ -1276,7 +1460,12 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             };
         }
     }
-    if a_idx[3 as usize] == 0 { idx_num &= !96; a_idx[4 as usize] = 0; }
+    if a_idx[3 as usize] == 0 {
+
+        /// Ignore OFFSET if LIMIT is omitted
+        (idx_num &= !96);
+        a_idx[4 as usize] = 0;
+    }
     {
         i = 0;
         '__b5: loop {
@@ -1310,12 +1499,24 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
         };
         return 1;
     }
-    if unusable_mask & !idx_num != 0 { return 19; }
+    if unusable_mask & !idx_num != 0 {
+
+        /// The start, stop, and step columns are inputs.  Therefore if there
+        ///* are unusable constraints on any of start, stop, or step then
+        ///* this plan is unusable
+        return 19;
+    }
     if idx_num & 3 == 3 {
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe {
             (*p_idx_info_1).estimated_cost =
                 (2 - (idx_num & 4 != 0) as i32) as f64
         };
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe { (*p_idx_info_1).estimated_rows = 1000 as Sqlite3Int64 };
         if unsafe { (*p_idx_info_1).n_order_by } >= 1 &&
                 unsafe {
@@ -1333,8 +1534,14 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             unsafe { (*p_idx_info_1).order_by_consumed = 1 };
         }
     } else if idx_num & 33 == 33 {
+
+        /// We have start= and LIMIT
         unsafe { (*p_idx_info_1).estimated_rows = 2500 as Sqlite3Int64 };
     } else {
+
+        /// If either boundary is missing, we have to generate a huge span
+        ///* of numbers.  Make this case very expensive so that the query
+        ///* planner will work hard to avoid it.
         unsafe {
             (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64
         };
@@ -1344,6 +1551,8 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* generate_series virtual table.
 static mut series_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

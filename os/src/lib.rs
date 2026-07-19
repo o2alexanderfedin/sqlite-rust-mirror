@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,8 +408,36 @@ impl Parse {
     }
 }
 
+///* The list of all registered VFS implementations.
 static mut vfs_list: *mut Sqlite3Vfs = core::ptr::null_mut();
 
+///* CAPI3REF: Virtual File System Objects
+///*
+///* A virtual filesystem (VFS) is an [sqlite3_vfs] object
+///* that SQLite uses to interact
+///* with the underlying operating system.  Most SQLite builds come with a
+///* single default VFS that is appropriate for the host computer.
+///* New VFSes can be registered and existing VFSes can be unregistered.
+///* The following interfaces are provided.
+///*
+///* ^The sqlite3_vfs_find() interface returns a pointer to a VFS given its name.
+///* ^Names are case sensitive.
+///* ^Names are zero-terminated UTF-8 strings.
+///* ^If there is no match, a NULL pointer is returned.
+///* ^If zVfsName is NULL then the default VFS is returned.
+///*
+///* ^New VFSes are registered with sqlite3_vfs_register().
+///* ^Each new VFS becomes the default VFS if the makeDflt flag is set.
+///* ^The same VFS can be registered multiple times without injury.
+///* ^To make an existing VFS into the default VFS, register it again
+///* with the makeDflt flag set.  If two different VFSes with the
+///* same name are registered, the behavior is undefined.  If a
+///* VFS is registered with a name that is NULL or an empty string,
+///* then the behavior is undefined.
+///*
+///* ^Unregister a VFS with the sqlite3_vfs_unregister() interface.
+///* ^(If the default VFS is unregistered, another VFS is chosen as
+///* the default.  The choice for the new VFS is arbitrary.)^
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_find(z_vfs: *const i8) -> *mut Sqlite3Vfs {
     unsafe {
@@ -424,6 +467,7 @@ pub extern "C" fn sqlite3_vfs_find(z_vfs: *const i8) -> *mut Sqlite3Vfs {
     }
 }
 
+///* Unlink a VFS from the linked list
 extern "C" fn vfs_unlink(p_vfs_1: *mut Sqlite3Vfs) -> () {
     unsafe {
         { let _ = 0; };
@@ -443,6 +487,9 @@ extern "C" fn vfs_unlink(p_vfs_1: *mut Sqlite3Vfs) -> () {
     }
 }
 
+///* Register a VFS with the system.  It is harmless to register the same
+///* VFS multiple times.  The new VFS becomes the default if makeDflt is
+///* true.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_register(p_vfs: *mut Sqlite3Vfs, make_dflt: i32)
     -> i32 {
@@ -466,6 +513,7 @@ pub extern "C" fn sqlite3_vfs_register(p_vfs: *mut Sqlite3Vfs, make_dflt: i32)
     }
 }
 
+///* Unregister a VFS so that it is no longer accessible.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vfs_unregister(p_vfs: *mut Sqlite3Vfs) -> i32 {
     let mut mutex: *mut Sqlite3Mutex = core::ptr::null_mut();
@@ -478,6 +526,7 @@ pub extern "C" fn sqlite3_vfs_unregister(p_vfs: *mut Sqlite3Vfs) -> i32 {
     return 0;
 }
 
+///* Wrapper around OS specific sqlite3_os_init() function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3OsInit() -> i32 {
     let p: *mut () = unsafe { sqlite3_malloc(10) };
@@ -486,6 +535,8 @@ pub extern "C" fn sqlite3OsInit() -> i32 {
     return unsafe { sqlite3_os_init() };
 }
 
+/// 
+///* Functions for accessing sqlite3_file methods
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_close(p_id: *mut Sqlite3File) -> () {
     if !(unsafe { (*p_id).p_methods }).is_null() {
@@ -581,6 +632,12 @@ pub extern "C" fn sqlite3_os_check_reserved_lock(id: *mut Sqlite3File,
         };
 }
 
+///* Use sqlite3OsFileControl() when we are doing something that might fail
+///* and we need to know about the failures.  Use sqlite3OsFileControlHint()
+///* when simply tossing information over the wall to the VFS and we do not
+///* really care if the VFS receives and understands the information since it
+///* is only a hint and can be safely ignored.  The sqlite3OsFileControlHint()
+///* routine has no return value since the return value would be meaningless.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_file_control(id: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
@@ -666,6 +723,7 @@ pub extern "C" fn sqlite3_os_shm_unmap(id: *mut Sqlite3File, delete_flag: i32)
         };
 }
 
+/// The real implementation of xFetch and xUnfetch
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_fetch(id: *mut Sqlite3File, i_off: i64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
@@ -686,10 +744,18 @@ pub extern "C" fn sqlite3_os_unfetch(id: *mut Sqlite3File, i_off: i64,
         };
 }
 
+/// 
+///* Functions for accessing sqlite3_vfs methods
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_os_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_flags_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
+
+    /// 0x87f7f is a mask of SQLITE_OPEN_ flags that are valid to be passed
+    ///* down into the VFS layer.  Some SQLITE_OPEN_ flags (for example,
+    ///* SQLITE_OPEN_FULLMUTEX or SQLITE_OPEN_SHAREDCACHE) are blocked before
+    ///* reaching the VFS.
     { let _ = 0; };
     rc =
         unsafe {
@@ -736,10 +802,13 @@ pub extern "C" fn sqlite3_os_full_pathname(p_vfs: *mut Sqlite3Vfs,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_os_dl_open(p_vfs: *mut Sqlite3Vfs,
     z_path: *const i8) -> *mut () {
     { let _ = 0; };
     { let _ = 0; };
+
+    /// tag-20210611-1
     return unsafe { (unsafe { (*p_vfs).x_dl_open.unwrap() })(p_vfs, z_path) };
 }
 
@@ -832,6 +901,8 @@ pub extern "C" fn sqlite3_os_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* Convenience functions for opening and closing files using 
+///* sqlite3_malloc() to obtain space for the file-handle structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_open_malloc(p_vfs: *mut Sqlite3Vfs,
     z_file: *const i8, pp_file: &mut *mut Sqlite3File, flags: i32,

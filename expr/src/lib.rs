@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AggInfo, AggInfoCol, AggInfoFunc, AuthContext, Bft, Bitmask, Bitvec,
+    BusyHandler, CollSeq, Column, Cte, DbFixer, Expr, ExprList, ExprListItem,
+    ExprListItemS0, FKey, FpDecode, FuncDef, FuncDefHash, FuncDestructor,
+    IdList, IdListItem, Index, IndexedExpr, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, SubrtnSig, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -395,6 +411,8 @@ impl Parse {
     }
 }
 
+/// Structure used to pass information throughout the Walker in order to
+///* implement sqlite3ReferencesSrcList().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RefSrcList {
@@ -404,6 +422,11 @@ struct RefSrcList {
     ai_exclude: *mut i32,
 }
 
+///* An instance of the following structure is used by the tree walker
+///* to determine if an expression can be evaluated by reference to the
+///* index only, without having to do a search for the corresponding
+///* table entry.  The IdxCover.pIdx field is the index.  IdxCover.iCur
+///* is the cursor for the table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxCover {
@@ -411,6 +434,11 @@ struct IdxCover {
     i_cur: i32,
 }
 
+///* This is a SELECT-node callback for the expression walker that
+///* always "fails".  By "fail" in this case, we mean set
+///* pWalker->eCode to zero and abort.
+///*
+///* This callback is used by multiple expression walkers.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_walk_fail(p_walker: *mut Walker,
     not_used: *mut Select) -> i32 {
@@ -419,6 +447,7 @@ pub extern "C" fn sqlite3_select_walk_fail(p_walker: *mut Walker,
     return 2;
 }
 
+///* Allocate a single new register for use to hold some intermediate result.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_temp_reg(p_parse: &mut Parse) -> i32 {
     if (*p_parse).n_temp_reg as i32 == 0 {
@@ -431,6 +460,8 @@ pub extern "C" fn sqlite3_get_temp_reg(p_parse: &mut Parse) -> i32 {
                 } as usize];
 }
 
+///* Deallocate a register, making available for reuse for some other
+///* purpose.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_release_temp_reg(p_parse: &mut Parse, i_reg: i32)
     -> () {
@@ -448,6 +479,7 @@ pub extern "C" fn sqlite3_release_temp_reg(p_parse: &mut Parse, i_reg: i32)
     }
 }
 
+///* Allocate or deallocate a block of nReg consecutive registers.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_temp_range(p_parse: *mut Parse, n_reg: i32)
     -> i32 {
@@ -479,18 +511,45 @@ pub extern "C" fn sqlite3_release_temp_range(p_parse: *mut Parse, i_reg: i32,
     }
 }
 
+///* Mark all temporary registers as being unavailable for reuse.
+///*
+///* Always invoke this procedure after coding a subroutine or co-routine
+///* that might be invoked from other parts of the code, to ensure that
+///* the sub/co-routine does not use registers in common with the code that
+///* invokes the sub/co-routine.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_clear_temp_reg_cache(p_parse: &mut Parse) -> () {
     (*p_parse).n_temp_reg = 0 as u8;
     (*p_parse).n_range_reg = 0;
 }
 
+///* Make sure sufficient registers have been allocated so that
+///* iReg is a valid register number.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_touch_register(p_parse: &mut Parse, i_reg: i32)
     -> () {
     if (*p_parse).n_mem < i_reg { (*p_parse).n_mem = i_reg; }
 }
 
+///* This routine is the core allocator for Expr nodes.
+///*
+///* Construct a new expression node and return a pointer to it.  Memory
+///* for this node and for the pToken argument is a single allocation
+///* obtained from sqlite3DbMalloc().  The calling function
+///* is responsible for making sure the node eventually gets freed.
+///*
+///* If dequote is true, then the token (if it exists) is dequoted.
+///* If dequote is false, no dequoting is performed.  The deQuote
+///* parameter is ignored if pToken is NULL or if the token does not
+///* appear to be quoted.  If the quotes were of the form "..." (double-quotes)
+///* then the EP_DblQuoted flag is set on the expression node.
+///*
+///* Special case (tag-20240227-a):  If op==TK_INTEGER and pToken points to
+///* a string that can be translated into a 32-bit integer, then the token is
+///* not stored in u.zToken.  Instead, the integer values is written
+///* into u.iValue and the EP_IntValue flag is set. No extra storage
+///* is allocated to hold the integer text and the dequote flag is ignored.
+///* See also tag-20240227-b.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_alloc(db: *mut Sqlite3, op: i32,
     p_token: *const Token, dequote: i32) -> *mut Expr {
@@ -550,6 +609,8 @@ pub extern "C" fn sqlite3_expr_alloc(db: *mut Sqlite3, op: i32,
     }
 }
 
+///* Allocate a new expression node from a zero-terminated token that has
+///* already been dequoted.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr(db: *mut Sqlite3, op: i32, z_token: *const i8)
     -> *mut Expr {
@@ -561,6 +622,7 @@ pub extern "C" fn sqlite3_expr(db: *mut Sqlite3, op: i32, z_token: *const i8)
     }
 }
 
+///* Allocate an expression for a 32-bit signed integer literal.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_int32(db: *mut Sqlite3, i_val: i32)
     -> *mut Expr {
@@ -589,6 +651,7 @@ pub extern "C" fn sqlite3_expr_int32(db: *mut Sqlite3, i_val: i32)
     }
 }
 
+///* Delete an entire expression list.
 extern "C" fn expr_list_delete_nn(db: *mut Sqlite3, p_list_1: *mut ExprList)
     -> () {
     let mut i: i32 = unsafe { (*p_list_1).n_expr };
@@ -624,6 +687,8 @@ pub extern "C" fn sqlite3_expr_list_delete(db: *mut Sqlite3,
     if !(p_list).is_null() { expr_list_delete_nn(db, p_list); }
 }
 
+///* Recursively delete an expression tree.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_expr_delete_nn(db: *mut Sqlite3, mut p: *mut Expr)
     -> () {
     unsafe {
@@ -636,6 +701,8 @@ extern "C" fn sqlite3_expr_delete_nn(db: *mut Sqlite3, mut p: *mut Expr)
             { let _ = 0; };
             if !(unsafe { (*p).flags } & (65536 | 8388608) as u32 != 0 as u32)
                         as i32 != 0 {
+
+                /// The Expr.x union is never used at the same time as Expr.pRight
                 { let _ = 0; };
                 if !(unsafe { (*p).p_right }).is_null() {
                     { let _ = 0; };
@@ -660,6 +727,8 @@ extern "C" fn sqlite3_expr_delete_nn(db: *mut Sqlite3, mut p: *mut Expr)
                                     as i32 != 0 &&
                             !(unsafe { (*p_left).flags } & 134217728 as u32 != 0 as u32)
                                     as i32 != 0 {
+
+                        /// Avoid unnecessary recursion on unary operators
                         unsafe { sqlite3_db_nn_free_nn(db, p as *mut ()) };
                         p = p_left;
                         continue;
@@ -680,6 +749,10 @@ pub extern "C" fn sqlite3_expr_delete(db: *mut Sqlite3, p: *mut Expr) -> () {
     if !(p).is_null() { sqlite3_expr_delete_nn(db, p); }
 }
 
+///* Attach subtrees pLeft and pRight to the Expr node pRoot.
+///*
+///* If pRoot==NULL that means that a memory allocation error has occurred.
+///* In that case, delete the subtrees pLeft and pRight.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_attach_subtrees(db: *mut Sqlite3,
     p_root: *mut Expr, p_left: *mut Expr, p_right: *mut Expr) -> () {
@@ -716,6 +789,9 @@ pub extern "C" fn sqlite3_expr_attach_subtrees(db: *mut Sqlite3,
     }
 }
 
+///* Check that argument nHeight is less than or equal to the maximum
+///* expression depth allowed. If it is not, leave an error message in
+///* pParse.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_check_height(p_parse: *mut Parse,
     n_height: i32) -> i32 {
@@ -733,6 +809,11 @@ pub extern "C" fn sqlite3_expr_check_height(p_parse: *mut Parse,
     return rc;
 }
 
+///* Allocate an Expr node which joins as many as two subtrees.
+///*
+///* One or both of the subtrees can be NULL.  Return a pointer to the new
+///* Expr node.  Or, if an OOM error occurs, set pParse->db->mallocFailed,
+///* free the subtrees and return NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_expr(p_parse: *mut Parse, op: i32,
     p_left: *mut Expr, p_right: *mut Expr) -> *mut Expr {
@@ -758,6 +839,14 @@ pub extern "C" fn sqlite3_p_expr(p_parse: *mut Parse, op: i32,
     return p;
 }
 
+/// The following three functions, heightOfExpr(), heightOfExprList()
+///* and heightOfSelect(), are used to determine the maximum height
+///* of any expression tree referenced by the structure passed as the
+///* first argument.
+///*
+///* If this maximum height is greater than the current value pointed
+///* to by pnHeight, the second parameter, then set *pnHeight to that
+///* value.
 extern "C" fn height_of_expr(p: *const Expr, pn_height_1: &mut i32) -> () {
     if !(p).is_null() {
         if unsafe { (*p).n_height } as i32 > *pn_height_1 {
@@ -816,6 +905,8 @@ extern "C" fn height_of_select(p_select_1: *const Select,
     }
 }
 
+///* Return the bitwise-OR of all Expr.flags fields in the given
+///* ExprList.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_flags(p_list: &ExprList) -> u32 {
     let mut i: i32 = 0;
@@ -841,6 +932,14 @@ pub extern "C" fn sqlite3_expr_list_flags(p_list: &ExprList) -> u32 {
     return m;
 }
 
+///* Set the Expr.nHeight variable in the structure passed as an
+///* argument. An expression with no children, Expr.pList or
+///* Expr.pSelect member has a height of 1. Any other expression
+///* has a height equal to the maximum height of any other
+///* referenced Expr plus one.
+///*
+///* Also propagate EP_Propagate flags up from Expr.x.pList to Expr.flags,
+///* if appropriate.
 extern "C" fn expr_set_height(p: &mut Expr) -> () {
     unsafe {
         let mut n_height: i32 =
@@ -864,6 +963,12 @@ extern "C" fn expr_set_height(p: &mut Expr) -> () {
     }
 }
 
+///* Set the Expr.nHeight variable using the exprSetHeight() function. If
+///* the height is greater than the maximum allowed expression depth,
+///* leave an error in pParse.
+///*
+///* Also propagate all EP_Propagate flags from the Expr.x.pList into
+///* Expr.flags.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_set_height_and_flags(p_parse: *mut Parse,
     p: *mut Expr) -> () {
@@ -872,6 +977,8 @@ pub extern "C" fn sqlite3_expr_set_height_and_flags(p_parse: *mut Parse,
     sqlite3_expr_check_height(p_parse, unsafe { (*p).n_height });
 }
 
+///* Add pSelect to the Expr.x.pSelect field.  Or, if pExpr is NULL (due
+///* do a memory allocation failure) then delete the pSelect object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_expr_add_select(p_parse: *mut Parse,
     p_expr: *mut Expr, p_select: *mut Select) -> () {
@@ -895,6 +1002,14 @@ pub extern "C" fn sqlite3_expr_delete_generic(db: *mut Sqlite3, p: *mut ())
     if !(p).is_null() { sqlite3_expr_delete_nn(db, p as *mut Expr); }
 }
 
+///* Arrange to cause pExpr to be deleted when the pParse is deleted.
+///* This is similar to sqlite3ExprDelete() except that the delete is
+///* deferred until the pParse is deleted.
+///*
+///* The pExpr might be deleted immediately on an OOM error.
+///*
+///* Return 0 if the delete was successfully deferred.  Return non-zero
+///* if the delete happened immediately because of an OOM.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_deferred_delete(p_parse: *mut Parse,
     p_expr: *mut Expr) -> i32 {
@@ -905,6 +1020,12 @@ pub extern "C" fn sqlite3_expr_deferred_delete(p_parse: *mut Parse,
                 }) as i32;
 }
 
+///* Join two expressions using an AND operator.  If either expression is
+///* NULL, then just return the other expression.
+///*
+///* If one side or the other of the AND is known to be false, and neither side
+///* is part of an ON clause, then instead of returning an AND expression,
+///* just return a constant expression with a value of false.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_and(p_parse: *mut Parse, p_left: *mut Expr,
     p_right: *mut Expr) -> *mut Expr {
@@ -925,6 +1046,17 @@ pub extern "C" fn sqlite3_expr_and(p_parse: *mut Parse, p_left: *mut Expr,
     }
 }
 
+///* If pExpr is an AND or OR expression, try to simplify it by eliminating
+///* terms that are always true or false.  Return the simplified expression.
+///* Or return the original expression if no simplification is possible.
+///*
+///* Examples:
+///*
+///*     (x<10) AND true                =>   (x<10)
+///*     (x<10) AND false               =>   false
+///*     (x<10) AND (y=22 OR false)     =>   (x<10) AND (y=22)
+///*     (x<10) AND (y=22 OR true)      =>   (x<10)
+///*     (y=22) OR true                 =>   true
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_simplified_and_or(mut p_expr: *mut Expr)
     -> *mut Expr {
@@ -956,7 +1088,10 @@ pub extern "C" fn sqlite3_expr_simplified_and_or(mut p_expr: *mut Expr)
     return p_expr;
 }
 
+///* Construct a new expression node for a function with multiple
+///* arguments.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_function(p_parse: *mut Parse,
     p_list: *mut ExprList, p_token: *const Token, e_distinct: i32)
     -> *mut Expr {
@@ -967,6 +1102,8 @@ pub extern "C" fn sqlite3_expr_function(p_parse: *mut Parse,
         p_new = sqlite3_expr_alloc(db, 172, p_token, 1);
         if p_new == core::ptr::null_mut() {
             sqlite3_expr_list_delete(db, p_list);
+
+            /// Avoid memory leak when malloc fails
             return core::ptr::null_mut();
         }
         { let _ = 0; };
@@ -1005,6 +1142,8 @@ pub extern "C" fn sqlite3_expr_list_delete_generic(db: *mut Sqlite3,
     }
 }
 
+///* Report an error when attempting to use an ORDER BY clause within
+///* the arguments of a non-aggregate function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_order_by_aggregate_error(p_parse: *mut Parse,
     p: *mut Expr) -> () {
@@ -1015,7 +1154,16 @@ pub extern "C" fn sqlite3_expr_order_by_aggregate_error(p_parse: *mut Parse,
     };
 }
 
+///* Attach an ORDER BY clause to a function call.
+///*
+///*     functionname( arguments ORDER BY sortlist )
+///*     \_____________________/          \______/
+///*             pExpr                    pOrderBy
+///*
+///* The ORDER BY clause is inserted into a new Expr node of type TK_ORDER
+///* and added to the Expr.pLeft field of the parent TK_FUNCTION node.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_add_function_order_by(p_parse: *mut Parse,
     p_expr: *mut Expr, p_order_by: *mut ExprList) -> () {
     unsafe {
@@ -1032,6 +1180,8 @@ pub extern "C" fn sqlite3_expr_add_function_order_by(p_parse: *mut Parse,
         { let _ = 0; };
         if unsafe { (*p_expr).x.p_list } == core::ptr::null_mut() ||
                 unsafe { (*unsafe { (*p_expr).x.p_list }).n_expr } == 0 {
+
+            /// Ignore ORDER BY on zero-argument aggregates
             unsafe {
                 sqlite3_parser_add_cleanup(p_parse,
                     Some(sqlite3_expr_list_delete_generic),
@@ -1068,7 +1218,17 @@ pub extern "C" fn sqlite3_expr_add_function_order_by(p_parse: *mut Parse,
     }
 }
 
+///* Check to see if a function is usable according to current access
+///* rules:
+///*
+///*    SQLITE_FUNC_DIRECT    -     Only usable from top-level SQL
+///*
+///*    SQLITE_FUNC_UNSAFE    -     Usable if TRUSTED_SCHEMA or from
+///*                                top-level SQL
+///*
+///* If the function is not usable, create an error.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_function_usable(p_parse: *mut Parse,
     p_expr: *const Expr, p_def: &FuncDef) -> () {
     { let _ = 0; };
@@ -1078,6 +1238,13 @@ pub extern "C" fn sqlite3_expr_function_usable(p_parse: *mut Parse,
         if (*p_def).func_flags & 524288 as u32 != 0 as u32 ||
                 unsafe { (*unsafe { (*p_parse).db }).flags } & 128 as u64 ==
                     0 as u64 {
+
+            /// Functions prohibited in triggers and views if:
+            ///*     (1) tagged with SQLITE_DIRECTONLY
+            ///*     (2) not tagged with SQLITE_INNOCUOUS (which means it
+            ///*         is tagged with SQLITE_FUNC_UNSAFE) and
+            ///*         SQLITE_DBCONFIG_TRUSTED_SCHEMA is off (meaning
+            ///*         that the schema is possibly tainted).
             unsafe {
                 sqlite3_error_msg(p_parse,
                     c"unsafe use of %#T()".as_ptr() as *mut i8 as *const i8,
@@ -1087,7 +1254,22 @@ pub extern "C" fn sqlite3_expr_function_usable(p_parse: *mut Parse,
     }
 }
 
+///* Assign a variable number to an expression that encodes a wildcard
+///* in the original SQL statement. 
+///*
+///* Wildcards consisting of a single "?" are assigned the next sequential
+///* variable number.
+///*
+///* Wildcards of the form "?nnn" are assigned the number "nnn".  We make
+///* sure "nnn" is not too big to avoid a denial of service attack when
+///* the SQL statement comes from an external source.
+///*
+///* Wildcards of the form ":aaa", "@aaa", or "$aaa" are assigned the same number
+///* as the previous instance of the same wildcard.  Or if this is the first
+///* instance of the wildcard, the next sequential variable number is
+///* assigned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_assign_var_number(p_parse: *mut Parse,
     p_expr: *mut Expr, n: u32) -> () {
     unsafe {
@@ -1101,6 +1283,8 @@ pub extern "C" fn sqlite3_expr_assign_var_number(p_parse: *mut Parse,
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { *z.offset(1 as isize) } as i32 == 0 {
+
+            /// Wildcard of the form "?".  Assign the next variable number
             { let _ = 0; };
             x =
                 {
@@ -1111,13 +1295,19 @@ pub extern "C" fn sqlite3_expr_assign_var_number(p_parse: *mut Parse,
         } else {
             let mut do_add: i32 = 0;
             if unsafe { *z.offset(0 as isize) } as i32 == '?' as i32 {
+                /// Wildcard of the form "?nnn".  Convert "nnn" to an integer and
+                ///* use it as the variable number
                 let mut i: i64 = 0 as i64;
                 let mut b_ok: i32 = 0;
                 if n == 2 as u32 {
-                    i =
+
+                    ///OPTIMIZATION-IF-TRUE
+                    (i =
                         (unsafe { *z.offset(1 as isize) } as i32 - '0' as i32) as
-                            i64;
-                    b_ok = 1;
+                            i64);
+
+                    /// The common case of ?N for a single digit N
+                    (b_ok = 1);
                 } else {
                     b_ok =
                         (0 ==
@@ -1151,11 +1341,15 @@ pub extern "C" fn sqlite3_expr_assign_var_number(p_parse: *mut Parse,
                     do_add = 1;
                 }
             } else {
-                x =
+
+                /// Wildcards like ":aaa", "$aaa" or "@aaa".  Reuse the same variable
+                ///* number as the prior appearance of the same name, or if the name
+                ///* has never appeared before, reuse the same variable number
+                (x =
                     unsafe {
                             sqlite3_v_list_name_to_num(unsafe { (*p_parse).p_v_list },
                                 z, n as i32)
-                        } as YnVar;
+                        } as YnVar);
                 if x as i32 == 0 {
                     x =
                         {
@@ -1190,6 +1384,8 @@ pub extern "C" fn sqlite3_expr_assign_var_number(p_parse: *mut Parse,
     }
 }
 
+/// Invoke sqlite3RenameExprUnmap() and sqlite3ExprDelete() on the
+///* expression.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_unmap_and_delete(p_parse: *mut Parse,
     p: *mut Expr) -> () {
@@ -1201,6 +1397,15 @@ pub extern "C" fn sqlite3_expr_unmap_and_delete(p_parse: *mut Parse,
     }
 }
 
+///* Add a new element to the end of an expression list.  If pList is
+///* initially NULL, then create a new expression list.
+///*
+///* The pList argument must be either NULL or a pointer to an ExprList
+///* obtained from a prior call to sqlite3ExprListAppend().
+///*
+///* If a memory allocation error occurs, the entire list is freed and
+///* NULL is returned.  If non-NULL is returned, then it is guaranteed
+///* that the new entry was successfully appended.
 static mut zero_item: ExprListItem =
     ExprListItem {
         p_expr: core::ptr::null_mut(),
@@ -1301,6 +1506,10 @@ pub extern "C" fn sqlite3_expr_list_append(p_parse: &Parse,
     }
 }
 
+///* If the expression passed as the only argument is of type TK_VECTOR
+///* return the number of expressions in the vector. Or, if the expression
+///* is a sub-select, return the number of columns in the sub-select. For
+///* any other type of expression, return 1.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_vector_size(p_expr: &Expr) -> i32 {
     unsafe {
@@ -1324,10 +1533,45 @@ struct EdupBuf {
     z_alloc: *mut u8,
 }
 
+///* The dupedExpr*Size() routines each return the number of bytes required
+///* to store a copy of an expression or expression tree.  They differ in
+///* how much of the tree is measured.
+///*
+///*     dupedExprStructSize()     Size of only the Expr structure
+///*     dupedExprNodeSize()       Size of Expr + space for token
+///*     dupedExprSize()           Expr + token + subtree components
+///*
+///**************************************************************************
+///*
+///* The dupedExprStructSize() function returns two values OR-ed together: 
+///* (1) the space required for a copy of the Expr structure only and
+///* (2) the EP_xxx flags that indicate what the structure size should be.
+///* The return values is always one of:
+///*
+///*      EXPR_FULLSIZE
+///*      EXPR_REDUCEDSIZE   | EP_Reduced
+///*      EXPR_TOKENONLYSIZE | EP_TokenOnly
+///*
+///* The size of the structure can be found by masking the return value
+///* of this routine with 0xfff.  The flags can be found by masking the
+///* return value with EP_Reduced|EP_TokenOnly.
+///*
+///* Note that with flags==EXPRDUP_REDUCE, this routines works on full-size
+///* (unreduced) Expr objects as they or originally constructed by the parser.
+///* During expression analysis, extra information is computed and moved into
+///* later parts of the Expr object and that extra information might get chopped
+///* off if the expression is reduced.  Note also that it does not work to
+///* make an EXPRDUP_REDUCE copy of a reduced expression.  It is only legal
+///* to reduce a pristine expression tree from the parser.  The implementation
+///* of dupedExprStructSize() contain multiple assert() statements that attempt
+///* to enforce this constraint.
+#[allow(unused_doc_comments)]
 extern "C" fn duped_expr_struct_size(p: &Expr, flags: i32) -> i32 {
     unsafe {
         let mut n_size: i32 = 0;
         { let _ = 0; };
+
+        /// Only one flag value allowed
         { let _ = 0; };
         { let _ = 0; };
         if 0 == flags || (*p).flags & 131072 as u32 != 0 as u32 {
@@ -1351,6 +1595,9 @@ extern "C" fn duped_expr_struct_size(p: &Expr, flags: i32) -> i32 {
     }
 }
 
+///* This function returns the space in bytes required to store the copy
+///* of the Expr structure and a copy of the Expr.u.zToken string (if that
+///* string is defined.)
 extern "C" fn duped_expr_node_size(p: *const Expr, flags: i32) -> i32 {
     unsafe {
         let mut n_byte: i32 =
@@ -1365,6 +1612,15 @@ extern "C" fn duped_expr_node_size(p: *const Expr, flags: i32) -> i32 {
     }
 }
 
+///* Return the number of bytes required to create a duplicate of the
+///* expression passed as the first argument.
+///*
+///* The value returned includes space to create a copy of the Expr struct
+///* itself and the buffer referred to by Expr.u.zToken, if any.
+///*
+///* The return value includes space to duplicate all Expr nodes in the
+///* tree formed by Expr.pLeft and Expr.pRight, but not any other
+///* substructure such as Expr.x.pList, Expr.x.pSelect, and Expr.y.pWin.
 extern "C" fn duped_expr_size(p: *const Expr) -> i32 {
     let mut n_byte: i32 = 0;
     { let _ = 0; };
@@ -1379,6 +1635,9 @@ extern "C" fn duped_expr_size(p: *const Expr) -> i32 {
     return n_byte;
 }
 
+///* Return the number of bytes allocated for the expression structure
+///* passed as the first argument. This is always one of EXPR_FULLSIZE,
+///* EXPR_REDUCEDSIZE or EXPR_TOKENONLYSIZE.
 extern "C" fn expr_struct_size(p: &Expr) -> i32 {
     if (*p).flags & 65536 as u32 != 0 as u32 {
         return core::mem::offset_of!(Expr, p_left) as i32;
@@ -1773,6 +2032,10 @@ pub extern "C" fn sqlite3_with_dup(db: *mut Sqlite3, p: *mut With)
     }
 }
 
+///* The gatherSelectWindows() procedure and its helper routine
+///* gatherSelectWindowsCallback() are used to scan all the expressions
+///* an a newly duplicated SELECT statement and gather all of the Window
+///* objects found there, assembling them onto the linked list at Select->pWin.
 extern "C" fn gather_select_windows_callback(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -1809,6 +2072,7 @@ extern "C" fn gather_select_windows(p: *mut Select) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_select_dup(db: *mut Sqlite3, p_dup: *const Select,
     flags: i32) -> *mut Select {
     unsafe {
@@ -1892,6 +2156,10 @@ pub extern "C" fn sqlite3_select_dup(db: *mut Sqlite3, p_dup: *const Select,
                     }
                     unsafe { (*p_new).sel_id = unsafe { (*p).sel_id } as u32 };
                     if unsafe { (*db).malloc_failed } != 0 {
+
+                        /// Any prior OOM might have left the Select object incomplete.
+                        ///* Delete the whole thing rather than allow an incomplete Select
+                        ///* to be used by the code generator.
                         unsafe { (*p_new).p_next = core::ptr::null_mut() };
                         unsafe { sqlite3_select_delete(db, p_new) };
                         break '__b9;
@@ -1908,13 +2176,23 @@ pub extern "C" fn sqlite3_select_dup(db: *mut Sqlite3, p_dup: *const Select,
     }
 }
 
+///* This function is similar to sqlite3ExprDup(), except that if pEdupBuf
+///* is not NULL then it points to memory that can be used to store a copy
+///* of the input Expr p together with its p->u.zToken (if any).  pEdupBuf
+///* is updated with the new buffer tail prior to returning.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_dup(db: *mut Sqlite3, p: *const Expr, dup_flags_1: i32,
     p_edup_buf_1: *mut EdupBuf) -> *mut Expr {
     unsafe {
         let mut p_new: *mut Expr = core::ptr::null_mut();
+        /// Value to return
         let mut s_edup_buf: EdupBuf = unsafe { core::mem::zeroed() };
+        /// Memory space from which to build Expr object
         let mut static_flag: u32 = 0 as u32;
+        /// EP_Static if space not obtained from malloc
         let mut n_token: i32 = -1;
+
+        /// Space needed for p->u.zToken.  -1 means unknown
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -1951,6 +2229,10 @@ extern "C" fn expr_dup(db: *mut Sqlite3, p: *const Expr, dup_flags_1: i32,
         p_new = s_edup_buf.z_alloc as *mut Expr;
         { let _ = 0; };
         if !(p_new).is_null() {
+            /// Set nNewSize to the size allocated for the structure pointed to
+            ///* by pNew. This is either EXPR_FULLSIZE, EXPR_REDUCEDSIZE or
+            ///* EXPR_TOKENONLYSIZE. nToken is set to the number of bytes consumed
+            ///* by the copy of the p->u.zToken string (if any).
             let n_struct_size: u32 =
                 duped_expr_struct_size(unsafe { &*p }, dup_flags_1) as u32;
             let mut n_new_size: i32 = (n_struct_size & 4095 as u32) as i32;
@@ -1987,12 +2269,16 @@ extern "C" fn expr_dup(db: *mut Sqlite3, p: *const Expr, dup_flags_1: i32,
                 }
                 n_new_size = core::mem::size_of::<Expr>() as i32;
             }
+
+            /// Set the EP_Reduced, EP_TokenOnly, and EP_Static flags appropriately.
             unsafe { (*p_new).flags &= !(16384 | 65536 | 134217728) as u32 };
             unsafe {
                 (*p_new).flags |= n_struct_size & (16384 | 65536) as u32
             };
             unsafe { (*p_new).flags |= static_flag };
             if dup_flags_1 != 0 {}
+
+            /// Copy the p->u.zToken string, if any.
             { let _ = 0; };
             if n_token > 0 {
                 let z_token: *mut i8 =
@@ -2094,6 +2380,21 @@ extern "C" fn expr_dup(db: *mut Sqlite3, p: *const Expr, dup_flags_1: i32,
     }
 }
 
+///* The following group of routines make deep copies of expressions,
+///* expression lists, ID lists, and select statements.  The copies can
+///* be deleted (by being passed to their respective ...Delete() routines)
+///* without effecting the originals.
+///*
+///* The expression list, ID, and source lists return by sqlite3ExprListDup(),
+///* sqlite3IdListDup(), and sqlite3SrcListDup() can not be further expanded
+///* by subsequent calls to sqlite*ListAppend() routines.
+///*
+///* Any tables that the SrcList might point to are not duplicated.
+///*
+///* The flags parameter contains a combination of the EXPRDUP_XXX flags.
+///* If the EXPRDUP_REDUCE flag is set, then the structure returned is a
+///* truncated version of the usual Expr structure that will be stored as
+///* part of the in-memory representation of the database schema.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_dup(db: *mut Sqlite3, p: *const Expr,
     flags: i32) -> *mut Expr {
@@ -2103,16 +2404,52 @@ pub extern "C" fn sqlite3_expr_dup(db: *mut Sqlite3, p: *const Expr,
         } else { core::ptr::null_mut() };
 }
 
+///* Compute and return a new Expr object which when passed to
+///* sqlite3ExprCode() will generate all necessary code to compute
+///* the iField-th column of the vector expression pVector.
+///*
+///* It is ok for pVector to be a scalar (as long as iField==0). 
+///* In that case, this routine works like sqlite3ExprDup().
+///*
+///* The caller owns the returned Expr object and is responsible for
+///* ensuring that the returned value eventually gets freed.
+///*
+///* The caller retains ownership of pVector.  If pVector is a TK_SELECT,
+///* then the returned object will reference pVector and so pVector must remain
+///* valid for the life of the returned object.  If pVector is a TK_VECTOR
+///* or a scalar expression, then it can be deleted as soon as this routine
+///* returns.
+///*
+///* A trick to cause a TK_SELECT pVector to be deleted together with
+///* the returned Expr object is to attach the pVector to the pRight field
+///* of the returned TK_SELECT_COLUMN Expr object.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_for_vector_field(p_parse: *mut Parse,
     mut p_vector: *mut Expr, i_field: i32, n_field: i32) -> *mut Expr {
     unsafe {
         let mut p_ret: *mut Expr = core::ptr::null_mut();
         if unsafe { (*p_vector).op } as i32 == 139 {
             { let _ = 0; };
-            p_ret =
+
+            /// The TK_SELECT_COLUMN Expr node:
+            ///*
+            ///* pLeft:           pVector containing TK_SELECT.  Not deleted.
+            ///* pRight:          not used.  But recursively deleted.
+            ///* iColumn:         Index of a column in pVector
+            ///* iTable:          0 or the number of columns on the LHS of an assignment
+            ///* pLeft->iTable:   First in an array of register holding result, or 0
+            ///*                  if the result is not yet computed.
+            ///*
+            ///* sqlite3ExprDelete() specifically skips the recursive delete of
+            ///* pLeft on TK_SELECT_COLUMN nodes.  But pRight is followed, so pVector
+            ///* can be attached to pRight to cause this node to take ownership of
+            ///* pVector.  Typically there will be multiple TK_SELECT_COLUMN nodes
+            ///* with the same pLeft pointer to the pVector, but only one of them
+            ///* will own the pVector.
+            (p_ret =
                 sqlite3_p_expr(p_parse, 178, core::ptr::null_mut(),
-                    core::ptr::null_mut());
+                    core::ptr::null_mut()));
             if !(p_ret).is_null() {
                 unsafe { (*p_ret).flags |= 131072 as u32 };
                 unsafe { (*p_ret).i_table = n_field };
@@ -2131,6 +2468,8 @@ pub extern "C" fn sqlite3_expr_for_vector_field(p_parse: *mut Parse,
                     };
                 p_vector = unsafe { *pp_vector };
                 if unsafe { (*p_parse).e_parse_mode } as i32 >= 2 {
+
+                    /// This must be a vector UPDATE inside a trigger
                     unsafe { *pp_vector = core::ptr::null_mut() };
                     return p_vector;
                 }
@@ -2143,7 +2482,17 @@ pub extern "C" fn sqlite3_expr_for_vector_field(p_parse: *mut Parse,
     }
 }
 
+///* pColumns and pExpr form a vector assignment which is part of the SET
+///* clause of an UPDATE statement.  Like this:
+///*
+///*        (a,b,c) = (expr1,expr2,expr3)
+///* Or:    (a,b,c) = (SELECT x,y,z FROM ....)
+///*
+///* For each term of the vector assignment, append new entries to the
+///* expression list pList.  In the case of a subquery on the RHS, append
+///* TK_SELECT_COLUMN expressions.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_list_append_vector(p_parse: *mut Parse,
     mut p_list: *mut ExprList, p_columns: *mut IdList, mut p_expr: *mut Expr)
     -> *mut ExprList {
@@ -2151,6 +2500,12 @@ pub extern "C" fn sqlite3_expr_list_append_vector(p_parse: *mut Parse,
     let mut n: i32 = 0;
     let mut i: i32 = 0;
     let mut i_first: i32 = 0;
+    /// pColumns can only be NULL due to an OOM but an OOM will cause an
+    ///* exit prior to this routine being invoked
+    /// If the RHS is a vector, then we can immediately check to see that
+    ///* the size of the RHS and LHS match.  But if the RHS is a SELECT,
+    ///* wildcards ("*") in the result set of the SELECT must be expanded before
+    ///* we can do the size check, so defer the size check until code generation.
     let mut p_sub_expr: *mut Expr = core::ptr::null_mut();
     let mut p_first: *mut Expr = core::ptr::null_mut();
     let mut __state: i32 = 0;
@@ -2294,9 +2649,37 @@ pub extern "C" fn sqlite3_expr_list_append_vector(p_parse: *mut Parse,
             }
         }
     }
+
+    /// pColumns can only be NULL due to an OOM but an OOM will cause an
+    ///* exit prior to this routine being invoked
+    /// If the RHS is a vector, then we can immediately check to see that
+    ///* the size of the RHS and LHS match.  But if the RHS is a SELECT,
+    ///* wildcards ("*") in the result set of the SELECT must be expanded before
+    ///* we can do the size check, so defer the size check until code generation.
+    /// Store the SELECT statement in pRight so it will be deleted when
+    ///* sqlite3ExprListDelete() is called
+    /// Remember the size of the LHS in iTable so that we can check that
+    ///* the RHS and LHS sizes match during code generation.
     unreachable!();
 }
 
+///* Expression list pEList is a list of vector values. This function
+///* converts the contents of pEList to a VALUES(...) Select statement
+///* returning 1 row for each element of the list. For example, the
+///* expression list:
+///*
+///*   ( (1,2), (3,4) (5,6) )
+///*
+///* is translated to the equivalent of:
+///*
+///*   VALUES(1,2), (3,4), (5,6)
+///*
+///* Each of the vector values in pEList must contain exactly nElem terms.
+///* If a list element that is not a vector or does not contain nElem terms,
+///* an error message is left in pParse.
+///*
+///* This is used as part of processing IN(...) expressions with a list
+///* of vectors on the RHS. e.g. "... IN ((1,2), (3,4), (5,6))".
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_to_values(p_parse: *mut Parse,
     n_elem: i32, p_e_list: *mut ExprList) -> *mut Select {
@@ -2361,6 +2744,7 @@ pub extern "C" fn sqlite3_expr_list_to_values(p_parse: *mut Parse,
     }
 }
 
+///* Set the sort order for the last element on the given ExprList.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_set_sort_order(p: *mut ExprList,
     mut i_sort_order: i32, e_nulls: i32) -> () {
@@ -2387,7 +2771,14 @@ pub extern "C" fn sqlite3_expr_list_set_sort_order(p: *mut ExprList,
     }
 }
 
+///* Set the ExprList.a[].zEName element of the most recently added item
+///* on the expression list.
+///*
+///* pList might be NULL following an OOM error.  But pName should never be
+///* NULL.  If a memory allocation fails, the pParse->db->mallocFailed flag
+///* is set.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_list_set_name(p_parse: *mut Parse,
     p_list: *mut ExprList, p_name: *const Token, dequote: i32) -> () {
     unsafe {
@@ -2412,6 +2803,10 @@ pub extern "C" fn sqlite3_expr_list_set_name(p_parse: *mut Parse,
                     }
             };
             if dequote != 0 {
+
+                /// If dequote==0, then pName->z does not point to part of a DDL
+                ///* statement handled by the parser. And so no token need be added
+                ///* to the token-map.
                 unsafe { sqlite3_dequote(unsafe { (*p_item).z_e_name }) };
                 if unsafe { (*p_parse).e_parse_mode } as i32 >= 2 {
                     unsafe {
@@ -2424,6 +2819,12 @@ pub extern "C" fn sqlite3_expr_list_set_name(p_parse: *mut Parse,
     }
 }
 
+///* Set the ExprList.a[].zSpan element of the most recently added item
+///* on the expression list.
+///*
+///* pList might be NULL following an OOM error.  But pSpan should never be
+///* NULL.  If a memory allocation fails, the pParse->db->mallocFailed flag
+///* is set.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_set_span(p_parse: &Parse,
     p_list: *mut ExprList, z_start: *const i8, z_end: *const i8) -> () {
@@ -2447,6 +2848,7 @@ pub extern "C" fn sqlite3_expr_list_set_span(p_parse: &Parse,
     }
 }
 
+///* Clear both elements of an OnOrUsing object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_clear_on_or_using(db: *mut Sqlite3,
     p: *mut OnOrUsing) -> () {
@@ -2460,6 +2862,20 @@ pub extern "C" fn sqlite3_clear_on_or_using(db: *mut Sqlite3,
     }
 }
 
+///* Expression pVar is guaranteed to be an SQL variable. pExpr may be any
+///* type of expression.
+///*
+///* If pExpr is a simple SQL value - an integer, real, string, blob
+///* or NULL value - then the VDBE currently being prepared is configured
+///* to re-prepare each time a new value is bound to variable pVar.
+///*
+///* Additionally, if pExpr is a simple SQL value and the value is the
+///* same as that currently bound to variable pVar, non-zero is returned.
+///* Otherwise, if the values are not the same or if pExpr is not a simple
+///* SQL value, zero is returned.
+///*
+///* If the SQLITE_EnableQPSG flag is set on the database connection, then
+///* this routine always returns false.
 extern "C" fn expr_compare_variable(p_parse_1: &Parse, p_var_1: &Expr,
     p_expr_1: *const Expr) -> i32 {
     let mut res: i32 = 2;
@@ -2504,6 +2920,20 @@ extern "C" fn expr_compare_variable(p_parse_1: &Parse, p_var_1: &Expr,
     return res;
 }
 
+///* Compare two ExprList objects.  Return 0 if they are identical, 1
+///* if they are certainly different, or 2 if it is not possible to
+///* determine if they are identical or not.
+///*
+///* If any subelement of pB has Expr.iTable==(-1) then it is allowed
+///* to compare equal to an equivalent element in pA with Expr.iTable==iTab.
+///*
+///* This routine might return non-zero for equivalent ExprLists.  The
+///* only consequence will be disabled optimizations.  But this routine
+///* must never return 0 if the two ExprList objects are different, or
+///* a malfunction will result.
+///*
+///* Two NULL pointers are considered to be the same.  But a NULL pointer
+///* always differs from a non-NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_compare(p_a: *const ExprList,
     p_b: *const ExprList, i_tab: i32) -> i32 {
@@ -2555,6 +2985,31 @@ pub extern "C" fn sqlite3_expr_list_compare(p_a: *const ExprList,
     return 0;
 }
 
+///* Do a deep comparison of two expression trees.  Return 0 if the two
+///* expressions are completely identical.  Return 1 if they differ only
+///* by a COLLATE operator at the top level.  Return 2 if there are differences
+///* other than the top-level COLLATE operator.
+///*
+///* If any subelement of pB has Expr.iTable==(-1) then it is allowed
+///* to compare equal to an equivalent element in pA with Expr.iTable==iTab.
+///*
+///* The pA side might be using TK_REGISTER.  If that is the case and pB is
+///* not using TK_REGISTER but is otherwise equivalent, then still return 0.
+///*
+///* Sometimes this routine will return 2 even if the two expressions
+///* really are equivalent.  If we cannot prove that the expressions are
+///* identical, we return 2 just to be safe.  So if this routine
+///* returns 2, then you do not really know for certain if the two
+///* expressions are the same.  But if you get a 0 or 1 return, then you
+///* can be sure the expressions are the same.  In the places where
+///* this routine is used, it does not hurt to get an extra 2 - that
+///* just might result in some slightly slower code.  But returning
+///* an incorrect 0 or 1 could lead to a malfunction.
+///*
+///* If pParse is not NULL and SQLITE_EnableQPSG is off then TK_VARIABLE
+///* terms in pA with bindings in pParse->pReprepare can be matched against
+///* literals in pB.  The pParse->pVdbe->expmask bitmask is updated for
+///* each variable referenced.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_compare(p_parse: *const Parse,
     p_a: *const Expr, p_b: *const Expr, i_tab: i32) -> i32 {
@@ -2688,6 +3143,7 @@ pub extern "C" fn sqlite3_expr_compare(p_parse: *const Parse,
     }
 }
 
+///* Return the affinity character for a single column of a table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_table_column_affinity(p_tab: &Table, i_col: i32)
     -> i8 {
@@ -2695,6 +3151,20 @@ pub extern "C" fn sqlite3_table_column_affinity(p_tab: &Table, i_col: i32)
     return unsafe { (*(*p_tab).a_col.offset(i_col as isize)).affinity };
 }
 
+///* Return the 'affinity' of the expression pExpr if any.
+///*
+///* If pExpr is a column, a reference to a column via an 'AS' alias,
+///* or a sub-select with a column as the return value, then the
+///* affinity of that column is returned. Otherwise, 0x00 is returned,
+///* indicating no affinity for the expression.
+///*
+///* i.e. the WHERE clause expressions in the following statements all
+///* have an affinity:
+///*
+///* CREATE TABLE t1(a);
+///* SELECT * FROM t1 WHERE a;
+///* SELECT a AS b FROM t1 WHERE b;
+///* SELECT * FROM t1 WHERE (select a from t1);
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_affinity(mut p_expr: *const Expr) -> i8 {
     unsafe {
@@ -2770,6 +3240,27 @@ pub extern "C" fn sqlite3_expr_affinity(mut p_expr: *const Expr) -> i8 {
     }
 }
 
+///* Expression Node callback for sqlite3ExprCanReturnSubtype().  If
+///* pExpr is able to return a subtype, set pWalker->eCode and abort
+///* the search.  If pExpr can never return a subtype, prune search.
+///*
+///* The only expressions that can return a subtype are:
+///*
+///*    1.  A function
+///*    2.  The no-op "+" operator
+///*    3.  A CASE...END expression
+///*    4.  A CAST() expression
+///*    5.  A "expr COLLATE colseq" expression.
+///*
+///* For any other kind of expression, prune the search.
+///*
+///* For case 1, the expression can yield a subtype if the function has
+///* the SQLITE_RESULT_SUBTYPE property.  Functions can also return
+///* a subtype (via sqlite3_result_value()) if any of the arguments can
+///* return a subtype.
+///*
+///* In all cases 1 through 5, the expression might also return a subtype
+///* if any operand can return a subtype.
 extern "C" fn expr_node_can_return_subtype(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2804,6 +3295,12 @@ extern "C" fn expr_node_can_return_subtype(p_walker_1: *mut Walker,
     }
 }
 
+///* Return TRUE if expression pExpr is able to return a subtype.
+///*
+///* A TRUE return does not guarantee that a subtype will be returned.
+///* It only indicates that a subtype return is possible.  False positives
+///* are acceptable as they only disable an optimization.  False negatives,
+///* on the other hand, can lead to incorrect answers.
 extern "C" fn sqlite3_expr_can_return_subtype(p_parse_1: *mut Parse,
     p_expr_1: *mut Expr) -> i32 {
     let mut w: Walker = unsafe { core::mem::zeroed() };
@@ -2817,6 +3314,11 @@ extern "C" fn sqlite3_expr_can_return_subtype(p_parse_1: *mut Parse,
     return w.e_code as i32;
 }
 
+///* Check to see if pExpr is one of the indexed expressions on pParse->pIdxEpr.
+///* If it is, then resolve the expression by reading from the index and
+///* return the register into which the value has been read.  If pExpr is
+///* not an indexed expression, then return negative.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_indexed_expr_lookup(p_parse_1: *mut Parse,
     p_expr_1: *mut Expr, target: i32) -> i32 {
     let mut p: *mut IndexedExpr = core::ptr::null_mut();
@@ -2848,6 +3350,8 @@ extern "C" fn sqlite3_indexed_expr_lookup(p_parse_1: *mut Parse,
                             || expr_aff as i32 == 66 && unsafe { (*p).aff } as i32 != 66
                         || expr_aff as i32 >= 67 && unsafe { (*p).aff } as i32 != 67
                     {
+
+                    /// Affinity mismatch on a generated column
                     break '__c15;
                 }
                 if unsafe { (*p_expr_1).flags } & 2147483648u32 as u32 !=
@@ -2858,6 +3362,9 @@ extern "C" fn sqlite3_indexed_expr_lookup(p_parse_1: *mut Parse,
                 v = unsafe { (*p_parse_1).p_vdbe };
                 { let _ = 0; };
                 if unsafe { (*p).b_maybe_null_row } != 0 {
+                    /// If the index is on a NULL row due to an outer join, then we
+                    ///* cannot extract the value from the index.  The value must be
+                    ///* computed using the original expression.
                     let addr: i32 = unsafe { sqlite3_vdbe_current_addr(v) };
                     unsafe {
                         sqlite3_vdbe_add_op3(v, 20, unsafe { (*p).i_idx_cur },
@@ -2888,6 +3395,8 @@ extern "C" fn sqlite3_indexed_expr_lookup(p_parse_1: *mut Parse,
     return -1;
 }
 
+///* Generate code that will compute the value of generated column pCol
+///* and store the result in register regOut
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_generated_column(p_parse: *mut Parse,
     p_tab: *mut Table, p_col: *mut Column, reg_out: i32) -> () {
@@ -2927,6 +3436,14 @@ pub extern "C" fn sqlite3_expr_code_generated_column(p_parse: *mut Parse,
     }
 }
 
+///* Expression pExpr is guaranteed to be a TK_COLUMN or equivalent. This
+///* function checks the Parse.pIdxPartExpr list to see if this column
+///* can be replaced with a constant value. If so, it generates code to
+///* put the constant value in a register (ideally, but not necessarily, 
+///* register iTarget) and returns the register number.
+///*
+///* Or, if the TK_COLUMN cannot be replaced by a constant, zero is 
+///* returned.
 extern "C" fn expr_partidx_expr_lookup(p_parse_1: *mut Parse, p_expr_1: &Expr,
     i_target_1: i32) -> i32 {
     let mut p: *mut IndexedExpr = core::ptr::null_mut();
@@ -2967,6 +3484,7 @@ extern "C" fn expr_partidx_expr_lookup(p_parse_1: *mut Parse, p_expr_1: &Expr,
     return 0;
 }
 
+///* Generate code to extract the value of the iCol-th column of a table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_get_column_of_table(v: *mut Vdbe,
     p_tab: *mut Table, i_tab_cur: i32, i_col: i32, reg_out: i32) -> () {
@@ -3027,6 +3545,11 @@ pub extern "C" fn sqlite3_expr_code_get_column_of_table(v: *mut Vdbe,
     }
 }
 
+///* Generate code that will extract the iColumn-th column from
+///* table pTab and store the column value in register iReg.
+///*
+///* There must be an open cursor to pTab in iTable when this routine
+///* is called.  If iColumn<0 then code is generated that extracts the rowid.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_get_column(p_parse: &Parse,
     p_tab: *mut Table, i_column: i32, i_table: i32, i_reg: i32, p5: u8)
@@ -3049,6 +3572,12 @@ pub extern "C" fn sqlite3_expr_code_get_column(p_parse: &Parse,
     return i_reg;
 }
 
+///* Generate an instruction that will put the floating point
+///* value described by z[0..n-1] into register iMem.
+///*
+///* The z[] string will probably not be zero-terminated.  But the
+///* z[n] character is guaranteed to be something that does not look
+///* like the continuation of the number.
 extern "C" fn code_real(v: *mut Vdbe, z: *const i8, negate_flag_1: i32,
     i_mem_1: i32) -> () {
     if z != core::ptr::null() {
@@ -3063,6 +3592,10 @@ extern "C" fn code_real(v: *mut Vdbe, z: *const i8, negate_flag_1: i32,
     }
 }
 
+///* Generate an instruction that will put the integer describe by
+///* text z[0..n-1] into register iMem.
+///*
+///* Expr.u.zToken is always UTF8 and zero-terminated.
 extern "C" fn code_integer(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     neg_flag_1: i32, i_mem_1: i32) -> () {
     unsafe {
@@ -3113,6 +3646,9 @@ extern "C" fn code_integer(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     }
 }
 
+///* Skip over any TK_COLLATE operators and/or any unlikely()
+///* or likelihood() or likely() functions at the root of an
+///* expression.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_skip_collate_and_likely(mut p_expr: *mut Expr)
     -> *mut Expr {
@@ -3137,6 +3673,8 @@ pub extern "C" fn sqlite3_expr_skip_collate_and_likely(mut p_expr: *mut Expr)
     }
 }
 
+///* The argument must be a TK_TRUEFALSE Expr node.  Return 1 if it is TRUE
+///* and 0 if it is FALSE.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_truth_value(mut p_expr: *const Expr) -> i32 {
     unsafe {
@@ -3151,21 +3689,35 @@ pub extern "C" fn sqlite3_expr_truth_value(mut p_expr: *const Expr) -> i32 {
     }
 }
 
+///* Return true if expression pExpr is a vector, or false otherwise.
+///*
+///* A vector is defined as any expression that results in two or more
+///* columns of result.  Every TK_VECTOR node is an vector because the
+///* parser will not generate a TK_VECTOR with fewer than two entries.
+///* But a TK_SELECT might be either a vector or a scalar. It is only
+///* considered a vector if it has two or more result columns.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_vector(p_expr: *const Expr) -> i32 {
     return (sqlite3_expr_vector_size(unsafe { &*p_expr }) > 1) as i32;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
     p_expr: &mut Expr) -> i32 {
     unsafe {
         let mut addr_once: i32 = 0;
+        /// Address of OP_Once at top of subroutine
         let mut r_reg: i32 = 0;
+        /// Register storing resulting
         let mut p_sel: *mut Select = core::ptr::null_mut();
+        /// SELECT statement to encode
         let mut dest: SelectDest = unsafe { core::mem::zeroed() };
+        /// How to deal with SELECT result
         let mut n_reg: i32 = 0;
+        /// Registers to allocate
         let mut p_limit: *mut Expr = core::ptr::null_mut();
+        /// New limit expression
         let v: *mut Vdbe = unsafe { (*p_parse).p_vdbe };
         { let _ = 0; };
         if unsafe { (*p_parse).n_err } != 0 { return 0; }
@@ -3185,6 +3737,8 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
             };
             return (*p_expr).i_table;
         }
+
+        /// Begin coding the subroutine
         { let _ = 0; };
         { let _ = 0; };
         (*p_expr).flags |= 33554432 as u32;
@@ -3197,6 +3751,16 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
         if !((*p_expr).flags & 64 as u32 != 0 as u32) as i32 != 0 {
             addr_once = unsafe { sqlite3_vdbe_add_op0(v, 15) };
         }
+
+        /// For a SELECT, generate code to put the values for all columns of
+        ///* the first row into an array of registers and return the index of
+        ///* the first register.
+        ///*
+        ///* If this is an EXISTS, write an integer 0 (not exists) or 1 (exists)
+        ///* into a register and return that register number.
+        ///*
+        ///* In both cases, the query is augmented with "LIMIT 1".  Any
+        ///* preexisting limit is discarded in place of the new LIMIT 1.
         unsafe {
             sqlite3_vdbe_explain(p_parse, 1 as u8,
                 c"%sSCALAR SUBQUERY %d".as_ptr() as *mut i8 as *const i8,
@@ -3221,7 +3785,16 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
                     !(unsafe {
                                     (*unsafe { (*p_sel).p_limit }).p_right
                                 }).is_null() {
-                dest.i_sdst = unsafe { (*p_parse).n_mem } + 1;
+
+                /// If there is both a DISTINCT and an OFFSET clause, then allocate
+                ///* a separate dest.iSdst array for sqlite3Select() and other
+                ///* routines to populate. In this case results will be copied over
+                ///* into the dest.iSDParm array only after OFFSET processing. This
+                ///* ensures that in the case where OFFSET excludes all rows, the
+                ///* dest.iSDParm array is not left populated with the contents of the
+                ///* last row visited - it should be all NULLs if all rows were
+                ///* excluded by OFFSET.
+                (dest.i_sdst = unsafe { (*p_parse).n_mem } + 1);
                 unsafe { (*p_parse).n_mem += n_reg };
             } else { dest.i_sdst = dest.i_sd_parm; }
             dest.n_sdst = n_reg;
@@ -3234,6 +3807,9 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
             unsafe { sqlite3_vdbe_add_op2(v, 73, 0, dest.i_sd_parm) };
         }
         if !(unsafe { (*p_sel).p_limit }).is_null() {
+            /// The subquery already has a limit.  If the pre-existing limit X is 
+            ///* not already integer value 1 or 0, then make the new limit X<>0 so that
+            ///* the new limit is either 1 or 0
             let p_left: *mut Expr =
                 unsafe { (*unsafe { (*p_sel).p_limit }).p_left };
             if (unsafe { (*p_left).flags } & 2048 as u32 != 0 as u32) as i32
@@ -3252,7 +3828,9 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
                 unsafe { (*unsafe { (*p_sel).p_limit }).p_left = p_limit };
             }
         } else {
-            p_limit = sqlite3_expr_int32(unsafe { (*p_parse).db }, 1);
+
+            /// If there is no pre-existing limit add a limit of 1
+            (p_limit = sqlite3_expr_int32(unsafe { (*p_parse).db }, 1));
             unsafe {
                 (*p_sel).p_limit =
                     sqlite3_p_expr(p_parse, 149, p_limit, core::ptr::null_mut())
@@ -3266,6 +3844,8 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
         }
         (*p_expr).i_table = { r_reg = dest.i_sd_parm; r_reg };
         if addr_once != 0 { unsafe { sqlite3_vdbe_jump_here(v, addr_once) }; }
+
+        /// Subroutine return
         { let _ = 0; };
         { let _ = 0; };
         unsafe {
@@ -3277,6 +3857,12 @@ pub extern "C" fn sqlite3_code_subselect(p_parse: *mut Parse,
     }
 }
 
+///* If expression pExpr is of type TK_SELECT, generate code to evaluate
+///* it. Return the register in which the result is stored (or, if the
+///* sub-select returns more than one column, the first in an array
+///* of registers in which the result is stored).
+///*
+///* If pExpr is not a TK_SELECT expression, return 0.
 extern "C" fn expr_code_subselect(p_parse_1: *mut Parse, p_expr_1: *mut Expr)
     -> i32 {
     let mut reg: i32 = 0;
@@ -3286,6 +3872,19 @@ extern "C" fn expr_code_subselect(p_parse_1: *mut Parse, p_expr_1: *mut Expr)
     return reg;
 }
 
+///* Return a pointer to a subexpression of pVector that is the i-th
+///* column of the vector (numbered starting with 0).  The caller must
+///* ensure that i is within range.
+///*
+///* If pVector is really a scalar (and "scalar" here includes subqueries
+///* that return a single column!) then return pVector unmodified.
+///*
+///* pVector retains ownership of the returned subexpression.
+///*
+///* If the vector is a (SELECT ...) then the expression returned is
+///* just the expression for the i-th term of the result set, and may
+///* not be ready for evaluation because the table cursor has not yet
+///* been positioned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vector_field_subexpr(p_vector: *mut Expr, i: i32)
     -> *mut Expr {
@@ -3315,13 +3914,33 @@ pub extern "C" fn sqlite3_vector_field_subexpr(p_vector: *mut Expr, i: i32)
     }
 }
 
+///* pExpr is a TK_FUNCTION node.  Try to determine whether or not the
+///* function is a constant function.  A function is constant if all of
+///* the following are true:
+///*
+///*    (1)  It is a scalar function (not an aggregate or window function)
+///*    (2)  It has either the SQLITE_FUNC_CONSTANT or SQLITE_FUNC_SLOCHNG
+///*         property.
+///*    (3)  All of its arguments are constants
+///*
+///* This routine sets pWalker->eCode to 0 if pExpr is not a constant.
+///* It makes no changes to pWalker->eCode if pExpr is constant.  In
+///* every case, it returns WRC_Abort.
+///*
+///* Called as a service subroutine from exprNodeIsConstant().
+#[allow(unused_doc_comments)]
 extern "C" fn expr_node_is_constant_function(p_walker_1: *mut Walker,
     p_expr_1: &Expr) -> i32 {
     unsafe {
         let mut n: i32 = 0;
+        /// Number of arguments
         let mut p_list: *mut ExprList = core::ptr::null_mut();
+        /// List of arguments
         let mut p_def: *const FuncDef = core::ptr::null();
+        /// The function
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+
+        /// The database
         { let _ = 0; };
         if (*p_expr_1).flags & 65536 as u32 != 0 as u32 ||
                 { p_list = (*p_expr_1).x.p_list; p_list } ==
@@ -3350,6 +3969,12 @@ extern "C" fn expr_node_is_constant_function(p_walker_1: *mut Walker,
     }
 }
 
+///* Check the input string to see if it is "true" or "false" (in any case).
+///*
+///*       If the string is....           Return
+///*         "true"                         EP_IsTrue
+///*         "false"                        EP_IsFalse
+///*         anything else                  0
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_true_or_false(z_in: *const i8) -> u32 {
     if unsafe {
@@ -3367,6 +3992,9 @@ pub extern "C" fn sqlite3_is_true_or_false(z_in: *const i8) -> u32 {
     return 0 as u32;
 }
 
+///* If the input expression is an ID with the name "true" or "false"
+///* then convert it into an TK_TRUEFALSE term.  Return non-zero if
+///* the conversion happened, and zero if the expression is unaltered.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_id_to_true_false(p_expr: &mut Expr) -> i32 {
     unsafe {
@@ -3387,6 +4015,31 @@ pub extern "C" fn sqlite3_expr_id_to_true_false(p_expr: &mut Expr) -> i32 {
     }
 }
 
+///* These routines are Walker callbacks used to check expressions to
+///* see if they are "constant" for some definition of constant.  The
+///* Walker.eCode value determines the type of "constant" we are looking
+///* for.
+///*
+///* These callback routines are used to implement the following:
+///*
+///*     sqlite3ExprIsConstant()                  pWalker->eCode==1
+///*     sqlite3ExprIsConstantNotJoin()           pWalker->eCode==2
+///*     sqlite3ExprIsTableConstant()             pWalker->eCode==3
+///*     sqlite3ExprIsConstantOrFunction()        pWalker->eCode==4 or 5
+///*
+///* In all cases, the callbacks set Walker.eCode=0 and abort if the expression
+///* is found to not be a constant.
+///*
+///* The sqlite3ExprIsConstantOrFunction() is used for evaluating DEFAULT
+///* expressions in a CREATE TABLE statement.  The Walker.eCode value is 5
+///* when parsing an existing schema out of the sqlite_schema table and 4
+///* when processing a new CREATE TABLE statement.  A bound parameter raises
+///* an error for new statements, but is silently converted
+///* to NULL for existing schemas.  This allows sqlite_schema tables that
+///* contain a bound parameter because they were generated by older versions
+///* of SQLite to be parsed by newer versions of SQLite without raising a
+///* malformed schema error.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_node_is_constant(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -3506,8 +4159,15 @@ extern "C" fn expr_node_is_constant(p_walker_1: *mut Walker,
                 }
                 157 => {
                     if unsafe { (*p_walker_1).e_code } as i32 == 5 {
+
+                        /// Silently convert bound parameters that appear inside of CREATE
+                        ///* statements into a NULL when parsing the CREATE statement text out
+                        ///* of the sqlite_schema table
                         unsafe { (*p_expr_1).op = 122 as u8 };
                     } else if unsafe { (*p_walker_1).e_code } as i32 == 4 {
+
+                        /// A bound parameter in a CREATE statement that originates from
+                        ///* sqlite3_prepare() causes an error
                         unsafe { (*p_walker_1).e_code = 0 as u16 };
                         return 2;
                     }
@@ -3530,11 +4190,37 @@ extern "C" fn expr_is_const(p_parse_1: *mut Parse, p: *mut Expr,
     return w.e_code as i32;
 }
 
+///* Walk an expression tree.  Return non-zero if
+///*
+///*   (1) the expression is constant, and
+///*   (2) the expression does not originate in the ON or USING clause
+///*       of a LEFT JOIN, and
+///*   (3) the expression does not contain any EP_FixedCol TK_COLUMN
+///*       operands created by the constant propagation optimization.
+///*
+///* When this routine returns true, it indicates that the expression
+///* can be added to the pParse->pConstExpr list and evaluated once when
+///* the prepared statement starts up.  See sqlite3ExprCodeRunJustOnce().
 extern "C" fn sqlite3_expr_is_constant_not_join(p_parse_1: *mut Parse,
     p: *mut Expr) -> i32 {
     return expr_is_const(p_parse_1, p, 2);
 }
 
+///* Generate code that will evaluate expression pExpr just one time
+///* per prepared statement execution.
+///*
+///* If the expression uses functions (that might throw an exception) then
+///* guard them with an OP_Once opcode to ensure that the code is only executed
+///* once. If no functions are involved, then factor the code out and put it at
+///* the end of the prepared statement in the initialization section.
+///*
+///* If regDest>0 then the result is always stored in that register and the
+///* result is not reusable.  If regDest<0 then this routine is free to
+///* store the value wherever it wants.  The register where the expression
+///* is stored is returned.  When regDest<0, two identical expressions might
+///* code to the same register, if they do not contain function calls and hence
+///* are factored out into the initialization section at the end of the
+///* prepared statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_run_just_once(p_parse: *mut Parse,
     mut p_expr: *mut Expr, mut reg_dest: i32) -> i32 {
@@ -3627,6 +4313,17 @@ pub extern "C" fn sqlite3_expr_code_run_just_once(p_parse: *mut Parse,
     }
 }
 
+///* Generate code to evaluate an expression and store the results
+///* into a register.  Return the register number where the results
+///* are stored.
+///*
+///* If the register is a temporary register that can be deallocated,
+///* then write its number into *pReg.  If the result register is not
+///* a temporary, then set *pReg to zero.
+///*
+///* If pExpr is a constant, then this routine might generate this
+///* code to fill the register in the initialization section of the
+///* VDBE program, in order to factor it out of the evaluation loop.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_temp(p_parse: *mut Parse,
     mut p_expr: *mut Expr, p_reg: &mut i32) -> i32 {
@@ -3651,6 +4348,22 @@ pub extern "C" fn sqlite3_expr_code_temp(p_parse: *mut Parse,
     return r2;
 }
 
+///* Argument pVector points to a vector expression - either a TK_VECTOR
+///* or TK_SELECT that returns more than one column. This function returns
+///* the register number of a register that contains the value of
+///* element iField of the vector.
+///*
+///* If pVector is a TK_SELECT expression, then code for it must have
+///* already been generated using the exprCodeSubselect() routine. In this
+///* case parameter regSelect should be the first in an array of registers
+///* containing the results of the sub-select.
+///*
+///* If pVector is of type TK_VECTOR, then code for the requested field
+///* is generated. In this case (*pRegFree) may be set to the number of
+///* a temporary register to be freed by the caller before returning.
+///*
+///* Before returning, output parameter (*ppExpr) is set to point to the
+///* Expr object corresponding to element iElem of the vector.
 extern "C" fn expr_vector_register(p_parse_1: *mut Parse,
     p_vector_1: *mut Expr, i_field_1: i32, reg_select_1: i32,
     pp_expr_1: &mut *mut Expr, p_reg_free_1: *mut i32) -> i32 {
@@ -3688,7 +4401,20 @@ extern "C" fn expr_vector_register(p_parse_1: *mut Parse,
     }
 }
 
+///* Return the collation sequence for the expression pExpr. If
+///* there is no defined collating sequence, return NULL.
+///*
+///* See also: sqlite3ExprNNCollSeq()
+///*
+///* The sqlite3ExprNNCollSeq() works the same exact that it returns the
+///* default collation if pExpr has no defined collation.
+///*
+///* The collating sequence might be determined by a COLLATE operator
+///* or by the presence of a column with a defined collating sequence.
+///* COLLATE operators take first precedence.  Left operands take
+///* precedence over right operands.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_coll_seq(p_parse: *mut Parse,
     p_expr: *const Expr) -> *mut CollSeq {
     unsafe {
@@ -3751,6 +4477,8 @@ pub extern "C" fn sqlite3_expr_coll_seq(p_parse: *mut Parse,
                 } else {
                     let mut p_next: *const Expr =
                         unsafe { (*p).p_right } as *const Expr;
+
+                    /// The Expr.x union is never used at the same time as Expr.pRight
                     { let _ = 0; };
                     if unsafe { (*p).flags } & 4096 as u32 == 0 as u32 &&
                                 unsafe { (*p).x.p_list } != core::ptr::null_mut() &&
@@ -3793,6 +4521,16 @@ pub extern "C" fn sqlite3_expr_coll_seq(p_parse: *mut Parse,
     }
 }
 
+///* Return a pointer to the collation sequence that should be used by
+///* a binary comparison operator comparing pLeft and pRight.
+///*
+///* If the left hand expression has a collating sequence type, then it is
+///* used. Otherwise the collation sequence for the right hand expression
+///* is used, or the default (BINARY) if neither expression has a collating
+///* type.
+///*
+///* Argument pRight (but not pLeft) may be a null pointer. In this case,
+///* it is not considered.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_binary_compare_coll_seq(p_parse: *mut Parse,
     p_left: *const Expr, p_right: *const Expr) -> *mut CollSeq {
@@ -3812,7 +4550,11 @@ pub extern "C" fn sqlite3_binary_compare_coll_seq(p_parse: *mut Parse,
     return p_coll;
 }
 
+///* pExpr is an operand of a comparison operator.  aff2 is the
+///* type affinity of the other operand.  This routine returns the
+///* type affinity that should be used for the comparison operator.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_compare_affinity(p_expr: *const Expr, aff2: i8)
     -> i8 {
     let aff1: i8 = sqlite3_expr_affinity(p_expr);
@@ -3821,12 +4563,16 @@ pub extern "C" fn sqlite3_compare_affinity(p_expr: *const Expr, aff2: i8)
             return 67 as i8;
         } else { return 65 as i8; }
     } else {
+
+        /// One side is a column, the other is not. Use the columns affinity.
         { let _ = 0; };
         return (if aff1 as i32 <= 64 { aff2 as i32 } else { aff1 as i32 } |
                     64) as i8;
     }
 }
 
+///* Return the P5 value that should be used for a binary comparison
+///* opcode (OP_Eq, OP_Ge etc.) used to compare pExpr1 and pExpr2.
 extern "C" fn binary_compare_p5(p_expr1_1: *const Expr,
     p_expr2_1: *const Expr, jump_if_null_1: i32) -> u8 {
     let mut aff: u8 = sqlite3_expr_affinity(p_expr2_1) as i8 as u8;
@@ -3836,6 +4582,7 @@ extern "C" fn binary_compare_p5(p_expr1_1: *const Expr,
     return aff;
 }
 
+///* Generate code for a comparison operator.
 extern "C" fn code_compare(p_parse_1: *mut Parse, p_left_1: *const Expr,
     p_right_1: *const Expr, opcode: i32, in1: i32, in2: i32, dest: i32,
     jump_if_null_1: i32, is_commuted_1: i32) -> i32 {
@@ -3866,6 +4613,15 @@ extern "C" fn code_compare(p_parse_1: *mut Parse, p_left_1: *const Expr,
     return addr;
 }
 
+///* Expression pExpr is a comparison between two vector values. Compute
+///* the result of the comparison (1, 0, or NULL) and write that
+///* result into register dest.
+///*
+///* The caller must satisfy the following preconditions:
+///*
+///*    if pExpr->op==TK_IS:      op==TK_EQ and p5==SQLITE_NULLEQ
+///*    if pExpr->op==TK_ISNOT:   op==TK_NE and p5==SQLITE_NULLEQ
+///*    otherwise:                op==pExpr->op and p5==0
 extern "C" fn code_vector_compare(p_parse_1: *mut Parse, p_expr_1: &Expr,
     dest: i32, op: u8, p5: u8) -> () {
     let v: *mut Vdbe = unsafe { (*p_parse_1).p_vdbe };
@@ -3954,6 +4710,12 @@ extern "C" fn code_vector_compare(p_parse_1: *mut Parse, p_expr_1: &Expr,
     if op as i32 == 53 { unsafe { sqlite3_vdbe_add_op2(v, 19, dest, dest) }; }
 }
 
+///* Return true if it might be advantageous to compute the right operand
+///* of expression pExpr first, before the left operand.
+///*
+///* Normally the left operand is computed before the right operand.  But if
+///* the left operand contains a subquery and the right does not, then it
+///* might be more efficient to compute the right operand first.
 extern "C" fn expr_eval_rhs_first(p_expr_1: &Expr) -> i32 {
     if unsafe { (*(*p_expr_1).p_left).flags } & 4194304 as u32 != 0 as u32 &&
             !(unsafe { (*(*p_expr_1).p_right).flags } & 4194304 as u32 !=
@@ -3962,6 +4724,18 @@ extern "C" fn expr_eval_rhs_first(p_expr_1: &Expr) -> i32 {
     } else { return 0; }
 }
 
+///* Return FALSE if there is no chance that the expression can be NULL.
+///*
+///* If the expression might be NULL or if the expression is too complex
+///* to tell return TRUE. 
+///*
+///* This routine is used as an optimization, to skip OP_IsNull opcodes
+///* when we know that a value cannot be NULL.  Hence, a false positive
+///* (returning TRUE when in fact the expression can never be NULL) might
+///* be a small performance hit but is otherwise harmless.  On the other
+///* hand, a false negative (returning FALSE when the result could be NULL)
+///* will likely result in an incorrect answer.  So when in doubt, return
+///* TRUE.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_can_be_null(mut p: *const Expr) -> i32 {
     unsafe {
@@ -4077,6 +4851,17 @@ pub extern "C" fn sqlite3_expr_can_be_null(mut p: *const Expr) -> i32 {
     }
 }
 
+///* Compute the two operands of a binary operator.
+///*
+///* If either operand contains a subquery, then the code strives to
+///* compute the operand containing the subquery second.  If the other
+///* operand evalutes to NULL, then a jump is made.  The address of the
+///* IsNull operand that does this jump is returned.  The caller can use
+///* this to optimize the computation so as to avoid doing the potentially
+///* expensive subquery.
+///*
+///* If no optimization opportunities exist, return 0.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_compute_operands(p_parse_1: *mut Parse,
     p_expr_1: *mut Expr, p_r1_1: &mut i32, p_r2_1: &mut i32,
     p_free1_1: *mut i32, p_free2_1: *mut i32) -> i32 {
@@ -4092,7 +4877,12 @@ extern "C" fn expr_compute_operands(p_parse_1: *mut Parse,
             sqlite3_expr_code_temp(p_parse_1, unsafe { (*p_expr_1).p_right },
                 unsafe { &mut *p_free2_1 });
         addr_is_null = unsafe { sqlite3_vdbe_add_op1(v, 51, r2) };
-    } else { r2 = 0; addr_is_null = 0; }
+    } else {
+        r2 = 0;
+
+        /// Silence a false-positive uninit-var warning in MSVC
+        (addr_is_null = 0);
+    }
     r1 =
         sqlite3_expr_code_temp(p_parse_1, unsafe { (*p_expr_1).p_left },
             unsafe { &mut *p_free1_1 });
@@ -4112,16 +4902,33 @@ extern "C" fn expr_compute_operands(p_parse_1: *mut Parse,
     return addr_is_null;
 }
 
+///* Generate code that evaluates an AND or OR operator leaving a
+///* boolean result in a register.  pExpr is the AND/OR expression.
+///* Store the result in the "target" register.  Use short-circuit
+///* evaluation to avoid computing both operands, if possible.
+///*
+///* The code generated might require the use of a temporary register.
+///* If it does, then write the number of that temporary register
+///* into *pTmpReg.  If not, leave *pTmpReg unchanged.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_code_target_and_or(p_parse_1: *mut Parse,
     p_expr_1: *mut Expr, target: i32, p_tmp_reg_1: *mut i32) -> i32 {
     let mut op: i32 = 0;
+    /// The opcode.  TK_AND or TK_OR
     let mut skip_op: i32 = 0;
+    /// Opcode for the branch that skips one operand
     let mut addr_skip: i32 = 0;
+    /// Branch instruction that skips one of the operands
     let mut reg_ss: i32 = 0;
+    /// Register holding computed operand when other omitted
     let mut r1: i32 = 0;
     let mut r2: i32 = 0;
+    /// Registers for left and right operands, respectively
     let mut p_alt: *mut Expr = core::ptr::null_mut();
+    /// Alternative, simplified expression
     let mut v: *mut Vdbe = core::ptr::null_mut();
+
+    /// statement being coded
     { let _ = 0; };
     op = unsafe { (*p_expr_1).op } as i32;
     { let _ = 0; };
@@ -4137,24 +4944,33 @@ extern "C" fn expr_code_target_and_or(p_parse_1: *mut Parse,
     }
     skip_op = if op == 44 { 17 } else { 16 };
     if expr_eval_rhs_first(unsafe { &*p_expr_1 }) != 0 {
-        r2 =
+
+        /// Compute the right operand first.  Skip the computation of the left
+        ///* operand if the right operand fully determines the result
+        (r2 =
             {
                 reg_ss =
                     sqlite3_expr_code_target(p_parse_1,
                         unsafe { (*p_expr_1).p_right }, target);
                 reg_ss
-            };
+            });
         addr_skip = unsafe { sqlite3_vdbe_add_op1(v, skip_op, r2) };
         r1 =
             sqlite3_expr_code_temp(p_parse_1, unsafe { (*p_expr_1).p_left },
                 unsafe { &mut *p_tmp_reg_1 });
     } else {
-        r1 =
+
+        /// Compute the left operand first
+        (r1 =
             sqlite3_expr_code_target(p_parse_1, unsafe { (*p_expr_1).p_left },
-                target);
+                target));
         if unsafe { (*unsafe { (*p_expr_1).p_right }).flags } & 4194304 as u32
                 != 0 as u32 {
-            reg_ss = r1;
+
+            /// Skip over the computation of the right operand if the right
+            ///* operand is a subquery and the left operand completely determines
+            ///* the result
+            (reg_ss = r1);
             addr_skip = unsafe { sqlite3_vdbe_add_op1(v, skip_op, r1) };
         } else { addr_skip = { reg_ss = 0; reg_ss }; }
         r2 =
@@ -4173,6 +4989,8 @@ extern "C" fn expr_code_target_and_or(p_parse_1: *mut Parse,
     return target;
 }
 
+///* If the last opcode is a OP_Copy, then set the do-not-merge flag (p5)
+///* so that a subsequent copy will not be merged into this one.
 extern "C" fn set_do_not_merge_flag_on_copy(v: *mut Vdbe) -> () {
     if unsafe { (*unsafe { sqlite3_vdbe_get_last_op(v) }).opcode } as i32 ==
             82 {
@@ -4180,6 +4998,10 @@ extern "C" fn set_do_not_merge_flag_on_copy(v: *mut Vdbe) -> () {
     }
 }
 
+///* Return non-zero if Expr p can only be true if pNN is not NULL.
+///*
+///* Or if seenNot is true, return non-zero if Expr p can only be
+///* non-NULL if pNN is not NULL
 extern "C" fn expr_implies_not_null(p_parse_1: *const Parse, p: *const Expr,
     p_nn_1: *const Expr, i_tab_1: i32, mut seen_not_1: i32) -> i32 {
     unsafe {
@@ -4789,12 +5611,25 @@ extern "C" fn expr_implies_not_null(p_parse_1: *const Parse, p: *const Expr,
     }
 }
 
+///* If the expression p codes a constant integer that is small enough
+///* to fit in a 32-bit integer, return 1 and put the value of the integer
+///* in *pValue.  If the expression is not an integer or if it is too big
+///* to fit in a signed 32-bit integer, return 0 and leave *pValue unchanged.
+///*
+///* If the pParse pointer is provided, then allow the expression p to be
+///* a parameter (TK_VARIABLE) that is bound to an integer.
+///* But if pParse is NULL, then p must be a pure integer literal.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_is_integer(p: *const Expr, p_value: *mut i32,
     p_parse: *mut Parse) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         if p == core::ptr::null() { return 0; }
+
+        /// Used to only happen following on OOM
+        /// If an expression is an integer literal that fits in a signed 32-bit
+        ///* integer, then the EP_IntValue flag will have already been set
         { let _ = 0; };
         if unsafe { (*p).flags } & 2048 as u32 != 0 {
             unsafe { *p_value = unsafe { (*p).u.i_value } as i32 };
@@ -4845,8 +5680,12 @@ pub extern "C" fn sqlite3_expr_is_integer(p: *const Expr, p_value: *mut i32,
                                 let vv: Sqlite3Int64 =
                                     unsafe { sqlite3_value_int64(p_val) };
                                 if vv == vv & 2147483647 as Sqlite3Int64 {
+
+                                    /// non-negative numbers only
                                     unsafe { *p_value = vv as i32 };
-                                    rc = 1;
+
+                                    /// non-negative numbers only
+                                    (rc = 1);
                                 }
                             }
                             unsafe { sqlite3ValueFree(p_val) };
@@ -4890,8 +5729,12 @@ pub extern "C" fn sqlite3_expr_is_integer(p: *const Expr, p_value: *mut i32,
                                 let vv: Sqlite3Int64 =
                                     unsafe { sqlite3_value_int64(p_val) };
                                 if vv == vv & 2147483647 as Sqlite3Int64 {
+
+                                    /// non-negative numbers only
                                     unsafe { *p_value = vv as i32 };
-                                    rc = 1;
+
+                                    /// non-negative numbers only
+                                    (rc = 1);
                                 }
                             }
                             unsafe { sqlite3ValueFree(p_val) };
@@ -4925,8 +5768,12 @@ pub extern "C" fn sqlite3_expr_is_integer(p: *const Expr, p_value: *mut i32,
                                 let vv: Sqlite3Int64 =
                                     unsafe { sqlite3_value_int64(p_val) };
                                 if vv == vv & 2147483647 as Sqlite3Int64 {
+
+                                    /// non-negative numbers only
                                     unsafe { *p_value = vv as i32 };
-                                    rc = 1;
+
+                                    /// non-negative numbers only
+                                    (rc = 1);
                                 }
                             }
                             unsafe { sqlite3ValueFree(p_val) };
@@ -4941,6 +5788,8 @@ pub extern "C" fn sqlite3_expr_is_integer(p: *const Expr, p_value: *mut i32,
     }
 }
 
+///* Return true if the boolean value of the expression is always either
+///* FALSE or NULL.
 extern "C" fn sqlite3_expr_is_not_true(p_expr_1: *const Expr) -> i32 {
     let mut v: i32 = 0;
     if unsafe { (*p_expr_1).op } as i32 == 122 { return 1; }
@@ -4956,6 +5805,14 @@ extern "C" fn sqlite3_expr_is_not_true(p_expr_1: *const Expr) -> i32 {
     return 0;
 }
 
+///* Return true if the expression is one of the following:
+///*
+///*    CASE WHEN x THEN y END
+///*    CASE WHEN x THEN y ELSE NULL END
+///*    CASE WHEN x THEN y ELSE false END
+///*    iif(x,y)
+///*    iif(x,y,NULL)
+///*    iif(x,y,false)
 extern "C" fn sqlite3_expr_is_iif(db: *mut Sqlite3, p_expr_1: &Expr) -> i32 {
     unsafe {
         let mut p_list: *const ExprList = core::ptr::null();
@@ -4997,6 +5854,31 @@ extern "C" fn sqlite3_expr_is_iif(db: *mut Sqlite3, p_expr_1: &Expr) -> i32 {
     }
 }
 
+///* Return true if we can prove the pE2 will always be true if pE1 is
+///* true.  Return false if we cannot complete the proof or if pE2 might
+///* be false.  Examples:
+///*
+///*     pE1: x==5        pE2: x==5             Result: true
+///*     pE1: x>0         pE2: x==5             Result: false
+///*     pE1: x=21        pE2: x=21 OR y=43     Result: true
+///*     pE1: x!=123      pE2: x IS NOT NULL    Result: true
+///*     pE1: x!=?1       pE2: x IS NOT NULL    Result: true
+///*     pE1: x IS NULL   pE2: x IS NOT NULL    Result: false
+///*     pE1: x IS ?2     pE2: x IS NOT NULL    Result: false
+///*     pE1: iif(x,y)    pE2: x                Result: true
+///*     PE1: iif(x,y,0)  pE2: x                Result: true
+///*
+///* When comparing TK_COLUMN nodes between pE1 and pE2, if pE2 has
+///* Expr.iTable<0 then assume a table number given by iTab.
+///*
+///* If pParse is not NULL, then the values of bound variables in pE1 are
+///* compared against literal values in pE2 and pParse->pVdbe->expmask is
+///* modified to record which bound variables are referenced.  If pParse
+///* is NULL, then false will be returned if pE1 contains any bound variables.
+///*
+///* When in doubt, return false.  Returning true might give a performance
+///* improvement.  Returning false might cause a performance reduction, but
+///* it will always give the correct answer and is hence always safe.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_implies_expr(p_parse: *const Parse,
     p_e1: *const Expr, p_e2: *const Expr, i_tab: i32) -> i32 {
@@ -5026,6 +5908,9 @@ pub extern "C" fn sqlite3_expr_implies_expr(p_parse: *const Parse,
     }
 }
 
+/// This is a helper function to impliesNotNullRow().  In this routine,
+///* set pWalker->eCode to one only if *both* of the input expressions
+///* separately have the implies-not-null-row property.
 extern "C" fn both_imply_not_null_row(p_walker_1: *mut Walker,
     p_e1_1: *mut Expr, p_e2_1: *mut Expr) -> () {
     if unsafe { (*p_walker_1).e_code } as i32 == 0 {
@@ -5037,12 +5922,30 @@ extern "C" fn both_imply_not_null_row(p_walker_1: *mut Walker,
     }
 }
 
+///* This is the Expr node callback for sqlite3ExprImpliesNonNullRow().
+///* If the expression node requires that the table at pWalker->iCur
+///* have one or more non-NULL column, then set pWalker->eCode to 1 and abort.
+///*
+///* pWalker->mWFlags is non-zero if this inquiry is being undertaking on
+///* behalf of a RIGHT JOIN (or FULL JOIN).  That makes a difference when
+///* evaluating terms in the ON clause of an inner join.
+///*
+///* This routine controls an optimization.  False positives (setting
+///* pWalker->eCode to 1 when it should not be) are deadly, but false-negatives
+///* (never setting pWalker->eCode) is a harmless missed optimization.
+#[allow(unused_doc_comments)]
 extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
         if unsafe { (*p_expr_1).flags } & 1 as u32 != 0 as u32 { return 1; }
         if unsafe { (*p_expr_1).flags } & 2 as u32 != 0 as u32 &&
                 unsafe { (*p_walker_1).m_w_flags } != 0 {
+
+            /// If iCur is used in an inner-join ON clause to the left of a
+            ///* RIGHT JOIN, that does *not* mean that the table must be non-null.
+            ///* But it is difficult to check for that condition precisely.
+            ///* To keep things simple, any use of iCur from any inner-join is
+            ///* ignored while attempting to simplify a RIGHT JOIN.
             return 1;
         }
         '__s27:
@@ -5108,6 +6011,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5129,6 +6035,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5150,6 +6059,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5171,6 +6083,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5192,6 +6107,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5213,6 +6131,9 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
                             unsafe { (*p_expr_1).p_left } as *const Expr;
                         let p_right: *const Expr =
                             unsafe { (*p_expr_1).p_right } as *const Expr;
+
+                        /// The y.pTab=0 assignment in wherecode.c always happens after the
+                        ///* impliesNotNullRow() test
                         { let _ = 0; };
                         { let _ = 0; };
                         if unsafe { (*p_left).op } as i32 == 168 &&
@@ -5234,6 +6155,26 @@ extern "C" fn implies_not_null_row(p_walker_1: *mut Walker,
     }
 }
 
+///* Return true (non-zero) if expression p can only be true if at least
+///* one column of table iTab is non-null.  In other words, return true
+///* if expression p will always be NULL or false if every column of iTab
+///* is NULL.
+///*
+///* False negatives are acceptable.  In other words, it is ok to return
+///* zero even if expression p will never be true of every column of iTab
+///* is NULL.  A false negative is merely a missed optimization opportunity.
+///*
+///* False positives are not allowed, however.  A false positive may result
+///* in an incorrect answer.
+///*
+///* Terms of p that are marked with EP_OuterON (and hence that come from
+///* the ON or USING clauses of OUTER JOINS) are excluded from the analysis.
+///*
+///* This routine is used to check if a LEFT JOIN can be converted into
+///* an ordinary JOIN.  The p argument is the WHERE clause.  If the WHERE
+///* clause requires that some column of the right table of the LEFT JOIN
+///* be non-NULL, then the LEFT JOIN can be safely converted into an
+///* ordinary join.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_implies_non_null_row(mut p: *mut Expr,
     i_tab: i32, is_rj: i32) -> i32 {
@@ -5263,6 +6204,9 @@ pub extern "C" fn sqlite3_expr_implies_non_null_row(mut p: *mut Expr,
     }
 }
 
+///* Generate code to implement special SQL functions that are implemented
+///* in-line rather than by using the usual callbacks.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
     p_farg_1: *mut ExprList, i_func_id_1: i32, mut target: i32) -> i32 {
     unsafe {
@@ -5277,6 +6221,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
             match i_func_id_1 {
                 0 => {
                     {
+                        /// Attempt a direct implementation of the built-in COALESCE() and
+                        ///* IFNULL() functions.  This avoids unnecessary evaluation of
+                        ///* arguments past the first non-NULL argument.
                         let end_coalesce: i32 =
                             unsafe { sqlite3_vdbe_make_label(p_parse_1) };
                         let mut i: i32 = 0;
@@ -5320,6 +6267,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                                 target);
                     }
                     {
+
+                        /// The UNLIKELY() function is a no-op.  The result is the value
+                        ///* of the first argument.
                         { let _ = 0; };
                         target =
                             sqlite3_expr_code_target(p_parse_1,
@@ -5330,6 +6280,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprCompare()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5346,6 +6298,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprImpliesExpr()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5362,6 +6316,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5383,6 +6338,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5420,6 +6378,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                                 target);
                     }
                     {
+
+                        /// The UNLIKELY() function is a no-op.  The result is the value
+                        ///* of the first argument.
                         { let _ = 0; };
                         target =
                             sqlite3_expr_code_target(p_parse_1,
@@ -5430,6 +6391,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprCompare()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5446,6 +6409,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprImpliesExpr()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5462,6 +6427,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5483,6 +6449,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5509,6 +6478,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                 }
                 3 => {
                     {
+
+                        /// Compare two expressions using sqlite3ExprCompare()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5525,6 +6496,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprImpliesExpr()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5541,6 +6514,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5562,6 +6536,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5588,6 +6565,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                 }
                 2 => {
                     {
+
+                        /// Compare two expressions using sqlite3ExprImpliesExpr()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5604,6 +6583,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5625,6 +6605,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5651,6 +6634,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                 }
                 1 => {
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5672,6 +6656,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5698,6 +6685,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                 }
                 4 => {
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5724,6 +6714,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                 }
                 _ => {
                     {
+
+                        /// The UNLIKELY() function is a no-op.  The result is the value
+                        ///* of the first argument.
                         { let _ = 0; };
                         target =
                             sqlite3_expr_code_target(p_parse_1,
@@ -5734,6 +6727,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprCompare()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5750,6 +6745,8 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+
+                        /// Compare two expressions using sqlite3ExprImpliesExpr()
                         { let _ = 0; };
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 73,
@@ -5766,6 +6763,7 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// Result of sqlite3ExprImpliesNonNullRow()
                         let mut p_a1: *const Expr = core::ptr::null();
                         { let _ = 0; };
                         p_a1 =
@@ -5787,6 +6785,9 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
                         break '__s29;
                     }
                     {
+                        /// The AFFINITY() function evaluates to a string that describes
+                        ///* the type affinity of the argument.  This is used for testing of
+                        ///* the SQLite type logic.
                         let az_aff: [*const i8; 6] =
                             [c"blob".as_ptr() as *const i8,
                                     c"text".as_ptr() as *const i8,
@@ -5817,13 +6818,44 @@ extern "C" fn expr_code_inline_function(p_parse_1: *mut Parse,
     }
 }
 
+///* Walk an expression tree.  Return non-zero if the expression is constant
+///* or return zero if the expression involves variables or function calls.
+///*
+///* For the purposes of this function, a double-quoted string (ex: "abc")
+///* is considered a variable but a single-quoted string (ex: 'abc') is
+///* a constant.
+///*
+///* The pParse parameter may be NULL.  But if it is NULL, there is no way
+///* to determine if function calls are constant or not, and hence all
+///* function calls will be considered to be non-constant.  If pParse is
+///* not NULL, then a function call might be constant, depending on the
+///* function and on its parameters.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_constant(p_parse: *mut Parse, p: *mut Expr)
     -> i32 {
     return expr_is_const(p_parse, p, 1);
 }
 
+///* Generate code that pushes the value of every element of the given
+///* expression list into a sequence of registers beginning at target.
+///*
+///* Return the number of elements evaluated.  The number returned will
+///* usually be pList->nExpr but might be reduced if SQLITE_ECEL_OMITREF
+///* is defined.
+///*
+///* The SQLITE_ECEL_DUP flag prevents the arguments from being
+///* filled using OP_SCopy.  OP_Copy must be used instead.
+///*
+///* The SQLITE_ECEL_FACTOR argument allows constant arguments to be
+///* factored out into initialization code.
+///*
+///* The SQLITE_ECEL_REF flag means that expressions in the list with
+///* ExprList.a[].u.x.iOrderByCol>0 have already been evaluated and stored
+///* in registers at srcReg, and so the value can be copied from there.
+///* If SQLITE_ECEL_OMITREF is also set, then the values with u.x.iOrderByCol>0
+///* are simply omitted rather than being copied from srcReg.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_code_expr_list(p_parse: *mut Parse,
     p_list: &mut ExprList, target: i32, src_reg: i32, mut flags: u8) -> i32 {
     unsafe {
@@ -5836,7 +6868,9 @@ pub extern "C" fn sqlite3_expr_code_expr_list(p_parse: *mut Parse,
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
-        n = (*p_list).n_expr;
+
+        /// Never gets this far otherwise
+        (n = (*p_list).n_expr);
         if (unsafe { (*p_parse).ok_const_factor() } == 0) as i32 != 0 {
             flags &= !2 as u8;
         }
@@ -5908,6 +6942,10 @@ pub extern "C" fn sqlite3_expr_code_expr_list(p_parse: *mut Parse,
     }
 }
 
+///* Load the Parse object passed as the first argument with an error
+///* message of the form:
+///*
+///*   "sub-select returns N columns - expected M"
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_subselect_error(p_parse_1: *mut Parse,
     n_actual_1: i32, n_expect_1: i32) -> () {
@@ -5921,6 +6959,15 @@ pub extern "C" fn sqlite3_subselect_error(p_parse_1: *mut Parse,
     }
 }
 
+///* Expression pExpr is a vector that has been used in a context where
+///* it is not permitted. If pExpr is a sub-select vector, this routine
+///* loads the Parse object with a message of the form:
+///*
+///*   "sub-select returns N columns - expected 1"
+///*
+///* Or, if it is a regular scalar vector:
+///*
+///*   "row value misused"
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vector_error_msg(p_parse: *mut Parse, p_expr: &Expr)
     -> () {
@@ -5939,6 +6986,10 @@ pub extern "C" fn sqlite3_vector_error_msg(p_parse: *mut Parse, p_expr: &Expr)
     }
 }
 
+///* Expr pIn is an IN(...) expression. This function checks that the
+///* sub-select on the RHS of the IN() operator has the same number of
+///* columns as the vector on the LHS. Or, if the RHS of the IN() is not
+///* a sub-query, that the LHS is a vector of size 1.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_check_in(p_parse: *mut Parse, p_in: &Expr)
     -> i32 {
@@ -5966,6 +7017,12 @@ pub extern "C" fn sqlite3_expr_check_in(p_parse: *mut Parse, p_in: &Expr)
     }
 }
 
+///* Argument pExpr is an (?, ?...) IN(...) expression. This
+///* function allocates and returns a nul-terminated string containing
+///* the affinities to be used for each column of the comparison.
+///*
+///* It is the responsibility of the caller to ensure that the returned
+///* string is eventually freed using sqlite3DbFree().
 extern "C" fn expr_in_affinity(p_parse_1: &Parse, p_expr_1: &Expr)
     -> *mut i8 {
     unsafe {
@@ -6012,6 +7069,7 @@ extern "C" fn expr_in_affinity(p_parse_1: &Parse, p_expr_1: &Expr)
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn is_candidate_for_in_opt(p_x_1: &Expr) -> *mut Select {
     unsafe {
         let mut p: *mut Select = core::ptr::null_mut();
@@ -6025,7 +7083,9 @@ extern "C" fn is_candidate_for_in_opt(p_x_1: &Expr) -> *mut Select {
         if (*p_x_1).flags & 64 as u32 != 0 as u32 {
             return core::ptr::null_mut();
         }
-        p = (*p_x_1).x.p_select;
+
+        /// Correlated subq
+        (p = (*p_x_1).x.p_select);
         if !(unsafe { (*p).p_prior }).is_null() {
             return core::ptr::null_mut();
         }
@@ -6039,7 +7099,9 @@ extern "C" fn is_candidate_for_in_opt(p_x_1: &Expr) -> *mut Select {
         if !(unsafe { (*p).p_where }).is_null() {
             return core::ptr::null_mut();
         }
-        p_src = unsafe { (*p).p_src };
+
+        /// Has no WHERE clause
+        (p_src = unsafe { (*p).p_src });
         { let _ = 0; };
         if unsafe { (*p_src).n_src } != 1 { return core::ptr::null_mut(); }
         if unsafe {
@@ -6048,17 +7110,21 @@ extern "C" fn is_candidate_for_in_opt(p_x_1: &Expr) -> *mut Select {
                 } != 0 {
             return core::ptr::null_mut();
         }
-        p_tab =
+
+        /// FROM is not a subquery or view
+        (p_tab =
             unsafe {
                 (*(unsafe { (*p_src).a.as_ptr() } as
                                 *mut SrcItem).offset(0 as isize)).p_s_tab
-            };
+            });
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*p_tab).e_tab_type } as i32 == 1 {
             return core::ptr::null_mut();
         }
-        p_e_list = unsafe { (*p).p_e_list };
+
+        /// FROM clause not a virtual table
+        (p_e_list = unsafe { (*p).p_e_list });
         { let _ = 0; };
         {
             i = 0;
@@ -6083,6 +7149,10 @@ extern "C" fn is_candidate_for_in_opt(p_x_1: &Expr) -> *mut Select {
     }
 }
 
+///* Generate code that checks the left-most column of index table iCur to see if
+///* it contains any NULL entries.  Cause the register at regHasNull to be set
+///* to a non-NULL value if iCur contains no NULLs.  Cause register regHasNull
+///* to be set to NULL if iCur contains one or more NULL values.
 extern "C" fn sqlite3_set_has_null_flag(v: *mut Vdbe, i_cur_1: i32,
     reg_has_null_1: i32) -> () {
     let mut addr1: i32 = 0;
@@ -6093,6 +7163,8 @@ extern "C" fn sqlite3_set_has_null_flag(v: *mut Vdbe, i_cur_1: i32,
     unsafe { sqlite3_vdbe_jump_here(v, addr1) };
 }
 
+///* The argument is an IN operator with a list (not a subquery) on the
+///* right-hand side.  Return TRUE if that list is constant.
 extern "C" fn sqlite3_in_rhs_is_constant(p_parse_1: *mut Parse,
     p_in_1: *mut Expr) -> i32 {
     let mut p_lhs: *mut Expr = core::ptr::null_mut();
@@ -6105,6 +7177,9 @@ extern "C" fn sqlite3_in_rhs_is_constant(p_parse_1: *mut Parse,
     return res;
 }
 
+///* Scan all previously generated bytecode looking for an OP_BeginSubrtn
+///* that is compatible with pExpr.  If found, add the y.sub values
+///* to pExpr and return true.  If not found, return false.
 extern "C" fn find_compatible_in_rhs_subrtn(p_parse_1: &Parse,
     p_expr_1: &mut Expr, p_new_sig_1: *const SubrtnSig) -> i32 {
     unsafe {
@@ -6167,21 +7242,55 @@ extern "C" fn find_compatible_in_rhs_subrtn(p_parse_1: &Parse,
     }
 }
 
+///* Generate code that will construct an ephemeral table containing all terms
+///* in the RHS of an IN operator.  The IN operator can be in either of two
+///* forms:
+///*
+///*     x IN (4,5,11)              -- IN operator with list on right-hand side
+///*     x IN (SELECT a FROM b)     -- IN operator with subquery on the right
+///*
+///* The pExpr parameter is the IN operator.  The cursor number for the
+///* constructed ephemeral table is returned.  The first time the ephemeral
+///* table is computed, the cursor number is also stored in pExpr->iTable,
+///* however the cursor number returned might not be the same, as it might
+///* have been duplicated using OP_OpenDup.
+///*
+///* If the LHS expression ("x" in the examples) is a column value, or
+///* the SELECT statement returns a column value, then the affinity of that
+///* column is used to build the index keys. If both 'x' and the
+///* SELECT... statement are columns, then numeric affinity is used
+///* if either column has NUMERIC or INTEGER affinity. If neither
+///* 'x' nor the SELECT... statement are columns, then numeric affinity
+///* is used.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
     p_expr: *mut Expr, i_tab: i32, allow_bloom: i32) -> () {
     unsafe {
         let mut addr_once: i32 = 0;
+        /// Address of the OP_Once instruction at top
         let mut addr: i32 = 0;
+        /// Address of OP_OpenEphemeral instruction
         let mut p_left: *mut Expr = core::ptr::null_mut();
+        /// the LHS of the IN operator
         let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
+        /// Key information
         let mut n_val: i32 = 0;
+        /// Size of vector pLeft
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The prepared statement under construction
         let mut p_sig: *mut SubrtnSig = core::ptr::null_mut();
-        v = unsafe { (*p_parse).p_vdbe };
+
+        /// Signature for this subroutine
+        (v = unsafe { (*p_parse).p_vdbe });
         { let _ = 0; };
         if !(unsafe { (*p_expr).flags } & 64 as u32 != 0 as u32) as i32 != 0
                 && unsafe { (*p_parse).i_self_tab } == 0 {
+
+            /// Reuse of the RHS is allowed
+            ///*
+            ///* Compute a signature for the RHS of the IN operator to facility
+            ///* finding and reusing prior instances of the same IN operator.
             { let _ = 0; };
             if unsafe { (*p_expr).flags } & 4096 as u32 != 0 as u32 &&
                     unsafe { (*unsafe { (*p_expr).x.p_select }).sel_flags } &
@@ -6236,6 +7345,8 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                 }
                 return;
             }
+
+            /// Begin coding the subroutine
             { let _ = 0; };
             unsafe { (*p_expr).flags |= 33554432 as u32 };
             { let _ = 0; };
@@ -6273,8 +7384,13 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
             }
             addr_once = unsafe { sqlite3_vdbe_add_op0(v, 15) };
         }
-        p_left = unsafe { (*p_expr).p_left };
+
+        /// Check to see if this is a vector IN operator
+        (p_left = unsafe { (*p_expr).p_left });
         n_val = sqlite3_expr_vector_size(unsafe { &*p_left });
+
+        /// Construct the ephemeral table that will contain the content of
+        ///* RHS of the IN operator.
         unsafe { (*p_expr).i_table = i_tab };
         addr =
             unsafe {
@@ -6286,6 +7402,10 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                 sqlite3_key_info_alloc(unsafe { (*p_parse).db }, n_val, 1)
             };
         if unsafe { (*p_expr).flags } & 4096 as u32 != 0 as u32 {
+            /// Case 1:     expr IN (SELECT ...)
+            ///*
+            ///* Generate code to write the results of the select into the temporary
+            ///* table allocated and opened above.
             let p_select: *mut Select = unsafe { (*p_expr).x.p_select };
             let p_e_list: *const ExprList =
                 unsafe { (*p_select).p_e_list } as *const ExprList;
@@ -6320,9 +7440,11 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                         unsafe { sqlite3_vdbe_add_op2(v, 79, 10000, reg_bloom) };
                     dest.i_sd_parm2 = reg_bloom;
                 }
-                p_copy =
+
+                /// Caused by OOM in sqlite3KeyInfoAlloc()
+                (p_copy =
                     sqlite3_select_dup(unsafe { (*p_parse).db },
-                        p_select as *const Select, 0);
+                        p_select as *const Select, 0));
                 rc =
                     if unsafe { (*unsafe { (*p_parse).db }).malloc_failed } != 0
                         {
@@ -6338,11 +7460,16 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                         dest.z_aff_sdst as *mut ())
                 };
                 if addr_bloom != 0 {
+
+                    /// Remember that location of the Bloom filter in the P3 operand
+                    ///* of the OP_Once that began this subroutine. tag-202407032019
                     unsafe {
                         (*unsafe { sqlite3_vdbe_get_op(v, addr_once) }).p3 =
                             dest.i_sd_parm2
                     };
                     if dest.i_sd_parm2 == 0 {
+
+                        /// If the Bloom filter won't actually be used, keep it small
                         unsafe {
                             (*unsafe { sqlite3_vdbe_get_op(v, addr_bloom) }).p1 = 10
                         };
@@ -6353,6 +7480,8 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                     return;
                 }
                 { let _ = 0; };
+
+                /// OOM will cause exit after sqlite3Select()
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
@@ -6379,7 +7508,14 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                 }
             }
         } else if unsafe { (*p_expr).x.p_list } != core::ptr::null_mut() {
+            /// Case 2:     expr IN (exprlist)
+            ///*
+            ///* For each expression, build an index key from the evaluation and
+            ///* store it in the temporary table. If <expr> is a column, then use
+            ///* that columns affinity when building index keys. If <expr> is not
+            ///* a column, use numeric affinity.
             let mut affinity: i8 = 0 as i8;
+            /// Affinity of the LHS of the IN
             let mut i: i32 = 0;
             let p_list: *mut ExprList = unsafe { (*p_expr).x.p_list };
             let mut p_item: *const ExprListItem = core::ptr::null();
@@ -6398,7 +7534,9 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                             unsafe { (*p_expr).p_left } as *const Expr)
                 };
             }
-            r1 = sqlite3_get_temp_reg(unsafe { &mut *p_parse });
+
+            /// Loop through each expression in <exprlist>.
+            (r1 = sqlite3_get_temp_reg(unsafe { &mut *p_parse }));
             r2 = sqlite3_get_temp_reg(unsafe { &mut *p_parse });
             {
                 {
@@ -6417,6 +7555,8 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
                             unsafe { (*p_expr).flags &= !(33554432 as u32) };
                             addr_once = 0;
                         }
+
+                        /// Evaluate the expression and insert it into the temp table
                         sqlite3_expr_code(p_parse, p_e2, r1);
                         unsafe {
                             sqlite3_vdbe_add_op4(v, 99, r1, 1, r2,
@@ -6451,6 +7591,8 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
         if addr_once != 0 {
             unsafe { sqlite3_vdbe_add_op1(v, 138, i_tab) };
             unsafe { sqlite3_vdbe_jump_here(v, addr_once) };
+
+            /// Subroutine return
             { let _ = 0; };
             { let _ = 0; };
             unsafe {
@@ -6464,15 +7606,22 @@ pub extern "C" fn sqlite3_code_rhs_of_in(p_parse: *mut Parse,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
     in_flags: u32, mut pr_rhs_has_null: *mut i32, ai_map: *mut i32,
     pi_tab: &mut i32) -> i32 {
     unsafe {
         let mut p: *const Select = core::ptr::null();
+        /// SELECT to the right of IN operator
         let mut e_type: i32 = 0;
+        /// Type of RHS table. IN_INDEX_*
         let mut i_tab: i32 = 0;
+        /// Cursor of the RHS table
         let mut must_be_unique: i32 = 0;
+        /// True if RHS must be unique
         let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
+
+        /// Virtual machine being coded
         { let _ = 0; };
         must_be_unique = (in_flags & 4 as u32 != 0 as u32) as i32;
         i_tab =
@@ -6512,23 +7661,34 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                 { p = is_candidate_for_in_opt(unsafe { &*p_x }); p } !=
                     core::ptr::null_mut() {
             let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+            /// Database connection
             let mut p_tab: *mut Table = core::ptr::null_mut();
+            /// Table <table>.
             let mut i_db: i32 = 0;
+            /// Database idx for pTab
             let p_e_list_1: *const ExprList =
                 unsafe { (*p).p_e_list } as *const ExprList;
             let n_expr: i32 = unsafe { (*p_e_list_1).n_expr };
             { let _ = 0; };
+
+            /// Because of isCandidateForInOpt(p)
             { let _ = 0; };
+
+            /// Because of isCandidateForInOpt(p)
             { let _ = 0; };
-            p_tab =
+
+            /// Because of isCandidateForInOpt(p)
+            (p_tab =
                 unsafe {
                     (*(unsafe { (*unsafe { (*p).p_src }).a.as_ptr() } as
                                     *mut SrcItem).offset(0 as isize)).p_s_tab
-                };
-            i_db =
+                });
+
+            /// Code an OP_Transaction and OP_TableLock for <table>.
+            (i_db =
                 unsafe {
                     sqlite3_schema_to_index(db, unsafe { (*p_tab).p_schema })
-                };
+                });
             { let _ = 0; };
             unsafe { sqlite3_code_verify_schema(p_parse, i_db) };
             unsafe {
@@ -6543,6 +7703,7 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                                                                     *mut ExprListItem).offset(0 as isize)).p_expr
                                                 }).i_column
                                 } as i32) < 0 {
+                /// The "x IN (SELECT rowid FROM table)" case
                 let i_addr: i32 = unsafe { sqlite3_vdbe_add_op0(v, 15) };
                 unsafe {
                     sqlite3_open_table(p_parse, i_tab, i_db, p_tab, 114)
@@ -6556,6 +7717,7 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                 unsafe { sqlite3_vdbe_jump_here(v, i_addr) };
             } else {
                 let mut p_idx: *mut Index = core::ptr::null_mut();
+                /// Iterator variable
                 let mut affinity_ok: i32 = 1;
                 let mut i: i32 = 0;
                 {
@@ -6575,6 +7737,7 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                                     } as i32;
                             let idxaff: i8 =
                                 sqlite3_table_column_affinity(unsafe { &*p_tab }, i_col);
+                            /// RHS table
                             let cmpaff: i8 =
                                 sqlite3_compare_affinity(p_lhs as *const Expr, idxaff);
                             '__s39:
@@ -6597,6 +7760,7 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                             if !(!(p_idx).is_null() && e_type == 0) { break '__b40; }
                             '__c40: loop {
                                 let mut col_used: Bitmask = 0 as Bitmask;
+                                /// Columns of the index used
                                 let mut m_col: Bitmask = 0 as Bitmask;
                                 if (unsafe { (*p_idx).n_column } as i32) < n_expr {
                                     break '__c40;
@@ -6663,7 +7827,9 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                                             if j == n_expr { break '__b41; }
                                             m_col = (1 as Bitmask) << j;
                                             if m_col & col_used != 0 { break '__b41; }
-                                            col_used |= m_col;
+
+                                            /// Each column used only once
+                                            (col_used |= m_col);
                                             if !(ai_map).is_null() {
                                                 unsafe { *ai_map.offset(i as isize) = j };
                                             }
@@ -6675,6 +7841,7 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                                 { let _ = 0; };
                                 { let _ = 0; };
                                 if col_used == ((1 as Bitmask) << n_expr) - 1 as Bitmask {
+                                    /// If we reach this point, that means the index pIdx is usable
                                     let i_addr_1: i32 = unsafe { sqlite3_vdbe_add_op0(v, 15) };
                                     unsafe {
                                         sqlite3_vdbe_explain(p_parse, 0 as u8,
@@ -6726,10 +7893,16 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
                 *__p -= 1;
                 __t
             };
-            i_tab = -1;
-            e_type = 5;
+
+            /// Back out the allocation of the unused cursor
+            (i_tab = -1);
+
+            /// Cursor is not allocated
+            (e_type = 5);
         }
         if e_type == 0 {
+            /// Could not find an existing table or index to use as the RHS b-tree.
+            ///* We will have to generate an ephemeral table to do the job.
             let saved_n_query_loop: u32 =
                 unsafe { (*p_parse).n_query_loop } as u32;
             let mut r_may_have_null: i32 = 0;
@@ -6788,6 +7961,10 @@ pub extern "C" fn sqlite3_find_in_index(p_parse: *mut Parse, p_x: *mut Expr,
     }
 }
 
+///* Generate code that will evaluate expression pExpr and store the
+///* results in register target.  The results are guaranteed to appear
+///* in register target.  If the expression is constant, then this routine
+///* might choose to code the expression at initialization time.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_factorable(p_parse: *mut Parse,
     p_expr: *mut Expr, target: i32) -> () {
@@ -6797,6 +7974,14 @@ pub extern "C" fn sqlite3_expr_code_factorable(p_parse: *mut Parse,
     } else { sqlite3_expr_code_copy(p_parse, p_expr, target); }
 }
 
+///* Evaluate an expression (either a vector or a scalar expression) and store
+///* the result in contiguous temporary registers.  Return the index of
+///* the first register used to store the result.
+///*
+///* If the returned result register is a temporary scalar, then also write
+///* that register number into *piFreeable.  If the returned result register
+///* is not a temporary or if the expression is a vector set *piFreeable
+///* to 0.
 extern "C" fn expr_code_vector(p_parse: *mut Parse, p: *mut Expr,
     pi_freeable: *mut i32) -> i32 {
     unsafe {
@@ -6837,26 +8022,88 @@ extern "C" fn expr_code_vector(p_parse: *mut Parse, p: *mut Expr,
     }
 }
 
+///* Generate code for an IN expression.
+///*
+///*      x IN (SELECT ...)
+///*      x IN (value, value, ...)
+///*
+///* The left-hand side (LHS) is a scalar or vector expression.  The
+///* right-hand side (RHS) is an array of zero or more scalar values, or a
+///* subquery.  If the RHS is a subquery, the number of result columns must
+///* match the number of columns in the vector on the LHS.  If the RHS is
+///* a list of values, the LHS must be a scalar.
+///*
+///* The IN operator is true if the LHS value is contained within the RHS.
+///* The result is false if the LHS is definitely not in the RHS.  The
+///* result is NULL if the presence of the LHS in the RHS cannot be
+///* determined due to NULLs.
+///*
+///* This routine generates code that jumps to destIfFalse if the LHS is not
+///* contained within the RHS.  If due to NULLs we cannot determine if the LHS
+///* is contained in the RHS then jump to destIfNull.  If the LHS is contained
+///* within the RHS then fall through.
+///*
+///* See the separate in-operator.md documentation file in the canonical
+///* SQLite source tree for additional information.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_expr_code_in(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     dest_if_false_1: i32, dest_if_null_1: i32) -> () {
     unsafe {
         let mut r_rhs_has_null: i32 = 0;
+        /// Register that is true if RHS contains NULL values
         let mut e_type: i32 = 0;
+        /// Type of the RHS
         let mut r_lhs: i32 = 0;
+        /// Register(s) holding the LHS values
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// Statement under construction
         let mut ai_map: *mut i32 = core::ptr::null_mut();
+        /// Map from vector field to index column
         let mut z_aff: *mut i8 = core::ptr::null_mut();
+        /// Affinity string for comparisons
         let mut n_vector: i32 = 0;
+        /// Size of vectors for this IN operator
         let mut i_dummy: i32 = 0;
+        /// Dummy parameter to exprCodeVector()
         let mut p_left: *mut Expr = core::ptr::null_mut();
+        /// The LHS of the IN operator
         let mut i: i32 = 0;
+        /// loop counter
         let mut dest_step2: i32 = 0;
+        /// Where to jump when NULLs seen in step 2
         let mut dest_step6: i32 = 0;
+        /// Start of code for Step 6
         let mut addr_truth_op: i32 = 0;
+        /// Address of opcode that determines the IN is true
         let mut dest_not_null: i32 = 0;
+        /// Jump here if a comparison is not true in step 6
         let mut addr_top: i32 = 0;
+        /// Top of the step-6 loop
         let mut i_tab: i32 = 0;
+        /// Index to use
         let mut ok_const_factor: u8 = 0 as u8;
+        /// Attempt to compute the RHS. After this step, if anything other than
+        ///* IN_INDEX_NOOP is returned, the table opened with cursor iTab
+        ///* contains the values that make up the RHS. If IN_INDEX_NOOP is returned,
+        ///* the RHS has not yet been coded.
+        /// OOM detected prior to this routine
+        /// Code the LHS, the <expr> from "<expr> IN (...)". If the LHS is a
+        ///* vector, then it is stored in an array of nVector registers starting
+        ///* at r1.
+        ///*
+        ///* sqlite3FindInIndex() might have reordered the fields of the LHS vector
+        ///* so that the fields are in the same order as an existing index.   The
+        ///* aiMap[] array contains a mapping from the original LHS field order to
+        ///* the field order that matches the RHS index.
+        ///*
+        ///* Avoid factoring the LHS of the IN(...) expression out of the loop,
+        ///* even if it is constant, as OP_Affinity may be used on the register
+        ///* by code generated below.
+        /// If sqlite3FindInIndex() did not find or create an index that is
+        ///* suitable for evaluating the IN operator, then evaluate using a
+        ///* sequence of comparisons.
+        ///*
+        ///* This is step (1) in the in-operator.md optimized algorithm.
         let mut p_list: *const ExprList = core::ptr::null();
         let mut p_coll: *mut CollSeq = core::ptr::null_mut();
         let mut label_ok: i32 = 0;
@@ -6866,9 +8113,40 @@ extern "C" fn sqlite3_expr_code_in(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
         let mut ii: i32 = 0;
         let mut op: i32 = 0;
         let mut op__1: i32 = 0;
+        /// If this IN operator will use an index, then the order of columns in the
+        ///* vector might be different from the order in the index.  In that case,
+        ///* we need to reorder the LHS values to be in index order.  Run Affinity
+        ///* before reordering the columns, so that the affinity is correct.
+        /// Are LHS fields reordered?
+        /// Need to reorder the LHS fields according to aiMap
         let mut r_lhs_orig: i32 = 0;
+        /// Step 2: Check to see if the LHS contains any NULL columns.  If the
+        ///* LHS does contain NULLs then the result must be either FALSE or NULL.
+        ///* We will then skip the binary search of the RHS.
         let mut p: *const Expr = core::ptr::null();
+        /// Step 3.  The LHS is now known to be non-NULL.  Do the binary search
+        ///* of the RHS using the LHS as a probe.  If found, the result is
+        ///* true.
+        /// In this case, the RHS is the ROWID of table b-tree and so we also
+        ///* know that the RHS is non-NULL.  Hence, we combine steps 3 and 4
+        ///* into a single opcode.
+        /// Return True
+        /// Combine Step 3 and Step 5 into a single opcode
         let mut p_op: *const VdbeOp = core::ptr::null();
+        /// tag-202407032019
+        /// Ordinary Step 3, for the case where FALSE and NULL are distinct
+        /// Step 4.  If the RHS is known to be non-NULL and we did not find
+        ///* an match on the search above, then the result must be FALSE.
+        /// Step 5.  If we do not care about the difference between NULL and
+        ///* FALSE, then just return false.
+        /// Step 6: Loop through rows of the RHS.  Compare each row to the LHS.
+        ///* If any comparison is NULL, then the result is NULL.  If all
+        ///* comparisons are FALSE then the final result is FALSE.
+        ///*
+        ///* For a scalar LHS, it is sufficient to check just the first row
+        ///* of the RHS.
+        /// For nVector==1, combine steps 6 and 7 by immediately returning
+        ///* FALSE if the first comparison is not NULL
         let mut p__1: *const Expr = core::ptr::null();
         let mut p_coll_1: *mut CollSeq = core::ptr::null_mut();
         let mut r3: i32 = 0;
@@ -7447,6 +8725,9 @@ extern "C" fn sqlite3_expr_code_in(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     }
 }
 
+///* Convert a scalar expression node to a TK_REGISTER referencing
+///* register iReg.  The caller must ensure that iReg already contains
+///* the correct value for the expression.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_to_register(p_expr: *mut Expr, i_reg: i32)
     -> () {
@@ -7462,15 +8743,21 @@ pub extern "C" fn sqlite3_expr_to_register(p_expr: *mut Expr, i_reg: i32)
     }
 }
 
+/// Forward declarations
+#[allow(unused_doc_comments)]
 extern "C" fn expr_code_between(p_parse: *mut Parse, p_expr: &Expr, dest: i32,
     x_jump:
         Option<unsafe extern "C" fn(*mut Parse, *mut Expr, i32, i32) -> ()>,
     jump_if_null: i32) -> () {
     unsafe {
         let mut expr_and: Expr = unsafe { core::mem::zeroed() };
+        /// The AND operator in  x>=y AND x<=z
         let mut comp_left: Expr = unsafe { core::mem::zeroed() };
+        /// The  x>=y  term
         let mut comp_right: Expr = unsafe { core::mem::zeroed() };
+        /// The  x<=z  term
         let mut reg_free1: i32 = 0;
+        /// Temporary use register
         let mut p_del: *mut Expr = core::ptr::null_mut();
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
         unsafe {
@@ -7512,6 +8799,12 @@ extern "C" fn expr_code_between(p_parse: *mut Parse, p_expr: &Expr, dest: i32,
                     x_jump.unwrap()(p_parse, &mut expr_and, dest, jump_if_null)
                 };
             } else {
+
+                /// Mark the expression is being from the ON or USING clause of a join
+                ///* so that the sqlite3ExprCodeTarget() routine will not attempt to move
+                ///* it into the Parse.pConstExpr list.  We should use a new bit for this,
+                ///* for clarity, but we are out of bits in the Expr.flags field so we
+                ///* have to reuse the EP_OuterON bit.  Bummer.
                 unsafe { (*p_del).flags |= 1 as u32 };
                 sqlite3_expr_code_target(p_parse, &mut expr_and, dest);
             }
@@ -7521,7 +8814,20 @@ extern "C" fn expr_code_between(p_parse: *mut Parse, p_expr: &Expr, dest: i32,
     }
 }
 
+///* Generate code for a boolean expression such that a jump is made
+///* to the label "dest" if the expression is true but execution
+///* continues straight thru if the expression is false.
+///*
+///* If the expression evaluates to NULL (neither true nor false), then
+///* take the jump if the jumpIfNull flag is SQLITE_JUMPIFNULL.
+///*
+///* This code depends on the fact that certain token values (ex: TK_EQ)
+///* are the same as opcode values (ex: OP_Eq) that implement the corresponding
+///* operation.  Special comments in vdbe.c and the mkopcodeh.awk script in
+///* the make process cause these values to align.  Assert()s in the code
+///* below verify that the numbers are aligned correctly.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_if_true(p_parse: *mut Parse, p_expr: *mut Expr,
     dest: i32, mut jump_if_null: i32) -> () {
     let mut v: *mut Vdbe = core::ptr::null_mut();
@@ -7530,12 +8836,17 @@ pub extern "C" fn sqlite3_expr_if_true(p_parse: *mut Parse, p_expr: *mut Expr,
     let mut reg_free2: i32 = 0;
     let mut r1: i32 = 0;
     let mut r2: i32 = 0;
+    /// Existence of VDBE checked by caller
+    /// No way this can happen
     let mut p_alt: *mut Expr = core::ptr::null_mut();
     let mut p_first: *mut Expr = core::ptr::null_mut();
     let mut p_second: *mut Expr = core::ptr::null_mut();
     let mut d2: i32 = 0;
     let mut is_not: i32 = 0;
+    /// IS NOT TRUE or IS NOT FALSE
     let mut is_true: i32 = 0;
+    /// IS TRUE or IS NOT TRUE
+    /// no break
     let mut addr_is_null: i32 = 0;
     let mut dest_if_false: i32 = 0;
     let mut dest_if_null: i32 = 0;
@@ -7899,7 +9210,15 @@ pub extern "C" fn sqlite3_expr_if_true(p_parse: *mut Parse, p_expr: *mut Expr,
     }
 }
 
+///* Generate code for a boolean expression such that a jump is made
+///* to the label "dest" if the expression is false but execution
+///* continues straight thru if the expression is true.
+///*
+///* If the expression evaluates to NULL (neither true nor false) then
+///* jump if jumpIfNull is SQLITE_JUMPIFNULL or fall through if jumpIfNull
+///* is 0.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_if_false(p_parse: *mut Parse,
     p_expr: *mut Expr, dest: i32, mut jump_if_null: i32) -> () {
     let mut v: *mut Vdbe = core::ptr::null_mut();
@@ -7908,12 +9227,36 @@ pub extern "C" fn sqlite3_expr_if_false(p_parse: *mut Parse,
     let mut reg_free2: i32 = 0;
     let mut r1: i32 = 0;
     let mut r2: i32 = 0;
+    /// Existence of VDBE checked by caller
+    /// The value of pExpr->op and op are related as follows:
+    ///*
+    ///*       pExpr->op            op
+    ///*       ---------          ----------
+    ///*       TK_ISNULL          OP_NotNull
+    ///*       TK_NOTNULL         OP_IsNull
+    ///*       TK_NE              OP_Eq
+    ///*       TK_EQ              OP_Ne
+    ///*       TK_GT              OP_Le
+    ///*       TK_LE              OP_Gt
+    ///*       TK_GE              OP_Lt
+    ///*       TK_LT              OP_Ge
+    ///*
+    ///* For other values of pExpr->op, op is undefined and unused.
+    ///* The value of TK_ and OP_ constants are arranged such that we
+    ///* can compute the mapping above using the following expression.
+    ///* Assert()s verify that the computation is correct.
+    /// Verify correct alignment of TK_ and OP_ constants
     let mut p_alt: *mut Expr = core::ptr::null_mut();
     let mut p_first: *mut Expr = core::ptr::null_mut();
     let mut p_second: *mut Expr = core::ptr::null_mut();
     let mut d2: i32 = 0;
     let mut is_not: i32 = 0;
+    /// IS NOT TRUE or IS NOT FALSE
     let mut is_true: i32 = 0;
+    /// IS TRUE or IS NOT TRUE
+    /// IS TRUE and IS NOT FALSE
+    /// IS FALSE and IS NOT TRUE
+    /// no break
     let mut addr_is_null: i32 = 0;
     let mut dest_if_null: i32 = 0;
     let mut __state: i32 = 0;
@@ -8295,70 +9638,230 @@ pub extern "C" fn sqlite3_expr_if_false(p_parse: *mut Parse,
     }
 }
 
+///* Generate code into the current Vdbe to evaluate the given
+///* expression.  Attempt to store the results in register "target".
+///* Return the register where results are stored.
+///*
+///* With this routine, there is no guarantee that results will
+///* be stored in target.  The result might be stored in some other
+///* register if it is convenient to do so.  The calling function
+///* must check the return code and move the results to the desired
+///* register.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_code_target(p_parse: *mut Parse,
     mut p_expr: *mut Expr, target: i32) -> i32 {
     unsafe {
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The VM under construction
         let mut op: i32 = 0;
+        /// The opcode being coded
         let mut in_reg: i32 = 0;
+        /// Results stored in register inReg
         let mut reg_free1: i32 = 0;
+        /// If non-zero free this temporary register
         let mut reg_free2: i32 = 0;
+        /// If non-zero free this temporary register
         let mut r1: i32 = 0;
         let mut r2: i32 = 0;
+        /// Various register numbers
         let mut temp_x: Expr = unsafe { core::mem::zeroed() };
+        /// Temporary expression node
         let mut p5: i32 = 0;
         let mut p_agg_info: *const AggInfo = core::ptr::null();
         let mut p_col: *const AggInfoCol = core::ptr::null();
+        /// Happens when the left table of a RIGHT JOIN is null and
+        ///* is using an expression index
         let mut p_tab: *const Table = core::ptr::null();
+        /// No comment added
+        /// This case happens when the argument to an aggregate function
+        ///* is rewritten by aggregateConvertIndexedExprRefToColumn()
+        /// Otherwise, fall thru into the TK_COLUMN case */
+        ///      /* no break
         let mut i_tab: i32 = 0;
         let mut i_reg: i32 = 0;
+        /// This COLUMN expression is really a constant due to WHERE clause
+        ///* constraints, and that constant is coded by the pExpr->pLeft
+        ///* expression.  However, make sure the constant has the correct
+        ///* datatype by applying the Affinity of the table column to the
+        ///* constant.
         let mut aff: i32 = 0;
+        /// Other columns in the same row for CHECK constraints or
+        ///* generated columns or for inserting into partial index.
+        ///* The row is unpacked into registers beginning at
+        ///* 0-(pParse->iSelfTab).  The rowid (if any) is in a register
+        ///* immediately prior to the first column.
         let mut p_col_1: *mut Column = core::ptr::null_mut();
         let mut p_tab_1: *mut Table = core::ptr::null_mut();
         let mut i_src: i32 = 0;
         let mut i_col: i32 = 0;
+        /// SQLITE_OMIT_GENERATED_COLUMNS
+        /// Coding an expression that is part of an index where column names
+        ///* in the index refer to the table to which the index belongs
+        /// Set a range of registers to NULL.  pExpr->y.nReg registers starting
+        ///* with target
+        /// Make NULL the default case so that if a bug causes an illegal
+        ///* Expr node to be passed into this function, it will be handled
+        ///* sanely and not crash.  But keep the assert() to bring the problem
+        ///* to the attention of the developers.
         let mut n: i32 = 0;
         let mut z: *const i8 = core::ptr::null();
         let mut z_blob: *const i8 = core::ptr::null();
+        /// Expressions of the form:   CAST(pLeft AS token)
+        /// SQLITE_OMIT_CAST
+        /// no break
         let mut p_left: *mut Expr = core::ptr::null_mut();
         let mut addr_is_null: i32 = 0;
         let mut addr_is_null_1: i32 = 0;
         let mut p_left_1: *mut Expr = core::ptr::null_mut();
         let mut is_true: i32 = 0;
+        /// IS TRUE or IS NOT TRUE
         let mut b_normal: i32 = 0;
+        /// IS TRUE or IS FALSE
         let mut addr: i32 = 0;
         let mut p_info: *const AggInfo = core::ptr::null();
         let mut p_farg: *mut ExprList = core::ptr::null_mut();
+        /// List of function arguments
         let mut n_farg: i32 = 0;
+        /// Number of function arguments
         let mut p_def: *mut FuncDef = core::ptr::null_mut();
+        /// The function definition object
         let mut z_id: *const i8 = core::ptr::null();
+        /// The function name
         let mut const_mask: u32 = 0 as u32;
+        /// Mask of function arguments that are constant
         let mut i: i32 = 0;
+        /// Loop counter
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut enc: u8 = 0 as u8;
+        /// The text encoding used by this database
         let mut p_coll: *mut CollSeq = core::ptr::null_mut();
+        /// A collating sequence
+        /// SQL functions can be expensive. So try to avoid running them
+        ///* multiple times if we know they always give the same result
+        /// For length() and typeof() and octet_length() functions,
+        ///* set the P5 parameter to the OP_Column opcode to OPFLAG_LENGTHARG
+        ///* or OPFLAG_TYPEOFARG or OPFLAG_BYTELENARG respectively, to avoid
+        ///* unnecessary data loading.
         let mut expr_op: u8 = 0 as u8;
+        /// Possibly overload the function if the first argument is
+        ///* a virtual table column.
+        ///*
+        ///* For infix functions (LIKE, GLOB, REGEXP, and MATCH) use the
+        ///* second argument, not the first, as the argument to test to
+        ///* see if it is a column in a virtual table.  This is done because
+        ///* the left operand of infix functions (the operand we want to
+        ///* control overloading) ends up as the second argument to the
+        ///* function.  The expression "A glob B" is equivalent to
+        ///* "glob(B,A).  We want to use the A in "A glob B" to test
+        ///* for function overloading.  But we use the B term in "glob(B,A)".
         let mut n_col: i32 = 0;
         let mut n__1: i32 = 0;
         let mut p_left_2: *mut Expr = core::ptr::null_mut();
         let mut dest_if_false: i32 = 0;
         let mut dest_if_null: i32 = 0;
+        /// SQLITE_OMIT_SUBQUERY
+        ///*    x BETWEEN y AND z
+        ///*
+        ///* This is equivalent to
+        ///*
+        ///*    x>=y AND x<=z
+        ///*
+        ///* X is stored in pExpr->pLeft.
+        ///* Y is stored in pExpr->pList->a[0].pExpr.
+        ///* Z is stored in pExpr->pList->a[1].pExpr.
+        /// A TK_COLLATE Expr node without the EP_Collate tag is a so-called
+        ///* "SOFT-COLLATE" that is added to constraints that are pushed down
+        ///* from outer queries into sub-queries by the WHERE-clause push-down
+        ///* optimization. Clear subtypes as subtypes may not cross a subquery
+        ///* boundary.
+        /// 2018-04-28: Prevent deep recursion.
+        /// 2018-04-28: Prevent deep recursion. OSSFuzz.
+        /// If the opcode is TK_TRIGGER, then the expression is a reference
+        ///* to a column in the new.* or old.* pseudo-tables available to
+        ///* trigger programs. In this case Expr.iTable is set to 1 for the
+        ///* new.* pseudo-table, or 0 for the old.* pseudo-table. Expr.iColumn
+        ///* is set to the column of the pseudo-table to read, or to -1 to
+        ///* read the rowid field.
+        ///*
+        ///* The expression is implemented using an OP_Param opcode. The p1
+        ///* parameter is set to 0 for an old.rowid reference, or to (i+1)
+        ///* to reference another column of the old.* pseudo-table, where
+        ///* i is the index of the column. For a new.rowid reference, p1 is
+        ///* set to (n+1), where n is the number of columns in each pseudo-table.
+        ///* For a reference to any other column in the new.* pseudo-table, p1
+        ///* is set to (n+2+i), where n and i are as defined previously. For
+        ///* example, if the table on which triggers are being fired is
+        ///* declared as:
+        ///*
+        ///*   CREATE TABLE t1(a, b);
+        ///*
+        ///* Then p1 is interpreted as follows:
+        ///*
+        ///*   p1==0   ->    old.rowid     p1==3   ->    new.rowid
+        ///*   p1==1   ->    old.a         p1==4   ->    new.a
+        ///*   p1==2   ->    old.b         p1==5   ->    new.b
         let mut p_tab_2: *mut Table = core::ptr::null_mut();
         let mut i_col_1: i32 = 0;
         let mut p1: i32 = 0;
+        /// If the column has REAL affinity, it may currently be stored as an
+        ///* integer. Use OP_RealAffinity to make sure it is really real.
+        ///*
+        ///* EVIDENCE-OF: R-60985-57662 SQLite will convert the value back to
+        ///* floating point when extracting it from the record.
+        /// TK_IF_NULL_ROW Expr nodes are inserted ahead of expressions
+        ///* that derive from the right-hand table of a LEFT JOIN.  The
+        ///* Expr.iTable value is the table number for the right-hand table.
+        ///* The expression is only evaluated if that table is not currently
+        ///* on a LEFT JOIN NULL row.
         let mut addr_inr: i32 = 0;
         let mut ok_const_factor: u8 = 0 as u8;
         let mut p_agg_info_1: *const AggInfo = core::ptr::null();
+        /// The OP_IfNullRow opcode above can overwrite the result register with
+        ///* NULL.  So we have to ensure that the result register is not a value
+        ///* that is suppose to be a constant.  Two defenses are needed:
+        ///*   (1)  Temporarily disable factoring of constant expressions
+        ///*   (2)  Make sure the computed value really is stored in register
+        ///*        "target" and not someplace else.
+        /// note (1) above
+        ///* Form A:
+        ///*   CASE x WHEN e1 THEN r1 WHEN e2 THEN r2 ... WHEN eN THEN rN ELSE y END
+        ///*
+        ///* Form B:
+        ///*   CASE WHEN e1 THEN r1 WHEN e2 THEN r2 ... WHEN eN THEN rN ELSE y END
+        ///*
+        ///* Form A is can be transformed into the equivalent form B as follows:
+        ///*   CASE WHEN x=e1 THEN r1 WHEN x=e2 THEN r2 ...
+        ///*        WHEN x=eN THEN rN ELSE y END
+        ///*
+        ///* X (if it exists) is in pExpr->pLeft.
+        ///* Y is in the last element of pExpr->x.pList if pExpr->x.pList->nExpr is
+        ///* odd.  The Y is also optional.  If the number of elements in x.pList
+        ///* is even, then Y is omitted and the "otherwise" result is NULL.
+        ///* Ei is in pExpr->pList->a[i*2] and Ri is pExpr->pList->a[i*2+1].
+        ///*
+        ///* The result of the expression is the Ri for the first matching Ei,
+        ///* or if there is no matching Ei, the ELSE term Y, or if there is
+        ///* no ELSE term, NULL.
         let mut end_label: i32 = 0;
+        /// GOTO label for end of CASE stmt
         let mut next_case: i32 = 0;
+        /// GOTO label for next WHEN clause
         let mut n_expr: i32 = 0;
+        /// 2x number of WHEN terms
         let mut i__1: i32 = 0;
+        /// Loop counter
         let mut p_e_list: *mut ExprList = core::ptr::null_mut();
+        /// List of WHEN terms
         let mut a_listelem: *const ExprListItem = core::ptr::null();
+        /// Array of WHEN terms
         let mut op_compare: Expr = unsafe { core::mem::zeroed() };
+        /// The X==Ei expression
         let mut p_x: *const Expr = core::ptr::null();
+        /// The X expression
         let mut p_test: *mut Expr = core::ptr::null_mut();
+        /// X==Ei (form A) or just Ei (form B)
         let mut p_del: *mut Expr = core::ptr::null_mut();
         let mut db__1: *mut Sqlite3 = core::ptr::null_mut();
         let mut __state: i32 = 0;
@@ -9986,10 +11489,168 @@ pub extern "C" fn sqlite3_expr_code_target(p_parse: *mut Parse,
                 }
             }
         }
+
+        /// The VM under construction
+        /// The opcode being coded
+        /// Results stored in register inReg
+        /// If non-zero free this temporary register
+        /// If non-zero free this temporary register
+        /// Various register numbers
+        /// Temporary expression node
+        /// Happens when the left table of a RIGHT JOIN is null and
+        ///* is using an expression index
+        /// No comment added
+        /// This case happens when the argument to an aggregate function
+        ///* is rewritten by aggregateConvertIndexedExprRefToColumn()
+        /// Otherwise, fall thru into the TK_COLUMN case */
+        ///      /* no break
+        /// This COLUMN expression is really a constant due to WHERE clause
+        ///* constraints, and that constant is coded by the pExpr->pLeft
+        ///* expression.  However, make sure the constant has the correct
+        ///* datatype by applying the Affinity of the table column to the
+        ///* constant.
+        /// Other columns in the same row for CHECK constraints or
+        ///* generated columns or for inserting into partial index.
+        ///* The row is unpacked into registers beginning at
+        ///* 0-(pParse->iSelfTab).  The rowid (if any) is in a register
+        ///* immediately prior to the first column.
+        /// SQLITE_OMIT_GENERATED_COLUMNS
+        /// Coding an expression that is part of an index where column names
+        ///* in the index refer to the table to which the index belongs
+        /// Set a range of registers to NULL.  pExpr->y.nReg registers starting
+        ///* with target
+        /// Make NULL the default case so that if a bug causes an illegal
+        ///* Expr node to be passed into this function, it will be handled
+        ///* sanely and not crash.  But keep the assert() to bring the problem
+        ///* to the attention of the developers.
+        /// Expressions of the form:   CAST(pLeft AS token)
+        /// SQLITE_OMIT_CAST
+        /// no break
+        /// IS TRUE or IS NOT TRUE
+        /// IS TRUE or IS FALSE
+        /// List of function arguments
+        /// Number of function arguments
+        /// The function definition object
+        /// The function name
+        /// Mask of function arguments that are constant
+        /// Loop counter
+        /// The database connection
+        /// The text encoding used by this database
+        /// A collating sequence
+        /// SQL functions can be expensive. So try to avoid running them
+        ///* multiple times if we know they always give the same result
+        /// For length() and typeof() and octet_length() functions,
+        ///* set the P5 parameter to the OP_Column opcode to OPFLAG_LENGTHARG
+        ///* or OPFLAG_TYPEOFARG or OPFLAG_BYTELENARG respectively, to avoid
+        ///* unnecessary data loading.
+        /// Possibly overload the function if the first argument is
+        ///* a virtual table column.
+        ///*
+        ///* For infix functions (LIKE, GLOB, REGEXP, and MATCH) use the
+        ///* second argument, not the first, as the argument to test to
+        ///* see if it is a column in a virtual table.  This is done because
+        ///* the left operand of infix functions (the operand we want to
+        ///* control overloading) ends up as the second argument to the
+        ///* function.  The expression "A glob B" is equivalent to
+        ///* "glob(B,A).  We want to use the A in "A glob B" to test
+        ///* for function overloading.  But we use the B term in "glob(B,A)".
+        /// SQLITE_OMIT_SUBQUERY
+        ///*    x BETWEEN y AND z
+        ///*
+        ///* This is equivalent to
+        ///*
+        ///*    x>=y AND x<=z
+        ///*
+        ///* X is stored in pExpr->pLeft.
+        ///* Y is stored in pExpr->pList->a[0].pExpr.
+        ///* Z is stored in pExpr->pList->a[1].pExpr.
+        /// A TK_COLLATE Expr node without the EP_Collate tag is a so-called
+        ///* "SOFT-COLLATE" that is added to constraints that are pushed down
+        ///* from outer queries into sub-queries by the WHERE-clause push-down
+        ///* optimization. Clear subtypes as subtypes may not cross a subquery
+        ///* boundary.
+        /// 2018-04-28: Prevent deep recursion.
+        /// 2018-04-28: Prevent deep recursion. OSSFuzz.
+        /// If the opcode is TK_TRIGGER, then the expression is a reference
+        ///* to a column in the new.* or old.* pseudo-tables available to
+        ///* trigger programs. In this case Expr.iTable is set to 1 for the
+        ///* new.* pseudo-table, or 0 for the old.* pseudo-table. Expr.iColumn
+        ///* is set to the column of the pseudo-table to read, or to -1 to
+        ///* read the rowid field.
+        ///*
+        ///* The expression is implemented using an OP_Param opcode. The p1
+        ///* parameter is set to 0 for an old.rowid reference, or to (i+1)
+        ///* to reference another column of the old.* pseudo-table, where
+        ///* i is the index of the column. For a new.rowid reference, p1 is
+        ///* set to (n+1), where n is the number of columns in each pseudo-table.
+        ///* For a reference to any other column in the new.* pseudo-table, p1
+        ///* is set to (n+2+i), where n and i are as defined previously. For
+        ///* example, if the table on which triggers are being fired is
+        ///* declared as:
+        ///*
+        ///*   CREATE TABLE t1(a, b);
+        ///*
+        ///* Then p1 is interpreted as follows:
+        ///*
+        ///*   p1==0   ->    old.rowid     p1==3   ->    new.rowid
+        ///*   p1==1   ->    old.a         p1==4   ->    new.a
+        ///*   p1==2   ->    old.b         p1==5   ->    new.b
+        /// If the column has REAL affinity, it may currently be stored as an
+        ///* integer. Use OP_RealAffinity to make sure it is really real.
+        ///*
+        ///* EVIDENCE-OF: R-60985-57662 SQLite will convert the value back to
+        ///* floating point when extracting it from the record.
+        /// TK_IF_NULL_ROW Expr nodes are inserted ahead of expressions
+        ///* that derive from the right-hand table of a LEFT JOIN.  The
+        ///* Expr.iTable value is the table number for the right-hand table.
+        ///* The expression is only evaluated if that table is not currently
+        ///* on a LEFT JOIN NULL row.
+        /// The OP_IfNullRow opcode above can overwrite the result register with
+        ///* NULL.  So we have to ensure that the result register is not a value
+        ///* that is suppose to be a constant.  Two defenses are needed:
+        ///*   (1)  Temporarily disable factoring of constant expressions
+        ///*   (2)  Make sure the computed value really is stored in register
+        ///*        "target" and not someplace else.
+        /// note (1) above
+        ///* Form A:
+        ///*   CASE x WHEN e1 THEN r1 WHEN e2 THEN r2 ... WHEN eN THEN rN ELSE y END
+        ///*
+        ///* Form B:
+        ///*   CASE WHEN e1 THEN r1 WHEN e2 THEN r2 ... WHEN eN THEN rN ELSE y END
+        ///*
+        ///* Form A is can be transformed into the equivalent form B as follows:
+        ///*   CASE WHEN x=e1 THEN r1 WHEN x=e2 THEN r2 ...
+        ///*        WHEN x=eN THEN rN ELSE y END
+        ///*
+        ///* X (if it exists) is in pExpr->pLeft.
+        ///* Y is in the last element of pExpr->x.pList if pExpr->x.pList->nExpr is
+        ///* odd.  The Y is also optional.  If the number of elements in x.pList
+        ///* is even, then Y is omitted and the "otherwise" result is NULL.
+        ///* Ei is in pExpr->pList->a[i*2] and Ri is pExpr->pList->a[i*2+1].
+        ///*
+        ///* The result of the expression is the Ri for the first matching Ei,
+        ///* or if there is no matching Ei, the ELSE term Y, or if there is
+        ///* no ELSE term, NULL.
+        /// GOTO label for end of CASE stmt
+        /// GOTO label for next WHEN clause
+        /// 2x number of WHEN terms
+        /// Loop counter
+        /// List of WHEN terms
+        /// Array of WHEN terms
+        /// The X==Ei expression
+        /// The X expression
+        /// X==Ei (form A) or just Ei (form B)
+        /// Ticket b351d95f9cd5ef17e9d9dbae18f5ca8611190001:
+        ///* The value in regFree1 might get SCopy-ed into the file result.
+        ///* So make sure that the regFree1 register is not reused for other
+        ///* purposes and possibly overwritten.
         unreachable!();
     }
 }
 
+///* Generate code that will evaluate expression pExpr and store the
+///* results in register target.  The results are guaranteed to appear
+///* in register target.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code(p_parse: *mut Parse, p_expr: *mut Expr,
     target: i32) -> () {
@@ -10015,6 +11676,9 @@ pub extern "C" fn sqlite3_expr_code(p_parse: *mut Parse, p_expr: *mut Expr,
     }
 }
 
+///* Make a transient copy of expression pExpr and then code it using
+///* sqlite3ExprCode().  This routine works just like sqlite3ExprCode()
+///* except that the input expression is guaranteed to be unchanged.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_copy(p_parse: *mut Parse,
     mut p_expr: *mut Expr, target: i32) -> () {
@@ -10026,6 +11690,8 @@ pub extern "C" fn sqlite3_expr_code_copy(p_parse: *mut Parse,
     sqlite3_expr_delete(db, p_expr);
 }
 
+/// Generate code that will load into register regOut a value that is
+///* appropriate for the iIdxCol-th column of index pIdx.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_load_index_column(p_parse: *mut Parse,
     p_idx: &Index, i_tab_cur: i32, i_idx_col: i32, reg_out: i32) -> () {
@@ -10047,6 +11713,8 @@ pub extern "C" fn sqlite3_expr_code_load_index_column(p_parse: *mut Parse,
     }
 }
 
+///* Generate code to move content from registers iFrom...iFrom+nReg-1
+///* over to iTo..iTo+nReg-1.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_code_move(p_parse: &Parse, i_from: i32,
     i_to: i32, n_reg: i32) -> () {
@@ -10055,6 +11723,8 @@ pub extern "C" fn sqlite3_expr_code_move(p_parse: &Parse, i_from: i32,
     };
 }
 
+///* Make arrangements to invoke OP_Null on a range of registers
+///* during initialization.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_null_register_range(p_parse: *mut Parse,
     i_reg: i32, n_reg: i32) -> () {
@@ -10076,6 +11746,9 @@ pub extern "C" fn sqlite3_expr_null_register_range(p_parse: *mut Parse,
     }
 }
 
+///* Like sqlite3ExprIfFalse() except that a copy is made of pExpr before
+///* code generation, and that copy is deleted after code generation. This
+///* ensures that the original pExpr is unchanged.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_if_false_dup(p_parse: *mut Parse,
     p_expr: *mut Expr, dest: i32, jump_if_null: i32) -> () {
@@ -10087,6 +11760,7 @@ pub extern "C" fn sqlite3_expr_if_false_dup(p_parse: *mut Parse,
     sqlite3_expr_delete(db, p_copy);
 }
 
+///* Skip over any TK_COLLATE operators.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_skip_collate(mut p_expr: *mut Expr)
     -> *mut Expr {
@@ -10098,6 +11772,8 @@ pub extern "C" fn sqlite3_expr_skip_collate(mut p_expr: *mut Expr)
     return p_expr;
 }
 
+///* Like sqlite3ExprCompare() except COLLATE operators at the top-level
+///* are ignored.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_compare_skip(p_a: *mut Expr, p_b: *mut Expr,
     i_tab: i32) -> i32 {
@@ -10106,6 +11782,15 @@ pub extern "C" fn sqlite3_expr_compare_skip(p_a: *mut Expr, p_b: *mut Expr,
             sqlite3_expr_skip_collate(p_b) as *const Expr, i_tab);
 }
 
+///* This is a Walker expression node callback.
+///*
+///* For Expr nodes that contain pAggInfo pointers, make sure the AggInfo
+///* object that is referenced does not refer directly to the Expr.  If
+///* it does, make a copy.  This is done because the pExpr argument is
+///* subject to change.
+///*
+///* The copy is scheduled for deletion using the sqlite3ExprDeferredDelete()
+///* which builds on the sqlite3ParserAddCleanup() mechanism.
 extern "C" fn agginfo_persist_expr_cb(p_walker_1: *mut Walker,
     mut p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -10161,6 +11846,8 @@ extern "C" fn agginfo_persist_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Initialize a Walker object so that will persist AggInfo entries referenced
+///* by the tree that is walked.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_agg_info_persist_walker_init(p_walker: *mut Walker,
     p_parse: *mut Parse) -> () {
@@ -10172,6 +11859,8 @@ pub extern "C" fn sqlite3_agg_info_persist_walker_init(p_walker: *mut Walker,
     unsafe { (*p_walker).x_select_callback = Some(sqlite3_select_walk_noop) };
 }
 
+///* Add a new element to the pAggInfo->aCol[] array.  Return the index of
+///* the new element.  Return a negative number if malloc fails.
 extern "C" fn add_agg_info_column(db: *mut Sqlite3, p_info_1: &mut AggInfo)
     -> i32 {
     let mut i: i32 = 0;
@@ -10184,12 +11873,19 @@ extern "C" fn add_agg_info_column(db: *mut Sqlite3, p_info_1: &mut AggInfo)
     return i;
 }
 
+///* Search the AggInfo object for an aCol[] entry that has iTable and iColumn.
+///* Return the index in aCol[] of the entry that describes that column.
+///*
+///* If no prior entry is found, create a new one and return -1.  The
+///* new column will have an index of pAggInfo->nColumn-1.
+#[allow(unused_doc_comments)]
 extern "C" fn find_or_create_agg_info_column(p_parse_1: *mut Parse,
     p_agg_info_1: *mut AggInfo, p_expr_1: *mut Expr) -> () {
     unsafe {
         let mut p_col: *mut AggInfoCol = core::ptr::null_mut();
         let mut k: i32 = 0;
         let mut mx_term: i32 = 0;
+        /// OOM on resize
         let mut j: i32 = 0;
         let mut n: i32 = 0;
         let mut p_gb: *mut ExprList = core::ptr::null_mut();
@@ -10398,6 +12094,8 @@ extern "C" fn find_or_create_agg_info_column(p_parse_1: *mut Parse,
     }
 }
 
+///* Add a new element to the pAggInfo->aFunc[] array.  Return the index of
+///* the new element.  Return a negative number if malloc fails.
 extern "C" fn add_agg_info_func(db: *mut Sqlite3, p_info_1: &mut AggInfo)
     -> i32 {
     let mut i: i32 = 0;
@@ -10410,6 +12108,10 @@ extern "C" fn add_agg_info_func(db: *mut Sqlite3, p_info_1: &mut AggInfo)
     return i;
 }
 
+///* This is the xExprCallback for a tree walker.  It is used to
+///* implement sqlite3ExprAnalyzeAggregates().  See sqlite3ExprAnalyzeAggregates
+///* for additional information.
+#[allow(unused_doc_comments)]
 extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -10462,6 +12164,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     unsafe { (*p_walker_1).walker_depth } ==
                                         unsafe { (*p_expr_1).op2 } as i32 &&
                                 unsafe { (*p_expr_1).p_agg_info } == core::ptr::null_mut() {
+                            /// Check to see if pExpr is a duplicate of another aggregate
+                            ///* function that is already in the pAggInfo structure
                             let mut p_item_1: *mut AggInfoFunc =
                                 unsafe { (*p_agg_info).a_func };
                             let mx_term: i32 =
@@ -10502,6 +12206,7 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 i = mx_term;
                                 { let _ = 0; };
                             } else if i >= unsafe { (*p_agg_info).n_func } {
+                                /// pExpr is original.  Make a new entry in pAggInfo->aFunc[]
                                 let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
                                 i =
                                     add_agg_info_func(unsafe { (*p_parse).db },
@@ -10531,6 +12236,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     if !(unsafe { (*p_expr_1).p_left }).is_null() &&
                                             unsafe { (*unsafe { (*p_item_1).p_func }).func_flags } &
                                                     32 as u32 == 0 as u32 {
+                                        /// The NEEDCOLL test above causes any ORDER BY clause on
+                                        ///* aggregate min() or max() to be ignored.
                                         let mut p_ob_list: *const ExprList = core::ptr::null();
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -10584,6 +12291,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     } else { unsafe { (*p_item_1).i_distinct = -1 }; }
                                 }
                             }
+
+                            /// Make pExpr point to the appropriate pAggInfo->aFunc[] entry
                             { let _ = 0; };
                             { let _ = 0; };
                             unsafe { (*p_expr_1).i_agg = i as i16 };
@@ -10630,6 +12339,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     unsafe { (*p_walker_1).walker_depth } ==
                                         unsafe { (*p_expr_1).op2 } as i32 &&
                                 unsafe { (*p_expr_1).p_agg_info } == core::ptr::null_mut() {
+                            /// Check to see if pExpr is a duplicate of another aggregate
+                            ///* function that is already in the pAggInfo structure
                             let mut p_item_1: *mut AggInfoFunc =
                                 unsafe { (*p_agg_info).a_func };
                             let mx_term: i32 =
@@ -10670,6 +12381,7 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 i = mx_term;
                                 { let _ = 0; };
                             } else if i >= unsafe { (*p_agg_info).n_func } {
+                                /// pExpr is original.  Make a new entry in pAggInfo->aFunc[]
                                 let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
                                 i =
                                     add_agg_info_func(unsafe { (*p_parse).db },
@@ -10699,6 +12411,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     if !(unsafe { (*p_expr_1).p_left }).is_null() &&
                                             unsafe { (*unsafe { (*p_item_1).p_func }).func_flags } &
                                                     32 as u32 == 0 as u32 {
+                                        /// The NEEDCOLL test above causes any ORDER BY clause on
+                                        ///* aggregate min() or max() to be ignored.
                                         let mut p_ob_list: *const ExprList = core::ptr::null();
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -10752,6 +12466,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     } else { unsafe { (*p_item_1).i_distinct = -1 }; }
                                 }
                             }
+
+                            /// Make pExpr point to the appropriate pAggInfo->aFunc[] entry
                             { let _ = 0; };
                             { let _ = 0; };
                             unsafe { (*p_expr_1).i_agg = i as i16 };
@@ -10798,6 +12514,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     unsafe { (*p_walker_1).walker_depth } ==
                                         unsafe { (*p_expr_1).op2 } as i32 &&
                                 unsafe { (*p_expr_1).p_agg_info } == core::ptr::null_mut() {
+                            /// Check to see if pExpr is a duplicate of another aggregate
+                            ///* function that is already in the pAggInfo structure
                             let mut p_item_1: *mut AggInfoFunc =
                                 unsafe { (*p_agg_info).a_func };
                             let mx_term: i32 =
@@ -10838,6 +12556,7 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 i = mx_term;
                                 { let _ = 0; };
                             } else if i >= unsafe { (*p_agg_info).n_func } {
+                                /// pExpr is original.  Make a new entry in pAggInfo->aFunc[]
                                 let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
                                 i =
                                     add_agg_info_func(unsafe { (*p_parse).db },
@@ -10867,6 +12586,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     if !(unsafe { (*p_expr_1).p_left }).is_null() &&
                                             unsafe { (*unsafe { (*p_item_1).p_func }).func_flags } &
                                                     32 as u32 == 0 as u32 {
+                                        /// The NEEDCOLL test above causes any ORDER BY clause on
+                                        ///* aggregate min() or max() to be ignored.
                                         let mut p_ob_list: *const ExprList = core::ptr::null();
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -10920,6 +12641,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     } else { unsafe { (*p_item_1).i_distinct = -1 }; }
                                 }
                             }
+
+                            /// Make pExpr point to the appropriate pAggInfo->aFunc[] entry
                             { let _ = 0; };
                             { let _ = 0; };
                             unsafe { (*p_expr_1).i_agg = i as i16 };
@@ -10934,6 +12657,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     unsafe { (*p_walker_1).walker_depth } ==
                                         unsafe { (*p_expr_1).op2 } as i32 &&
                                 unsafe { (*p_expr_1).p_agg_info } == core::ptr::null_mut() {
+                            /// Check to see if pExpr is a duplicate of another aggregate
+                            ///* function that is already in the pAggInfo structure
                             let mut p_item_1: *mut AggInfoFunc =
                                 unsafe { (*p_agg_info).a_func };
                             let mx_term: i32 =
@@ -10974,6 +12699,7 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 i = mx_term;
                                 { let _ = 0; };
                             } else if i >= unsafe { (*p_agg_info).n_func } {
+                                /// pExpr is original.  Make a new entry in pAggInfo->aFunc[]
                                 let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
                                 i =
                                     add_agg_info_func(unsafe { (*p_parse).db },
@@ -11003,6 +12729,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     if !(unsafe { (*p_expr_1).p_left }).is_null() &&
                                             unsafe { (*unsafe { (*p_item_1).p_func }).func_flags } &
                                                     32 as u32 == 0 as u32 {
+                                        /// The NEEDCOLL test above causes any ORDER BY clause on
+                                        ///* aggregate min() or max() to be ignored.
                                         let mut p_ob_list: *const ExprList = core::ptr::null();
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -11056,6 +12784,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     } else { unsafe { (*p_item_1).i_distinct = -1 }; }
                                 }
                             }
+
+                            /// Make pExpr point to the appropriate pAggInfo->aFunc[] entry
                             { let _ = 0; };
                             { let _ = 0; };
                             unsafe { (*p_expr_1).i_agg = i as i16 };
@@ -11121,6 +12851,10 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                             break '__s59;
                         }
                         if unsafe { (*p_parse).n_err } != 0 { return 2; }
+
+                        /// If we reach this point, it means that expression pExpr can be
+                        ///* translated into a reference to an index column as described by
+                        ///* pIEpr.
                         unsafe {
                             memset(&raw mut tmp as *mut (), 0,
                                 core::mem::size_of::<Expr>() as u64)
@@ -11179,6 +12913,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     unsafe { (*p_walker_1).walker_depth } ==
                                         unsafe { (*p_expr_1).op2 } as i32 &&
                                 unsafe { (*p_expr_1).p_agg_info } == core::ptr::null_mut() {
+                            /// Check to see if pExpr is a duplicate of another aggregate
+                            ///* function that is already in the pAggInfo structure
                             let mut p_item_1: *mut AggInfoFunc =
                                 unsafe { (*p_agg_info).a_func };
                             let mx_term: i32 =
@@ -11219,6 +12955,7 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                 i = mx_term;
                                 { let _ = 0; };
                             } else if i >= unsafe { (*p_agg_info).n_func } {
+                                /// pExpr is original.  Make a new entry in pAggInfo->aFunc[]
                                 let enc: u8 = unsafe { (*unsafe { (*p_parse).db }).enc };
                                 i =
                                     add_agg_info_func(unsafe { (*p_parse).db },
@@ -11248,6 +12985,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     if !(unsafe { (*p_expr_1).p_left }).is_null() &&
                                             unsafe { (*unsafe { (*p_item_1).p_func }).func_flags } &
                                                     32 as u32 == 0 as u32 {
+                                        /// The NEEDCOLL test above causes any ORDER BY clause on
+                                        ///* aggregate min() or max() to be ignored.
                                         let mut p_ob_list: *const ExprList = core::ptr::null();
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -11301,6 +13040,8 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
                                     } else { unsafe { (*p_item_1).i_distinct = -1 }; }
                                 }
                             }
+
+                            /// Make pExpr point to the appropriate pAggInfo->aFunc[] entry
                             { let _ = 0; };
                             { let _ = 0; };
                             unsafe { (*p_expr_1).i_agg = i as i16 };
@@ -11315,6 +13056,13 @@ extern "C" fn analyze_aggregate(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     }
 }
 
+///* Analyze the pExpr expression looking for aggregate functions and
+///* for variables that need to be added to AggInfo object that pNC->pAggInfo
+///* points to.  Additional entries are made on the AggInfo object as
+///* necessary.
+///*
+///* This routine should only be called after the expression has been
+///* analyzed by sqlite3ResolveExprNames().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_analyze_aggregates(p_nc: *mut NameContext,
     p_expr: *mut Expr) -> () {
@@ -11331,6 +13079,10 @@ pub extern "C" fn sqlite3_expr_analyze_aggregates(p_nc: *mut NameContext,
     }
 }
 
+///* Call sqlite3ExprAnalyzeAggregates() for every expression in an
+///* expression list.  Return the number of errors.
+///*
+///* If an error is found, the analysis is cut short.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_analyze_agg_list(p_nc: *mut NameContext,
     p_list: *mut ExprList) -> () {
@@ -11363,6 +13115,9 @@ pub extern "C" fn sqlite3_expr_analyze_agg_list(p_nc: *mut NameContext,
     }
 }
 
+///* Check to see if there are references to columns in table
+///* pWalker->u.pIdxCover->iCur can be satisfied using the index
+///* pWalker->u.pIdxCover->pIdx.
 extern "C" fn expr_idx_cover(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     -> i32 {
     unsafe {
@@ -11382,6 +13137,14 @@ extern "C" fn expr_idx_cover(p_walker_1: *mut Walker, p_expr_1: *mut Expr)
     }
 }
 
+///* Determine if an index pIdx on table with cursor iCur contains will
+///* the expression pExpr.  Return true if the index does cover the
+///* expression and false if the pExpr expression references table columns
+///* that are not found in the index pIdx.
+///*
+///* An index covering an expression means that the expression can be
+///* evaluated using only the index and without having to lookup the
+///* corresponding table entry.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_covered_by_index(p_expr: *mut Expr, i_cur: i32,
     p_idx: *mut Index) -> i32 {
@@ -11401,6 +13164,13 @@ pub extern "C" fn sqlite3_expr_covered_by_index(p_expr: *mut Expr, i_cur: i32,
     }
 }
 
+/// This is the Walker EXPR callback for sqlite3ReferencesSrcList().
+///*
+///* Set the 0x01 bit of pWalker->eCode if there is a reference to any
+///* of the tables shown in RefSrcList.pRef.
+///*
+///* Set the 0x02 bit of pWalker->eCode if there is a reference to a
+///* table is in neither RefSrcList.pRef nor RefSrcList.aiExclude.
 extern "C" fn expr_ref_to_src_list(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -11454,6 +13224,12 @@ extern "C" fn expr_ref_to_src_list(p_walker_1: *mut Walker,
     }
 }
 
+///* Walker SELECT callbacks for sqlite3ReferencesSrcList().
+///*
+///* When entering a new subquery on the pExpr argument, add all FROM clause
+///* entries for that subquery to the exclude list.
+///*
+///* When leaving the subquery, remove those entries from the exclude list.
 extern "C" fn select_ref_enter(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -11514,6 +13290,19 @@ extern "C" fn select_ref_leave(p_walker_1: *mut Walker,
     }
 }
 
+///* Check to see if pExpr references any tables in pSrcList.
+///* Possible return values:
+///*
+///*    1         pExpr does references a table in pSrcList.
+///*
+///*    0         pExpr references some table that is not defined in either
+///*              pSrcList or in subqueries of pExpr itself.
+///*
+///*   -1         pExpr only references no tables at all, or it only
+///*              references tables defined in subqueries of pExpr itself.
+///*
+///* As currently used, pExpr is always an aggregate function call.  That
+///* fact is exploited for efficiency.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_references_src_list(p_parse: &Parse, p_expr: &Expr,
     p_src_list: *mut SrcList) -> i32 {
@@ -11564,6 +13353,25 @@ pub extern "C" fn sqlite3_references_src_list(p_parse: &Parse, p_expr: &Expr,
     }
 }
 
+///* Walk an expression tree for the DEFAULT field of a column definition
+///* in a CREATE TABLE statement.  Return non-zero if the expression is
+///* acceptable for use as a DEFAULT.  That is to say, return non-zero if
+///* the expression is constant or a function call with constant arguments.
+///* Return and 0 if there are any variables.
+///*
+///* isInit is true when parsing from sqlite_schema.  isInit is false when
+///* processing a new CREATE TABLE statement.  When isInit is true, parameters
+///* (such as ? or $abc) in the expression are converted into NULL.  When
+///* isInit is false, parameters raise an error.  Parameters should not be
+///* allowed in a CREATE TABLE statement, but some legacy versions of SQLite
+///* allowed it, so we need to support it when reading sqlite_schema for
+///* backwards compatibility.
+///*
+///* If isInit is true, set EP_FromDDL on every TK_FUNCTION node.
+///*
+///* For the purposes of this function, a double-quoted string (ex: "abc")
+///* is considered a variable but a single-quoted string (ex: 'abc') is
+///* a constant.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_constant_or_function(p: *mut Expr,
     is_init: u8) -> i32 {
@@ -11571,6 +13379,14 @@ pub extern "C" fn sqlite3_expr_is_constant_or_function(p: *mut Expr,
     return expr_is_const(core::ptr::null_mut(), p, 4 + is_init as i32);
 }
 
+///* Return the collation sequence for the expression pExpr. If
+///* there is no defined collating sequence, return a pointer to the
+///* default collation sequence.
+///*
+///* See also: sqlite3ExprCollSeq()
+///*
+///* The sqlite3ExprCollSeq() routine works the same except that it
+///* returns NULL if there is no defined collation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_nn_coll_seq(p_parse: *mut Parse,
     p_expr: *const Expr) -> *mut CollSeq {
@@ -11582,6 +13398,7 @@ pub extern "C" fn sqlite3_expr_nn_coll_seq(p_parse: *mut Parse,
     return p;
 }
 
+///* sqlite3WalkExpr() callback used by sqlite3ExprIsConstantOrGroupBy().
 extern "C" fn expr_node_is_constant_or_group_by(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -11621,6 +13438,23 @@ extern "C" fn expr_node_is_constant_or_group_by(p_walker_1: *mut Walker,
     }
 }
 
+///* Walk the expression tree passed as the first argument. Return non-zero
+///* if the expression consists entirely of constants or copies of terms
+///* in pGroupBy that sort with the BINARY collation sequence.
+///*
+///* This routine is used to determine if a term of the HAVING clause can
+///* be promoted into the WHERE clause.  In order for such a promotion to work,
+///* the value of the HAVING clause term must be the same for all members of
+///* a "group".  The requirement that the GROUP BY term must be BINARY
+///* assumes that no other collating sequence will have a finer-grained
+///* grouping than binary.  In other words (A=B COLLATE binary) implies
+///* A=B in every other collating sequence.  The requirement that the
+///* GROUP BY be BINARY is stricter than necessary.  It would also work
+///* to promote HAVING clauses that use the same alternative collating
+///* sequence as the GROUP BY term, but that is much harder to check,
+///* alternative collating sequences are uncommon, and this is only an
+///* optimization, so we take the easy way out and simply require the
+///* GROUP BY to use the BINARY collating sequence.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_constant_or_group_by(p_parse: *mut Parse,
     p: *mut Expr, p_group_by: *mut ExprList) -> i32 {
@@ -11636,6 +13470,10 @@ pub extern "C" fn sqlite3_expr_is_constant_or_group_by(p_parse: *mut Parse,
     }
 }
 
+///* This routine examines sub-SELECT statements as an expression is being
+///* walked as part of sqlite3ExprIsTableConstant().  Sub-SELECTs are considered
+///* constant as long as they are uncorrelated - meaning that they do not
+///* contain any terms from outer contexts.
 extern "C" fn expr_select_walk_table_constant(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     { let _ = 0; };
@@ -11647,6 +13485,13 @@ extern "C" fn expr_select_walk_table_constant(p_walker_1: *mut Walker,
     return 1;
 }
 
+///* Walk an expression tree.  Return non-zero if the expression is constant
+///* for any single row of the table with cursor iCur.  In other words, the
+///* expression must not refer to any non-deterministic function nor any
+///* table other than iCur.
+///*
+///* Consider uncorrelated subqueries to be constants if the bAllowSubq
+///* parameter is true.
 extern "C" fn sqlite3_expr_is_table_constant(p: *mut Expr, i_cur_1: i32,
     b_allow_subq_1: i32) -> i32 {
     unsafe {
@@ -11663,7 +13508,50 @@ extern "C" fn sqlite3_expr_is_table_constant(p: *mut Expr, i_cur_1: i32,
     }
 }
 
+///* Check pExpr to see if it is an constraint on the single data source
+///* pSrc = &pSrcList->a[iSrc].  In other words, check to see if pExpr
+///* constrains pSrc but does not depend on any other tables or data
+///* sources anywhere else in the query.  Return true (non-zero) if pExpr
+///* is a constraint on pSrc only.
+///*
+///* This is an optimization.  False negatives will perhaps cause slower
+///* queries, but false positives will yield incorrect answers.  So when in
+///* doubt, return 0.
+///*
+///* To be an single-source constraint, the following must be true:
+///*
+///*   (1)  pExpr cannot refer to any table other than pSrc->iCursor.
+///*
+///*   (2a) pExpr cannot use subqueries unless the bAllowSubq parameter is
+///*        true and the subquery is non-correlated
+///*
+///*   (2b) pExpr cannot use non-deterministic functions.
+///*
+///*   (3)  pSrc cannot be part of the left operand for a RIGHT JOIN.
+///*        (Is there some way to relax this constraint?)
+///*
+///*   (4)  If pSrc is the right operand of a LEFT JOIN, then...
+///*         (4a)  pExpr must come from an ON clause..
+///*         (4b)  and specifically the ON clause associated with the LEFT JOIN.
+///*
+///*   (5)  If pSrc is the right operand of a LEFT JOIN or the left
+///*        operand of a RIGHT JOIN, then pExpr must be from the WHERE
+///*        clause, not an ON clause.
+///*
+///*   (6) Either:
+///*
+///*       (6a) pExpr does not originate in an ON or USING clause, or
+///*
+///*       (6b) The ON or USING clause from which pExpr is derived is
+///*            not to the left of a RIGHT JOIN (or FULL JOIN).
+///*
+///*       Without this restriction, accepting pExpr as a single-table
+///*       constraint might move the the ON/USING filter expression
+///*       from the left side of a RIGHT JOIN over to the right side,
+///*       which leads to incorrect answers.  See also restriction (9)
+///*       on push-down.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_is_single_table_constraint(p_expr: *mut Expr,
     p_src_list: &SrcList, i_src: i32, b_allow_subq: i32) -> i32 {
     unsafe {
@@ -11714,12 +13602,23 @@ pub extern "C" fn sqlite3_expr_is_single_table_constraint(p_expr: *mut Expr,
                 }
             }
         }
+
+        /// Rules (1), (2a), and (2b) handled by the following:
         return sqlite3_expr_is_table_constant(p_expr,
                 unsafe { (*p_src).i_cursor }, b_allow_subq);
     }
 }
 
+///* Return TRUE if the given expression is a constant which would be
+///* unchanged by OP_Affinity with the affinity given in the second
+///* argument.
+///*
+///* This routine is used to determine if the OP_Affinity operation
+///* can be omitted.  When in doubt return FALSE.  A false negative
+///* is harmless.  A false positive, however, can result in the wrong
+///* answer.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
     aff: i8) -> i32 {
     let mut op: u8 = 0 as u8;
@@ -11745,6 +13644,8 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
                 { return (unary_minus == 0) as i32 as i32; }
                 {
                     { let _ = 0; };
+
+                    /// p cannot be part of a CHECK constraint
                     return (aff as i32 >= 67 &&
                                 (unsafe { (*p).i_column } as i32) < 0) as i32;
                 }
@@ -11759,6 +13660,8 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
                 { return (unary_minus == 0) as i32 as i32; }
                 {
                     { let _ = 0; };
+
+                    /// p cannot be part of a CHECK constraint
                     return (aff as i32 >= 67 &&
                                 (unsafe { (*p).i_column } as i32) < 0) as i32;
                 }
@@ -11772,6 +13675,8 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
                 { return (unary_minus == 0) as i32 as i32; }
                 {
                     { let _ = 0; };
+
+                    /// p cannot be part of a CHECK constraint
                     return (aff as i32 >= 67 &&
                                 (unsafe { (*p).i_column } as i32) < 0) as i32;
                 }
@@ -11781,6 +13686,8 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
                 { return (unary_minus == 0) as i32 as i32; }
                 {
                     { let _ = 0; };
+
+                    /// p cannot be part of a CHECK constraint
                     return (aff as i32 >= 67 &&
                                 (unsafe { (*p).i_column } as i32) < 0) as i32;
                 }
@@ -11789,6 +13696,8 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
             168 => {
                 {
                     { let _ = 0; };
+
+                    /// p cannot be part of a CHECK constraint
                     return (aff as i32 >= 67 &&
                                 (unsafe { (*p).i_column } as i32) < 0) as i32;
                 }
@@ -11799,6 +13708,7 @@ pub extern "C" fn sqlite3_expr_needs_no_affinity_change(mut p: *const Expr,
     }
 }
 
+///* Return TRUE if the given string is a row-id column name.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_rowid(z: *const i8) -> i32 {
     if unsafe {
@@ -11821,6 +13731,9 @@ pub extern "C" fn sqlite3_is_rowid(z: *const i8) -> i32 {
     return 0;
 }
 
+///* Return a pointer to a buffer containing a usable rowid alias for table
+///* pTab. An alias is usable if there is not an explicit user-defined column 
+///* of the same name.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rowid_alias(p_tab: *mut Table) -> *const i8 {
     let az_opt: [*const i8; 3] =
@@ -11849,6 +13762,8 @@ pub extern "C" fn sqlite3_rowid_alias(p_tab: *mut Table) -> *const i8 {
     return core::ptr::null();
 }
 
+///* pExpr is a comparison operator.  Return the type affinity that should
+///* be applied to both operands prior to doing the comparison.
 extern "C" fn comparison_affinity(p_expr_1: &Expr) -> i8 {
     unsafe {
         let mut aff: i8 = 0 as i8;
@@ -11871,6 +13786,10 @@ extern "C" fn comparison_affinity(p_expr_1: &Expr) -> i8 {
     }
 }
 
+///* pExpr is a comparison expression, eg. '=', '<', IN(...) etc.
+///* idx_affinity is the affinity of an indexed column. Return true
+///* if the index with affinity idx_affinity may be used to implement
+///* the comparison in pExpr.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_index_affinity_ok(p_expr: *const Expr,
     idx_affinity: i8) -> i32 {
@@ -11880,7 +13799,16 @@ pub extern "C" fn sqlite3_index_affinity_ok(p_expr: *const Expr,
     return (idx_affinity as i32 >= 67) as i32;
 }
 
+///* Make a guess at all the possible datatypes of the result that could
+///* be returned by an expression.  Return a bitmask indicating the answer:
+///*
+///*     0x01         Numeric
+///*     0x02         Text
+///*     0x04         Blob
+///*
+///* If the expression must return NULL, then 0x00 is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expr_data_type(mut p_expr: *const Expr) -> i32 {
     unsafe {
         while !(p_expr).is_null() {
@@ -12626,10 +14554,13 @@ pub extern "C" fn sqlite3_expr_data_type(mut p_expr: *const Expr) -> i32 {
                 }
             }
         }
+
+        /// End of while(pExpr)
         return 0;
     }
 }
 
+///* Return TRUE if the two expressions have equivalent collating sequences.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_coll_seq_match(p_parse: *mut Parse,
     p_e1: *const Expr, p_e2: *const Expr) -> i32 {
@@ -12639,6 +14570,12 @@ pub extern "C" fn sqlite3_expr_coll_seq_match(p_parse: *mut Parse,
     return (p_coll1 == p_coll2) as i32;
 }
 
+///* Set the collating sequence for expression pExpr to be the collating
+///* sequence named by pToken.   Return a pointer to a new Expr node that
+///* implements the COLLATE operator.
+///*
+///* If a memory allocation error occurs, that fact is recorded in pParse->db
+///* and the pExpr parameter is returned unchanged.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_add_collate_token(p_parse: &Parse,
     mut p_expr: *mut Expr, p_coll_name: *const Token, dequote: i32)
@@ -12667,6 +14604,8 @@ pub extern "C" fn sqlite3_expr_add_collate_string(p_parse: *const Parse,
             &raw mut s as *const Token, 0);
 }
 
+///* If the expression list pEList contains more than iLimit elements,
+///* leave an error message in pParse.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_list_check_length(p_parse: *mut Parse,
     p_e_list: *mut ExprList, z_object: *const i8) -> () {
@@ -12680,6 +14619,13 @@ pub extern "C" fn sqlite3_expr_list_check_length(p_parse: *mut Parse,
     }
 }
 
+/// Expression p is a comparison operator.  Return a collation sequence
+///* appropriate for the comparison operator.
+///*
+///* This is normally just a wrapper around sqlite3BinaryCompareCollSeq().
+///* However, if the OP_Commuted flag is set, then the order of the operands
+///* is reversed in the sqlite3BinaryCompareCollSeq() call so that the
+///* correct collating sequence is found.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_compare_coll_seq(p_parse: *mut Parse, p: &Expr)
     -> *mut CollSeq {
@@ -12692,6 +14638,8 @@ pub extern "C" fn sqlite3_expr_compare_coll_seq(p_parse: *mut Parse, p: &Expr)
     }
 }
 
+///* Return the maximum height of any expression tree referenced
+///* by the select statement passed as an argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_expr_height(p: *const Select) -> i32 {
     let mut n_height: i32 = 0;
@@ -12699,6 +14647,7 @@ pub extern "C" fn sqlite3_select_expr_height(p: *const Select) -> i32 {
     return n_height;
 }
 
+///* Set the error offset for an Expr node, if possible.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_set_error_offset(p_expr: *mut Expr,
     i_ofst: i32) -> () {

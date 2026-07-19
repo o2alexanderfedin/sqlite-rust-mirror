@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -479,6 +497,9 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* The first argument is a TCL UTF-8 string. Return the byte array
+///* object with the encoded representation of the string, including
+///* the NULL terminator.
 extern "C" fn binarize(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut len: i32 = 0;
@@ -498,6 +519,15 @@ extern "C" fn binarize(client_data_1: *mut (), interp: *mut TclInterp,
     return 0;
 }
 
+///* Usage: test_value_overhead <repeat-count> <do-calls>.
+///*
+///* This routine is used to test the overhead of calls to
+///* sqlite3_value_text(), on a value that contains a UTF-8 string. The idea
+///* is to figure out whether or not it is a problem to use sqlite3_value
+///* structures with collation sequence functions.
+///*
+///* If <do-calls> is 0, then the calls to sqlite3_value_text() are not
+///* actually made.
 extern "C" fn test_value_overhead(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -608,6 +638,8 @@ extern "C" fn name_to_enc(interp: *mut TclInterp, p_obj_1: *mut TclObj)
     return unsafe { (*p_enc).enc };
 }
 
+///* Usage:   test_translate <string/blob> <from enc> <to enc> ?<transient>?
+///*
 extern "C" fn test_translate(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut enc_from: u8 = 0 as u8;

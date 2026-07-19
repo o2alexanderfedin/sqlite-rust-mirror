@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, BusyHandler, CollSeq, Column, Cte, DbFixer, Expr,
+    ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,25 @@ impl Parse {
     }
 }
 
+///* A bitmap is an instance of the following structure.
+///*
+///* This bitmap records the existence of zero or more bits
+///* with values between 1 and iSize, inclusive.
+///*
+///* There are three possible representations of the bitmap.
+///* If iSize<=BITVEC_NBIT, then Bitvec.u.aBitmap[] is a straight
+///* bitmap.  The least significant bit is bit 1.
+///*
+///* If iSize>BITVEC_NBIT and iDivisor==0 then Bitvec.u.aHash[] is
+///* a hash table that will hold up to BITVEC_MXHASH distinct values.
+///*
+///* Otherwise, the value i is redirected into one of BITVEC_NPTR
+///* sub-bitmaps pointed to by Bitvec.u.apSub[].  Each subbitmap
+///* handles up to iDivisor separate values of i.  apSub[0] holds
+///* values between 1 and iDivisor.  apSub[1] holds values between
+///* iDivisor+1 and 2*iDivisor.  apSub[N] holds values between
+///* N*iDivisor+1 and (N+1)*iDivisor.  Each subbitmap is normalized
+///* to hold deal with values between 1 and iDivisor.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Bitvec {
@@ -410,6 +444,9 @@ union BitvecU0 {
     ap_sub: [*mut Bitvec; 62],
 }
 
+///* Create a new bitmap object able to handle bits between 0 and iSize,
+///* inclusive.  Return a pointer to the new object.  Return NULL if
+///* malloc fails.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_create(i_size: u32) -> *mut Bitvec {
     let mut p: *mut Bitvec = core::ptr::null_mut();
@@ -421,6 +458,9 @@ pub extern "C" fn sqlite3_bitvec_create(i_size: u32) -> *mut Bitvec {
     return p;
 }
 
+///* Check to see if the i-th bit is set.  Return true or false.
+///* If p is NULL (if the bitmap has not been created) or if
+///* i is out of range, then return false.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_test_not_null(mut p: *mut Bitvec, mut i: u32)
     -> i32 {
@@ -471,11 +511,30 @@ pub extern "C" fn sqlite3_bitvec_test(p: *mut Bitvec, i: u32) -> i32 {
                 sqlite3_bitvec_test_not_null(p, i) != 0) as i32;
 }
 
+///* Set the i-th bit.  Return 0 on success and an error code if
+///* anything goes wrong.
+///*
+///* This routine might cause sub-bitmaps to be allocated.  Failing
+///* to get the memory needed to hold the sub-bitmap is the only
+///* that can go wrong with an insert, assuming p and i are valid.
+///*
+///* The calling function must ensure that p is a valid Bitvec object
+///* and that the value for "i" is within range of the Bitvec object.
+///* Otherwise the behavior is undefined.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bitvec_set(mut p: *mut Bitvec, mut i: u32) -> i32 {
     unsafe {
         let mut h: u32 = 0 as u32;
         let mut bin: u32 = 0 as u32;
+        /// if there wasn't a hash collision, and this doesn't */
+        ///  /* completely fill the hash, then just add it without */
+        ///  /* worrying about sub-dividing and re-hashing.
+        /// there was a collision, check to see if it's already */
+        ///  /* in hash, if not, try to find a spot for it
+        /// we didn't find it in the hash.  h points to the first */
+        ///  /* available free spot. check to see if this is going to */
+        ///  /* make our hash too "full".
         let mut j: u32 = 0 as u32;
         let mut rc: i32 = 0;
         let mut ai_values: *mut u32 = core::ptr::null_mut();
@@ -749,10 +808,23 @@ pub extern "C" fn sqlite3_bitvec_set(mut p: *mut Bitvec, mut i: u32) -> i32 {
                 }
             }
         }
+
+        /// if there wasn't a hash collision, and this doesn't */
+        ///  /* completely fill the hash, then just add it without */
+        ///  /* worrying about sub-dividing and re-hashing.
+        /// there was a collision, check to see if it's already */
+        ///  /* in hash, if not, try to find a spot for it
+        /// we didn't find it in the hash.  h points to the first */
+        ///  /* available free spot. check to see if this is going to */
+        ///  /* make our hash too "full".
         unreachable!();
     }
 }
 
+///* Clear the i-th bit.
+///*
+///* pBuf must be a pointer to at least BITVEC_SZ bytes of temporary storage
+///* that BitvecClear can use to rebuilt its hash table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_clear(mut p: *mut Bitvec, mut i: u32,
     p_buf: *mut ()) -> () {
@@ -840,6 +912,7 @@ pub extern "C" fn sqlite3_bitvec_clear(mut p: *mut Bitvec, mut i: u32,
     }
 }
 
+///* Destroy a bitmap object.  Reclaim all memory used.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_destroy(p: *mut Bitvec) -> () {
     unsafe {
@@ -871,12 +944,50 @@ pub extern "C" fn sqlite3_bitvec_destroy(p: *mut Bitvec) -> () {
     }
 }
 
+///* Return the value of the iSize parameter specified when Bitvec *p
+///* was created.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bitvec_size(p: &Bitvec) -> u32 {
     return (*p).i_size;
 }
 
+///* This routine runs an extensive test of the Bitvec code.
+///*
+///* The input is an array of integers that acts as a program
+///* to test the Bitvec.  The integers are opcodes followed
+///* by 0, 1, or 3 operands, depending on the opcode.  Another
+///* opcode follows immediately after the last operand.
+///*
+///* There are opcodes numbered starting with 0.  0 is the
+///* "halt" opcode and causes the test to end.
+///*
+///*    0          Halt and return the number of errors
+///*    1 N S X    Set N bits beginning with S and incrementing by X
+///*    2 N S X    Clear N bits beginning with S and incrementing by X
+///*    3 N        Set N randomly chosen bits
+///*    4 N        Clear N randomly chosen bits
+///*    5 N S X    Set N bits from S increment X in array only, not in bitvec
+///*    6          Invoice sqlite3ShowBitvec() on the Bitvec object so far
+///*    7 X        Show compile-time parameters and the hash of X         
+///*
+///* The opcodes 1 through 4 perform set and clear operations are performed
+///* on both a Bitvec object and on a linear array of bits obtained from malloc.
+///* Opcode 5 works on the linear array only, not on the Bitvec.
+///* Opcode 5 is used to deliberately induce a fault in order to
+///* confirm that error detection works.  Opcodes 6 and greater are
+///* state output opcodes.  Opcodes 6 and greater are no-ops unless
+///* SQLite has been compiled with SQLITE_DEBUG.
+///*
+///* At the conclusion of the test the linear array is compared
+///* against the Bitvec object.  If there are any differences,
+///* an error is returned.  If they are the same, zero is returned.
+///*
+///* If a memory allocation error occurs, return -1.
+///*
+///* sz is the size of the Bitvec.  Or if sz is negative, make the size
+///* 2*(unsigned)(-sz) and disabled the linear vector check.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bitvec_builtin_test(sz: i32, a_op: *mut i32)
     -> i32 {
     let mut p_bitvec: *mut Bitvec = core::ptr::null_mut();
@@ -1078,6 +1189,16 @@ pub extern "C" fn sqlite3_bitvec_builtin_test(sz: i32, a_op: *mut i32)
             }
         }
     }
+
+    /// Allocate the Bitvec to be tested and a linear array of
+    ///* bits to act as the reference
+    /// NULL pBitvec tests
+    /// Run the program
+    /// Test to make sure the linear array exactly matches the
+    ///* Bitvec object.  Start with the assumption that they do
+    ///* match (rc==0).  Change rc to non-zero if a discrepancy
+    ///* is found.
+    /// Free allocated structure
     unreachable!();
 }
 

@@ -1,10 +1,34 @@
+//!* 2014-09-21
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* This SQLite extension adds a debug "authorizer" callback to the database
+//!* connection.  The callback merely writes the authorization request to
+//!* standard output and returns SQLITE_OK.
+//!*
+//!* This extension can be used (for example) in the command-line shell to
+//!* trace the operation of the authorizer.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* Display the authorization request
 extern "C" fn auth_callback(p_client_data_1: *mut (), op: i32,
     mut z1: *const i8, mut z2: *const i8, mut z3: *const i8,
     mut z4: *const i8) -> i32 {
@@ -102,16 +126,19 @@ extern "C" fn auth_callback(p_client_data_1: *mut (), op: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_showauth_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_set_authorizer(db, Some(auth_callback),
                 core::ptr::null_mut())
-        };
+        });
     return rc;
 }
 

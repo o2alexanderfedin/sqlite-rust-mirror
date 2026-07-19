@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type Int32T = i32;
 
@@ -554,6 +569,29 @@ struct UnixFile {
     fs_flags: u32,
 }
 
+///* An instance of the following structure is allocated for each open
+///* inode.
+///*
+///* A single inode can have multiple file descriptors, so each unixFile
+///* structure contains a pointer to an instance of this object and this
+///* object keeps a count of the number of unixFile pointing to it.
+///*
+///* Mutex rules:
+///*
+///*  (1) Only the pLockMutex mutex must be held in order to read or write
+///*      any of the locking fields:
+///*          nShared, nLock, eFileLock, bProcessLock, pUnused
+///*
+///*  (2) When nRef>0, then the following fields are unchanging and can
+///*      be read (but not written) without holding any mutex:
+///*          fileId, pLockMutex
+///*
+///*  (3) With the exceptions above, all the fields may only be read
+///*      or written while holding the global unixBigLock mutex.
+///*
+///* Deadlock prevention:  The global unixBigLock mutex may not
+///* be acquired while holding the pLockMutex mutex.  If both unixBigLock
+///* and pLockMutex are needed, then unixBigLock must be acquired first.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixInodeInfo {
@@ -571,6 +609,8 @@ struct UnixInodeInfo {
     shared_byte: u64,
 }
 
+///* An instance of the following structure serves as the key used
+///* to locate a particular unixInodeInfo object.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixFileId {
@@ -578,6 +618,10 @@ struct UnixFileId {
     ino: u64,
 }
 
+///* Sometimes, after a file handle is closed by SQLite, the file descriptor
+///* cannot be closed immediately. In these cases, instances of the following
+///* structure are used to store the file descriptor while waiting for an
+///* opportunity to either close or reuse it.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixUnusedFd {
@@ -586,6 +630,52 @@ struct UnixUnusedFd {
     p_next: *mut UnixUnusedFd,
 }
 
+///* Object used to represent an shared memory buffer.
+///*
+///* When multiple threads all reference the same wal-index, each thread
+///* has its own unixShm object, but they all point to a single instance
+///* of this unixShmNode object.  In other words, each wal-index is opened
+///* only once per process.
+///*
+///* Each unixShmNode object is connected to a single unixInodeInfo object.
+///* We could coalesce this object into unixInodeInfo, but that would mean
+///* every open file that does not use shared memory (in other words, most
+///* open files) would have to carry around this extra information.  So
+///* the unixInodeInfo object contains a pointer to this unixShmNode object
+///* and the unixShmNode object is created only when needed.
+///*
+///* unixMutexHeld() must be true when creating or destroying
+///* this object or while reading or writing the following fields:
+///*
+///*      nRef
+///*
+///* The following fields are read-only after the object is created:
+///*
+///*      hShm
+///*      zFilename
+///*
+///* Either unixShmNode.pShmMutex must be held or unixShmNode.nRef==0 and
+///* unixMutexHeld() is true when reading or writing any other field
+///* in this structure.
+///*
+///* aLock[SQLITE_SHM_NLOCK]:
+///*   This array records the various locks held by clients on each of the
+///*   SQLITE_SHM_NLOCK slots. If the aLock[] entry is set to 0, then no
+///*   locks are held by the process on this slot. If it is set to -1, then
+///*   some client holds an EXCLUSIVE lock on the locking slot. If the aLock[]
+///*   value is set to a positive value, then it is the number of shared 
+///*   locks currently held on the slot.
+///*
+///* aMutex[SQLITE_SHM_NLOCK]:
+///*   Normally, when SQLITE_ENABLE_SETLK_TIMEOUT is not defined, mutex 
+///*   pShmMutex is used to protect the aLock[] array and the right to
+///*   call fcntl() on unixShmNode.hShm to obtain or release locks.
+///*
+///*   If SQLITE_ENABLE_SETLK_TIMEOUT is defined though, we use an array
+///*   of mutexes - one for each locking slot. To read or write locking
+///*   slot aLock[iSlot], the caller must hold the corresponding mutex
+///*   aMutex[iSlot]. Similarly, to call fcntl() to obtain or release a
+///*   lock corresponding to slot iSlot, mutex aMutex[iSlot] must be held.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixShmNode {
@@ -603,6 +693,17 @@ struct UnixShmNode {
     a_lock: [i32; 8],
 }
 
+///* Structure used internally by this VFS to record the state of an
+///* open shared memory connection.
+///*
+///* The following fields are initialized when this object is created and
+///* are read-only thereafter:
+///*
+///*    unixShm.pShmNode
+///*    unixShm.id
+///*
+///* All other fields are read/write.  The unixShm.pShmNode->pShmMutex must
+///* be held while accessing any read/write fields.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixShm {
@@ -614,6 +715,10 @@ struct UnixShm {
     excl_mask: u16,
 }
 
+///* Many system calls are accessed through pointer-to-functions so that
+///* they may be overridden at runtime to facilitate fault injection during
+///* testing and sandboxing.  The following array holds the names and pointers
+///* to all overrideable system calls.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct UnixSyscall {
@@ -622,10 +727,31 @@ struct UnixSyscall {
     p_default: Option<unsafe extern "C" fn() -> ()>,
 }
 
+///* Different Unix systems declare open() in different ways.  Same use
+///* open(const char*,int,mode_t).  Others use open(const char*,int,...).
+///* The difference is important when using a pointer to the function.
+///*
+///* The safest way to deal with the problem is to always use this wrapper
+///* which always has the same well-defined interface.
 extern "C" fn posix_open(z_file_1: *const i8, flags: i32, mode: i32) -> i32 {
     return unsafe { open(z_file_1, flags, mode) };
 }
 
+///* Invoke open().  Do so multiple times, until it either succeeds or
+///* fails for some reason other than EINTR.
+///*
+///* If the file creation mode "m" is 0 then set it to the default for
+///* SQLite.  The default is SQLITE_DEFAULT_FILE_PERMISSIONS (normally
+///* 0644) as modified by the system umask.  If m is not 0, then
+///* make the file creation mode be exactly m ignoring the umask.
+///*
+///* The m parameter will be non-zero only when creating -wal, -journal,
+///* and -shm files.  We want those files to have *exactly* the same
+///* permissions as their original database, unadulterated by the umask.
+///* In that way, if a database file is -rw-rw-rw or -rw-rw-r-, and a
+///* transaction crashes and leaves behind hot journals, then any
+///* process that is able to write to the database will also be able to
+///* recover the hot journals.
 extern "C" fn robust_open(z: *const i8, f: i32, m: ModeT) -> i32 {
     unsafe {
         let mut fd: i32 = 0;
@@ -735,11 +861,19 @@ extern "C" fn robust_open(z: *const i8, f: i32, m: ModeT) -> i32 {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn unix_log_error_at_line(errcode: i32, z_func_1: *const i8,
     mut z_path_1: *const i8, i_line_1: i32) -> i32 {
     let mut z_err: *mut i8 = core::ptr::null_mut();
+    /// Message from strerror() or equivalent
     let i_errno: i32 = unsafe { *unsafe { __error() } };
-    z_err = c"".as_ptr() as *mut i8;
+
+    /// Saved syscall error number
+    /// If this is not a threadsafe build (SQLITE_THREADSAFE==0), then use
+    ///* the strerror() function to obtain the human-readable error message
+    ///* equivalent to errno. Otherwise, use strerror_r().
+    /// This is a threadsafe build, but strerror_r() is not available.
+    (z_err = c"".as_ptr() as *mut i8);
     if z_path_1 == core::ptr::null() {
         z_path_1 = c"".as_ptr() as *mut i8 as *const i8;
     }
@@ -751,6 +885,7 @@ extern "C" fn unix_log_error_at_line(errcode: i32, z_func_1: *const i8,
     return errcode;
 }
 
+/// Forward reference
 extern "C" fn open_directory(z_filename: *const i8, p_fd: *mut i32) -> i32 {
     let mut ii: i32 = 0;
     let mut fd: i32 = -1;
@@ -792,6 +927,10 @@ extern "C" fn open_directory(z_filename: *const i8, p_fd: *mut i32) -> i32 {
             &raw mut z_dirname[0 as usize] as *mut i8 as *const i8, 3893);
 }
 
+///* Return the system page size.
+///*
+///* This function should not be called directly by other code in this file.
+///* Instead, it should be called via macro osGetpagesize().
 extern "C" fn unix_getpagesize() -> i32 {
     return unsafe { sysconf(29) } as i32;
 }
@@ -1015,6 +1154,7 @@ static mut a_syscall: [UnixSyscall; 29] =
                 p_default: None,
             }];
 
+///* Return TRUE if pFile has been renamed or unlinked since it was first opened.
 extern "C" fn file_has_moved(p_file_1: &UnixFile) -> i32 {
     unsafe {
         let mut buf: Stat = unsafe { core::mem::zeroed() };
@@ -1036,6 +1176,13 @@ extern "C" fn file_has_moved(p_file_1: &UnixFile) -> i32 {
     }
 }
 
+///* Check a unixFile that is a database.  Verify the following:
+///*
+///* (1) There is exactly one hard link on the file
+///* (2) The file is not a symbolic link
+///* (3) The file has not been renamed or unlinked
+///*
+///* Issue sqlite3_log(SQLITE_WARNING,...) messages if anything is not right.
 extern "C" fn verify_db_file(p_file_1: *mut UnixFile) -> () {
     unsafe {
         let mut buf: Stat = unsafe { core::mem::zeroed() };
@@ -1089,6 +1236,24 @@ extern "C" fn verify_db_file(p_file_1: *mut UnixFile) -> () {
     }
 }
 
+///* Attempt to set a system-lock on the file pFile.  The lock is
+///* described by pLock.
+///*
+///* If the pFile was opened read/write from unix-excl, then the only lock
+///* ever obtained is an exclusive lock, and it is obtained exactly once
+///* the first time any lock is attempted.  All subsequent system locking
+///* operations become no-ops.  Locking operations still happen internally,
+///* in order to coordinate access between separate database connections
+///* within this process, but all of that is handled in memory and the
+///* operating system does not participate.
+///*
+///* This function is a pass-through to fcntl(F_SETLK) if pFile is using
+///* any VFS other than "unix-excl" or if pFile is opened on "unix-excl"
+///* and is read-only.
+///*
+///* Zero is returned if the call completes successfully, or -1 if a call
+///* to fcntl() fails. In this case, errno is set appropriately (by fcntl()).
+#[allow(unused_doc_comments)]
 extern "C" fn unix_file_lock(p_file_1: &UnixFile, p_lock_1: *mut Flock)
     -> i32 {
     unsafe {
@@ -1099,7 +1264,9 @@ extern "C" fn unix_file_lock(p_file_1: &UnixFile, p_lock_1: *mut Flock)
         if (*p_file_1).ctrl_flags as i32 & (1 | 2) == 1 {
             if unsafe { (*p_inode).b_process_lock } as i32 == 0 {
                 let mut lock: Flock = unsafe { core::mem::zeroed() };
-                lock.l_whence = 0 as i16;
+
+                /// assert( pInode->nLock==0 ); <-- Not true if unix-excl READONLY used
+                (lock.l_whence = 0 as i16);
                 lock.l_start = (sqlite3_pending_byte + 2) as OffT;
                 lock.l_len = 510 as OffT;
                 lock.l_type = 3 as i16;
@@ -1144,10 +1311,20 @@ extern "C" fn unix_file_lock(p_file_1: &UnixFile, p_lock_1: *mut Flock)
     }
 }
 
+///* Set the pFile->lastErrno.  Do this in a subroutine as that provides
+///* a convenient place to set a breakpoint.
 extern "C" fn store_last_errno(p_file_1: &mut UnixFile, error: i32) -> () {
     (*p_file_1).last_errno = error;
 }
 
+///* This routine translates a standard POSIX errno code into something
+///* useful to the clients of the sqlite3 functions.  Specifically, it is
+///* intended to translate a variety of "try again" errors into SQLITE_BUSY
+///* and a variety of "please close the file descriptor NOW" errors into
+///* SQLITE_IOERR
+///*
+///* Errors during initialization of locks, or file system support for locks,
+///* should handle ENOLCK, ENOTSUP, EOPNOTSUPP separately.
 extern "C" fn sqlite_error_from_posix_error(posix_error_1: i32,
     sqlite_io_err_1: i32) -> i32 {
     { let _ = 0; };
@@ -1166,6 +1343,17 @@ extern "C" fn sqlite_error_from_posix_error(posix_error_1: i32,
     }
 }
 
+///* Close a file descriptor.
+///*
+///* We assume that close() almost always works, since it is only in a
+///* very sick application or on a very sick platform that it might fail.
+///* If it does fail, simply leak the file descriptor, but do log the
+///* error.
+///*
+///* Note that it is not safe to retry close() after EINTR since the
+///* file descriptor might have already been reused by another thread.
+///* So we don't even try to recover from an EINTR.  Just log the error
+///* and move on.
 extern "C" fn robust_close(p_file_1: *const UnixFile, h: i32, lineno: i32)
     -> () {
     unsafe {
@@ -1190,6 +1378,7 @@ extern "C" fn robust_close(p_file_1: *const UnixFile, h: i32, lineno: i32)
     }
 }
 
+///* Close all file descriptors accumulated in the unixInodeInfo->pUnused list.
 extern "C" fn close_pending_fds(p_file_1: *mut UnixFile) -> () {
     let p_inode: *mut UnixInodeInfo = unsafe { (*p_file_1).p_inode };
     let mut p: *mut UnixUnusedFd = core::ptr::null_mut();
@@ -1212,6 +1401,18 @@ extern "C" fn close_pending_fds(p_file_1: *mut UnixFile) -> () {
     unsafe { (*p_inode).p_unused = core::ptr::null_mut() };
 }
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
+///*
+///* If handleNFSUnlock is true, then on downgrading an EXCLUSIVE_LOCK to SHARED
+///* the byte range is divided into 2 parts and the first part is unlocked then
+///* set to a read lock, then the other part is simply unlocked.  This works
+///* around a bug in BSD NFS lockd (also seen on MacOSX 10.3+) that fails to
+///* remove the write lock on a region when a read lock is set.
+#[allow(unused_doc_comments)]
 extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
     handle_nfs_unlock_1: i32) -> i32 {
     unsafe {
@@ -1236,6 +1437,7 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
                     if e_file_lock_1 == 1 {
                         if handle_nfs_unlock_1 != 0 {
                             let mut t_errno: i32 = 0;
+                            /// Error code from system call errors
                             let div_size: OffT = (510 - 1) as OffT;
                             lock.l_type = 2 as i16;
                             lock.l_whence = 0 as i16;
@@ -1276,7 +1478,14 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
                             lock.l_start = (sqlite3_pending_byte + 2) as OffT;
                             lock.l_len = 510 as OffT;
                             if unix_file_lock(unsafe { &*p_file }, &mut lock) != 0 {
-                                rc = 10 | 9 << 8;
+
+                                /// In theory, the call to unixFileLock() cannot fail because another
+                                ///* process is holding an incompatible lock. If it does, this
+                                ///* indicates that the other process is not following the locking
+                                ///* protocol. If this happens, return SQLITE_IOERR_RDLOCK. Returning
+                                ///* SQLITE_BUSY would confuse the upper layer (in practice it causes
+                                ///* an assert to fail).
+                                (rc = 10 | 9 << 8);
                                 store_last_errno(unsafe { &mut *p_file },
                                     unsafe { *unsafe { __error() } });
                                 break '__b4;
@@ -1298,6 +1507,10 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
                     }
                 }
                 if e_file_lock_1 == 0 {
+
+                    /// Decrement the shared lock counter.  Release the lock using an
+                    ///* OS call only when all threads in this same process have released
+                    ///* the lock.
                     {
                         let __p = unsafe { &mut (*p_inode).n_shared };
                         let __t = *__p;
@@ -1318,6 +1531,10 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
                             unsafe { (*p_file).e_file_lock = 0 as u8 };
                         }
                     }
+
+                    /// Decrement the count of locks against this same file.  When the
+                    ///* count reaches zero, close any other file descriptors whose close
+                    ///* was deferred because of outstanding locks.
                     {
                         let __p = unsafe { &mut (*p_inode).n_lock };
                         let __t = *__p;
@@ -1333,23 +1550,81 @@ extern "C" fn posix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32,
             }
             if !(false) { break '__b4; }
         }
+
+        /// downgrading to a shared lock on NFS involves clearing the write lock
+        ///* before establishing the readlock - to avoid a race condition we downgrade
+        ///* the lock in 2 blocks, so that part of the range will be covered by a
+        ///* write lock until the rest is covered by a read lock:
+        ///*  1:   [WWWWW]
+        ///*  2:   [....W]
+        ///*  3:   [RRRRW]
+        ///*  4:   [RRRR.]
+        /// Error code from system call errors
+        /// defined(__APPLE__) && SQLITE_ENABLE_LOCKING_STYLE
+        /// In theory, the call to unixFileLock() cannot fail because another
+        ///* process is holding an incompatible lock. If it does, this
+        ///* indicates that the other process is not following the locking
+        ///* protocol. If this happens, return SQLITE_IOERR_RDLOCK. Returning
+        ///* SQLITE_BUSY would confuse the upper layer (in practice it causes
+        ///* an assert to fail).
+        /// Decrement the shared lock counter.  Release the lock using an
+        ///* OS call only when all threads in this same process have released
+        ///* the lock.
+        /// Decrement the count of locks against this same file.  When the
+        ///* count reaches zero, close any other file descriptors whose close
+        ///* was deferred because of outstanding locks.
         unsafe { sqlite3_mutex_leave(unsafe { (*p_inode).p_lock_mutex }) };
         if rc == 0 { unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 }; }
         return rc;
     }
 }
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
 extern "C" fn unix_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     { let _ = 0; };
     return posix_unlock(id, e_file_lock_1, 0);
 }
 
+///* Helper functions to obtain and relinquish the global mutex. The
+///* global mutex is used to protect the unixInodeInfo objects used by
+///* this file, all of which may be shared by multiple threads.
+///*
+///* Function unixMutexHeld() is used to assert() that the global mutex
+///* is held when required. This function is only used as part of assert()
+///* statements. e.g.
+///*
+///*   unixEnterMutex()
+///*     assert( unixMutexHeld() );
+///*   unixEnterLeave()
+///*
+///* To prevent deadlock, the global unixBigLock must must be acquired
+///* before the unixInodeInfo.pLockMutex mutex, if both are held.  It is
+///* OK to get the pLockMutex without holding unixBigLock first, but if
+///* that happens, the unixBigLock mutex must not be acquired until after
+///* pLockMutex is released.
+///*
+///*      OK:     enter(unixBigLock),  enter(pLockInfo)
+///*      OK:     enter(unixBigLock)
+///*      OK:     enter(pLockInfo)
+///*   ERROR:     enter(pLockInfo), enter(unixBigLock)
 static mut unix_big_lock: *mut Sqlite3Mutex = core::ptr::null_mut();
 
+#[allow(unused_doc_comments)]
 extern "C" fn unix_enter_mutex() -> () {
-    unsafe { { let _ = 0; }; unsafe { sqlite3_mutex_enter(unix_big_lock) }; }
+    unsafe {
+        { let _ = 0; };
+
+        /// Not a recursive mutex
+        unsafe { sqlite3_mutex_enter(unix_big_lock) };
+    }
 }
 
+///* Add the file descriptor used by file handle pFile to the corresponding
+///* pUnused list.
 extern "C" fn set_pending_fd(p_file_1: &mut UnixFile) -> () {
     let p_inode: *mut UnixInodeInfo = (*p_file_1).p_inode;
     let p: *mut UnixUnusedFd = (*p_file_1).p_preallocated_unused;
@@ -1360,8 +1635,13 @@ extern "C" fn set_pending_fd(p_file_1: &mut UnixFile) -> () {
     (*p_file_1).p_preallocated_unused = core::ptr::null_mut();
 }
 
+/// All unixInodeInfo objects
 static mut inode_list: *mut UnixInodeInfo = core::ptr::null_mut();
 
+///* Release a unixInodeInfo structure previously allocated by findInodeInfo().
+///*
+///* The global mutex must be held when this routine is called, but the mutex
+///* on the inode being deleted must NOT be held.
 extern "C" fn release_inode_info(p_file_1: *mut UnixFile) -> () {
     unsafe {
         let p_inode: *mut UnixInodeInfo = unsafe { (*p_file_1).p_inode };
@@ -1409,6 +1689,7 @@ extern "C" fn release_inode_info(p_file_1: *mut UnixFile) -> () {
     }
 }
 
+///* If it is currently memory mapped, unmap file pFd.
 extern "C" fn unix_unmapfile(p_fd_1: &mut UnixFile) -> () {
     unsafe {
         { let _ = 0; };
@@ -1433,6 +1714,14 @@ extern "C" fn unix_unmapfile(p_fd_1: &mut UnixFile) -> () {
     }
 }
 
+///* This function performs the parts of the "close file" operation
+///* common to all locking schemes. It closes the directory and file
+///* handles, if they are valid, and sets all fields of the unixFile
+///* structure to 0.
+///*
+///* It is *not* necessary to hold the mutex when this routine is called,
+///* even on VxWorks.  A mutex will be acquired on VxWorks by the
+///* vxworksReleaseFileId() routine.
 extern "C" fn close_unix_file(id: *mut Sqlite3File) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     unsafe { unix_unmapfile(unsafe { &mut *p_file }) };
@@ -1453,6 +1742,8 @@ extern "C" fn unix_leave_mutex() -> () {
     unsafe { { let _ = 0; }; unsafe { sqlite3_mutex_leave(unix_big_lock) }; }
 }
 
+///* Close a file.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_close(id: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1463,9 +1754,17 @@ extern "C" fn unix_close(id: *mut Sqlite3File) -> i32 {
     unix_unlock(id, 0);
     { let _ = 0; };
     unix_enter_mutex();
+
+    /// unixFile.pInode is always valid here. Otherwise, a different close
+    ///* routine (e.g. nolockClose()) would be called instead.
     { let _ = 0; };
     unsafe { sqlite3_mutex_enter(unsafe { (*p_inode).p_lock_mutex }) };
     if unsafe { (*p_inode).n_lock } != 0 {
+
+        /// If there are outstanding locks, do not actually close the file just
+        ///* yet because that would clear those locks.  Instead, add the file
+        ///* descriptor to pInode->pUnused list.  It will be automatically closed
+        ///* when the last lock is cleared.
         set_pending_fd(unsafe { &mut *p_file });
     }
     unsafe { sqlite3_mutex_leave(unsafe { (*p_inode).p_lock_mutex }) };
@@ -1476,6 +1775,11 @@ extern "C" fn unix_close(id: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Seek to the offset passed as the second argument, then read cnt
+///* bytes into pBuf. Return the number of bytes actually read.
+///*
+///* To avoid stomping the errno value on a failed read the lastErrno value
+///* is set before returning.
 extern "C" fn seek_and_read(id: *mut UnixFile, mut offset: Sqlite3Int64,
     mut p_buf_1: *mut (), mut cnt: i32) -> i32 {
     unsafe {
@@ -1524,6 +1828,10 @@ extern "C" fn seek_and_read(id: *mut UnixFile, mut offset: Sqlite3Int64,
     }
 }
 
+///* Read data from a file into a buffer.  Return SQLITE_OK if all
+///* bytes were read successfully and SQLITE_IOERR if anything goes
+///* wrong.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_read(id: *mut Sqlite3File, mut p_buf_1: *mut (),
     mut amt: i32, mut offset: Sqlite3Int64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1575,6 +1883,9 @@ extern "C" fn unix_read(id: *mut Sqlite3File, mut p_buf_1: *mut (),
         return 10 | 1 << 8;
     } else {
         store_last_errno(unsafe { &mut *p_file }, 0);
+
+        /// not a system error */
+        ///    /* Unread parts of the buffer must be zero-filled
         unsafe {
             memset(unsafe {
                         &raw mut *(p_buf_1 as *mut i8).offset(got as isize)
@@ -1584,10 +1895,18 @@ extern "C" fn unix_read(id: *mut Sqlite3File, mut p_buf_1: *mut (),
     }
 }
 
+///* Attempt to seek the file-descriptor passed as the first argument to
+///* absolute offset iOff, then attempt to write nBuf bytes of data from
+///* pBuf to it. If an error occurs, return -1 and set *piErrno. Otherwise,
+///* return the actual number of bytes written (which may be less than
+///* nBuf).
+#[allow(unused_doc_comments)]
 extern "C" fn seek_and_write_fd(fd: i32, i_off_1: i64, p_buf_1: *const (),
     mut n_buf_1: i32, pi_errno_1: &mut i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+
+        /// Value returned by system call
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -1618,12 +1937,20 @@ extern "C" fn seek_and_write_fd(fd: i32, i_off_1: i64, p_buf_1: *const (),
     }
 }
 
+///* Seek to the offset in id->offset then read cnt bytes into pBuf.
+///* Return the number of bytes actually read.  Update the offset.
+///*
+///* To avoid stomping the errno value on a failed write the lastErrno value
+///* is set before returning.
 extern "C" fn seek_and_write(id: &mut UnixFile, offset: i64,
     p_buf_1: *const (), cnt: i32) -> i32 {
     return seek_and_write_fd((*id).h, offset, p_buf_1, cnt,
             &mut (*id).last_errno);
 }
 
+///* Write data from a buffer into a file.  Return SQLITE_OK on success
+///* or some other error code on failure.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_write(id: *mut Sqlite3File, mut p_buf_1: *const (),
     mut amt: i32, mut offset: Sqlite3Int64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -1644,12 +1971,24 @@ extern "C" fn unix_write(id: *mut Sqlite3File, mut p_buf_1: *const (),
     }
     if amt > wrote {
         if wrote < 0 && unsafe { (*p_file).last_errno } != 28 {
+
+            /// lastErrno set by seekAndWrite
             return 10 | 3 << 8;
-        } else { store_last_errno(unsafe { &mut *p_file }, 0); return 13; }
+        } else {
+            store_last_errno(unsafe { &mut *p_file }, 0);
+
+            /// not a system error
+            return 13;
+        }
     }
     return 0;
 }
 
+///* Retry ftruncate() calls that fail due to EINTR
+///*
+///* All calls to ftruncate() within this file should be made through
+///* this wrapper.  On the Android platform, bypassing the logic below
+///* could lead to a corrupt database.
 extern "C" fn robust_ftruncate(h: i32, sz: Sqlite3Int64) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1678,6 +2017,7 @@ extern "C" fn robust_ftruncate(h: i32, sz: Sqlite3Int64) -> i32 {
     }
 }
 
+///* Truncate an open file to a specified size
 extern "C" fn unix_truncate(id: *mut Sqlite3File, mut n_byte_1: i64) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = 0;
@@ -1703,9 +2043,36 @@ extern "C" fn unix_truncate(id: *mut Sqlite3File, mut n_byte_1: i64) -> i32 {
     }
 }
 
+///* The fsync() system call does not work as advertised on many
+///* unix systems.  The following procedure is an attempt to make
+///* it work better.
+///*
+///* The SQLITE_NO_SYNC macro disables all fsync()s.  This is useful
+///* for testing when we want to run through the test suite quickly.
+///* You are strongly advised *not* to deploy with SQLITE_NO_SYNC
+///* enabled, however, since with SQLITE_NO_SYNC enabled, an OS crash
+///* or power failure will likely corrupt the database file.
+///*
+///* SQLite sets the dataOnly flag if the size of the file is unchanged.
+///* The idea behind dataOnly is that it should only write the file content
+///* to disk, not the inode.  We only set dataOnly if the file size is
+///* unchanged since the file size is part of the inode.  However,
+///* Ted Ts'o tells us that fdatasync() will also write the inode if the
+///* file size has changed.  The only real difference between fdatasync()
+///* and fsync(), Ted tells us, is that fdatasync() will not flush the
+///* inode if the mtime or owner or other inode attributes have changed.
+///* We only care about the file size, not the other file attributes, so
+///* as far as SQLite is concerned, an fdatasync() is always adequate.
+///* So, we always use fdatasync() if it is available, regardless of
+///* the value of the dataOnly flag.
+#[allow(unused_doc_comments)]
 extern "C" fn full_fsync(fd: i32, full_sync_1: i32, data_only_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+
+        /// The following "ifdef/elif/else/" block has the same structure as
+        ///* the one below. It is replicated here solely to avoid cluttering
+        ///* up the real code with the UNUSED_PARAMETER() macros.
         { let _ = data_only_1; };
         if full_sync_1 != 0 {
             rc =
@@ -1728,12 +2095,28 @@ extern "C" fn full_fsync(fd: i32, full_sync_1: i32, data_only_1: i32) -> i32 {
     }
 }
 
+///* Make sure all writes to a particular file are committed to disk.
+///*
+///* If dataOnly==0 then both the file itself and its metadata (file
+///* size, access time, etc) are synced.  If dataOnly!=0 then only the
+///* file data is synced.
+///*
+///* Under Unix, also make sure that the directory entry for the file
+///* has been created by fsync-ing the directory that contains the file.
+///* If we do not do this and we encounter a power failure, the directory
+///* entry for the journal might not exist after we reboot.  The next
+///* SQLite to access the file will not know that the journal exists (because
+///* the directory entry for the journal was never created) and the transaction
+///* will not roll back - possibly leading to database corruption.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let p_file: *mut UnixFile = id as *mut UnixFile;
         let is_data_only: i32 = flags & 16;
         let is_fullsync: i32 = (flags & 15 == 3) as i32;
+
+        /// Check that one of SQLITE_SYNC_NORMAL or FULL was passed
         { let _ = 0; };
         { let _ = 0; };
         rc = full_fsync(unsafe { (*p_file).h }, is_fullsync, is_data_only);
@@ -1769,6 +2152,7 @@ extern "C" fn unix_sync(id: *mut Sqlite3File, flags: i32) -> i32 {
     }
 }
 
+///* Determine the current size of a file in bytes
 extern "C" fn unix_file_size(id: *mut Sqlite3File, p_size_1: *mut i64)
     -> i32 {
     unsafe {
@@ -1801,6 +2185,7 @@ extern "C" fn unix_file_size(id: *mut Sqlite3File, p_size_1: *mut i64)
     }
 }
 
+/// Forward reference
 extern "C" fn unix_is_sharing_shm_node(p_file_1: &UnixFile) -> i32 {
     unsafe {
         let mut p_shm_node: *const UnixShmNode = core::ptr::null();
@@ -1833,12 +2218,113 @@ extern "C" fn unix_is_sharing_shm_node(p_file_1: &UnixFile) -> i32 {
     }
 }
 
+///* Lock the file with the lock specified by parameter eFileLock - one
+///* of the following:
+///*
+///*     (1) SHARED_LOCK
+///*     (2) RESERVED_LOCK
+///*     (3) PENDING_LOCK
+///*     (4) EXCLUSIVE_LOCK
+///*
+///* Sometimes when requesting one lock state, additional lock states
+///* are inserted in between.  The locking might fail on one of the later
+///* transitions leaving the lock state different from what it started but
+///* still short of its goal.  The following chart shows the allowed
+///* transitions and the inserted intermediate states:
+///*
+///*    UNLOCKED -> SHARED
+///*    SHARED -> RESERVED
+///*    SHARED -> EXCLUSIVE
+///*    RESERVED -> (PENDING) -> EXCLUSIVE
+///*    PENDING -> EXCLUSIVE
+///*
+///* This routine will only increase a lock.  Use the sqlite3OsUnlock()
+///* routine to lower a locking level.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
+        /// The following describes the implementation of the various locks and
+        ///* lock transitions in terms of the POSIX advisory shared and exclusive
+        ///* lock primitives (called read-locks and write-locks below, to avoid
+        ///* confusion with SQLite lock names). The algorithms are complicated
+        ///* slightly in order to be compatible with Windows95 systems simultaneously
+        ///* accessing the same database file, in case that is ever required.
+        ///*
+        ///* Symbols defined in os.h identify the 'pending byte' and the 'reserved
+        ///* byte', each single bytes at well known offsets, and the 'shared byte
+        ///* range', a range of 510 bytes at a well known offset.
+        ///*
+        ///* To obtain a SHARED lock, a read-lock is obtained on the 'pending
+        ///* byte'.  If this is successful, 'shared byte range' is read-locked
+        ///* and the lock on the 'pending byte' released.  (Legacy note:  When
+        ///* SQLite was first developed, Windows95 systems were still very common,
+        ///* and Windows95 lacks a shared-lock capability.  So on Windows95, a
+        ///* single randomly selected by from the 'shared byte range' is locked.
+        ///* Windows95 is now pretty much extinct, but this work-around for the
+        ///* lack of shared-locks on Windows95 lives on, for backwards
+        ///* compatibility.)
+        ///*
+        ///* A process may only obtain a RESERVED lock after it has a SHARED lock.
+        ///* A RESERVED lock is implemented by grabbing a write-lock on the
+        ///* 'reserved byte'.
+        ///*
+        ///* An EXCLUSIVE lock may only be requested after either a SHARED or
+        ///* RESERVED lock is held. An EXCLUSIVE lock is implemented by obtaining
+        ///* a write-lock on the entire 'shared byte range'. Since all other locks
+        ///* require a read-lock on one of the bytes within this range, this ensures
+        ///* that no other locks are held on the database.
+        ///*
+        ///* If a process that holds a RESERVED lock requests an EXCLUSIVE, then
+        ///* a PENDING lock is obtained first. A PENDING lock is implemented by
+        ///* obtaining a write-lock on the 'pending byte'. This ensures that no new
+        ///* SHARED locks can be obtained, but existing SHARED locks are allowed to
+        ///* persist. If the call to this function fails to obtain the EXCLUSIVE
+        ///* lock in this case, it holds the PENDING lock instead. The client may
+        ///* then re-attempt the EXCLUSIVE lock later on, after existing SHARED
+        ///* locks have cleared.
         let mut rc: i32 = 0;
         let mut p_inode: *mut UnixInodeInfo = core::ptr::null_mut();
         '__b10: loop {
             '__c10: loop {
+                /// The following describes the implementation of the various locks and
+                ///* lock transitions in terms of the POSIX advisory shared and exclusive
+                ///* lock primitives (called read-locks and write-locks below, to avoid
+                ///* confusion with SQLite lock names). The algorithms are complicated
+                ///* slightly in order to be compatible with Windows95 systems simultaneously
+                ///* accessing the same database file, in case that is ever required.
+                ///*
+                ///* Symbols defined in os.h identify the 'pending byte' and the 'reserved
+                ///* byte', each single bytes at well known offsets, and the 'shared byte
+                ///* range', a range of 510 bytes at a well known offset.
+                ///*
+                ///* To obtain a SHARED lock, a read-lock is obtained on the 'pending
+                ///* byte'.  If this is successful, 'shared byte range' is read-locked
+                ///* and the lock on the 'pending byte' released.  (Legacy note:  When
+                ///* SQLite was first developed, Windows95 systems were still very common,
+                ///* and Windows95 lacks a shared-lock capability.  So on Windows95, a
+                ///* single randomly selected by from the 'shared byte range' is locked.
+                ///* Windows95 is now pretty much extinct, but this work-around for the
+                ///* lack of shared-locks on Windows95 lives on, for backwards
+                ///* compatibility.)
+                ///*
+                ///* A process may only obtain a RESERVED lock after it has a SHARED lock.
+                ///* A RESERVED lock is implemented by grabbing a write-lock on the
+                ///* 'reserved byte'.
+                ///*
+                ///* An EXCLUSIVE lock may only be requested after either a SHARED or
+                ///* RESERVED lock is held. An EXCLUSIVE lock is implemented by obtaining
+                ///* a write-lock on the entire 'shared byte range'. Since all other locks
+                ///* require a read-lock on one of the bytes within this range, this ensures
+                ///* that no other locks are held on the database.
+                ///*
+                ///* If a process that holds a RESERVED lock requests an EXCLUSIVE, then
+                ///* a PENDING lock is obtained first. A PENDING lock is implemented by
+                ///* obtaining a write-lock on the 'pending byte'. This ensures that no new
+                ///* SHARED locks can be obtained, but existing SHARED locks are allowed to
+                ///* persist. If the call to this function fails to obtain the EXCLUSIVE
+                ///* lock in this case, it holds the PENDING lock instead. The client may
+                ///* then re-attempt the EXCLUSIVE lock later on, after existing SHARED
+                ///* locks have cleared.
                 let p_file: *mut UnixFile = id as *mut UnixFile;
                 let mut lock: Flock = unsafe { core::mem::zeroed() };
                 let mut t_errno: i32 = 0;
@@ -1846,10 +2332,17 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                 if unsafe { (*p_file).e_file_lock } as i32 >= e_file_lock_1 {
                     return 0;
                 }
+
+                /// Make sure the locking sequence is correct.
+                ///*  (1) We never move from unlocked to anything higher than shared lock.
+                ///*  (2) SQLite never explicitly requests a pending lock.
+                ///*  (3) A shared lock is always held when a reserve lock is requested.
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
-                p_inode = unsafe { (*p_file).p_inode };
+
+                /// This mutex is needed because pFile->pInode is shared across threads
+                (p_inode = unsafe { (*p_file).p_inode });
                 unsafe {
                     sqlite3_mutex_enter(unsafe { (*p_inode).p_lock_mutex })
                 };
@@ -1881,7 +2374,11 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                     };
                     break '__b10;
                 }
-                lock.l_len = 1 as OffT;
+
+                /// A PENDING lock is needed before acquiring a SHARED lock and before
+                ///* acquiring an EXCLUSIVE lock.  For the SHARED lock, the PENDING will
+                ///* be released.
+                (lock.l_len = 1 as OffT);
                 lock.l_whence = 0 as i16;
                 if e_file_lock_1 == 1 ||
                         e_file_lock_1 == 4 &&
@@ -1904,18 +2401,24 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                     { let _ = 0; };
                     { let _ = 0; };
                     { let _ = 0; };
-                    lock.l_start = (sqlite3_pending_byte + 2) as OffT;
+
+                    /// Now get the read-lock
+                    (lock.l_start = (sqlite3_pending_byte + 2) as OffT);
                     lock.l_len = 510 as OffT;
                     if unix_file_lock(unsafe { &*p_file }, &mut lock) != 0 {
                         t_errno = unsafe { *unsafe { __error() } };
                         rc = sqlite_error_from_posix_error(t_errno, 10 | 15 << 8);
                     }
-                    lock.l_start = sqlite3_pending_byte as OffT;
+
+                    /// Drop the temporary PENDING lock
+                    (lock.l_start = sqlite3_pending_byte as OffT);
                     lock.l_len = 1 as OffT;
                     lock.l_type = 2 as i16;
                     if unix_file_lock(unsafe { &*p_file }, &mut lock) != 0 &&
                             rc == 0 {
-                        t_errno = unsafe { *unsafe { __error() } };
+
+                        /// This could happen with a network mount
+                        (t_errno = unsafe { *unsafe { __error() } });
                         rc = 10 | 8 << 8;
                     }
                     if rc != 0 {
@@ -1935,12 +2438,25 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                     }
                 } else if e_file_lock_1 == 4 &&
                         unsafe { (*p_inode).n_shared } > 1 {
-                    rc = 5;
+
+                    /// We are trying for an exclusive lock but another thread in this
+                    ///* same process is still holding a shared lock.
+                    (rc = 5);
                 } else if unsafe {
                             unix_is_sharing_shm_node(unsafe { &*p_file })
                         } != 0 {
-                    rc = 5;
+
+                    /// We are in WAL mode and attempting to delete the SHM and WAL
+                    ///* files due to closing the connection or changing out of WAL mode,
+                    ///* but another process still holds locks on the SHM file, thus
+                    ///* indicating that database locks have been broken, perhaps due
+                    ///* to a rogue close(open(dbFile)) or similar.
+                    (rc = 5);
                 } else {
+
+                    /// The request was for a RESERVED or EXCLUSIVE lock.  It is
+                    ///* assumed that there is a SHARED or greater lock on the file
+                    ///* already.
                     { let _ = 0; };
                     lock.l_type = 3 as i16;
                     { let _ = 0; };
@@ -1967,11 +2483,86 @@ extern "C" fn unix_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
             }
             if !(false) { break '__b10; }
         }
+
+        /// The following describes the implementation of the various locks and
+        ///* lock transitions in terms of the POSIX advisory shared and exclusive
+        ///* lock primitives (called read-locks and write-locks below, to avoid
+        ///* confusion with SQLite lock names). The algorithms are complicated
+        ///* slightly in order to be compatible with Windows95 systems simultaneously
+        ///* accessing the same database file, in case that is ever required.
+        ///*
+        ///* Symbols defined in os.h identify the 'pending byte' and the 'reserved
+        ///* byte', each single bytes at well known offsets, and the 'shared byte
+        ///* range', a range of 510 bytes at a well known offset.
+        ///*
+        ///* To obtain a SHARED lock, a read-lock is obtained on the 'pending
+        ///* byte'.  If this is successful, 'shared byte range' is read-locked
+        ///* and the lock on the 'pending byte' released.  (Legacy note:  When
+        ///* SQLite was first developed, Windows95 systems were still very common,
+        ///* and Windows95 lacks a shared-lock capability.  So on Windows95, a
+        ///* single randomly selected by from the 'shared byte range' is locked.
+        ///* Windows95 is now pretty much extinct, but this work-around for the
+        ///* lack of shared-locks on Windows95 lives on, for backwards
+        ///* compatibility.)
+        ///*
+        ///* A process may only obtain a RESERVED lock after it has a SHARED lock.
+        ///* A RESERVED lock is implemented by grabbing a write-lock on the
+        ///* 'reserved byte'.
+        ///*
+        ///* An EXCLUSIVE lock may only be requested after either a SHARED or
+        ///* RESERVED lock is held. An EXCLUSIVE lock is implemented by obtaining
+        ///* a write-lock on the entire 'shared byte range'. Since all other locks
+        ///* require a read-lock on one of the bytes within this range, this ensures
+        ///* that no other locks are held on the database.
+        ///*
+        ///* If a process that holds a RESERVED lock requests an EXCLUSIVE, then
+        ///* a PENDING lock is obtained first. A PENDING lock is implemented by
+        ///* obtaining a write-lock on the 'pending byte'. This ensures that no new
+        ///* SHARED locks can be obtained, but existing SHARED locks are allowed to
+        ///* persist. If the call to this function fails to obtain the EXCLUSIVE
+        ///* lock in this case, it holds the PENDING lock instead. The client may
+        ///* then re-attempt the EXCLUSIVE lock later on, after existing SHARED
+        ///* locks have cleared.
+        /// If there is already a lock of this type or more restrictive on the
+        ///* unixFile, do nothing. Don't use the end_lock: exit path, as
+        ///* unixEnterMutex() hasn't been called yet.
+        /// Make sure the locking sequence is correct.
+        ///*  (1) We never move from unlocked to anything higher than shared lock.
+        ///*  (2) SQLite never explicitly requests a pending lock.
+        ///*  (3) A shared lock is always held when a reserve lock is requested.
+        /// This mutex is needed because pFile->pInode is shared across threads
+        /// If some thread using this PID has a lock via a different unixFile*
+        ///* handle that precludes the requested lock, return BUSY.
+        /// If a SHARED lock is requested, and some thread using this PID already
+        ///* has a SHARED or RESERVED lock, then increment reference counts and
+        ///* return SQLITE_OK.
+        /// A PENDING lock is needed before acquiring a SHARED lock and before
+        ///* acquiring an EXCLUSIVE lock.  For the SHARED lock, the PENDING will
+        ///* be released.
+        /// If control gets to this point, then actually go ahead and make
+        ///* operating system calls for the specified lock.
+        /// Now get the read-lock
+        /// Drop the temporary PENDING lock
+        /// This could happen with a network mount
+        /// We are trying for an exclusive lock but another thread in this
+        ///* same process is still holding a shared lock.
+        /// We are in WAL mode and attempting to delete the SHM and WAL
+        ///* files due to closing the connection or changing out of WAL mode,
+        ///* but another process still holds locks on the SHM file, thus
+        ///* indicating that database locks have been broken, perhaps due
+        ///* to a rogue close(open(dbFile)) or similar.
+        /// The request was for a RESERVED or EXCLUSIVE lock.  It is
+        ///* assumed that there is a SHARED or greater lock on the file
+        ///* already.
         unsafe { sqlite3_mutex_leave(unsafe { (*p_inode).p_lock_mutex }) };
         return rc;
     }
 }
 
+///* This routine checks if there is a RESERVED lock held on the specified
+///* file by this or any other process. If such a lock is held, set *pResOut
+///* to a non-zero value otherwise *pResOut is set to zero.  The return value
+///* is set to SQLITE_OK unless an I/O error occurs during lock checking.
 extern "C" fn unix_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -2023,14 +2614,34 @@ extern "C" fn unix_check_reserved_lock(id: *mut Sqlite3File,
     }
 }
 
+///* Attempt to set the size of the memory mapping maintained by file
+///* descriptor pFd to nNew bytes. Any existing mapping is discarded.
+///*
+///* If successful, this function sets the following variables:
+///*
+///*       unixFile.pMapRegion
+///*       unixFile.mmapSize
+///*       unixFile.mmapSizeActual
+///*
+///* If unsuccessful, an error message is logged via sqlite3_log() and
+///* the three variables above are zeroed. In this case SQLite should
+///* continue accessing the database using the xRead() and xWrite()
+///* methods.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_remapfile(p_fd_1: &mut UnixFile, mut n_new_1: i64) -> () {
     unsafe {
         let z_err: *const i8 = c"mmap".as_ptr() as *mut i8 as *const i8;
         let h: i32 = (*p_fd_1).h;
+        /// File descriptor open on db file
         let p_orig: *mut u8 = (*p_fd_1).p_map_region as *mut u8;
+        /// Pointer to current file mapping
         let n_orig: i64 = (*p_fd_1).mmap_size_actual;
+        /// Size of pOrig region in bytes
         let mut p_new: *mut u8 = core::ptr::null_mut();
+        /// Location of new mapping
         let flags: i32 = 1;
+
+        /// Flags to pass to mmap()
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -2135,7 +2746,11 @@ extern "C" fn unix_remapfile(p_fd_1: &mut UnixFile, mut n_new_1: i64) -> () {
             p_new = core::ptr::null_mut();
             n_new_1 = 0 as i64;
             unix_log_error_at_line(0, z_err, (*p_fd_1).z_path, 5650);
-            (*p_fd_1).mmap_size_max = 0 as Sqlite3Int64;
+
+            /// If the mmap() above failed, assume that all subsequent mmap() calls
+            ///* will probably fail too. Fall back to using xRead/xWrite exclusively
+            ///* in this case.
+            ((*p_fd_1).mmap_size_max = 0 as Sqlite3Int64);
         }
         (*p_fd_1).p_map_region = p_new as *mut ();
         (*p_fd_1).mmap_size =
@@ -2146,6 +2761,20 @@ extern "C" fn unix_remapfile(p_fd_1: &mut UnixFile, mut n_new_1: i64) -> () {
     }
 }
 
+///* Memory map or remap the file opened by file-descriptor pFd (if the file
+///* is already mapped, the existing mapping is replaced by the new). Or, if
+///* there already exists a mapping for this file, and there are still
+///* outstanding xFetch() references to it, this function is a no-op.
+///*
+///* If parameter nByte is non-negative, then it is the requested size of
+///* the mapping to create. Otherwise, if nByte is less than zero, then the
+///* requested size is the size of the file on disk. The actual size of the
+///* created mapping is either the requested size or the value configured
+///* using SQLITE_FCNTL_MMAP_LIMIT, whichever is smaller.
+///*
+///* SQLITE_OK is returned if no error occurs (even if the mapping is not
+///* recreated as a result of outstanding references) or an SQLite error
+///* code otherwise.
 extern "C" fn unix_mapfile(p_fd_1: *mut UnixFile, mut n_map_1: i64) -> i32 {
     unsafe {
         { let _ = 0; };
@@ -2180,10 +2809,16 @@ extern "C" fn unix_mapfile(p_fd_1: *mut UnixFile, mut n_map_1: i64) -> i32 {
     }
 }
 
+///* This function is called to handle the SQLITE_FCNTL_SIZE_HINT
+///* file-control operation.  Enlarge the database to nBytes in size
+///* (rounded up to the next chunk-size).  If the database is already
+///* nBytes or larger, this routine is a no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn fcntl_size_hint(p_file_1: *mut UnixFile, n_byte_1: i64) -> i32 {
     unsafe {
         if unsafe { (*p_file_1).sz_chunk } > 0 {
             let mut n_size: i64 = 0 as i64;
+            /// Required file size
             let mut buf: Stat = unsafe { core::mem::zeroed() };
             if unsafe {
                         (unsafe {
@@ -2204,12 +2839,22 @@ extern "C" fn fcntl_size_hint(p_file_1: *mut UnixFile, n_byte_1: i64) -> i32 {
                         / unsafe { (*p_file_1).sz_chunk } as i64 *
                     unsafe { (*p_file_1).sz_chunk } as i64;
             if n_size > buf.st_size as i64 {
+                /// If the OS does not have posix_fallocate(), fake it. Write a
+                ///* single byte to the last byte in each block that falls entirely
+                ///* within the extended region. Then, if required, a single byte
+                ///* at offset (nSize-1), to set the size of the file correctly.
+                ///* This is a similar technique to that used by glibc on systems
+                ///* that do not have a real fallocate() call.
                 let n_blk: i32 = buf.st_blksize;
+                /// File-system block size
                 let mut n_write: i32 = 0;
+                /// Number of bytes written by seekAndWrite
                 let mut i_write: i64 = 0 as i64;
-                i_write =
+
+                /// Next offset to write to
+                (i_write =
                     buf.st_size / n_blk as OffT * n_blk as OffT + n_blk as OffT
-                        - 1 as OffT;
+                        - 1 as OffT);
                 { let _ = 0; };
                 { let _ = 0; };
                 {
@@ -2249,6 +2894,10 @@ extern "C" fn fcntl_size_hint(p_file_1: *mut UnixFile, n_byte_1: i64) -> i32 {
     }
 }
 
+///* If *pArg is initially negative then this is a query.  Set *pArg to
+///* 1 or 0 depending on whether or not bit mask of pFile->ctrlFlags is set.
+///*
+///* If *pArg is 0 or 1, then clear or set the mask bit of pFile->ctrlFlags.
 extern "C" fn unix_mode_bit(p_file_1: &mut UnixFile, mask: u8,
     p_arg_1: &mut i32) -> () {
     if *p_arg_1 < 0 {
@@ -2258,11 +2907,14 @@ extern "C" fn unix_mode_bit(p_file_1: &mut UnixFile, mask: u8,
     } else { (*p_file_1).ctrl_flags |= mask as i32 as u16; }
 }
 
+///* Directories to consider for temp files.
 static mut az_temp_dirs: [*const i8; 6] =
     [core::ptr::null(), core::ptr::null(), c"/var/tmp".as_ptr() as *const i8,
             c"/usr/tmp".as_ptr() as *const i8, c"/tmp".as_ptr() as *const i8,
             c".".as_ptr() as *const i8];
 
+///* Return the name of a directory in which to put temporary files.
+///* If no suitable temporary file directory can be found, return NULL.
 extern "C" fn unix_temp_file_dir() -> *const i8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -2313,11 +2965,17 @@ extern "C" fn unix_temp_file_dir() -> *const i8 {
     }
 }
 
+/// Forward declaration
+#[allow(unused_doc_comments)]
 extern "C" fn unix_get_tempname(n_buf: i32, z_buf: *mut i8) -> i32 {
     unsafe {
         let mut z_dir: *const i8 = core::ptr::null();
         let mut i_limit: i32 = 0;
         let mut rc: i32 = 0;
+
+        /// It's odd to simulate an io-error here, but really this is just
+        ///* using the io-error infrastructure to test that SQLite handles this
+        ///* function failing.
         unsafe { *z_buf.offset(0 as isize) = 0 as i8 };
         unsafe { sqlite3_mutex_enter(unsafe { sqlite3MutexAlloc(11) }) };
         z_dir = unix_temp_file_dir();
@@ -2382,12 +3040,20 @@ struct ProxyLockingContext {
     p_old_method: *const Sqlite3IoMethods,
 }
 
+///* If pFile holds a lock on a conch file, then release that lock.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_release_conch(p_file_1: &mut UnixFile) -> i32 {
     let mut rc: i32 = 0;
+    /// Subroutine return code
     let mut p_ctx: *mut ProxyLockingContext = core::ptr::null_mut();
+    /// The locking context for the proxy lock
     let mut conch_file: *mut UnixFile = core::ptr::null_mut();
-    p_ctx = (*p_file_1).locking_context as *mut ProxyLockingContext;
-    conch_file = unsafe { (*p_ctx).conch_file };
+
+    /// Name of the conch file
+    (p_ctx = (*p_file_1).locking_context as *mut ProxyLockingContext);
+
+    /// Name of the conch file
+    (conch_file = unsafe { (*p_ctx).conch_file });
     if unsafe { (*p_ctx).conch_held } > 0 {
         rc =
             unsafe {
@@ -2400,6 +3066,8 @@ extern "C" fn proxy_release_conch(p_file_1: &mut UnixFile) -> i32 {
     return rc;
 }
 
+///* Close a file that uses proxy locks.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_close(id: *mut Sqlite3File) -> i32 {
     if !(id).is_null() {
         let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -2451,6 +3119,8 @@ extern "C" fn proxy_close(id: *mut Sqlite3File) -> i32 {
             sqlite3_db_free(core::ptr::null_mut(),
                 unsafe { (*p_ctx).db_path } as *mut ())
         };
+
+        /// restore the original locking context and pMethod then close it
         unsafe {
             (*p_file).locking_context =
                 unsafe { (*p_ctx).old_locking_context }
@@ -2466,6 +3136,8 @@ extern "C" fn proxy_close(id: *mut Sqlite3File) -> i32 {
     return 0;
 }
 
+/// get the host ID via gethostuuid(), pHostID must point to PROXY_HOSTIDLEN
+///* bytes of writable memory.
 extern "C" fn proxy_get_host_id(p_host_id_1: *mut u8, p_error_1: *mut i32)
     -> i32 {
     { let _ = 0; };
@@ -2485,11 +3157,18 @@ extern "C" fn proxy_get_host_id(p_host_id_1: *mut u8, p_error_1: *mut i32)
     return 0;
 }
 
+/// Forward declaration
+#[allow(unused_doc_comments)]
 extern "C" fn unix_sleep(not_used: *mut Sqlite3Vfs, microseconds: i32)
     -> i32 {
     let mut sp: Timespec = unsafe { core::mem::zeroed() };
     sp.tv_sec = (microseconds / 1000000) as DarwinTimeT;
     sp.tv_nsec = (microseconds % 1000000 * 1000) as i64;
+
+    /// Almost all modern unix systems support nanosleep().  But if you are
+    ///* compiling for one of the rare exceptions, you can use
+    ///* -DHAVE_NANOSLEEP=0 (perhaps in conjunction with -DHAVE_USLEEP if
+    ///* usleep() is available) in order to bypass the use of nanosleep()
     unsafe {
         nanosleep(&raw mut sp as *const Timespec,
             0 as *mut () as *mut Timespec)
@@ -2498,6 +3177,11 @@ extern "C" fn unix_sleep(not_used: *mut Sqlite3Vfs, microseconds: i32)
     return microseconds;
 }
 
+///* Takes an open conch file, copies the contents to a new path and then moves
+///* it back.  The newly created file's file descriptor is assigned to the
+///* conch file structure and finally the original conch file descriptor is
+///* closed.  Returns zero if successful.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
     my_host_id_1: *const u8) -> i32 {
     unsafe {
@@ -2528,11 +3212,13 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
                 let mut read_len: u64 = 0 as u64;
                 let mut path_len: u64 = 0 as u64;
                 { let _ = my_host_id_1; };
-                path_len =
+
+                /// create a new path by replace the trailing '-conch' with '-break'
+                (path_len =
                     unsafe {
                         strlcpy(&raw mut t_path[0 as usize] as *mut i8,
                             c_path as *const i8, 1024 as u64)
-                    };
+                    });
                 if path_len > 1024 as u64 || path_len < 6 as u64 ||
                         unsafe {
                                 strlcpy(&mut t_path[(path_len - 5 as u64) as usize],
@@ -2546,7 +3232,9 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
                     };
                     break '__b14;
                 }
-                read_len =
+
+                /// read the conch content
+                (read_len =
                     unsafe {
                             (unsafe {
                                     core::mem::transmute::<*const (),
@@ -2560,7 +3248,7 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
                                 })(unsafe { (*conch_file).h },
                                 &raw mut buf[0 as usize] as *mut i8 as *mut (),
                                 (1 + 16 + 1024) as u64, 0)
-                        } as u64;
+                        } as u64);
                 if read_len < (1 + 16) as u64 {
                     unsafe {
                         sqlite3_snprintf(core::mem::size_of::<[i8; 64]>() as i32,
@@ -2570,9 +3258,11 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
                     };
                     break '__b14;
                 }
-                fd =
+
+                /// write it out to the temporary break file
+                (fd =
                     robust_open(&raw mut t_path[0 as usize] as *mut i8 as
-                            *const i8, 2 | 512 | 2048 | 256, 0 as ModeT);
+                            *const i8, 2 | 512 | 2048 | 256, 0 as ModeT));
                 if fd < 0 {
                     unsafe {
                         sqlite3_snprintf(core::mem::size_of::<[i8; 64]>() as i32,
@@ -2656,6 +3346,9 @@ extern "C" fn proxy_break_conch_lock(p_file_1: *mut UnixFile,
     }
 }
 
+/// Take the requested lock on the conch file and break a stale lock if the
+///* host id matches.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
     lock_type_1: i32) -> i32 {
     unsafe {
@@ -2680,6 +3373,11 @@ extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
                     };
                 { let __p = &mut n_tries; let __t = *__p; *__p += 1; __t };
                 if rc == 5 {
+                    /// If the lock failed (busy):
+                    ///1st try: get the mod time of the conch, wait 0.5s and try again.
+                    ///2nd try: fail if the mod time changed or host id is different, wait
+                    ///          10 sec and try again
+                    ///3rd try: break the lock unless the mod time has changed.
                     let mut buf: Stat = unsafe { core::mem::zeroed() };
                     if unsafe {
                                 (unsafe {
@@ -2700,6 +3398,8 @@ extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
                     if n_tries == 1 {
                         conch_mod_time = buf.st_mtimespec;
                         unix_sleep(core::ptr::null_mut(), 500000);
+
+                        /// wait 0.5 sec and try the lock again
                         break '__c15;
                     }
                     { let _ = 0; };
@@ -2738,8 +3438,14 @@ extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
                                     } {
                                 return 5;
                             }
-                        } else { return 5; }
+                        } else {
+
+                            /// don't break the lock on short read or a version mismatch
+                            return 5;
+                        }
                         unix_sleep(core::ptr::null_mut(), 10000000);
+
+                        /// wait 10 sec and try the lock again
                         break '__c15;
                     }
                     { let _ = 0; };
@@ -2773,6 +3479,10 @@ extern "C" fn proxy_conch_lock(p_file_1: *mut UnixFile, my_host_id_1: *mut u8,
     }
 }
 
+///* The proxy lock file path for the database at dbPath is written into lPath,
+///* which must point to valid, writable memory large enough for a maxLen length
+///* file path.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_get_lock_path(db_path_1: *const i8, l_path_1: *mut i8,
     max_len_1: u64) -> i32 {
     let mut len: i32 = 0;
@@ -2795,7 +3505,9 @@ extern "C" fn proxy_get_lock_path(db_path_1: *const i8, l_path_1: *mut i8,
                         max_len_1)
                 } as i32;
     }
-    db_len = unsafe { strlen(db_path_1) } as i32;
+
+    /// transform the db path to a unique cache name
+    (db_len = unsafe { strlen(db_path_1) } as i32);
     {
         i = 0;
         '__b16: loop {
@@ -2822,11 +3534,33 @@ extern "C" fn proxy_get_lock_path(db_path_1: *const i8, l_path_1: *mut i8,
     return 0;
 }
 
+///* Search for an unused file descriptor that was opened on the database
+///* file (not a journal or super-journal file) identified by pathname
+///* zPath with SQLITE_OPEN_XXX flags matching those passed as the second
+///* argument to this function.
+///*
+///* Such a file descriptor may exist if a database connection was closed
+///* but the associated file descriptor could not be closed because some
+///* other file descriptor open on the same file is holding a file-lock.
+///* Refer to comments in the unixClose() function and the lengthy comment
+///* describing "Posix Advisory Locking" at the start of this file for
+///* further details. Also, ticket #4018.
+///*
+///* If a suitable file descriptor is found, then it is returned. If no
+///* such file descriptor is located, -1 is returned.
+#[allow(unused_doc_comments)]
 extern "C" fn find_reusable_fd(z_path_1: *const i8, mut flags: i32)
     -> *mut UnixUnusedFd {
     unsafe {
         let mut p_unused: *mut UnixUnusedFd = core::ptr::null_mut();
+        /// Do not search for an unused file descriptor on vxworks. Not because
+        ///* vxworks would not benefit from the change (it might, we're not sure),
+        ///* but because no way to test it is currently available. It is better
+        ///* not to risk breaking vxworks support for the sake of such an obscure
+        ///* feature.
         let mut s_stat: Stat = unsafe { core::mem::zeroed() };
+
+        /// Results of stat() call
         unix_enter_mutex();
         if inode_list != core::ptr::null_mut() &&
                 0 ==
@@ -2877,10 +3611,14 @@ extern "C" fn find_reusable_fd(z_path_1: *const i8, mut flags: i32)
             }
         }
         unix_leave_mutex();
+
+        /// if !OS_VXWORKS
         return p_unused;
     }
 }
 
+///* Creates the lock file and any missing directories in lockPath
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_create_lock_path(lock_path_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -2888,8 +3626,12 @@ extern "C" fn proxy_create_lock_path(lock_path_1: *const i8) -> i32 {
         let mut buf: [i8; 1024] = [0; 1024];
         let mut start: i32 = 0;
         { let _ = 0; };
-        len = unsafe { strlen(lock_path_1) } as i32;
-        buf[0 as usize] = unsafe { *lock_path_1.offset(0 as isize) } as i8;
+
+        /// try to create all the intermediate directories
+        (len = unsafe { strlen(lock_path_1) } as i32);
+
+        /// try to create all the intermediate directories
+        (buf[0 as usize] = unsafe { *lock_path_1.offset(0 as isize) } as i8);
         {
             i = 1;
             '__b19: loop {
@@ -2932,6 +3674,7 @@ extern "C" fn proxy_create_lock_path(lock_path_1: *const i8) -> i32 {
     }
 }
 
+///* Close the file.
 extern "C" fn nolock_close(id: *mut Sqlite3File) -> i32 {
     return close_unix_file(id);
 }
@@ -2948,6 +3691,21 @@ extern "C" fn nolock_unlock(not_used_1: *mut Sqlite3File, not_used2_1: i32)
     return 0;
 }
 
+///***************************************************************************
+///***************************** No-op Locking **********************************
+///*
+///* Of the various locking implementations available, this is by far the
+///* simplest:  locking is ignored.  No attempt is made to lock the database
+///* file for reading or writing.
+///*
+///* This locking mode is appropriate for use on read-only databases
+///* (ex: databases that are burned into CD-ROM, for example.)  It can
+///* also be used if the application employs some external mechanism to
+///* prevent simultaneous access of the same database by two or more
+///* database connections.  But there is a serious risk of database
+///* corruption if this locking mode is used in situations where multiple
+///* database connections are accessing the same database file at the same
+///* time and one or more of those connections are writing.
 extern "C" fn nolock_check_reserved_lock(not_used_1: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     { let _ = not_used_1; };
@@ -2966,38 +3724,75 @@ extern "C" fn set_device_characteristics(p_fd_1: &mut UnixFile) -> () {
     }
 }
 
+///* Return the sector size in bytes of the underlying block device for
+///* the specified file. This is almost always 512 bytes, but may be
+///* larger for some devices.
+///*
+///* SQLite code assumes this function cannot fail. It also assumes that
+///* if two files are created in the same file-system directory (i.e.
+///* a database and its journal file) that the sector size will be the
+///* same for both.
 extern "C" fn unix_sector_size(id: *mut Sqlite3File) -> i32 {
     let p_fd: *mut UnixFile = id as *mut UnixFile;
     set_device_characteristics(unsafe { &mut *p_fd });
     return unsafe { (*p_fd).sector_size };
 }
 
+///* Return the device characteristics for the file.
+///*
+///* This VFS is set up to return SQLITE_IOCAP_POWERSAFE_OVERWRITE by default.
+///* However, that choice is controversial since technically the underlying
+///* file system does not always provide powersafe overwrites.  (In other
+///* words, after a power-loss event, parts of the file that were never
+///* written might end up being altered.)  However, non-PSOW behavior is very,
+///* very rare.  And asserting PSOW makes a large reduction in the amount
+///* of required I/O for journaling, since a lot of padding is eliminated.
+///*  Hence, while POWERSAFE_OVERWRITE is on by default, there is a file-control
+///* available to turn it off and URI query parameter available to turn it off.
 extern "C" fn unix_device_characteristics(id: *mut Sqlite3File) -> i32 {
     let p_fd: *mut UnixFile = id as *mut UnixFile;
     set_device_characteristics(unsafe { &mut *p_fd });
     return unsafe { (*p_fd).device_characteristics };
 }
 
+///* Apply posix advisory locks for all bytes from ofst through ofst+n-1.
+///*
+///* Locks block if the mask is exactly UNIX_SHM_C and are non-blocking
+///* otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_system_lock(p_file_1: &UnixFile, lock_type_1: i32,
     ofst: i32, n: i32) -> i32 {
     unsafe {
         let mut p_shm_node: *const UnixShmNode = core::ptr::null();
+        /// Apply locks to this open shared-memory segment
         let mut f: Flock = unsafe { core::mem::zeroed() };
+        /// The posix advisory locking structure
         let mut rc: i32 = 0;
-        p_shm_node = unsafe { (*(*p_file_1).p_inode).p_shm_node };
+
+        /// Result code form fcntl()
+        (p_shm_node = unsafe { (*(*p_file_1).p_inode).p_shm_node });
+
+        /// Assert that the parameters are within expected range and that the
+        ///* correct mutex or mutexes are held.
         { let _ = 0; };
         { let _ = 0; };
         if ofst == (22 + 8) * 4 + 8 {
             { let _ = 0; };
             { let _ = 0; };
         } else { { let _ = 0; }; { let _ = 0; }; }
+
+        /// Shared locks never span more than one byte
         { let _ = 0; };
+
+        /// Locks are within range
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*p_shm_node).h_shm } >= 0 {
             let mut res: i32 = 0;
-            f.l_type = lock_type_1 as i16;
+
+            /// Initialize the locking parameters
+            (f.l_type = lock_type_1 as i16);
             f.l_whence = 0 as i16;
             f.l_start = ofst as OffT;
             f.l_len = n as OffT;
@@ -3016,17 +3811,31 @@ extern "C" fn unix_shm_system_lock(p_file_1: &UnixFile, lock_type_1: i32,
                 };
             if res == -1 { rc = 5; }
         }
+
+        /// Do debug tracing
         return rc;
     }
 }
 
+///* Change the lock state for a shared-memory segment.
+///*
+///* Note that the relationship between SHARED and EXCLUSIVE locks is a little
+///* different here than in posix.  In xShmLock(), one can go from unlocked
+///* to shared and back or from unlocked to exclusive and back.  But one may
+///* not go from shared to exclusive or from exclusive to shared.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     let p_db_fd: *mut UnixFile = fd as *mut UnixFile;
+    /// Connection holding shared memory
     let mut p: *mut UnixShm = core::ptr::null_mut();
+    /// The shared memory being locked
     let mut p_shm_node: *mut UnixShmNode = core::ptr::null_mut();
+    /// The underlying file iNode
     let mut rc: i32 = 0;
+    /// Result code
     let mask: u16 = ((1 << ofst + n) - (1 << ofst)) as u16;
+    /// Mask of locks to take or release
     let mut a_lock: *mut i32 = core::ptr::null_mut();
     p = unsafe { (*p_db_fd).p_shm };
     if p == core::ptr::null_mut() { return 10 | 20 << 8; }
@@ -3041,6 +3850,26 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// Check that, if this to be a blocking lock, no locks that occur later
+    ///* in the following list than the lock being obtained are already held:
+    ///*
+    ///*   1. Recovery lock (ofst==2).
+    ///*   2. Checkpointer lock (ofst==1).
+    ///*   3. Write lock (ofst==0).
+    ///*   4. Read locks (ofst>=3 && ofst<SQLITE_SHM_NLOCK).
+    ///*
+    ///* In other words, if this is a blocking lock, none of the locks that
+    ///* occur later in the above list than the lock being obtained may be
+    ///* held.
+    /// Check if there is any work to do. There are three cases:
+    ///*
+    ///*    a) An unlock operation where there are locks to unlock,
+    ///*    b) An shared lock where the requested lock is not already held
+    ///*    c) An exclusive lock where the requested lock is not already held
+    ///*
+    ///* The SQLite core never requests an exclusive lock that it already holds.
+    ///* This is assert()ed below.
     { let _ = 0; };
     if flags & 1 != 0 &&
                     (unsafe { (*p).excl_mask } as i32 |
@@ -3048,9 +3877,26 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
                 flags == 4 | 2 &&
                     0 == unsafe { (*p).shared_mask } as i32 & mask as i32 ||
             flags == 8 | 2 {
+
+        /// Take the required mutexes. In SETLK_TIMEOUT mode (blocking locks), if
+        ///* this is an attempt on an exclusive lock use sqlite3_mutex_try(). If any
+        ///* other thread is holding this mutex, then it is either holding or about
+        ///* to hold a lock exclusive to the one being requested, and we may
+        ///* therefore return SQLITE_BUSY to the caller.
+        ///*
+        ///* Doing this prevents some deadlock scenarios. For example, thread 1 may
+        ///* be a checkpointer blocked waiting on the WRITER lock. And thread 2
+        ///* may be a normal SQL client upgrading to a write transaction. In this
+        ///* case thread 2 does a non-blocking request for the WRITER lock. But -
+        ///* if it were to use sqlite3_mutex_enter() then it would effectively
+        ///* become a (doomed) blocking request, as thread 2 would block until thread
+        ///* 1 obtained WRITER and released the mutex. Since thread 2 already holds
+        ///* a lock on a read-locking slot at this point, this breaks the
+        ///* anti-deadlock rules (see above).
         unsafe { sqlite3_mutex_enter(unsafe { (*p_shm_node).p_shm_mutex }) };
         if rc == 0 {
             if flags & 1 != 0 {
+                /// Case (a) - unlock.
                 let mut b_unlock: i32 = 1;
                 { let _ = 0; };
                 { let _ = 0; };
@@ -3084,7 +3930,9 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
                 }
             } else if flags & 4 != 0 {
                 if unsafe { *a_lock.offset(ofst as isize) } < 0 {
-                    rc = 5;
+
+                    /// An exclusive lock is held by some other connection. BUSY.
+                    (rc = 5);
                 } else if unsafe { *a_lock.offset(ofst as isize) } == 0 {
                     rc =
                         unix_shm_system_lock(unsafe { &*p_db_fd }, 1,
@@ -3100,6 +3948,7 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
                     };
                 }
             } else {
+                /// Case (c) - an exclusive lock.
                 let mut ii: i32 = 0;
                 { let _ = 0; };
                 { let _ = 0; };
@@ -3140,22 +3989,42 @@ extern "C" fn unix_shm_lock(fd: *mut Sqlite3File, ofst: i32, n: i32,
             }
             { let _ = 0; };
         }
+
+        /// Drop the mutexes acquired above.
         unsafe { sqlite3_mutex_leave(unsafe { (*p_shm_node).p_shm_mutex }) };
     }
     return rc;
 }
 
+///* Implement a memory barrier or memory fence on shared memory.
+///*
+///* All loads and stores begun before the barrier must complete before
+///* any load or store begun after the barrier.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_barrier(fd: *mut Sqlite3File) -> () {
     { let _ = fd; };
     unsafe { sqlite3_memory_barrier() };
+
+    /// compiler-defined memory barrier
     { let _ = 0; };
     unix_enter_mutex();
+
+    /// Also mutex, for redundancy
     unix_leave_mutex();
 }
 
+///* Return the minimum number of 32KB shm regions that should be mapped at
+///* a time, assuming that each mapping must be an integer multiple of the
+///* current system page-size.
+///*
+///* Usually, this is 1. The exception seems to be systems that are configured
+///* to use 64KB pages - in this case each mapping must cover at least two
+///* shm regions.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_region_per_map() -> i32 {
     unsafe {
         let shmsz: i32 = 32 * 1024;
+        /// SHM region size
         let pgsz: i32 =
             unsafe {
                 (unsafe {
@@ -3169,12 +4038,18 @@ extern "C" fn unix_shm_region_per_map() -> i32 {
                                     }) as *const ())
                     })()
             };
+
+        /// System page size
         { let _ = 0; };
         if pgsz < shmsz { return 1; }
         return pgsz / shmsz;
     }
 }
 
+///* Purge the unixShmNodeList list of all entries with unixShmNode.nRef==0.
+///*
+///* This is not a VFS shared-memory method; it is a utility function called
+///* by VFS shared-memory methods.
 extern "C" fn unix_shm_purge(p_fd_1: *mut UnixFile) -> () {
     unsafe {
         let p: *mut UnixShmNode =
@@ -3230,19 +4105,35 @@ extern "C" fn unix_shm_purge(p_fd_1: *mut UnixFile) -> () {
     }
 }
 
+///* Close a connection to shared-memory.  Delete the underlying
+///* storage if deleteFlag is true.
+///*
+///* If there is no shared memory associated with the connection then this
+///* routine is a harmless no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_unmap(fd: *mut Sqlite3File, delete_flag_1: i32)
     -> i32 {
     unsafe {
         let mut p: *mut UnixShm = core::ptr::null_mut();
+        /// The connection to be closed
         let mut p_shm_node: *mut UnixShmNode = core::ptr::null_mut();
+        /// The underlying shared-memory file
         let mut pp: *mut *mut UnixShm = core::ptr::null_mut();
+        /// For looping over sibling connections
         let mut p_db_fd: *mut UnixFile = core::ptr::null_mut();
-        p_db_fd = fd as *mut UnixFile;
-        p = unsafe { (*p_db_fd).p_shm };
+
+        /// The underlying database file
+        (p_db_fd = fd as *mut UnixFile);
+
+        /// The underlying database file
+        (p = unsafe { (*p_db_fd).p_shm });
         if p == core::ptr::null_mut() { return 0; }
         p_shm_node = unsafe { (*p).p_shm_node };
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Remove connection p from the set of connections associated
+        ///* with pShmNode
         unsafe { sqlite3_mutex_enter(unsafe { (*p_shm_node).p_shm_mutex }) };
         {
             pp = unsafe { &mut (*p_shm_node).p_first };
@@ -3253,9 +4144,14 @@ extern "C" fn unix_shm_unmap(fd: *mut Sqlite3File, delete_flag_1: i32)
             }
         }
         unsafe { *pp = unsafe { (*p).p_next } };
+
+        /// Free the connection p
         unsafe { sqlite3_free(p as *mut ()) };
         unsafe { (*p_db_fd).p_shm = core::ptr::null_mut() };
         unsafe { sqlite3_mutex_leave(unsafe { (*p_shm_node).p_shm_mutex }) };
+
+        /// If pShmNode->nRef has reached 0, then close the underlying
+        ///* shared-memory file, too
         { let _ = 0; };
         unix_enter_mutex();
         { let _ = 0; };
@@ -3287,11 +4183,28 @@ extern "C" fn unix_shm_unmap(fd: *mut Sqlite3File, delete_flag_1: i32)
     }
 }
 
+///* If possible, return a pointer to a mapping of file fd starting at offset
+///* iOff. The mapping must be valid for at least nAmt bytes.
+///*
+///* If such a pointer can be obtained, store it in *pp and return SQLITE_OK.
+///* Or, if one cannot but no error occurs, set *pp to 0 and return SQLITE_OK.
+///* Finally, if an error does occur, return an SQLite error code. The final
+///* value of *pp is undefined in this case.
+///*
+///* If this function does return a pointer, the caller must eventually
+///* release the reference by calling unixUnfetch().
+#[allow(unused_doc_comments)]
 extern "C" fn unix_fetch(fd: *mut Sqlite3File, i_off_1: i64, n_amt_1: i32,
     pp: *mut *mut ()) -> i32 {
     let p_fd: *mut UnixFile = fd as *mut UnixFile;
+
+    /// The underlying database file
     unsafe { *pp = core::ptr::null_mut() };
     if unsafe { (*p_fd).mmap_size_max } > 0 as i64 {
+        /// Ensure that there is always at least a 256 byte buffer of addressable
+        ///* memory following the returned page. If the database is corrupt,
+        ///* SQLite may overread the page slightly (in practice only a few bytes,
+        ///* but 256 is safe, round, number).
         let n_eof_buffer: i32 = 256 as i32;
         if unsafe { (*p_fd).p_map_region } == core::ptr::null_mut() {
             let rc: i32 = unix_mapfile(p_fd, -1 as i64);
@@ -3317,11 +4230,29 @@ extern "C" fn unix_fetch(fd: *mut Sqlite3File, i_off_1: i64, n_amt_1: i32,
     return 0;
 }
 
+///* If the third argument is non-NULL, then this function releases a
+///* reference obtained by an earlier call to unixFetch(). The second
+///* argument passed to this function must be the same as the corresponding
+///* argument that was passed to the unixFetch() invocation.
+///*
+///* Or, if the third argument is NULL, then this function is being called
+///* to inform the VFS layer that, according to POSIX, any existing mapping
+///* may now be invalid and should be unmapped.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_unfetch(fd: *mut Sqlite3File, i_off_1: i64, p: *mut ())
     -> i32 {
     let p_fd: *mut UnixFile = fd as *mut UnixFile;
+
+    /// The underlying database file
     { let _ = i_off_1; };
+
+    /// The underlying database file
+    /// If p==0 (unmap the entire file) then there must be no outstanding
+    ///* xFetch references. Or, if p!=0 (meaning it is an xFetch reference),
+    ///* then there must be at least one outstanding.
     { let _ = 0; };
+
+    /// If p!=0, it must match the iOff value.
     { let _ = 0; };
     if !(p).is_null() {
         {
@@ -3358,9 +4289,15 @@ static nolock_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+///* An abstract type for a pointer to an IO method finder function:
 type FinderType =
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods;
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
 extern "C" fn nfs_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     return posix_unlock(id, e_file_lock_1, 1);
 }
@@ -3388,16 +4325,33 @@ static nfs_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+///* Given a file descriptor, locate the unixInodeInfo object that
+///* describes that file descriptor.  Create a new one if necessary.  The
+///* return value might be uninitialized if an error occurs.
+///*
+///* The global mutex must held when calling this routine.
+///*
+///* Return an appropriate error code.
+#[allow(unused_doc_comments)]
 extern "C" fn find_inode_info(p_file_1: *mut UnixFile,
     pp_inode_1: &mut *mut UnixInodeInfo) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// System call return code
         let mut fd: i32 = 0;
+        /// The file descriptor for pFile
         let mut file_id: UnixFileId = unsafe { core::mem::zeroed() };
+        /// Lookup key for the unixInodeInfo
         let mut statbuf: Stat = unsafe { core::mem::zeroed() };
+        /// Low-level file information
         let mut p_inode: *mut UnixInodeInfo = core::ptr::null_mut();
+
+        /// Candidate unixInodeInfo object
         { let _ = 0; };
-        fd = unsafe { (*p_file_1).h };
+
+        /// Get low-level information about the file that we can used to
+        ///* create a unique name for the file.
+        (fd = unsafe { (*p_file_1).h });
         rc =
             unsafe {
                 (unsafe {
@@ -3549,6 +4503,10 @@ struct ByteRangeLockPB2 {
     fd: i32,
 }
 
+///* This is a utility for setting or clearing a bit-range lock on an
+///* AFP filesystem.
+///*
+///* Return SQLITE_OK on success, SQLITE_BUSY on failure.
 extern "C" fn afp_set_lock(path: *const i8, p_file_1: *mut UnixFile,
     offset: u64, length: u64, set_lock_flag_1: i32) -> i32 {
     let mut pb: ByteRangeLockPB2 = unsafe { core::mem::zeroed() };
@@ -3581,6 +4539,12 @@ extern "C" fn afp_set_lock(path: *const i8, p_file_1: *mut UnixFile,
     } else { return 0; }
 }
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -3605,6 +4569,7 @@ extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                         (sqlite3_pending_byte + 2) as u64, 510 as u64, 0);
                 if rc == 0 &&
                         (e_file_lock_1 == 1 || unsafe { (*p_inode).n_shared } > 1) {
+                    /// only re-establish the shared lock if necessary
                     let shared_lock_byte: i32 =
                         ((sqlite3_pending_byte + 2) as u64 +
                                 unsafe { (*p_inode).shared_byte }) as i32;
@@ -3633,6 +4598,9 @@ extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
             }
         }
         if rc == 0 && e_file_lock_1 == 0 {
+            /// Decrement the shared lock counter.  Release the lock using an
+            ///* OS call only when all threads in this same process have released
+            ///* the lock.
             let shared_lock_byte_1: u64 =
                 (sqlite3_pending_byte + 2) as u64 +
                     unsafe { (*p_inode).shared_byte };
@@ -3672,6 +4640,8 @@ extern "C" fn afp_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     }
 }
 
+///* Close a file & cleanup AFP specific locking context
+#[allow(unused_doc_comments)]
 extern "C" fn afp_close(id: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -3684,6 +4654,11 @@ extern "C" fn afp_close(id: *mut Sqlite3File) -> i32 {
             unsafe { (*p_file).p_inode } as *const UnixInodeInfo;
         unsafe { sqlite3_mutex_enter(unsafe { (*p_inode).p_lock_mutex }) };
         if unsafe { (*p_inode).n_lock } != 0 {
+
+            /// If there are outstanding locks, do not actually close the file just
+            ///* yet because that would clear those locks.  Instead, add the file
+            ///* descriptor to pInode->aPending.  It will be automatically closed when
+            ///* the last lock is cleared.
             set_pending_fd(unsafe { &mut *p_file });
         }
         unsafe { sqlite3_mutex_leave(unsafe { (*p_inode).p_lock_mutex }) };
@@ -3695,6 +4670,29 @@ extern "C" fn afp_close(id: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Lock the file with the lock specified by parameter eFileLock - one
+///* of the following:
+///*
+///*     (1) SHARED_LOCK
+///*     (2) RESERVED_LOCK
+///*     (3) PENDING_LOCK
+///*     (4) EXCLUSIVE_LOCK
+///*
+///* Sometimes when requesting one lock state, additional lock states
+///* are inserted in between.  The locking might fail on one of the later
+///* transitions leaving the lock state different from what it started but
+///* still short of its goal.  The following chart shows the allowed
+///* transitions and the inserted intermediate states:
+///*
+///*    UNLOCKED -> SHARED
+///*    SHARED -> RESERVED
+///*    SHARED -> (PENDING) -> EXCLUSIVE
+///*    RESERVED -> (PENDING) -> EXCLUSIVE
+///*    PENDING -> EXCLUSIVE
+///*
+///* This routine will only increase a lock.  Use the sqlite3OsUnlock()
+///* routine to lower a locking level.
+#[allow(unused_doc_comments)]
 extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -3709,10 +4707,17 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                 if unsafe { (*p_file).e_file_lock } as i32 >= e_file_lock_1 {
                     return 0;
                 }
+
+                /// Make sure the locking sequence is correct
+                ///*  (1) We never move from unlocked to anything higher than shared lock.
+                ///*  (2) SQLite never explicitly requests a pending lock.
+                ///*  (3) A shared lock is always held when a reserve lock is requested.
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
-                p_inode = unsafe { (*p_file).p_inode };
+
+                /// This mutex is needed because pFile->pInode is shared across threads
+                (p_inode = unsafe { (*p_file).p_inode });
                 unsafe {
                     sqlite3_mutex_enter(unsafe { (*p_inode).p_lock_mutex })
                 };
@@ -3765,7 +4770,10 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                         if core::mem::size_of::<i64>() as u64 == 8 as u64 {
                                 4294967295u32 as i64 | (2147483647 as i64) << 32
                             } else { 2147483647 as i64 } as i64;
-                    lk = unsafe { random() };
+
+                    /// Now get the read-lock SHARED_LOCK */
+                    ///    /* note that the quality of the randomness doesn't matter that much
+                    (lk = unsafe { random() });
                     unsafe {
                         (*p_inode).shared_byte =
                             ((lk & mask) % (510 - 1) as i64) as u64
@@ -3777,9 +4785,11 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                     if lrc1 != 0 && lrc1 != 5 {
                         lrc1_errno = unsafe { (*p_file).last_errno };
                     }
-                    lrc2 =
+
+                    /// Drop the temporary PENDING lock
+                    (lrc2 =
                         afp_set_lock(unsafe { (*context).db_path }, p_file,
-                            sqlite3_pending_byte as u64, 1 as u64, 0);
+                            sqlite3_pending_byte as u64, 1 as u64, 0));
                     if lrc1 != 0 && lrc1 != 5 {
                         store_last_errno(unsafe { &mut *p_file }, lrc1_errno);
                         rc = lrc1;
@@ -3801,15 +4811,23 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                     }
                 } else if e_file_lock_1 == 4 &&
                         unsafe { (*p_inode).n_shared } > 1 {
-                    rc = 5;
+
+                    /// We are trying for an exclusive lock but another thread in this
+                    ///* same process is still holding a shared lock.
+                    (rc = 5);
                 } else {
+                    /// The request was for a RESERVED or EXCLUSIVE lock.  It is
+                    ///* assumed that there is a SHARED or greater lock on the file
+                    ///* already.
                     let mut failed: i32 = 0;
                     { let _ = 0; };
                     if e_file_lock_1 >= 2 &&
                             (unsafe { (*p_file).e_file_lock } as i32) < 2 {
-                        failed =
+
+                        /// Acquire a RESERVED lock
+                        (failed =
                             afp_set_lock(unsafe { (*context).db_path }, p_file,
-                                (sqlite3_pending_byte + 1) as u64, 1 as u64, 1);
+                                (sqlite3_pending_byte + 1) as u64, 1 as u64, 1));
                         if (failed == 0) as i32 != 0 {
                             unsafe { (*context).reserved = 1 };
                         }
@@ -3823,9 +4841,11 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                                             failed
                                         } == 0) as i32 != 0 {
                             let mut failed2: i32 = 0;
-                            failed =
+
+                            /// now attempt to get the exclusive lock range
+                            (failed =
                                 afp_set_lock(unsafe { (*context).db_path }, p_file,
-                                    (sqlite3_pending_byte + 2) as u64, 510 as u64, 1);
+                                    (sqlite3_pending_byte + 2) as u64, 510 as u64, 1));
                             if failed != 0 &&
                                     {
                                             failed2 =
@@ -3834,8 +4854,11 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                                                         unsafe { (*p_inode).shared_byte }, 1 as u64, 1);
                                             failed2
                                         } != 0 {
-                                rc =
-                                    if failed & 255 == 10 { failed2 } else { 10 | 15 << 8 };
+
+                                /// Can't reestablish the shared lock.  Sqlite can't deal, this is
+                                ///* a critical I/O error
+                                (rc =
+                                    if failed & 255 == 10 { failed2 } else { 10 | 15 << 8 });
                                 break '__b26;
                             }
                         } else { rc = failed; }
@@ -3853,11 +4876,50 @@ extern "C" fn afp_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
             }
             if !(false) { break '__b26; }
         }
+
+        /// If there is already a lock of this type or more restrictive on the
+        ///* unixFile, do nothing. Don't use the afp_end_lock: exit path, as
+        ///* unixEnterMutex() hasn't been called yet.
+        /// Make sure the locking sequence is correct
+        ///*  (1) We never move from unlocked to anything higher than shared lock.
+        ///*  (2) SQLite never explicitly requests a pending lock.
+        ///*  (3) A shared lock is always held when a reserve lock is requested.
+        /// This mutex is needed because pFile->pInode is shared across threads
+        /// If some thread using this PID has a lock via a different unixFile*
+        ///* handle that precludes the requested lock, return BUSY.
+        /// If a SHARED lock is requested, and some thread using this PID already
+        ///* has a SHARED or RESERVED lock, then increment reference counts and
+        ///* return SQLITE_OK.
+        /// A PENDING lock is needed before acquiring a SHARED lock and before
+        ///* acquiring an EXCLUSIVE lock.  For the SHARED lock, the PENDING will
+        ///* be released.
+        /// If control gets to this point, then actually go ahead and make
+        ///* operating system calls for the specified lock.
+        /// Now get the read-lock SHARED_LOCK */
+        ///    /* note that the quality of the randomness doesn't matter that much
+        /// Drop the temporary PENDING lock
+        /// We are trying for an exclusive lock but another thread in this
+        ///* same process is still holding a shared lock.
+        /// The request was for a RESERVED or EXCLUSIVE lock.  It is
+        ///* assumed that there is a SHARED or greater lock on the file
+        ///* already.
+        /// Acquire a RESERVED lock
+        /// Acquire an EXCLUSIVE lock
+        /// Remove the shared lock before trying the range.  we'll need to
+        ///* reestablish the shared lock if we can't get the  afpUnlock
+        /// now attempt to get the exclusive lock range
+        /// Can't reestablish the shared lock.  Sqlite can't deal, this is
+        ///* a critical I/O error
         unsafe { sqlite3_mutex_leave(unsafe { (*p_inode).p_lock_mutex }) };
         return rc;
     }
 }
 
+///* This routine checks if there is a RESERVED lock held on the specified
+///* file by this or any other process. If such a lock is held, set *pResOut
+///* to a non-zero value otherwise *pResOut is set to zero.  The return value
+///* is set to SQLITE_OK unless an I/O error occurs during lock checking.
+#[allow(unused_doc_comments)]
 extern "C" fn afp_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -3881,14 +4943,22 @@ extern "C" fn afp_check_reserved_lock(id: *mut Sqlite3File,
             reserved = 1;
         }
         if (reserved == 0) as i32 != 0 {
+            /// lock the RESERVED byte
             let mut lrc: i32 =
                 afp_set_lock(unsafe { (*context).db_path }, p_file,
                     (sqlite3_pending_byte + 1) as u64, 1 as u64, 1);
             if 0 == lrc {
-                lrc =
+
+                /// if we succeeded in taking the reserved lock, unlock it to restore
+                ///* the original state
+                (lrc =
                     afp_set_lock(unsafe { (*context).db_path }, p_file,
-                        (sqlite3_pending_byte + 1) as u64, 1 as u64, 0);
-            } else { reserved = 1; }
+                        (sqlite3_pending_byte + 1) as u64, 1 as u64, 0));
+            } else {
+
+                /// if we failed to get the lock then someone else must have it
+                (reserved = 1);
+            }
             if lrc != 0 && lrc != 5 { rc = lrc; }
         }
         unsafe {
@@ -3924,6 +4994,14 @@ static afp_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
+///*
+///* When the locking level reaches NO_LOCK, delete the lock file.
+#[allow(unused_doc_comments)]
 extern "C" fn dotlock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32)
     -> i32 {
     unsafe {
@@ -3940,6 +5018,8 @@ extern "C" fn dotlock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32)
             unsafe { (*p_file).e_file_lock = 1 as u8 };
             return 0;
         }
+
+        /// To fully unlock the database, delete the lock file
         { let _ = 0; };
         rc =
             unsafe {
@@ -3969,6 +5049,7 @@ extern "C" fn dotlock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32)
     }
 }
 
+///* Close a file.  Make sure the lock has been released before closing.
 extern "C" fn dotlock_close(id: *mut Sqlite3File) -> i32 {
     let p_file: *const UnixFile = id as *mut UnixFile as *const UnixFile;
     { let _ = 0; };
@@ -3977,6 +5058,32 @@ extern "C" fn dotlock_close(id: *mut Sqlite3File) -> i32 {
     return close_unix_file(id);
 }
 
+///* Lock the file with the lock specified by parameter eFileLock - one
+///* of the following:
+///*
+///*     (1) SHARED_LOCK
+///*     (2) RESERVED_LOCK
+///*     (3) PENDING_LOCK
+///*     (4) EXCLUSIVE_LOCK
+///*
+///* Sometimes when requesting one lock state, additional lock states
+///* are inserted in between.  The locking might fail on one of the later
+///* transitions leaving the lock state different from what it started but
+///* still short of its goal.  The following chart shows the allowed
+///* transitions and the inserted intermediate states:
+///*
+///*    UNLOCKED -> SHARED
+///*    SHARED -> RESERVED
+///*    SHARED -> (PENDING) -> EXCLUSIVE
+///*    RESERVED -> (PENDING) -> EXCLUSIVE
+///*    PENDING -> EXCLUSIVE
+///*
+///* This routine will only increase a lock.  Use the sqlite3OsUnlock()
+///* routine to lower a locking level.
+///*
+///* With dotfile locking, we really only support state (4): EXCLUSIVE.
+///* But we track the other locking levels internally.
+#[allow(unused_doc_comments)]
 extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     unsafe {
         let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -3985,13 +5092,17 @@ extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         let mut rc: i32 = 0;
         if unsafe { (*p_file).e_file_lock } as i32 > 0 {
             unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 };
+
+            /// Always update the timestamp on the old file
             unsafe {
                 utime(z_lock_file as *const i8,
                     0 as *mut () as *const Utimbuf)
             };
             return 0;
         }
-        rc =
+
+        /// grab an exclusive lock
+        (rc =
             unsafe {
                 (unsafe {
                         core::mem::transmute::<*const (),
@@ -4003,8 +5114,9 @@ extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
                                                 unsafe extern "C" fn() -> ()>(0 as *const ())
                                     }) as *const ())
                     })(z_lock_file as *const i8, 511)
-            };
+            });
         if rc < 0 {
+            /// failed to open/create the lock directory
             let t_errno: i32 = unsafe { *unsafe { __error() } };
             if 17 == t_errno {
                 rc = 5;
@@ -4016,11 +5128,18 @@ extern "C" fn dotlock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
             }
             return rc;
         }
+
+        /// got it, set the type and return ok
         unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 };
         return rc;
     }
 }
 
+///* This routine checks if there is a RESERVED lock held on the specified
+///* file by this or any other process. If the caller holds a SHARED
+///* or greater lock when it is called, then it is assumed that no other
+///* client may hold RESERVED. Or, if the caller holds no lock, then it
+///* is assumed another client holds RESERVED if the lock-file exists.
 extern "C" fn dotlock_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     unsafe {
@@ -4071,6 +5190,8 @@ static dotlock_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+///* Initialize the contents of the unixFile structure pointed to by pId.
+#[allow(unused_doc_comments)]
 extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
     p_id_1: *mut Sqlite3File, z_filename_1: *const i8, ctrl_flags_1: i32)
     -> i32 {
@@ -4079,6 +5200,8 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
         let p_new: *mut UnixFile = p_id_1 as *mut UnixFile;
         let mut rc: i32 = 0;
         { let _ = 0; };
+
+        /// No locking occurs in temporary files
         { let _ = 0; };
         unsafe { (*p_new).h = h };
         unsafe { (*p_new).p_vfs = p_vfs_1 };
@@ -4114,6 +5237,10 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
                                 }
                         })(z_filename_1, p_new)
                 };
+
+            /// Cache zFilename in the locking context (AFP and dotlock override) for
+            ///* proxyLock activation is possible (remote proxy is based on db name)
+            ///* zFilename remains valid until file is closed, to support
             unsafe { (*p_new).locking_context = z_filename_1 as *mut () };
         }
         if p_locking_style ==
@@ -4123,12 +5250,32 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
             unix_enter_mutex();
             rc = find_inode_info(p_new, unsafe { &mut (*p_new).p_inode });
             if rc != 0 {
+
+                /// If an error occurred in findInodeInfo(), close the file descriptor
+                ///* immediately, before releasing the mutex. findInodeInfo() may fail
+                ///* in two scenarios:
+                ///*
+                ///*   (a) A call to fstat() failed.
+                ///*   (b) A malloc failed.
+                ///*
+                ///* Scenario (b) may only occur if the process is holding no other
+                ///* file descriptors open on the same file. If there were other file
+                ///* descriptors on this file, then no malloc would be required by
+                ///* findInodeInfo(). If this is the case, it is quite safe to close
+                ///* handle h - as it is guaranteed that no posix locks will be released
+                ///* by doing so.
+                ///*
+                ///* If scenario (a) caused the error then things are not so safe. The
+                ///* implicit assumption here is that if fstat() fails, things are in
+                ///* such bad shape that dropping a lock or two doesn't matter much.
                 robust_close(p_new as *const UnixFile, h, 6158);
                 h = -1;
             }
             unix_leave_mutex();
         } else if p_locking_style ==
                 &raw const afp_io_methods as *const Sqlite3IoMethods {
+            /// AFP locking uses the file path so it needs to be included in
+            ///* the afpLockingContext.
             let mut p_ctx: *mut AfpLockingContext = core::ptr::null_mut();
             unsafe {
                 (*p_new).locking_context =
@@ -4144,6 +5291,10 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
             if p_ctx == core::ptr::null_mut() {
                 rc = 7;
             } else {
+
+                /// NB: zFilename exists and remains valid until the file is closed
+                ///* according to requirement F11141.  So we do not need to make a
+                ///* copy of the filename.
                 unsafe { (*p_ctx).db_path = z_filename_1 };
                 unsafe { (*p_ctx).reserved = 0 };
                 unsafe { srandomdev() };
@@ -4160,6 +5311,8 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
             }
         } else if p_locking_style ==
                 &raw const dotlock_io_methods as *const Sqlite3IoMethods {
+            /// Dotfile locking uses the file path so it needs to be included in
+            ///* the dotlockLockingContext
             let mut z_lock_file: *mut i8 = core::ptr::null_mut();
             let mut n_filename: i32 = 0;
             { let _ = 0; };
@@ -4188,6 +5341,12 @@ extern "C" fn fill_in_unix_file(p_vfs_1: *mut Sqlite3Vfs, mut h: i32,
     }
 }
 
+///* Create a new VFS file descriptor (stored in memory obtained from
+///* sqlite3_malloc) and open the file named "path" in the file descriptor.
+///*
+///* The caller is responsible not only for closing the file descriptor
+///* but also for freeing the memory associated with the file descriptor.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_create_unix_file(path: *const i8,
     pp_file_1: &mut *mut UnixFile, islockfile: i32) -> i32 {
     let mut fd: i32 = 0;
@@ -4371,9 +5530,22 @@ extern "C" fn proxy_create_unix_file(path: *const i8,
             }
         }
     }
+
+    /// 1. first try to open/create the file
+    ///* 2. if that fails, and this is a lock file (not-conch), try creating
+    ///* the parent directories and then try again.
+    ///* 3. if that fails, try to open the file read-only
+    ///* otherwise return BUSY (if lock file) or CANTOPEN for the conch file
+    /// even though it is the conch
     unreachable!();
 }
 
+/// Takes the conch by taking a shared lock and read the contents conch, if
+///* lockPath is non-NULL, the host ID and lock file path must match.  A NULL
+///* lockPath means that the lockPath in the conch file will be used if the
+///* host IDs match, or a new lock path will be generated automatically
+///* and written to the conch file.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_take_conch(p_file_1: *mut UnixFile) -> i32 {
     unsafe {
         let p_ctx: *mut ProxyLockingContext =
@@ -4394,14 +5566,45 @@ extern "C" fn proxy_take_conch(p_file_1: *mut UnixFile) -> i32 {
             let mut read_len: i32 = 0;
             let mut try_old_lock_path: i32 = 0;
             let mut force_new_lock_path: i32 = 0;
+            /// read the existing conch file
+            /// I/O error: lastErrno set by seekAndRead
+            /// a short read or version format mismatch means we need to create a new
+            ///* conch file.
+            /// if the host id matches and the lock path already exists in the conch
+            ///* we'll try to use the path there, if we can't open that path, we'll
+            ///* retry with a new auto-generated path
+            /// in case we need to try again for an :auto: named lock file
+            /// if the conch has data compare the contents
+            /// for auto-named local lock file, just check the host ID and we'll
+            ///* use the local lock file path that's already in there
             let mut path_len: u64 = 0 as u64;
+            /// create a copy of the lock path if the conch is taken
+            /// conch host and lock path match
+            /// if the conch isn't writable and doesn't match, we can't take it
+            /// either the conch didn't match or we need to create a new one
+            /// create a copy of the lock path _only_ if the conch is taken
+            /// update conch with host and path (this will fail if other process
+            ///* has a shared lock already), if the host id matches, use the big
+            ///* stick.
+            /// We are trying for an exclusive lock but another thread in this
+            ///* same process is still holding a shared lock.
             let mut write_buffer: [i8; 1041] = [0; 1041];
             let mut write_size: i32 = 0;
+            /// If we created a new conch file (not just updated the contents of a
+            ///* valid conch file), try to match the permissions of the database
             let mut buf: Stat = unsafe { core::mem::zeroed() };
             let mut err: i32 = 0;
             let mut cmode: ModeT = 0 as ModeT;
+            /// try to match the database file R/W permissions, ignore failure
             let mut fd: i32 = 0;
+            /// SQLITE_BUSY? proxyTakeConch called
+            ///           during locking
             let mut path: *const i8 = core::ptr::null();
+            /// we couldn't create the proxy lock file with the old lock file path
+            ///* so try again via auto-naming
+            /// go back to the do {} while start point, try again
+            /// Need to make a copy of path if we extracted the value
+            ///* from the conch file or the path was allocated on the stack
             let mut afp_ctx: *mut AfpLockingContext = core::ptr::null_mut();
             let mut __state: i32 = 0;
             loop {
@@ -4838,11 +6041,67 @@ extern "C" fn proxy_take_conch(p_file_1: *mut UnixFile) -> i32 {
                     }
                 }
             }
+
+            /// read the existing conch file
+            /// I/O error: lastErrno set by seekAndRead
+            /// a short read or version format mismatch means we need to create a new
+            ///* conch file.
+            /// if the host id matches and the lock path already exists in the conch
+            ///* we'll try to use the path there, if we can't open that path, we'll
+            ///* retry with a new auto-generated path
+            /// in case we need to try again for an :auto: named lock file
+            /// if the conch has data compare the contents
+            /// for auto-named local lock file, just check the host ID and we'll
+            ///* use the local lock file path that's already in there
+            /// create a copy of the lock path if the conch is taken
+            /// conch host and lock path match
+            /// if the conch isn't writable and doesn't match, we can't take it
+            /// either the conch didn't match or we need to create a new one
+            /// create a copy of the lock path _only_ if the conch is taken
+            /// update conch with host and path (this will fail if other process
+            ///* has a shared lock already), if the host id matches, use the big
+            ///* stick.
+            /// We are trying for an exclusive lock but another thread in this
+            ///* same process is still holding a shared lock.
+            /// If we created a new conch file (not just updated the contents of a
+            ///* valid conch file), try to match the permissions of the database
+            /// try to match the database file R/W permissions, ignore failure
+            /// SQLITE_BUSY? proxyTakeConch called
+            ///           during locking
+            /// we couldn't create the proxy lock file with the old lock file path
+            ///* so try again via auto-naming
+            /// go back to the do {} while start point, try again
+            /// Need to make a copy of path if we extracted the value
+            ///* from the conch file or the path was allocated on the stack
+            /// in case we need to retry the :auto: lock file -
+            ///* we should never get here except via the 'continue' call.
             unreachable!();
         }
     }
 }
 
+///* Lock the file with the lock specified by parameter eFileLock - one
+///* of the following:
+///*
+///*     (1) SHARED_LOCK
+///*     (2) RESERVED_LOCK
+///*     (3) PENDING_LOCK
+///*     (4) EXCLUSIVE_LOCK
+///*
+///* Sometimes when requesting one lock state, additional lock states
+///* are inserted in between.  The locking might fail on one of the later
+///* transitions leaving the lock state different from what it started but
+///* still short of its goal.  The following chart shows the allowed
+///* transitions and the inserted intermediate states:
+///*
+///*    UNLOCKED -> SHARED
+///*    SHARED -> RESERVED
+///*    SHARED -> (PENDING) -> EXCLUSIVE
+///*    RESERVED -> (PENDING) -> EXCLUSIVE
+///*    PENDING -> EXCLUSIVE
+///*
+///* This routine will only increase a lock.  Use the sqlite3OsUnlock()
+///* routine to lower a locking level.
 extern "C" fn proxy_lock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = proxy_take_conch(p_file);
@@ -4866,6 +6125,11 @@ extern "C" fn proxy_lock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     return rc;
 }
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
 extern "C" fn proxy_unlock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     let mut rc: i32 = proxy_take_conch(p_file);
@@ -4889,6 +6153,11 @@ extern "C" fn proxy_unlock(id: *mut Sqlite3File, e_file_lock: i32) -> i32 {
     return rc;
 }
 
+///* This routine checks if there is a RESERVED lock held on the specified
+///* file by this or any other process. If such a lock is held, set *pResOut
+///* to a non-zero value otherwise *pResOut is set to zero.  The return value
+///* is set to SQLITE_OK unless an I/O error occurs during lock checking.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_check_reserved_lock(id: *mut Sqlite3File,
     mut p_res_out: *mut i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -4906,7 +6175,11 @@ extern "C" fn proxy_check_reserved_lock(id: *mut Sqlite3File,
                                             }).x_check_reserved_lock.unwrap()
                         })(proxy as *mut Sqlite3File, p_res_out)
                 };
-        } else { p_res_out = core::ptr::null_mut(); }
+        } else {
+
+            /// conchHeld < 0 is lockless
+            (p_res_out = core::ptr::null_mut());
+        }
     }
     return rc;
 }
@@ -4934,6 +6207,8 @@ static proxy_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+/// Takes a fully configured proxy locking-style unix file and switches
+///* the local lock file path
 extern "C" fn switch_lock_proxy_path(p_file_1: &mut UnixFile, path: *const i8)
     -> i32 {
     let p_ctx: *mut ProxyLockingContext =
@@ -4974,10 +6249,19 @@ extern "C" fn switch_lock_proxy_path(p_file_1: &mut UnixFile, path: *const i8)
     return rc;
 }
 
+///* pFile is a file that has been opened by a prior xOpen call.  dbPath
+///* is a string buffer at least MAXPATHLEN+1 characters in size.
+///*
+///* This routine find the filename associated with pFile and writes it
+///* int dbPath.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
     db_path_1: *mut i8) -> i32 {
     if (*p_file_1).p_method ==
             &raw const afp_io_methods as *const Sqlite3IoMethods {
+
+        /// afp style keeps a reference to the db path in the filePath field
+        ///* of the struct
         { let _ = 0; };
         unsafe {
             strlcpy(db_path_1,
@@ -4988,6 +6272,8 @@ extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
         };
     } else if (*p_file_1).p_method ==
             &raw const dotlock_io_methods as *const Sqlite3IoMethods {
+        /// dot lock style uses the locking context to store the dot lock
+        ///* file path
         let len: i32 =
             (unsafe {
                         strlen((*p_file_1).locking_context as *mut i8 as *const i8)
@@ -5001,6 +6287,8 @@ extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
                 (len + 1) as u64)
         };
     } else {
+
+        /// all other styles use the locking context to store the db file path
         { let _ = 0; };
         unsafe {
             strlcpy(db_path_1,
@@ -5011,18 +6299,34 @@ extern "C" fn proxy_get_db_path_for_unix_file(p_file_1: &mut UnixFile,
     return 0;
 }
 
+///* Given the name of a database file, compute the name of its conch file.
+///* Store the conch filename in memory obtained from sqlite3_malloc64().
+///* Make *pConchPath point to the new name.  Return SQLITE_OK on success
+///* or SQLITE_NOMEM if unable to obtain memory.
+///*
+///* The caller is responsible for ensuring that the allocated memory
+///* space is eventually freed.
+///*
+///* *pConchPath is set to NULL if a memory allocation error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_create_conch_pathname(db_path_1: *const i8,
     p_conch_path_1: &mut *mut i8) -> i32 {
     let mut i: i32 = 0;
+    /// Loop counter
     let len: i32 = unsafe { strlen(db_path_1 as *const i8) } as i32;
+    /// Length of database filename - dbPath
     let mut conch_path: *mut i8 = core::ptr::null_mut();
-    *p_conch_path_1 =
+
+    /// buffer in which to construct conch name
+    /// Allocate space for the conch filename and initialize the name to
+    ///* the name of the original database file.
+    (*p_conch_path_1 =
         {
             conch_path =
                 unsafe { sqlite3_malloc64((len + 8) as Sqlite3Uint64) } as
                     *mut i8;
             conch_path
-        };
+        });
     if conch_path == core::ptr::null_mut() { return 7; }
     unsafe {
         memcpy(conch_path as *mut (), db_path_1 as *const (),
@@ -5051,6 +6355,8 @@ extern "C" fn proxy_create_conch_pathname(db_path_1: *const i8,
         };
         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
     }
+
+    /// append the "-conch" suffix to the file
     unsafe {
         memcpy(unsafe { &raw mut *conch_path.offset((i + 1) as isize) } as
                 *mut (), c"-conch".as_ptr() as *mut i8 as *const (), 7 as u64)
@@ -5059,11 +6365,16 @@ extern "C" fn proxy_create_conch_pathname(db_path_1: *const i8,
     return 0;
 }
 
+///* Routine to transform a unixFile into a proxy-locking unixFile.
+///* Implementation in the proxy-lock division, but used by unixOpen()
+///* if SQLITE_PREFER_PROXY_LOCKING is defined.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
     path: *const i8) -> i32 {
     unsafe {
         let mut p_ctx: *mut ProxyLockingContext = core::ptr::null_mut();
         let mut db_path: [i8; 1025] = [0; 1025];
+        /// Name of the database file
         let mut lock_path: *const i8 = 0 as *mut () as *const i8;
         let mut rc: i32 = 0;
         if unsafe { (*p_file_1).e_file_lock } as i32 != 0 { return 5; }
@@ -5096,6 +6407,10 @@ extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
                 proxy_create_unix_file(unsafe { (*p_ctx).conch_file_path } as
                         *const i8, unsafe { &mut (*p_ctx).conch_file }, 0);
             if rc == 14 && unsafe { (*p_file_1).open_flags } & 2 == 0 {
+                /// if (a) the open flags are not O_RDWR, (b) the conch isn't there, and
+                ///* (c) the file system is read-only, then enable no-locking access.
+                ///* Ugh, since O_RDONLY==0x0000 we test for !O_RDWR since unixOpen asserts
+                ///* that openFlags will have only one of O_RDONLY or O_RDWR.
                 let mut fs_info: Statfs = unsafe { core::mem::zeroed() };
                 let mut conch_info: Stat = unsafe { core::mem::zeroed() };
                 let mut go_lockless: i32 = 0;
@@ -5124,7 +6439,9 @@ extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
                 }
                 if go_lockless != 0 {
                     unsafe { (*p_ctx).conch_held = -1 };
-                    rc = 0;
+
+                    /// read only FS/ lockless
+                    (rc = 0);
                 }
             }
         }
@@ -5150,6 +6467,9 @@ extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
             }
         }
         if rc == 0 {
+
+            /// all memory is allocated, proxys are created and assigned,
+            ///* switch the locking context and pMethod then return.
             unsafe {
                 (*p_ctx).old_locking_context =
                     unsafe { (*p_file_1).locking_context }
@@ -5185,6 +6505,9 @@ extern "C" fn proxy_transform_unix_file(p_file_1: *mut UnixFile,
     }
 }
 
+///* Handler for proxy-locking file-control verbs.  Defined below in the
+///* proxying locking division.
+#[allow(unused_doc_comments)]
 extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     '__s34:
@@ -5226,7 +6549,17 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
                             i32;
                     if p_arg == 0 as *mut () ||
                             p_arg as *const i8 == core::ptr::null() {
-                        if is_proxy_style != 0 { rc = 1; } else { rc = 0; }
+                        if is_proxy_style != 0 {
+
+                            /// turn off proxy locking - not supported.  If support is added for
+                            ///* switching proxy locking mode off then it will need to fail if
+                            ///* the journal mode is WAL mode.
+                            (rc = 1);
+                        } else {
+
+                            /// turn off proxy locking - already off - NOOP
+                            (rc = 0);
+                        }
                     } else {
                         let proxy_path: *const i8 = p_arg as *const i8;
                         if is_proxy_style != 0 {
@@ -5249,7 +6582,9 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
                                         proxy_path);
                             }
                         } else {
-                            rc = proxy_transform_unix_file(p_file_1, proxy_path);
+
+                            /// turn on proxy file locking
+                            (rc = proxy_transform_unix_file(p_file_1, proxy_path));
                         }
                     }
                     return rc;
@@ -5266,7 +6601,17 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
                             i32;
                     if p_arg == 0 as *mut () ||
                             p_arg as *const i8 == core::ptr::null() {
-                        if is_proxy_style != 0 { rc = 1; } else { rc = 0; }
+                        if is_proxy_style != 0 {
+
+                            /// turn off proxy locking - not supported.  If support is added for
+                            ///* switching proxy locking mode off then it will need to fail if
+                            ///* the journal mode is WAL mode.
+                            (rc = 1);
+                        } else {
+
+                            /// turn off proxy locking - already off - NOOP
+                            (rc = 0);
+                        }
                     } else {
                         let proxy_path: *const i8 = p_arg as *const i8;
                         if is_proxy_style != 0 {
@@ -5289,7 +6634,9 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
                                         proxy_path);
                             }
                         } else {
-                            rc = proxy_transform_unix_file(p_file_1, proxy_path);
+
+                            /// turn on proxy file locking
+                            (rc = proxy_transform_unix_file(p_file_1, proxy_path));
                         }
                     }
                     return rc;
@@ -5299,10 +6646,18 @@ extern "C" fn proxy_file_control(id: *mut Sqlite3File, op: i32,
             _ => { { { let _ = 0; }; } }
         }
     }
+
+    ///NOTREACHED
     { let _ = 0; };
     return 1;
 }
 
+///* Use F_GETLK to check whether or not there are any readers with open
+///* wal-mode transactions in other processes on database file pFile. If
+///* no error occurs, return SQLITE_OK and set (*piOut) to 1 if there are
+///* such transactions, or 0 otherwise. If an error occurs, return an
+///* SQLite error code. The final value of *piOut is undefined in this
+///* case.
 extern "C" fn unix_fcntl_external_reader(p_file_1: &UnixFile,
     pi_out_1: &mut i32) -> i32 {
     unsafe {
@@ -5346,6 +6701,7 @@ extern "C" fn unix_fcntl_external_reader(p_file_1: &UnixFile,
     }
 }
 
+///* Information and control of an open file handle.
 extern "C" fn unix_file_control(id: *mut Sqlite3File, op: i32,
     p_arg_1: *mut ()) -> i32 {
     unsafe {
@@ -6205,6 +7561,9 @@ extern "C" fn unix_file_control(id: *mut Sqlite3File, op: i32,
     }
 }
 
+///* On some systems, calls to fchown() will trigger a message in a security
+///* log if they come from non-root processes.  So avoid calling fchown() if
+///* we are not running as root.
 extern "C" fn robust_fchown(fd: i32, uid: UidT, gid: GidT) -> i32 {
     unsafe {
         return if unsafe {
@@ -6237,12 +7596,39 @@ extern "C" fn robust_fchown(fd: i32, uid: UidT, gid: GidT) -> i32 {
     }
 }
 
+///* The DMS lock has not yet been taken on shm file pShmNode. Attempt to
+///* take it now. Return SQLITE_OK if successful, or an SQLite error
+///* code otherwise.
+///*
+///* If the DMS cannot be locked because this is a readonly_shm=1
+///* connection and no other process already holds a lock, return
+///* SQLITE_READONLY_CANTINIT and set pShmNode->isUnlocked=1.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_lock_shared_memory(p_db_fd_1: *mut UnixFile,
     p_shm_node_1: &mut UnixShmNode) -> i32 {
     unsafe {
         let mut lock: Flock = unsafe { core::mem::zeroed() };
         let mut rc: i32 = 0;
-        lock.l_whence = 0 as i16;
+
+        /// Use F_GETLK to determine the locks other processes are holding
+        ///* on the DMS byte. If it indicates that another process is holding
+        ///* a SHARED lock, then this process may also take a SHARED lock
+        ///* and proceed with opening the *-shm file.
+        ///*
+        ///* Or, if no other process is holding any lock, then this process
+        ///* is the first to open it. In this case take an EXCLUSIVE lock on the
+        ///* DMS byte and truncate the *-shm file to zero bytes in size. Then
+        ///* downgrade to a SHARED lock on the DMS byte.
+        ///*
+        ///* If another process is holding an EXCLUSIVE lock on the DMS byte,
+        ///* return SQLITE_BUSY to the caller (it will try again). An earlier
+        ///* version of this code attempted the SHARED lock at this point. But
+        ///* this introduced a subtle race condition: if the process holding
+        ///* EXCLUSIVE failed just before truncating the *-shm file, then this
+        ///* process might open and use the *-shm file without truncating it.
+        ///* And if the *-shm file has been corrupted by a power failure or
+        ///* system crash, the database itself may also become corrupt.
+        (lock.l_whence = 0 as i16);
         lock.l_start = ((22 + 8) * 4 + 8) as OffT;
         lock.l_len = 1 as OffT;
         lock.l_type = 3 as i16;
@@ -6287,33 +7673,81 @@ extern "C" fn unix_lock_shared_memory(p_db_fd_1: *mut UnixFile,
     }
 }
 
+///* Open a shared-memory area associated with open database file pDbFd.
+///* This particular implementation uses mmapped files.
+///*
+///* The file used to implement shared-memory is in the same directory
+///* as the open database file and has the same name as the open database
+///* file with the "-shm" suffix added.  For example, if the database file
+///* is "/home/user1/config.db" then the file that is created and mmapped
+///* for shared memory will be called "/home/user1/config.db-shm".
+///*
+///* Another approach to is to use files in /dev/shm or /dev/tmp or an
+///* some other tmpfs mount. But if a file in a different directory
+///* from the database file is used, then differing access permissions
+///* or a chroot() might cause two different processes on the same
+///* database to end up using different files for shared memory -
+///* meaning that their memory would not really be shared - resulting
+///* in database corruption.  Nevertheless, this tmpfs file usage
+///* can be enabled at compile-time using -DSQLITE_SHM_DIRECTORY="/dev/shm"
+///* or the equivalent.  The use of the SQLITE_SHM_DIRECTORY compile-time
+///* option results in an incompatible build of SQLite;  builds of SQLite
+///* that with differing SQLITE_SHM_DIRECTORY settings attempt to use the
+///* same database file at the same time, database corruption will likely
+///* result. The SQLITE_SHM_DIRECTORY compile-time option is considered
+///* "unsupported" and may go away in a future SQLite release.
+///*
+///* When opening a new shared-memory file, if no other instances of that
+///* file are currently open, in this process or in other processes, then
+///* the file must be truncated to zero length or have its header cleared.
+///*
+///* If the original database file (pDbFd) is using the "unix-excl" VFS
+///* that means that an exclusive lock is held on the database file and
+///* that no other processes are able to read or write the database.  In
+///* that case, we do not really need shared memory.  No shared memory
+///* file is created.  The shared memory will be simulated with heap memory.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
     unsafe {
         let mut p: *mut UnixShm = core::ptr::null_mut();
+        /// The connection to be opened
+        /// The underlying mmapped file
         let mut rc: i32 = 0;
         '__b36: loop {
             '__c36: loop {
+                /// The connection to be opened
                 let mut p_shm_node: *mut UnixShmNode = core::ptr::null_mut();
+                /// The underlying mmapped file
+                /// Result code
                 let mut p_inode: *const UnixInodeInfo = core::ptr::null();
+                /// The inode of fd
                 let mut z_shm: *mut i8 = core::ptr::null_mut();
+                /// Name of the file used for SHM
                 let mut n_shm_filename: i32 = 0;
-                p =
+
+                /// Size of the SHM filename in bytes
+                /// Allocate space for the new unixShm object.
+                (p =
                     unsafe {
                             sqlite3_malloc64(core::mem::size_of::<UnixShm>() as
                                     Sqlite3Uint64)
-                        } as *mut UnixShm;
+                        } as *mut UnixShm);
                 if p == core::ptr::null_mut() { return 7; }
                 unsafe {
                     memset(p as *mut (), 0,
                         core::mem::size_of::<UnixShm>() as u64)
                 };
                 { let _ = 0; };
+
+                /// Check to see if a unixShmNode object already exists. Reuse an existing
+                ///* one if present. Create a new one if necessary.
                 { let _ = 0; };
                 unix_enter_mutex();
                 p_inode = unsafe { (*p_db_fd_1).p_inode };
                 p_shm_node = unsafe { (*p_inode).p_shm_node };
                 if p_shm_node == core::ptr::null_mut() {
                     let mut s_stat: Stat = unsafe { core::mem::zeroed() };
+                    /// fstat() info for database file
                     let z_base_path: *const i8 = unsafe { (*p_db_fd_1).z_path };
                     if unsafe {
                                 (unsafe {
@@ -6404,6 +7838,10 @@ extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
                             }
                             unsafe { (*p_shm_node).is_readonly = 1 as u8 };
                         }
+
+                        /// If this process is running as root, make sure that the SHM file
+                        ///* is owned by the same user that owns the original database.  Otherwise,
+                        ///* the original owner will not be able to connect.
                         robust_fchown(unsafe { (*p_shm_node).h_shm }, s_stat.st_uid,
                             s_stat.st_gid);
                         rc =
@@ -6412,6 +7850,8 @@ extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
                         if rc != 0 && rc != 8 | 5 << 8 { break '__b36; }
                     }
                 }
+
+                /// Make the new connection a child of the unixShmNode
                 unsafe { (*p).p_shm_node = p_shm_node };
                 {
                     let __p = unsafe { &mut (*p_shm_node).n_ref };
@@ -6421,6 +7861,13 @@ extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
                 };
                 unsafe { (*p_db_fd_1).p_shm = p };
                 unix_leave_mutex();
+
+                /// The reference count on pShmNode has already been incremented under
+                ///* the cover of the unixEnterMutex() mutex and the pointer from the
+                ///* new (struct unixShm) object to the pShmNode has been set. All that is
+                ///* left to do is to link the new object into the linked list starting
+                ///* at pShmNode->pFirst. This must be done while holding the
+                ///* pShmNode->pShmMutex.
                 unsafe {
                     sqlite3_mutex_enter(unsafe { (*p_shm_node).p_shm_mutex })
                 };
@@ -6434,13 +7881,58 @@ extern "C" fn unix_open_shared_memory(p_db_fd_1: *mut UnixFile) -> i32 {
             }
             if !(false) { break '__b36; }
         }
+
+        /// The connection to be opened
+        /// The underlying mmapped file
+        /// Result code
+        /// The inode of fd
+        /// Name of the file used for SHM
+        /// Size of the SHM filename in bytes
+        /// Allocate space for the new unixShm object.
+        /// Check to see if a unixShmNode object already exists. Reuse an existing
+        ///* one if present. Create a new one if necessary.
+        /// fstat() info for database file
+        /// Call fstat() to figure out the permissions on the database file. If
+        ///* a new *-shm file is created, an attempt will be made to create it
+        ///* with the same permissions.
+        /// If this process is running as root, make sure that the SHM file
+        ///* is owned by the same user that owns the original database.  Otherwise,
+        ///* the original owner will not be able to connect.
+        /// Make the new connection a child of the unixShmNode
+        /// The reference count on pShmNode has already been incremented under
+        ///* the cover of the unixEnterMutex() mutex and the pointer from the
+        ///* new (struct unixShm) object to the pShmNode has been set. All that is
+        ///* left to do is to link the new object into the linked list starting
+        ///* at pShmNode->pFirst. This must be done while holding the
+        ///* pShmNode->pShmMutex.
+        /// Jump here on any error
         unix_shm_purge(p_db_fd_1);
+
+        /// This call frees pShmNode if required
         unsafe { sqlite3_free(p as *mut ()) };
         unix_leave_mutex();
         return rc;
     }
 }
 
+///* This function is called to obtain a pointer to region iRegion of the
+///* shared-memory associated with the database file fd. Shared-memory regions
+///* are numbered starting from zero. Each shared-memory region is szRegion
+///* bytes in size.
+///*
+///* If an error occurs, an error code is returned and *pp is set to NULL.
+///*
+///* Otherwise, if the bExtend parameter is 0 and the requested shared-memory
+///* region has not been allocated (by any client, including one running in a
+///* separate process), then *pp is set to NULL and SQLITE_OK returned. If
+///* bExtend is non-zero and the requested shared-memory region has not yet
+///* been allocated, it is allocated by this function.
+///*
+///* If the shared-memory region has already been allocated or is allocated by
+///* this call as described above, then it is mapped into this processes
+///* address space (if it is not already), *pp is set to point to the mapped
+///* memory and SQLITE_OK returned.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_shm_map(fd: *mut Sqlite3File, i_region_1: i32,
     sz_region_1: i32, b_extend_1: i32, pp: *mut *mut ()) -> i32 {
     unsafe {
@@ -6450,12 +7942,18 @@ extern "C" fn unix_shm_map(fd: *mut Sqlite3File, i_region_1: i32,
         let mut rc: i32 = 0;
         let mut n_shm_per_map: i32 = 0;
         let mut n_req_region: i32 = 0;
+        /// If the shared-memory file has not yet been opened, open it now.
+        /// Minimum number of regions required to be mapped.
         let mut ap_new: *mut *mut i8 = core::ptr::null_mut();
+        /// New apRegion[] array
         let mut n_byte: i64 = 0 as i64;
+        /// Minimum required file size
         let mut s_stat: Stat = unsafe { core::mem::zeroed() };
         let mut i_pg: i64 = 0 as i64;
+        /// Write to the last byte of each newly allocated or extended page
         let mut x: i32 = 0;
         let mut z_file: *const i8 = core::ptr::null();
+        /// Map the requested memory region into this processes address space.
         let mut n_map: i64 = 0 as i64;
         let mut i: i64 = 0 as i64;
         let mut p_mem: *mut () = core::ptr::null_mut();
@@ -6762,10 +8260,32 @@ extern "C" fn unix_shm_map(fd: *mut Sqlite3File, i_region_1: i32,
                 }
             }
         }
+
+        /// If the shared-memory file has not yet been opened, open it now.
+        /// Minimum number of regions required to be mapped.
+        /// New apRegion[] array
+        /// Minimum required file size
+        /// Used by fstat()
+        /// The requested region is not mapped into this processes address space.
+        ///* Check to see if it has been allocated (i.e. if the wal-index file is
+        ///* large enough to contain the requested region).
+        /// The requested memory region does not exist. If bExtend is set to
+        ///* false, exit early. *pp will be set to NULL and SQLITE_OK returned.
+        /// Alternatively, if bExtend is true, extend the file. Do this by
+        ///* writing a single byte to the end of each (OS) page being
+        ///* allocated or extended. Technically, we need only write to the
+        ///* last page in order to extend the file. But writing to all new
+        ///* pages forces the OS to allocate them immediately, which reduces
+        ///* the chances of SIGBUS while accessing the mapped region later on.
+        /// Write to the last byte of each newly allocated or extended page
+        /// Map the requested memory region into this processes address space.
         unreachable!();
     }
 }
 
+///* Here are all of the sqlite3_io_methods objects for each of the
+///* locking strategies.  Functions that return pointers to these methods
+///* are also created.
 static posix_io_methods: Sqlite3IoMethods =
     Sqlite3IoMethods {
         i_version: 3,
@@ -6789,13 +8309,26 @@ static posix_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(unix_unfetch),
     };
 
+///* This "finder" function attempts to determine the best locking strategy
+///* for the database file "filePath".  It then returns the sqlite3_io_methods
+///* object that implements that strategy.
+///*
+///* This is for MacOSX only.
+#[allow(unused_doc_comments)]
 extern "C" fn autolock_io_finder_impl(file_path_1: *const i8,
     p_new_1: *mut UnixFile) -> *const Sqlite3IoMethods {
     unsafe {
+        /// Filesystem type name
+        /// Appropriate locking method
         let mut i: i32 = 0;
         let mut fs_info: Statfs = unsafe { core::mem::zeroed() };
         let mut lock_info: Flock = unsafe { core::mem::zeroed() };
-        if (file_path_1).is_null() as i32 != 0 { return &nolock_io_methods; }
+        if (file_path_1).is_null() as i32 != 0 {
+
+            /// If filePath==NULL that means we are dealing with a transient file
+            ///* that does not need to be locked.
+            return &nolock_io_methods;
+        }
         if unsafe { statfs(file_path_1, &mut fs_info) } != -1 {
             if fs_info.f_flags & 1 as u32 != 0 { return &nolock_io_methods; }
             {
@@ -6817,7 +8350,11 @@ extern "C" fn autolock_io_finder_impl(file_path_1: *const i8,
                 }
             }
         }
-        lock_info.l_len = 1 as OffT;
+
+        /// Default case. Handles, amongst others, "nfs".
+        ///* Test byte-range lock using fcntl(). If the call succeeds,
+        ///* assume that the file-system supports POSIX style locks.
+        (lock_info.l_len = 1 as OffT);
         lock_info.l_start = 0 as OffT;
         lock_info.l_whence = 0 as i16;
         lock_info.l_type = 1 as i16;
@@ -6848,12 +8385,18 @@ static autolock_io_finder:
     =
     autolock_io_finder_impl;
 
+/// This variable holds the process id (pid) from when the xRandomness()
+///* method was called.  If xOpen() is called from a different process id,
+///* indicating that a fork() has occurred, the PRNG will be reset.
 static mut randomness_pid: PidT = 0;
 
+///* Find the mode, uid and gid of file zFile.
+#[allow(unused_doc_comments)]
 extern "C" fn get_file_mode(z_file_1: *const i8, p_mode_1: *mut ModeT,
     p_uid_1: *mut UidT, p_gid_1: *mut GidT) -> i32 {
     unsafe {
         let mut s_stat: Stat = unsafe { core::mem::zeroed() };
+        /// Output of stat() on database file
         let mut rc: i32 = 0;
         if 0 ==
                 unsafe {
@@ -6876,16 +8419,58 @@ extern "C" fn get_file_mode(z_file_1: *const i8, p_mode_1: *mut ModeT,
     }
 }
 
+///* This function is called by unixOpen() to determine the unix permissions
+///* to create new files with. If no error occurs, then SQLITE_OK is returned
+///* and a value suitable for passing as the third argument to open(2) is
+///* written to *pMode. If an IO error occurs, an SQLite error code is
+///* returned and the value of *pMode is not modified.
+///*
+///* In most cases, this routine sets *pMode to 0, which will become
+///* an indication to robust_open() to create the file using
+///* SQLITE_DEFAULT_FILE_PERMISSIONS adjusted by the umask.
+///* But if the file being opened is a WAL or regular journal file, then
+///* this function queries the file-system for the permissions on the
+///* corresponding database file and sets *pMode to this value. Whenever
+///* possible, WAL and journal files are created using the same permissions
+///* as the associated database file.
+///*
+///* If the SQLITE_ENABLE_8_3_NAMES option is enabled, then the
+///* original filename is unavailable.  But 8_3_NAMES is only used for
+///* FAT filesystems and permissions do not matter there, so just use
+///* the default permissions.  In 8_3_NAMES mode, leave *pMode set to zero.
+#[allow(unused_doc_comments)]
 extern "C" fn find_create_file_mode(z_path_1: *const i8, flags: i32,
     p_mode_1: *mut ModeT, p_uid_1: *mut UidT, p_gid_1: *mut GidT) -> i32 {
     let mut rc: i32 = 0;
+
+    /// Return Code
     unsafe { *p_mode_1 = 0 as ModeT };
     unsafe { *p_uid_1 = 0 as UidT };
     unsafe { *p_gid_1 = 0 as GidT };
     if flags & (524288 | 2048) != 0 {
         let mut z_db: [i8; 513] = [0; 513];
+        /// Database file path
         let mut n_db: i32 = 0;
-        n_db = unsafe { sqlite3_strlen30(z_path_1) } - 1;
+
+        /// Number of valid bytes in zDb
+        /// zPath is a path to a WAL or journal file. The following block derives
+        ///* the path to the associated database file from zPath. This block handles
+        ///* the following naming conventions:
+        ///*
+        ///*   "<path to db>-journal"
+        ///*   "<path to db>-wal"
+        ///*   "<path to db>-journalNN"
+        ///*   "<path to db>-walNN"
+        ///*
+        ///* where NN is a decimal number. The NN naming schemes are
+        ///* used by the test_multiplex.c module.
+        ///*
+        ///* In normal operation, the journal file name will always contain
+        ///* a '-' character.  However in 8+3 filename mode, or if a corrupt
+        ///* rollback journal specifies a super-journal with a goofy name, then
+        ///* the '-' might be missing or the '-' might be the first character in
+        ///* the filename.  In that case, just return SQLITE_OK with *pMode==0.
+        (n_db = unsafe { sqlite3_strlen30(z_path_1) } - 1);
         while n_db > 0 &&
                 unsafe { *z_path_1.offset(n_db as isize) } as i32 !=
                     '.' as i32 {
@@ -6906,6 +8491,10 @@ extern "C" fn find_create_file_mode(z_path_1: *const i8, flags: i32,
     } else if flags & 8 != 0 {
         unsafe { *p_mode_1 = 384 as ModeT };
     } else if flags & 64 != 0 {
+        /// If this is a main database file and the file was opened using a URI
+        ///* filename, check for the "modeof" parameter. If present, interpret
+        ///* its value as a filename and try to copy the mode, uid and gid from
+        ///* that file.
         let z: *const i8 =
             unsafe {
                 sqlite3_uri_parameter(z_path_1,
@@ -6918,19 +8507,50 @@ extern "C" fn find_create_file_mode(z_path_1: *const i8, flags: i32,
     return rc;
 }
 
+///* Open the file zPath.
+///*
+///* Previously, the SQLite OS layer used three functions in place of this
+///* one:
+///*
+///*     sqlite3OsOpenReadWrite();
+///*     sqlite3OsOpenReadOnly();
+///*     sqlite3OsOpenExclusive();
+///*
+///* These calls correspond to the following combinations of flags:
+///*
+///*     ReadWrite() ->     (READWRITE | CREATE)
+///*     ReadOnly()  ->     (READONLY)
+///*     OpenExclusive() -> (READWRITE | CREATE | EXCLUSIVE)
+///*
+///* The old OpenExclusive() accepted a boolean argument - "delFlag". If
+///* true, the file was configured to be automatically deleted when the
+///* file handle closed. To achieve the same effect using this new
+///* interface, add the DELETEONCLOSE flag to those specified above for
+///* OpenExclusive().
+#[allow(unused_doc_comments)]
 extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     p_file_1: *mut Sqlite3File, mut flags: i32, p_out_flags_1: *mut i32)
     -> i32 {
     unsafe {
         let p: *mut UnixFile = p_file_1 as *mut UnixFile;
+        /// File descriptor returned by open()
+        /// Flags to pass to open()
+        /// Type of file to open
+        /// True to omit locking primitives
         let mut rc: i32 = 0;
         '__b41: loop {
             '__c41: loop {
                 let mut fd: i32 = -1;
+                /// File descriptor returned by open()
                 let mut open_flags: i32 = 0;
+                /// Flags to pass to open()
                 let e_type: i32 = flags & 1048320;
+                /// Type of file to open
                 let mut no_lock: i32 = 0;
+                /// True to omit locking primitives
+                /// Function Return Code
                 let mut ctrl_flags: i32 = 0;
+                /// UNIXFILE_* flags
                 let is_exclusive: i32 = flags & 16;
                 let is_delete: i32 = flags & 8;
                 let is_create: i32 = flags & 4;
@@ -6938,20 +8558,37 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                 let is_read_write: i32 = flags & 2;
                 let is_auto_proxy: i32 = flags & 32;
                 let mut fs_info: Statfs = unsafe { core::mem::zeroed() };
+                /// If creating a super- or main-file journal, this function will open
+                ///* a file-descriptor on the directory too. The first time unixSync()
+                ///* is called the directory file descriptor will be fsync()ed and close()d.
                 let is_new_jrnl: i32 =
                     (is_create != 0 &&
                             (e_type == 16384 || e_type == 2048 || e_type == 524288)) as
                         i32;
+                /// If argument zPath is a NULL pointer, this function is required to open
+                ///* a temporary file. Use this buffer to store the file name in.
                 let mut z_tmpname: [i8; 514] = [0; 514];
                 let mut z_name: *const i8 = z_path_1;
+
+                /// Check the following statements are true:
+                ///*
+                ///*   (a) Exactly one of the READWRITE and READONLY flags must be set, and
+                ///*   (b) if CREATE is set, then READWRITE must also be set, and
+                ///*   (c) if EXCLUSIVE is set, then CREATE must also be set.
+                ///*   (d) if DELETEONCLOSE is set, then CREATE must also be set.
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
+
+                /// The main DB, main journal, WAL file and super-journal are never
+                ///* automatically deleted. Nor are they ever temporary files.
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
+
+                /// Assert that the upper layer has set one of the "file-type" flags.
                 { let _ = 0; };
                 if randomness_pid != unsafe { getpid() } as PidT {
                     randomness_pid = unsafe { getpid() } as PidT;
@@ -6975,8 +8612,14 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                         if (p_unused).is_null() as i32 != 0 { return 7; }
                     }
                     unsafe { (*p).p_preallocated_unused = p_unused };
+
+                    /// Database filenames are double-zero terminated if they are not
+                    ///* URIs with parameters.  Hence, they can always be passed into
+                    ///* sqlite3_uri_parameter().
                     { let _ = 0; };
                 } else if (z_name).is_null() as i32 != 0 {
+
+                    /// If zName is NULL, the upper layer is requesting a temp file.
                     { let _ = 0; };
                     { let _ = 0; };
                     { let _ = 0; };
@@ -6987,6 +8630,9 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                     if rc != 0 { return rc; }
                     z_name =
                         &raw mut z_tmpname[0 as usize] as *mut i8 as *const i8;
+
+                    /// Generated temporary filenames are always double-zero terminated
+                    ///* for use by sqlite3_uri_parameter().
                     { let _ = 0; };
                 }
                 if is_readonly != 0 { open_flags |= 0; }
@@ -6996,11 +8642,15 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                 open_flags |= 0 | 0 | 256;
                 if fd < 0 {
                     let mut open_mode: ModeT = 0 as ModeT;
+                    /// Permissions to create file with
                     let mut uid: UidT = 0 as UidT;
+                    /// Userid for the file
                     let mut gid: GidT = 0 as GidT;
-                    rc =
+
+                    /// Groupid for the file
+                    (rc =
                         find_create_file_mode(z_name, flags, &mut open_mode,
-                            &mut uid, &mut gid);
+                            &mut uid, &mut gid));
                     if rc != 0 { { let _ = 0; }; { let _ = 0; }; return rc; }
                     fd = robust_open(z_name, open_flags, open_mode);
                     { let _ = 0; };
@@ -7019,9 +8669,13 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                                                             }) as *const ())
                                             })(z_name, 0)
                                     } != 0 {
-                            rc = 8 | 6 << 8;
+
+                            /// If unable to create a journal because the directory is not
+                            ///* writable, change the error code to indicate that.
+                            (rc = 8 | 6 << 8);
                         } else if unsafe { *unsafe { __error() } } != 21 &&
                                 is_read_write != 0 {
+                            /// Failed to open the file for read/write access. Try read-only.
                             let mut p_readonly: *mut UnixUnusedFd =
                                 core::ptr::null_mut();
                             flags &= !(2 | 4);
@@ -7131,7 +8785,14 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
                                     proxy_transform_unix_file(p_file_1 as *mut UnixFile,
                                         c":auto:".as_ptr() as *mut i8 as *const i8)
                                 };
-                            if rc != 0 { unix_close(p_file_1); return rc; }
+                            if rc != 0 {
+
+                                /// Use unixClose to clean up the resources added in fillInUnixFile
+                                ///* and clear all the structure's references.  Specifically,
+                                ///* pFile->pMethods will be NULL so sqlite3OsClose will be a no-op
+                                unix_close(p_file_1);
+                                return rc;
+                            }
                         }
                         break '__b41;
                     }
@@ -7153,6 +8814,8 @@ extern "C" fn unix_open(p_vfs_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     }
 }
 
+///* Delete the file at zPath. If the dirSync argument is true, fsync()
+///* the directory after deleting the file.
 extern "C" fn unix_delete(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     dir_sync_1: i32) -> i32 {
     unsafe {
@@ -7207,11 +8870,23 @@ extern "C" fn unix_delete(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     }
 }
 
+///* Test the existence of or access permissions of file zPath. The
+///* test performed depends on the value of flags:
+///*
+///*     SQLITE_ACCESS_EXISTS: Return 1 if the file exists
+///*     SQLITE_ACCESS_READWRITE: Return 1 if the file is read and writable.
+///*     SQLITE_ACCESS_READONLY: Return 1 if the file is readable.
+///*
+///* Otherwise return 0.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_access(not_used_1: *mut Sqlite3Vfs, z_path_1: *const i8,
     flags: i32, p_res_out_1: *mut i32) -> i32 {
     unsafe {
         { let _ = not_used_1; };
         { let _ = 0; };
+
+        /// The spec says there are three possible values for flags.  But only
+        ///* two of them are actually used
         { let _ = 0; };
         if flags == 0 {
             let mut buf: Stat = unsafe { core::mem::zeroed() };
@@ -7264,6 +8939,7 @@ struct DbPath {
     n_used: i32,
 }
 
+///* Append a single path element to the DbPath under construction
 extern "C" fn append_one_path_element(p_path_1: *mut DbPath,
     z_name_1: *const i8, n_name_1: i32) -> () {
     unsafe {
@@ -7394,6 +9070,7 @@ extern "C" fn append_one_path_element(p_path_1: *mut DbPath,
     }
 }
 
+/// Forward reference
 extern "C" fn append_all_path_elements(p_path_1: *mut DbPath,
     z_path_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -7425,6 +9102,13 @@ extern "C" fn append_all_path_elements(p_path_1: *mut DbPath,
     }
 }
 
+///* Turn a relative pathname into a full pathname. The relative path
+///* is stored as a nul-terminated string in the buffer pointed to by
+///* zPath.
+///*
+///* zOut points to a buffer of at least sqlite3_vfs.mxPathname bytes
+///* (in this case, MAX_PATHNAME bytes). The full-path is written to
+///* this buffer before returning.
 extern "C" fn unix_full_pathname(p_vfs_1: *mut Sqlite3Vfs,
     z_path_1: *const i8, n_out_1: i32, z_out_1: *mut i8) -> i32 {
     unsafe {
@@ -7474,6 +9158,11 @@ extern "C" fn unix_dl_open(not_used_1: *mut Sqlite3Vfs,
     return unsafe { dlopen(z_filename_1, 2 | 8) };
 }
 
+///* SQLite calls this function immediately after a call to unixDlSym() or
+///* unixDlOpen() fails (returns a null pointer). If a more detailed error
+///* message is available, it is written to zBufOut. If no error message
+///* is available, zBufOut is left unmodified and SQLite uses a default
+///* error message.
 extern "C" fn unix_dl_error(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     z_buf_out_1: *mut i8) -> () {
     let mut z_err: *const i8 = core::ptr::null();
@@ -7489,8 +9178,24 @@ extern "C" fn unix_dl_error(not_used_1: *mut Sqlite3Vfs, n_buf_1: i32,
     unix_leave_mutex();
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn unix_dl_sym(not_used_1: *mut Sqlite3Vfs, p: *mut (),
     z_sym_1: *const i8) -> unsafe extern "C" fn() -> () {
+    ///* GCC with -pedantic-errors says that C90 does not allow a void* to be
+    ///* cast into a pointer to a function.  And yet the library dlsym() routine
+    ///* returns a void* which is really a pointer to a function.  So how do we
+    ///* use dlsym() with -pedantic-errors?
+    ///*
+    ///* Variable x below is defined to be a pointer to a function taking
+    ///* parameters void* and const char* and returning a pointer to a function.
+    ///* We initialize x by assigning it a pointer to the dlsym() function.
+    ///* (That assignment requires a cast.)  Then we call the function that
+    ///* x points to.
+    ///*
+    ///* This work-around is unlikely to work correctly on any system where
+    ///* you really cannot cast a function pointer into void*.  But then, on the
+    ///* other hand, dlsym() will not work on such a system either, so we have
+    ///* not really lost anything.
     let mut x:
             Option<unsafe extern "C" fn(*mut (), *const i8)
                 -> unsafe extern "C" fn() -> ()> = None;
@@ -7510,11 +9215,25 @@ extern "C" fn unix_dl_close(not_used_1: *mut Sqlite3Vfs, p_handle_1: *mut ())
     unsafe { dlclose(p_handle_1) };
 }
 
+///* Write nBuf bytes of random data to the supplied buffer zBuf.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_randomness(not_used_1: *mut Sqlite3Vfs, mut n_buf_1: i32,
     z_buf_1: *mut i8) -> i32 {
     unsafe {
         { let _ = not_used_1; };
         { let _ = 0; };
+
+        /// We have to initialize zBuf to prevent valgrind from reporting
+        ///* errors.  The reports issued by valgrind are incorrect - we would
+        ///* prefer that the randomness be increased by making use of the
+        ///* uninitialized space in zBuf - but valgrind errors tend to worry
+        ///* some users.  Rather than argue, it seems easier just to initialize
+        ///* the whole array and silence valgrind, even if that means less randomness
+        ///* in the random seed.
+        ///*
+        ///* When testing, initializing zBuf[] to zero is all we do.  That means
+        ///* that we always use the same random number sequence.  This makes the
+        ///* tests repeatable.
         unsafe { memset(z_buf_1 as *mut (), 0, n_buf_1 as u64) };
         randomness_pid = unsafe { getpid() } as PidT;
         {
@@ -7570,11 +9289,22 @@ extern "C" fn unix_randomness(not_used_1: *mut Sqlite3Vfs, mut n_buf_1: i32,
     }
 }
 
+///* Find the current time (in Universal Coordinated Time).  Write into *piNow
+///* the current time and date as a Julian Day number times 86_400_000.  In
+///* other words, write into *piNow the number of milliseconds since the Julian
+///* epoch of noon in Greenwich on November 24, 4714 B.C according to the
+///* proleptic Gregorian calendar.
+///*
+///* On success, return SQLITE_OK.  Return SQLITE_ERROR if the time and date
+///* cannot be found.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_current_time_int64(not_used_1: *mut Sqlite3Vfs,
     pi_now_1: *mut Sqlite3Int64) -> i32 {
     let rc: i32 = 0;
     let mut s_now: Timeval = unsafe { core::mem::zeroed() };
     { let _ = unsafe { gettimeofday(&mut s_now, core::ptr::null_mut()) }; };
+
+    /// Cannot fail given valid arguments
     unsafe {
         *pi_now_1 =
             unix_epoch + 1000 as Sqlite3Int64 * s_now.tv_sec as Sqlite3Int64 +
@@ -7584,6 +9314,9 @@ extern "C" fn unix_current_time_int64(not_used_1: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* Find the current time (in Universal Coordinated Time).  Write the
+///* current time and date as a Julian Day number into *prNow and
+///* return 0.  Return 1 if the time and date cannot be found.
 extern "C" fn unix_current_time(not_used_1: *mut Sqlite3Vfs,
     pr_now_1: *mut f64) -> i32 {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -7594,6 +9327,10 @@ extern "C" fn unix_current_time(not_used_1: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* The xGetLastError() method is designed to return a better
+///* low-level error message when operating-system problems come up
+///* during SQLite operation.  Only the integer return code is currently
+///* used.
 extern "C" fn unix_get_last_error(not_used_1: *mut Sqlite3Vfs,
     not_used2_1: i32, not_used3_1: *mut i8) -> i32 {
     { let _ = not_used_1; };
@@ -7602,6 +9339,11 @@ extern "C" fn unix_get_last_error(not_used_1: *mut Sqlite3Vfs,
     return unsafe { *unsafe { __error() } };
 }
 
+///* This is the xSetSystemCall() method of sqlite3_vfs for all of the
+///* "unix" VFSes.  Return SQLITE_OK upon successfully updating the
+///* system call pointer, or SQLITE_NOTFOUND if there is no configurable
+///* system call named zName.
+#[allow(unused_doc_comments)]
 extern "C" fn unix_set_system_call(p_not_used_1: *mut Sqlite3Vfs,
     z_name_1: *const i8, mut p_new_func_1: unsafe extern "C" fn() -> ())
     -> i32 {
@@ -7610,7 +9352,10 @@ extern "C" fn unix_set_system_call(p_not_used_1: *mut Sqlite3Vfs,
         let mut rc: i32 = 12;
         { let _ = p_not_used_1; };
         if z_name_1 == core::ptr::null() {
-            rc = 0;
+
+            /// If no zName is given, restore all system calls to their default
+            ///* settings and return NULL
+            (rc = 0);
             {
                 i = 0 as u32;
                 '__b46: loop {
@@ -7678,6 +9423,9 @@ extern "C" fn unix_set_system_call(p_not_used_1: *mut Sqlite3Vfs,
     }
 }
 
+///* Return the value of a system call.  Return NULL if zName is not a
+///* recognized system call name.  NULL is also returned if the system call
+///* is currently undefined.
 extern "C" fn unix_get_system_call(p_not_used_1: *mut Sqlite3Vfs,
     z_name_1: *const i8) -> unsafe extern "C" fn() -> () {
     unsafe {
@@ -7712,6 +9460,10 @@ extern "C" fn unix_get_system_call(p_not_used_1: *mut Sqlite3Vfs,
     }
 }
 
+///* Return the name of the first system call after zName.  If zName==NULL
+///* then return the name of the first system call.  Return NULL if zName
+///* is the last system call or if zName is not the name of a valid
+///* system call.
 extern "C" fn unix_next_system_call(p: *mut Sqlite3Vfs, z_name_1: *const i8)
     -> *const i8 {
     unsafe {
@@ -7782,6 +9534,9 @@ static dotlock_io_finder:
     =
     dotlock_io_finder_impl;
 
+///* Here are all of the sqlite3_io_methods objects for each of the
+///* locking strategies.  Functions that return pointers to these methods
+///* are also created.
 extern "C" fn posix_io_finder_impl(z: *const i8, p: *mut UnixFile)
     -> *const Sqlite3IoMethods {
     { let _ = z; };
@@ -7789,6 +9544,9 @@ extern "C" fn posix_io_finder_impl(z: *const i8, p: *mut UnixFile)
     return &posix_io_methods;
 }
 
+///* Here are all of the sqlite3_io_methods objects for each of the
+///* locking strategies.  Functions that return pointers to these methods
+///* are also created.
 static posix_io_finder:
     unsafe extern "C" fn(*const i8, *mut UnixFile) -> *const Sqlite3IoMethods
     =
@@ -7805,6 +9563,12 @@ extern "C" fn robust_flock(fd: i32, op: i32) -> i32 {
     return rc;
 }
 
+///* Lower the locking level on file descriptor pFile to eFileLock.  eFileLock
+///* must be either NO_LOCK or SHARED_LOCK.
+///*
+///* If the locking level of the file descriptor is already at or below
+///* the requested locking level, this routine is a no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn flock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     let p_file: *mut UnixFile = id as *mut UnixFile;
     { let _ = 0; };
@@ -7815,16 +9579,47 @@ extern "C" fn flock_unlock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
         return 0;
     }
     if robust_flock(unsafe { (*p_file).h }, 8) != 0 {
+
+        /// SQLITE_IGNORE_FLOCK_LOCK_ERRORS
         return 10 | 8 << 8;
     } else { unsafe { (*p_file).e_file_lock = 0 as u8 }; return 0; }
 }
 
+///* Close a file.
 extern "C" fn flock_close(id: *mut Sqlite3File) -> i32 {
     { let _ = 0; };
     flock_unlock(id, 0);
     return close_unix_file(id);
 }
 
+///* Lock the file with the lock specified by parameter eFileLock - one
+///* of the following:
+///*
+///*     (1) SHARED_LOCK
+///*     (2) RESERVED_LOCK
+///*     (3) PENDING_LOCK
+///*     (4) EXCLUSIVE_LOCK
+///*
+///* Sometimes when requesting one lock state, additional lock states
+///* are inserted in between.  The locking might fail on one of the later
+///* transitions leaving the lock state different from what it started but
+///* still short of its goal.  The following chart shows the allowed
+///* transitions and the inserted intermediate states:
+///*
+///*    UNLOCKED -> SHARED
+///*    SHARED -> RESERVED
+///*    SHARED -> (PENDING) -> EXCLUSIVE
+///*    RESERVED -> (PENDING) -> EXCLUSIVE
+///*    PENDING -> EXCLUSIVE
+///*
+///* flock() only really support EXCLUSIVE locks.  We track intermediate
+///* lock states in the sqlite3_file structure, but all locks SHARED or
+///* above are really EXCLUSIVE locks and exclude all other processes from
+///* access the file.
+///*
+///* This routine will only increase a lock.  Use the sqlite3OsUnlock()
+///* routine to lower a locking level.
+#[allow(unused_doc_comments)]
 extern "C" fn flock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     let mut rc: i32 = 0;
     let p_file: *mut UnixFile = id as *mut UnixFile;
@@ -7835,19 +9630,46 @@ extern "C" fn flock_lock(id: *mut Sqlite3File, e_file_lock_1: i32) -> i32 {
     }
     if robust_flock(unsafe { (*p_file).h }, 2 | 4) != 0 {
         let t_errno: i32 = unsafe { *unsafe { __error() } };
-        rc = sqlite_error_from_posix_error(t_errno, 10 | 15 << 8);
+
+        /// didn't get, must be busy
+        (rc = sqlite_error_from_posix_error(t_errno, 10 | 15 << 8));
         if rc != 0 && rc != 5 {
             store_last_errno(unsafe { &mut *p_file }, t_errno);
         }
-    } else { unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 }; }
+    } else {
+
+        /// got it, set the type and return ok
+        unsafe { (*p_file).e_file_lock = e_file_lock_1 as u8 };
+    }
+
+    /// SQLITE_IGNORE_FLOCK_LOCK_ERRORS
     return rc;
 }
 
+///* This routine checks if there is a RESERVED lock held on the specified
+///* file by this or any other process. If such a lock is held, set *pResOut
+///* to a non-zero value otherwise *pResOut is set to zero.  The return value
+///* is set to SQLITE_OK unless an I/O error occurs during lock checking.
+#[allow(unused_doc_comments)]
 extern "C" fn flock_check_reserved_lock(id: *mut Sqlite3File,
     p_res_out_1: *mut i32) -> i32 {
     { let _ = id; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// The flock VFS only ever takes exclusive locks (see function flockLock).
+    ///* Therefore, if this connection is holding any lock at all, no other
+    ///* connection may be holding a RESERVED lock. So set *pResOut to 0
+    ///* in this case.
+    ///*
+    ///* Or, this connection may be holding no lock. In that case, set *pResOut to
+    ///* 0 as well. The caller will then attempt to take an EXCLUSIVE lock on the
+    ///* db in order to roll the hot journal back. If there is another connection
+    ///* holding a lock, that attempt will fail and an SQLITE_BUSY returned to
+    ///* the user. With other VFS, we try to avoid this, in order to allow a reader
+    ///* to proceed while a writer is preparing its transaction. But that won't
+    ///* work with the flock VFS - as it always takes EXCLUSIVE locks - so it is
+    ///* not a problem in this case.
     unsafe { *p_res_out_1 = 0 };
     return 0;
 }
@@ -7923,6 +9745,7 @@ static proxy_io_finder:
     =
     proxy_io_finder_impl;
 
+///* Initialize first two members of azTempDirs[] array.
 extern "C" fn unix_temp_file_init() -> () {
     unsafe {
         az_temp_dirs[0 as usize] =
@@ -7935,10 +9758,26 @@ extern "C" fn unix_temp_file_init() -> () {
     }
 }
 
+///* Initialize the operating system interface.
+///*
+///* This routine registers all VFS implementations for unix-like operating
+///* systems.  This routine, and the sqlite3_os_end() routine that follows,
+///* should be the only routines in this file that are visible from other
+///* files.
+///*
+///* This routine is called once during SQLite initialization and by a
+///* single thread.  The memory allocation and mutex subsystems have not
+///* necessarily been initialized when this routine is called, and so they
+///* should not be used.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_os_init() -> i32 {
     unsafe {
         let mut i: u32 = 0 as u32;
+
+        /// Loop counter
+        /// Double-check that the aSyscall[] array has been constructed
+        ///* correctly.  See ticket [bb3a86e890c8e96ab]
         { let _ = 0; };
         {
             i = 0 as u32;
@@ -7959,19 +9798,59 @@ pub extern "C" fn sqlite3_os_init() -> i32 {
             }
         }
         unix_big_lock = unsafe { sqlite3MutexAlloc(11) };
+
+        /// Validate lock assumptions
         { let _ = 0; };
+
+        /// Number of available locks
         { let _ = 0; };
+
+        /// Start of locking area */
+        ///  /* Locks:
+        ///*    WRITE       UNIX_SHM_BASE      120
+        ///*    CKPT        UNIX_SHM_BASE+1    121
+        ///*    RECOVER     UNIX_SHM_BASE+2    122
+        ///*    READ-0      UNIX_SHM_BASE+3    123
+        ///*    READ-1      UNIX_SHM_BASE+4    124
+        ///*    READ-2      UNIX_SHM_BASE+5    125
+        ///*    READ-3      UNIX_SHM_BASE+6    126
+        ///*    READ-4      UNIX_SHM_BASE+7    127
+        ///*    DMS         UNIX_SHM_BASE+8    128
         { let _ = 0; };
+
+        /// Byte offset of the deadman-switch
+        /// Initialize temp file dir array.
         unix_temp_file_init();
         return 0;
     }
 }
 
+///* Shutdown the operating system interface.
+///*
+///* Some operating systems might need to do some cleanup in this routine,
+///* to release dynamically allocated objects.  But not on unix.
+///* This routine is a no-op for unix.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_os_end() -> i32 {
     unsafe { unix_big_lock = core::ptr::null_mut(); return 0; }
 }
 
+///***************************************************************************
+///***************** Begin Unique File ID Utility Used By VxWorks ***************
+///*
+///* On most versions of unix, we can get a unique ID for a file by concatenating
+///* the device number and the inode number.  But this does not work on VxWorks.
+///* On VxWorks, a unique file id must be based on the canonical filename.
+///*
+///* A pointer to an instance of the following structure can be used as a
+///* unique file ID in VxWorks.  Each instance of this structure contains
+///* a copy of the canonical filename.  There is also a reference count.
+///* The structure is reclaimed when the number of pointers to it drops to
+///* zero.
+///*
+///* There are never very many files open at one time and lookups are not
+///* a performance-critical path, so it is sufficient to put these
+///* structures on a linked list.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VxworksFileId {

@@ -1,10 +1,77 @@
+//!* 2019-10-23
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!*****************************************************************************
+//!*
+//!* This SQLite extension implements functions that handling RFC-4122 UUIDs
+//!* Three SQL functions are implemented:
+//!*
+//!*     uuid()        - generate a version 4 UUID as a string
+//!*     uuid_str(X)   - convert a UUID X into a well-formed UUID string
+//!*     uuid_blob(X)  - convert a UUID X into a 16-byte blob
+//!*
+//!* The output from uuid() and uuid_str(X) are always well-formed RFC-4122
+//!* UUID strings in this format:
+//!*
+//!*        xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx
+//!*
+//!* All of the 'x', 'M', and 'N' values are lower-case hexadecimal digits.
+//!* The M digit indicates the "version".  For uuid()-generated UUIDs, the
+//!* version is always "4" (a random UUID).  The upper three bits of N digit
+//!* are the "variant".  This library only supports variant 1 (indicated
+//!* by values of N between '8' and 'b') as those are overwhelming the most
+//!* common.  Other variants are for legacy compatibility only.
+//!*
+//!* The output of uuid_blob(X) is always a 16-byte blob.  The UUID input
+//!* string is converted in network byte order (big-endian) in accordance
+//!* with RFC-4122 specifications for variant-1 UUIDs.  Note that network
+//!* byte order is *always* used, even if the input self-identifies as a
+//!* variant-2 UUID.
+//!*
+//!* The input X to the uuid_str() and uuid_blob() functions can be either
+//!* a string or a BLOB.  If it is a BLOB it must be exactly 16 bytes in
+//!* length or else a NULL is returned.  If the input is a string it must
+//!* consist of 32 hexadecimal digits, upper or lower case, optionally
+//!* surrounded by {...} and with optional "-" characters interposed in the
+//!* middle.  The flexibility of input is inspired by the PostgreSQL
+//!* implementation of UUID functions that accept in all of the following
+//!* formats:
+//!*
+//!*     A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11
+//!*     {a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}
+//!*     a0eebc999c0b4ef8bb6d6bb9bd380a11
+//!*     a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11
+//!*     {a0eebc99-9c0b4ef8-bb6d6bb9-bd380a11}
+//!*
+//!* If any of the above inputs are passed into uuid_str(), the output will
+//!* always be in the canonical RFC-4122 format:
+//!*
+//!*     a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+//!*
+//!* If the X input string has too few or too many digits or contains
+//!* stray characters other than {, }, or -, then NULL is returned.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///* Translate a single byte of Hex into an integer.
+///* This routine only works if h really is a valid hexadecimal
+///* character:  0..9a..fA..F
 extern "C" fn sqlite3_uuid_hex_to_int(mut h: i32) -> u8 {
     if !(h >= '0' as i32 && h <= '9' as i32 ||
                                 h >= 'a' as i32 && h <= 'f' as i32 ||
@@ -20,6 +87,9 @@ extern "C" fn sqlite3_uuid_hex_to_int(mut h: i32) -> u8 {
     return (h & 15) as u8;
 }
 
+///* Convert a 16-byte BLOB into a well-formed RFC-4122 UUID.  The output
+///* buffer zStr should be at least 37 bytes in length.   The output will
+///* be zero-terminated.
 extern "C" fn sqlite3_uuid_blob_to_str(a_blob_1: *const u8,
     mut z_str_1: *mut u8) -> () {
     let mut i: i32 = 0;
@@ -65,6 +135,9 @@ extern "C" fn sqlite3_uuid_blob_to_str(a_blob_1: *const u8,
     unsafe { *z_str_1 = 0 as u8 };
 }
 
+///* Attempt to parse a zero-terminated input string zStr into a binary
+///* UUID.  Return 0 on success, or non-zero if the input string is not
+///* parsable.
 extern "C" fn sqlite3_uuid_str_to_blob(mut z_str_1: *const u8,
     a_blob_1: *mut u8) -> i32 {
     let mut i: i32 = 0;
@@ -128,6 +201,8 @@ extern "C" fn sqlite3_uuid_str_to_blob(mut z_str_1: *const u8,
     return (unsafe { *z_str_1.offset(0 as isize) } as i32 != 0) as i32;
 }
 
+///* Render sqlite3_value pIn as a 16-byte UUID blob.  Return a pointer
+///* to the blob, or NULL if the input is not well-formed.
 extern "C" fn sqlite3_uuid_input_to_blob(p_in_1: *mut Sqlite3Value,
     p_buf_1: *mut u8) -> *const u8 {
     '__s2:
@@ -163,6 +238,7 @@ extern "C" fn sqlite3_uuid_input_to_blob(p_in_1: *mut Sqlite3Value,
     }
 }
 
+/// Implementation of uuid()
 extern "C" fn sqlite3_uuid_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -188,6 +264,7 @@ extern "C" fn sqlite3_uuid_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Implementation of uuid_str()
 extern "C" fn sqlite3_uuid_str_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -210,6 +287,7 @@ extern "C" fn sqlite3_uuid_str_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Implementation of uuid_blob()
 extern "C" fn sqlite3_uuid_blob_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut a_blob: [u8; 16] = [0; 16];
@@ -230,17 +308,20 @@ extern "C" fn sqlite3_uuid_blob_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_uuid_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"uuid".as_ptr() as *mut i8 as *const i8, 0, 1 | 2097152,
                 core::ptr::null_mut(), Some(sqlite3_uuid_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

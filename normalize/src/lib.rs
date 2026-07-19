@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -45,6 +51,12 @@ static ai_class: [u8; 256] =
             2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8, 2 as u8,
             2 as u8, 2 as u8];
 
+/// An array to map all upper-case characters into their corresponding
+///* lower-case character. 
+///*
+///* SQLite only considers US-ASCII (or EBCDIC) characters.  We do not
+///* handle case conversions for the UTF character set since the tables
+///* involved are nearly as big or bigger than SQLite itself.
 static sqlite3_upper_to_lower: [u8; 256] =
     [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 5 as u8, 6 as u8, 7 as u8,
             8 as u8, 9 as u8, 10 as u8, 11 as u8, 12 as u8, 13 as u8,
@@ -90,6 +102,32 @@ static sqlite3_upper_to_lower: [u8; 256] =
             248 as u8, 249 as u8, 250 as u8, 251 as u8, 252 as u8, 253 as u8,
             254 as u8, 255 as u8];
 
+///* The following 256 byte lookup table is used to support SQLites built-in
+///* equivalents to the following standard library functions:
+///*
+///*   isspace()                        0x01
+///*   isalpha()                        0x02
+///*   isdigit()                        0x04
+///*   isalnum()                        0x06
+///*   isxdigit()                       0x08
+///*   toupper()                        0x20
+///*   SQLite identifier character      0x40
+///*   Quote character                  0x80
+///*
+///* Bit 0x20 is set if the mapped character requires translation to upper
+///* case. i.e. if the character is a lower-case ASCII character.
+///* If x is a lower-case ASCII character, then its upper-case equivalent
+///* is (x - 0x20). Therefore toupper() can be implemented as:
+///*
+///*   (x & ~(map[x]&0x20))
+///*
+///* The equivalent of tolower() is implemented using the sqlite3UpperToLower[]
+///* array. tolower() is used more often than toupper() by SQLite.
+///*
+///* Bit 0x40 is set if the character is non-alphanumeric and can be used in an 
+///* SQLite identifier.  Identifiers are alphanumerics, "_", "$", and any
+///* non-ASCII UTF character. Hence the test for whether or not a character is
+///* part of an identifier is 0x46.
 static sqlite3_ctype_map: [u8; 256] =
     [0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8,
             0 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 1 as u8, 0 as u8,
@@ -133,6 +171,9 @@ static sqlite3_ctype_map: [u8; 256] =
             64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8, 64 as u8,
             64 as u8, 64 as u8, 64 as u8];
 
+///* Return the length (in bytes) of the token that begins at z[0]. 
+///* Store the token type in *tokenType before returning.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
     -> Sqlite3Int64 {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -443,6 +484,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -768,6 +813,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -1074,6 +1123,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -1379,6 +1432,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -1683,6 +1740,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -1986,6 +2047,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -2288,6 +2353,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -2589,6 +2658,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -2863,6 +2936,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -3136,6 +3213,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -3403,6 +3484,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -3657,6 +3742,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -3901,6 +3990,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -4139,6 +4232,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -4371,6 +4468,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -4602,6 +4703,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -4832,6 +4937,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5061,6 +5170,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5261,6 +5374,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5454,6 +5571,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5582,6 +5703,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5692,6 +5817,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5787,6 +5916,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5882,6 +6015,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -5934,6 +6071,10 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
                     }
                     if sqlite3_ctype_map[unsafe { *z.offset(i as isize) } as u8
                                             as usize] as i32 & 70 != 0 {
+
+                        /// This token started out using characters that can appear in keywords,
+                        ///* but z[i] is a character not allowed within keywords, so this must
+                        ///* be an identifier instead
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                         break '__s0;
                     }
@@ -6019,16 +6160,26 @@ extern "C" fn sqlite3_get_token(z: *const u8, token_type_1: &mut i32)
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// The output string
     let mut n_z: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of the output string in bytes
     let mut n_sql: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of the input string in bytes
     let mut i: i32 = 0;
+    /// Next character to read from zSql[]
     let mut j: i32 = 0;
+    /// Next slot to fill in on z[]
     let mut token_type: i32 = 0;
+    /// Type of the next token
     let mut n: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of the next token
     let mut k: i32 = 0;
-    n_sql = unsafe { strlen(z_sql_1) } as Sqlite3Int64;
+
+    /// Loop counter
+    (n_sql = unsafe { strlen(z_sql_1) } as Sqlite3Int64);
     n_z = n_sql;
     z =
         unsafe {
@@ -6091,6 +6242,8 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
                                                 !(sqlite3_ctype_map[unsafe { *z.offset((j - 4) as isize) }
                                                                                     as u8 as usize] as i32 & 70 != 0) as i32 != 0
                                         {} else {
+
+                                        /// Here the NULL is a literal value
                                         unsafe {
                                             *z.offset({
                                                                 let __p = &mut j;
@@ -6181,6 +6334,8 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
                                                 !(sqlite3_ctype_map[unsafe { *z.offset((j - 4) as isize) }
                                                                                     as u8 as usize] as i32 & 70 != 0) as i32 != 0
                                         {} else {
+
+                                        /// Here the NULL is a literal value
                                         unsafe {
                                             *z.offset({
                                                                 let __p = &mut j;
@@ -6267,6 +6422,8 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
                                                 !(sqlite3_ctype_map[unsafe { *z.offset((j - 4) as isize) }
                                                                                     as u8 as usize] as i32 & 70 != 0) as i32 != 0
                                         {} else {
+
+                                        /// Here the NULL is a literal value
                                         unsafe {
                                             *z.offset({
                                                                 let __p = &mut j;
@@ -6342,6 +6499,8 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
                                                 !(sqlite3_ctype_map[unsafe { *z.offset((j - 4) as isize) }
                                                                                     as u8 as usize] as i32 & 70 != 0) as i32 != 0
                                         {} else {
+
+                                        /// Here the NULL is a literal value
                                         unsafe {
                                             *z.offset({
                                                                 let __p = &mut j;
@@ -6417,6 +6576,8 @@ pub extern "C" fn sqlite3_normalize(z_sql_1: *const i8) -> *mut i8 {
                                                 !(sqlite3_ctype_map[unsafe { *z.offset((j - 4) as isize) }
                                                                                     as u8 as usize] as i32 & 70 != 0) as i32 != 0
                                         {} else {
+
+                                        /// Here the NULL is a literal value
                                         unsafe {
                                             *z.offset({
                                                                 let __p = &mut j;

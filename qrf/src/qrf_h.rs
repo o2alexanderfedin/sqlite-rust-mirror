@@ -1,4 +1,5 @@
 use super::*;
+use crate::sqlite3_h::Sqlite3Value;
 
 #[repr(C)]
 #[derive(Copy, Clone)]

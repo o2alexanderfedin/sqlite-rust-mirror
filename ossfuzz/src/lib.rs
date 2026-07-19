@@ -1,15 +1,30 @@
+//!* This module interfaces SQLite to the Google OSS-Fuzz, fuzzer as a service.
+//!* (https://github.com/google/oss-fuzz)
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+/// Global debugging settings.  OSS-Fuzz will have all debugging turned
+///* off.  But if LLVMFuzzerTestOneInput() is called interactively from
+///* the ossshell utility program, then these flags might be set.
 static mut m_debug: u32 = 0 as u32;
 
+/// The ossshell utility program invokes this interface to see the
+///* debugging flags.  Unused by OSS-Fuzz.
 #[unsafe(no_mangle)]
 pub extern "C" fn ossfuzz_set_debug_flags(x: u32) -> () {
     unsafe { m_debug = x; }
 }
 
+/// Return the current real-world time in milliseconds since the
+///* Julian epoch (-4714-11-24).
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     unsafe {
         let mut t: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -39,6 +54,8 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
     }
 }
 
+/// An instance of the following object is passed by pointer as the
+///* client data to various callbacks.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzCtx {
@@ -50,6 +67,10 @@ struct FuzzCtx {
     exec_cnt: u32,
 }
 
+///* Progress handler callback.
+///*
+///* The argument is the cutoff-time after which all processing should
+///* stop.  So return non-zero if the cut-off time is exceeded.
 extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     let p: *mut FuzzCtx = p_client_data_1 as *mut FuzzCtx;
     let i_now: Sqlite3Int64 = time_of_day();
@@ -62,6 +83,9 @@ extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     return rc;
 }
 
+///* Disallow debugging pragmas such as "PRAGMA vdbe_debug" and
+///* "PRAGMA parser_trace" since they can dramatically increase the
+///* amount of output without actually testing anything useful.
 extern "C" fn block_debug_pragmas(notused_1: *mut (), e_code_1: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8,
     z_arg4_1: *const i8) -> i32 {
@@ -79,6 +103,7 @@ extern "C" fn block_debug_pragmas(notused_1: *mut (), e_code_1: i32,
     return 0;
 }
 
+///* Callback for sqlite3_exec().
 extern "C" fn exec_handler(p_client_data_1: *mut (), argc: i32,
     argv: *mut *mut i8, namev: *mut *mut i8) -> i32 {
     let p: *mut FuzzCtx = p_client_data_1 as *mut FuzzCtx;
@@ -110,15 +135,24 @@ extern "C" fn exec_handler(p_client_data_1: *mut (), argc: i32,
             i32;
 }
 
+///* Main entry point.  The fuzzer invokes this function with each
+///* fuzzed input.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn llvm_fuzzer_test_one_input(mut data: *const u8,
     mut size: u64) -> i32 {
     unsafe {
         let mut z_err_msg: *mut i8 = core::ptr::null_mut();
+        /// Error message returned by sqlite_exec()
         let mut u_selector: u8 = 0 as u8;
+        /// First byte of input data[]
         let mut rc: i32 = 0;
+        /// Return code from various interfaces
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// Zero-terminated copy of data[]
         let mut cx: FuzzCtx = unsafe { core::mem::zeroed() };
+
+        /// Fuzzing context
         unsafe {
             memset(&raw mut cx as *mut (), 0,
                 core::mem::size_of::<FuzzCtx>() as u64)
@@ -140,31 +174,60 @@ pub extern "C" fn llvm_fuzzer_test_one_input(mut data: *const u8,
                     &mut cx.db, 2 | 4 | 128, core::ptr::null())
             };
         if rc != 0 { return 0; }
-        cx.i_last_cb = time_of_day();
+
+        /// Invoke the progress handler frequently to check to see if we
+        ///* are taking too long.  The progress handler will return true
+        ///* (which will block further processing) if more than 10 seconds have
+        ///* elapsed since the start of the test.
+        (cx.i_last_cb = time_of_day());
         cx.i_cutoff_time = cx.i_last_cb + 10000 as Sqlite3Int64;
+
+        /// Now + 10 seconds
         unsafe {
             sqlite3_progress_handler(cx.db, 10, Some(progress_handler),
                 &raw mut cx as *mut ())
         };
+
+        /// Set a limit on the maximum size of a prepared statement
         unsafe { sqlite3_limit(cx.db, 5, 25000) };
+
+        /// Set a limit on the maximum LIKE or GLOB pattern length due to
+        ///* https://issues.oss-fuzz.com/issues/453240497.  The default is 50K
+        ///* which is causing timeouts in OSS-Fuzz
         unsafe { sqlite3_limit(cx.db, 8, 250) };
+
+        /// Limit total memory available to SQLite to 20MB
         unsafe { sqlite3_hard_heap_limit64(20000000 as Sqlite3Int64) };
+
+        /// Set a limit on the maximum length of a string or BLOB.  Without this
+        ///* limit, fuzzers will invoke randomblob(N) for a large N, and the process
+        ///* will timeout trying to generate the huge blob
         unsafe { sqlite3_limit(cx.db, 0, 50000) };
+
+        /// Bit 1 of the selector enables foreign key constraints
         unsafe {
             sqlite3_db_config(cx.db, 1002, u_selector as i32 & 1,
                 &raw mut rc as *mut i32)
         };
         u_selector >>= 1;
+
+        /// Do not allow debugging pragma statements that might cause excess output
         unsafe {
             sqlite3_set_authorizer(cx.db, Some(block_debug_pragmas),
                 core::ptr::null_mut())
         };
-        cx.exec_cnt = (u_selector as i32 + 1) as u32;
-        z_sql =
+
+        /// Remaining bits of the selector determine a limit on the number of
+        ///* output rows
+        (cx.exec_cnt = (u_selector as i32 + 1) as u32);
+
+        /// Run the SQL.  The sqlite_exec() interface expects a zero-terminated
+        ///* string, so make a copy.
+        (z_sql =
             unsafe {
                 sqlite3_mprintf(c"%.*s".as_ptr() as *mut i8 as *const i8,
                     size as i32, data)
-            };
+            });
         unsafe { sqlite3_complete(z_sql as *const i8) };
         unsafe {
             sqlite3_exec(cx.db, z_sql as *const i8, Some(exec_handler),
@@ -176,6 +239,8 @@ pub extern "C" fn llvm_fuzzer_test_one_input(mut data: *const u8,
                     z_err_msg)
             };
         }
+
+        /// Cleanup and return
         unsafe { sqlite3_free(z_err_msg as *mut ()) };
         unsafe { sqlite3_free(z_sql as *mut ()) };
         unsafe {

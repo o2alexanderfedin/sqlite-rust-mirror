@@ -1,5 +1,12 @@
 type DarwinSizeT = u64;
 
+///* Compute signature for a block of content.
+///*
+///* For blocks of 16 or fewer bytes, the signature is just a hex dump of
+///* the entire block.
+///*
+///* For blocks of more than 16 bytes, the signature is a hex dump of the
+///* first 8 bytes followed by a 64-bit hash of the entire block.
 extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     let mut s0: u32 = 0 as u32;
     let mut s1: u32 = 0 as u32;
@@ -62,6 +69,8 @@ extern "C" fn vlog_signature(p: *mut u8, n: i32, z_cksum_1: *mut i8) -> () {
     }
 }
 
+///* Open a file.  Find its page size.  Read each page, and compute and
+///* display the page signature.
 extern "C" fn compute_sigs(z_filename_1: *const i8) -> () {
     unsafe {
         let mut in_: *mut FILE = core::ptr::null_mut();
@@ -176,6 +185,7 @@ extern "C" fn compute_sigs(z_filename_1: *const i8) -> () {
     }
 }
 
+///* Find page signatures for all named files.
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     let mut i: i32 = 0;

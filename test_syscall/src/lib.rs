@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -464,6 +479,9 @@ static mut g_syscall: TestSyscallGlobal =
         orig_getpagesize: None,
     };
 
+///* This function is called exactly once from within each invocation of a
+///* system call wrapper in this file. It returns 1 if the function should
+///* fail, or 0 if it should succeed.
 extern "C" fn ts_is_fail() -> i32 {
     unsafe {
         { let __p = &mut g_syscall.n_count; let __t = *__p; *__p -= 1; __t };
@@ -491,9 +509,17 @@ struct TestSyscallArray {
     custom_errno: i32,
 }
 
+///* A wrapper around close().
+#[allow(unused_doc_comments)]
 extern "C" fn ts_close(fd: i32) -> i32 {
     unsafe {
         if ts_is_fail() != 0 {
+
+            /// Even if simulating an error, close the original file-descriptor. 
+            ///* This is to stop the test process from running out of file-descriptors
+            ///* when running a long test. If a call to close() appears to fail, SQLite
+            ///* never attempts to use the file-descriptor afterwards (or even to close
+            ///* it a second time).
             unsafe {
                 (unsafe {
                         core::mem::transmute::<*const (),
@@ -523,6 +549,7 @@ extern "C" fn ts_close(fd: i32) -> i32 {
     }
 }
 
+///* A wrapper around access().
 extern "C" fn ts_access(z_path: *const i8, mode: i32) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -541,6 +568,7 @@ extern "C" fn ts_access(z_path: *const i8, mode: i32) -> i32 {
     }
 }
 
+///* A wrapper around getcwd().
 extern "C" fn ts_getcwd(z_path: *mut i8, n_path: u64) -> *mut i8 {
     unsafe {
         if ts_is_fail() != 0 { return 0 as *mut () as *mut i8; }
@@ -559,6 +587,7 @@ extern "C" fn ts_getcwd(z_path: *mut i8, n_path: u64) -> *mut i8 {
     }
 }
 
+///* A wrapper around stat().
 extern "C" fn ts_stat(z_path: *const i8, p: *mut Stat) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -577,6 +606,7 @@ extern "C" fn ts_stat(z_path: *const i8, p: *mut Stat) -> i32 {
     }
 }
 
+///* A wrapper around fstat().
 extern "C" fn ts_fstat(fd: i32, p: *mut Stat) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"fstat".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -597,6 +627,7 @@ extern "C" fn ts_fstat(fd: i32, p: *mut Stat) -> i32 {
     }
 }
 
+///* A wrapper around ftruncate().
 extern "C" fn ts_ftruncate(fd: i32, n: OffT) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"ftruncate".as_ptr() as *mut i8 as *const i8) !=
@@ -618,6 +649,7 @@ extern "C" fn ts_ftruncate(fd: i32, n: OffT) -> i32 {
     }
 }
 
+///* A wrapper around fcntl().
 unsafe extern "C" fn ts_fcntl(fd: i32, cmd: i32, mut __va0: ...) -> i32 {
     unsafe {
         let mut ap: *const i8 = core::ptr::null();
@@ -649,6 +681,7 @@ unsafe extern "C" fn ts_fcntl(fd: i32, cmd: i32, mut __va0: ...) -> i32 {
     }
 }
 
+///* A wrapper around read().
 extern "C" fn ts_read(fd: i32, a_buf: *mut (), n_buf: u64) -> i64 {
     unsafe {
         if ts_is_fail_errno(c"read".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -669,6 +702,7 @@ extern "C" fn ts_read(fd: i32, a_buf: *mut (), n_buf: u64) -> i64 {
     }
 }
 
+///* A wrapper around pread().
 extern "C" fn ts_pread(fd: i32, a_buf: *mut (), n_buf: u64, off: OffT)
     -> i64 {
     unsafe {
@@ -690,6 +724,9 @@ extern "C" fn ts_pread(fd: i32, a_buf: *mut (), n_buf: u64, off: OffT)
     }
 }
 
+/// Note:  pread64() and pwrite64() actually use off64_t as the type on their
+///* last parameter.  But that datatype is not defined on many systems 
+///* (ex: Mac, OpenBSD).  So substitute a likely equivalent: sqlite3_uint64
 extern "C" fn ts_pread64(fd: i32, a_buf: *mut (), n_buf: u64,
     off: Sqlite3Uint64) -> i64 {
     unsafe {
@@ -712,6 +749,7 @@ extern "C" fn ts_pread64(fd: i32, a_buf: *mut (), n_buf: u64,
     }
 }
 
+///* A wrapper around write().
 extern "C" fn ts_write(fd: i32, a_buf: *const (), n_buf: u64) -> i64 {
     unsafe {
         if ts_is_fail_errno(c"write".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -746,6 +784,7 @@ extern "C" fn ts_write(fd: i32, a_buf: *const (), n_buf: u64) -> i64 {
     }
 }
 
+///* A wrapper around pwrite().
 extern "C" fn ts_pwrite(fd: i32, a_buf: *const (), n_buf: u64, off: OffT)
     -> i64 {
     unsafe {
@@ -767,6 +806,7 @@ extern "C" fn ts_pwrite(fd: i32, a_buf: *const (), n_buf: u64, off: OffT)
     }
 }
 
+///* A wrapper around pwrite64().
 extern "C" fn ts_pwrite64(fd: i32, a_buf: *const (), n_buf: u64,
     off: Sqlite3Uint64) -> i64 {
     unsafe {
@@ -789,6 +829,7 @@ extern "C" fn ts_pwrite64(fd: i32, a_buf: *const (), n_buf: u64,
     }
 }
 
+///* A wrapper around fchmod().
 extern "C" fn ts_fchmod(fd: i32, mode: ModeT) -> i32 {
     unsafe {
         if ts_is_fail() != 0 { return -1; }
@@ -807,6 +848,13 @@ extern "C" fn ts_fchmod(fd: i32, mode: ModeT) -> i32 {
     }
 }
 
+///* A wrapper around fallocate().
+///*
+///* SQLite assumes that the fallocate() function is compatible with
+///* posix_fallocate(). According to the Linux man page (2009-09-30):
+///*
+///*   posix_fallocate() returns  zero on success, or an error number on
+///*   failure. Note that errno is not set.
 extern "C" fn ts_fallocate(fd: i32, off: OffT, len: OffT) -> i32 {
     unsafe {
         if ts_is_fail() != 0 {
@@ -1070,6 +1118,12 @@ pub static mut a_syscall: [TestSyscallArray; 19] =
                 custom_errno: 0,
             }];
 
+///* Return the current error-number value for function zFunc. zFunc must be
+///* the name of a system call in the aSyscall[] table.
+///*
+///* Usually, the current error-number is the value that errno should be set
+///* to if the named system call fails. The exception is "fallocate". See 
+///* comments above the implementation of ts_fallocate() for details.
 extern "C" fn ts_errno(z_func_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -1102,6 +1156,8 @@ extern "C" fn ts_errno(z_func_1: *const i8) -> i32 {
     }
 }
 
+///* A wrapper around tsIsFail(). If tsIsFail() returns non-zero, set the
+///* value of errno before returning.
 extern "C" fn ts_is_fail_errno(z_func_1: *const i8) -> i32 {
     if ts_is_fail() != 0 {
         unsafe { *unsafe { __error() } = ts_errno(z_func_1) };
@@ -1110,6 +1166,7 @@ extern "C" fn ts_is_fail_errno(z_func_1: *const i8) -> i32 {
     return 0;
 }
 
+///* A wrapper around open().
 extern "C" fn ts_open(z_file: *const i8, flags: i32, mode: i32) -> i32 {
     unsafe {
         if ts_is_fail_errno(c"open".as_ptr() as *mut i8 as *const i8) != 0 {

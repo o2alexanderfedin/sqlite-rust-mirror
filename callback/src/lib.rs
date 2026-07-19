@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+///* Search a FuncDefHash for a function with the given name.  Return
+///* a pointer to the matching FuncDef if found, or 0 if there is no match.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_function_search(h: i32, z_func: *const i8)
     -> *mut FuncDef {
@@ -420,6 +437,7 @@ pub extern "C" fn sqlite3_function_search(h: i32, z_func: *const i8)
     }
 }
 
+///* Insert a new FuncDef into a FuncDefHash hash table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_insert_builtin_funcs(a_def: *mut FuncDef,
     n_def: i32) -> () {
@@ -491,23 +509,49 @@ extern "C" fn match_quality(p: &FuncDef, n_arg_1: i32, enc: u8) -> i32 {
     return match_;
 }
 
+///* Locate a user function given a name, a number of arguments and a flag
+///* indicating whether the function prefers UTF-16 over UTF-8.  Return a
+///* pointer to the FuncDef structure that defines that function, or return
+///* NULL if the function does not exist.
+///*
+///* If the createFlag argument is true, then a new (blank) FuncDef
+///* structure is created and liked into the "db" structure if a
+///* no matching function previously existed.
+///*
+///* If nArg is -2, then the first valid function found is returned.  A
+///* function is valid if xSFunc is non-zero.  The nArg==(-2)
+///* case is used to see if zName is a valid function name for some number
+///* of arguments.  If nArg is -2, then createFlag must be 0.
+///*
+///* If createFlag is false, then a function with the required name and
+///* number of arguments may be returned even if the eTextRep flag does not
+///* match that requested.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_find_function(db: *mut Sqlite3, z_name: *const i8,
     n_arg: i32, enc: u8, create_flag: u8) -> *mut FuncDef {
     unsafe {
         let mut p: *mut FuncDef = core::ptr::null_mut();
+        /// Iterator variable
         let mut p_best: *mut FuncDef = core::ptr::null_mut();
+        /// Best match found so far
         let mut best_score: i32 = 0;
+        /// Score of best match
         let mut h: i32 = 0;
+        /// Hash value
         let mut n_name: i32 = 0;
+
+        /// Length of the name
         { let _ = 0; };
         { let _ = 0; };
         n_name = unsafe { sqlite3_strlen30(z_name) };
-        p =
+
+        /// First search for a match amongst the application-defined functions.
+        (p =
             unsafe {
                     sqlite3_hash_find(unsafe { &raw mut (*db).a_func } as
                             *const Hash, z_name)
-                } as *mut FuncDef;
+                } as *mut FuncDef);
         while !(p).is_null() {
             let score: i32 = match_quality(unsafe { &*p }, n_arg, enc);
             if score > best_score { p_best = p; best_score = score; }
@@ -595,6 +639,18 @@ pub extern "C" fn sqlite3_find_function(db: *mut Sqlite3, z_name: *const i8,
     }
 }
 
+///* Locate and return an entry from the db.aCollSeq hash table. If the entry
+///* specified by zName and nName is not found and parameter 'create' is
+///* true, then create a new entry. Otherwise return NULL.
+///*
+///* Each pointer stored in the sqlite3.aCollSeq hash table contains an
+///* array of three CollSeq structures. The first is the collation sequence
+///* preferred for UTF-8, the second UTF-16le, and the third UTF-16be.
+///*
+///* Stored immediately after the three collation sequences is a copy of
+///* the collation sequence name. A pointer to this string is stored in
+///* each collation sequence structure.
+#[allow(unused_doc_comments)]
 extern "C" fn find_coll_seq_entry(db: *mut Sqlite3, z_name_1: *const i8,
     create: i32) -> *mut CollSeq {
     let mut p_coll: *mut CollSeq = core::ptr::null_mut();
@@ -638,6 +694,10 @@ extern "C" fn find_coll_seq_entry(db: *mut Sqlite3, z_name_1: *const i8,
                             unsafe { (*p_coll.offset(0 as isize)).z_name } as *const i8,
                             p_coll as *mut ())
                     } as *mut CollSeq;
+
+            /// If a malloc() failure occurred in sqlite3HashInsert(), it will 
+            ///* return the pColl pointer to be deleted (because it wasn't added
+            ///* to the hash table).
             { let _ = 0; };
             if p_del != core::ptr::null_mut() {
                 unsafe { sqlite3_oom_fault(db) };
@@ -649,6 +709,19 @@ extern "C" fn find_coll_seq_entry(db: *mut Sqlite3, z_name_1: *const i8,
     return p_coll;
 }
 
+///* Parameter zName points to a UTF-8 encoded string nName bytes long.
+///* Return the CollSeq* pointer for the collation sequence named zName
+///* for the encoding 'enc' from the database 'db'.
+///*
+///* If the entry specified is not found and 'create' is true, then create a
+///* new entry.  Otherwise return NULL.
+///*
+///* A separate function sqlite3LocateCollSeq() is a wrapper around
+///* this routine.  sqlite3LocateCollSeq() invokes the collation factory
+///* if necessary and generates an error message if the collating sequence
+///* cannot be found.
+///*
+///* See also: sqlite3LocateCollSeq(), sqlite3GetCollSeq()
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_find_coll_seq(db: *mut Sqlite3, enc: u8,
     z_name: *const i8, create: i32) -> *mut CollSeq {
@@ -668,6 +741,8 @@ pub extern "C" fn sqlite3_find_coll_seq(db: *mut Sqlite3, enc: u8,
     return p_coll;
 }
 
+///* Invoke the 'collation needed' callback to request a collation sequence
+///* in the encoding enc of name zName, length nName.
 extern "C" fn call_coll_needed(db: *mut Sqlite3, enc: i32,
     z_name_1: *const i8) -> () {
     { let _ = 0; };
@@ -703,6 +778,12 @@ extern "C" fn call_coll_needed(db: *mut Sqlite3, enc: i32,
     }
 }
 
+///* This routine is called if the collation factory fails to deliver a
+///* collation function in the best encoding but there may be other versions
+///* of this collation function (for other text encodings) available. Use one
+///* of these instead if they exist. Avoid a UTF-8 <-> UTF-16 conversion if
+///* possible.
+#[allow(unused_doc_comments)]
 extern "C" fn synth_coll_seq(db: *mut Sqlite3, p_coll_1: *mut CollSeq)
     -> i32 {
     let mut p_coll2: *const CollSeq = core::ptr::null();
@@ -722,6 +803,8 @@ extern "C" fn synth_coll_seq(db: *mut Sqlite3, p_coll_1: *mut CollSeq)
                             core::mem::size_of::<CollSeq>() as u64)
                     };
                     unsafe { (*p_coll_1).x_del = None };
+
+                    /// Do not copy the destructor
                     return 0;
                 }
                 break '__c5;
@@ -732,7 +815,20 @@ extern "C" fn synth_coll_seq(db: *mut Sqlite3, p_coll_1: *mut CollSeq)
     return 1;
 }
 
+///* This function is responsible for invoking the collation factory callback
+///* or substituting a collation sequence of a different encoding when the
+///* requested collation sequence is not available in the desired encoding.
+///* 
+///* If it is not NULL, then pColl must point to the database native encoding 
+///* collation sequence with name zName, length nName.
+///*
+///* The return value is either the collation sequence to be used in database
+///* db for collation type name zName, length nName, or NULL, if no collation
+///* sequence can be found.  If no collation is found, leave an error message.
+///*
+///* See also: sqlite3LocateCollSeq(), sqlite3FindCollSeq()
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_get_coll_seq(p_parse: *mut Parse, enc: u8,
     p_coll: *mut CollSeq, z_name: *const i8) -> *mut CollSeq {
     let mut p: *mut CollSeq = core::ptr::null_mut();
@@ -743,6 +839,9 @@ pub extern "C" fn sqlite3_get_coll_seq(p_parse: *mut Parse, enc: u8,
     }
     if (p).is_null() as i32 != 0 ||
             !unsafe { (*p).x_cmp.is_some() } as i32 != 0 {
+
+        /// No collation sequence of this type for this encoding is registered.
+        ///* Call the collation factory to see if it can supply us with one.
         call_coll_needed(db, enc as i32, z_name);
         p = sqlite3_find_coll_seq(db, enc, z_name, 0);
     }
@@ -762,6 +861,24 @@ pub extern "C" fn sqlite3_get_coll_seq(p_parse: *mut Parse, enc: u8,
     return p;
 }
 
+///* This function returns the collation sequence for database native text
+///* encoding identified by the string zName.
+///*
+///* If the requested collation sequence is not available, or not available
+///* in the database native encoding, the collation factory is invoked to
+///* request it. If the collation factory does not supply such a sequence,
+///* and the sequence is available in another text encoding, then that is
+///* returned instead.
+///*
+///* If no versions of the requested collations sequence are available, or
+///* another error occurs, NULL is returned and an error message written into
+///* pParse.
+///*
+///* This routine is a wrapper around sqlite3FindCollSeq().  This routine
+///* invokes the collation factory if the named collation cannot be found
+///* and generates an error message.
+///*
+///* See also: sqlite3FindCollSeq(), sqlite3GetCollSeq()
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_locate_coll_seq(p_parse: *mut Parse,
     z_name: *const i8) -> *mut CollSeq {
@@ -778,11 +895,17 @@ pub extern "C" fn sqlite3_locate_coll_seq(p_parse: *mut Parse,
     return p_coll;
 }
 
+///* Change the text encoding for a database connection. This means that
+///* the pDfltColl must change as well.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_set_text_encoding(db: *mut Sqlite3, enc: u8) -> () {
     unsafe {
         { let _ = 0; };
         unsafe { (*db).enc = enc };
+
+        /// EVIDENCE-OF: R-08308-17224 The default collating function for all
+        ///* strings is BINARY.
         unsafe {
             (*db).p_dflt_coll =
                 sqlite3_find_coll_seq(db, enc,
@@ -792,6 +915,15 @@ pub extern "C" fn sqlite3_set_text_encoding(db: *mut Sqlite3, enc: u8) -> () {
     }
 }
 
+///* This routine is called on a collation sequence before it is used to
+///* check that it is defined. An undefined collation sequence exists when
+///* a database is loaded that contains references to collation sequences
+///* that have not been defined by sqlite3_create_collation() etc.
+///*
+///* If required, this routine calls the 'collation needed' callback to
+///* request a definition of the collating sequence. If this doesn't work, 
+///* an equivalent collating sequence that uses a text encoding different
+///* from the main database is substituted, if one is available.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_check_coll_seq(p_parse: *mut Parse,
     p_coll: *mut CollSeq) -> i32 {
@@ -808,6 +940,12 @@ pub extern "C" fn sqlite3_check_coll_seq(p_parse: *mut Parse,
     return 0;
 }
 
+///* Free all resources held by the schema structure. The void* argument points
+///* at a Schema struct. This function does not call sqlite3DbFree(db, ) on the 
+///* pointer itself, it just cleans up subsidiary resources (i.e. the contents
+///* of the schema hash tables).
+///*
+///* The Schema.cache_size variable is not cleared.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_schema_clear(p: *mut ()) -> () {
     let mut temp1: Hash = unsafe { core::mem::zeroed() };
@@ -866,6 +1004,8 @@ pub extern "C" fn sqlite3_schema_clear(p: *mut ()) -> () {
     unsafe { (*p_schema).schema_flags &= !(1 | 8) as u16 };
 }
 
+///* Find and return the schema associated with a BTree.  Create
+///* a new one if necessary.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_schema_get(db: *mut Sqlite3, p_bt: *mut Btree)
     -> *mut Schema {

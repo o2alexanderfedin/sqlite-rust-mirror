@@ -1,8 +1,61 @@
+//!* 2013-10-01
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This program implements a high-speed version of the VACUUM command.
+//!* It repacks an SQLite database to remove as much unused space as
+//!* possible and to relocate content sequentially in the file.
+//!*
+//!* This program runs faster and uses less temporary disk space than the
+//!* built-in VACUUM command.  On the other hand, this program has a number
+//!* of important restrictions relative to the built-in VACUUM command.
+//!*
+//!*  (1)  The caller must ensure that no other processes are accessing the
+//!*       database file while the vacuum is taking place.  The usual SQLite
+//!*       file locking is insufficient for this.  The caller must use
+//!*       external means to make sure only this one routine is reading and
+//!*       writing the database.
+//!*
+//!*  (2)  Database reconfiguration such as page size or auto_vacuum changes
+//!*       are not supported by this utility.
+//!*
+//!*  (3)  The database file might be renamed if a power loss or crash
+//!*       occurs at just the wrong moment.  Recovery must be prepared to
+//!*       to deal with the possibly changed filename.
+//!*
+//!* This program is intended as a *Demonstration Only*.  The intent of this
+//!* program is to provide example code that application developers can use
+//!* when creating similar functionality in their applications.
+//!*
+//!* To compile this program:
+//!*
+//!*     cc fast_vacuum.c sqlite3.c
+//!*
+//!* Add whatever linker options are required.  (Example: "-ldl -lpthread").
+//!* Then to run the program:
+//!*
+//!*    ./a.out file-to-vacuum
+//!*
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+///* Finalize a prepared statement.  If an error has occurred, print the
+///* error message and exit.
 extern "C" fn vacuum_finalize(p_stmt_1: *mut Sqlite3Stmt) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { sqlite3_db_handle(p_stmt_1) };
@@ -18,6 +71,9 @@ extern "C" fn vacuum_finalize(p_stmt_1: *mut Sqlite3Stmt) -> () {
     }
 }
 
+///* Execute zSql on database db. The SQL text is printed to standard
+///* output.  If an error occurs, print an error message and exit the
+///* process.
 extern "C" fn exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -43,6 +99,12 @@ extern "C" fn exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     }
 }
 
+///* Execute zSql on database db. The zSql statement returns exactly
+///* one column. Execute this return value as SQL on the same database.
+///*
+///* The zSql statement is printed on standard output prior to being
+///* run.  If any errors occur, an error is printed and the process
+///* exits.
 extern "C" fn exec_exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -70,15 +132,22 @@ extern "C" fn exec_exec_sql(db: *mut Sqlite3, z_sql_1: *const i8) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Connection to the database file
         let mut rc: i32 = 0;
+        /// Return code from SQLite interface calls
         let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+        /// A random number
         let mut z_db_to_vacuum: *const i8 = core::ptr::null();
+        /// Database to be vacuumed
         let mut z_backup_db: *mut i8 = core::ptr::null_mut();
+        /// Backup copy of the original database
         let mut z_temp_db: *mut i8 = core::ptr::null_mut();
+        /// Temporary database
         let mut z_sql: *mut i8 = core::ptr::null_mut();
         if argc != 2 {
             unsafe {
@@ -88,7 +157,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             };
             return Err(1);
         }
-        z_db_to_vacuum = unsafe { *argv.offset(1 as isize) } as *const i8;
+
+        /// Identify the database file to be vacuumed and open it.
+        (z_db_to_vacuum = unsafe { *argv.offset(1 as isize) } as *const i8);
         unsafe {
             printf(c"-- open database file \"%s\"\n".as_ptr() as *mut i8 as
                     *const i8, z_db_to_vacuum)
@@ -102,6 +173,10 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             };
             return Err(1);
         }
+
+        /// Create names for two other files.  zTempDb will be a new database
+        ///* into which we construct a vacuumed copy of zDbToVacuum.  zBackupDb
+        ///* will be a new name for zDbToVacuum after it is vacuumed.
         unsafe {
             sqlite3_randomness(core::mem::size_of::<Sqlite3Uint64>() as i32,
                 &raw mut r as *mut ())
@@ -116,16 +191,27 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 sqlite3_mprintf(c"%s-backup-%016llx".as_ptr() as *mut i8 as
                         *const i8, z_db_to_vacuum, r)
             };
-        z_sql =
+
+        /// Attach the zTempDb database to the database connection.
+        (z_sql =
             unsafe {
                 sqlite3_mprintf(c"ATTACH \'%q\' AS vacuum_db;".as_ptr() as
                             *mut i8 as *const i8, z_temp_db)
-            };
+            });
         exec_sql(db, z_sql as *const i8);
         unsafe { sqlite3_free(z_sql as *mut ()) };
+
+        /// TODO:
+        ///* Set the page_size and auto_vacuum mode for zTempDb here, if desired.
+        /// The vacuum will occur inside of a transaction.  Set writable_schema
+        ///* to ON so that we can directly update the sqlite_schema table in the
+        ///* zTempDb database.
         exec_sql(db,
             c"PRAGMA writable_schema=ON".as_ptr() as *mut i8 as *const i8);
         exec_sql(db, c"BEGIN".as_ptr() as *mut i8 as *const i8);
+
+        /// Query the schema of the main database. Create a mirror schema
+        ///* in the temporary database.
         exec_exec_sql(db,
             c"SELECT \'CREATE TABLE vacuum_db.\' || substr(sql,14)   FROM sqlite_schema WHERE type=\'table\' AND name!=\'sqlite_sequence\'   AND rootpage>0".as_ptr()
                     as *mut i8 as *const i8);
@@ -135,23 +221,40 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
         exec_exec_sql(db,
             c"SELECT \'CREATE UNIQUE INDEX vacuum_db.\' || substr(sql,21)   FROM sqlite_schema WHERE sql LIKE \'CREATE UNIQUE INDEX %\'".as_ptr()
                     as *mut i8 as *const i8);
+
+        /// Loop through the tables in the main database. For each, do
+        ///* an "INSERT INTO vacuum_db.xxx SELECT * FROM main.xxx;" to copy
+        ///* the contents to the temporary database.
         exec_exec_sql(db,
             c"SELECT \'INSERT INTO vacuum_db.\' || quote(name) || \' SELECT * FROM main.\' || quote(name) FROM main.sqlite_schema WHERE type = \'table\' AND name!=\'sqlite_sequence\'   AND rootpage>0".as_ptr()
                     as *mut i8 as *const i8);
+
+        /// Copy over the sequence table
         exec_exec_sql(db,
             c"SELECT \'DELETE FROM vacuum_db.\' || quote(name) FROM vacuum_db.sqlite_schema WHERE name=\'sqlite_sequence\'".as_ptr()
                     as *mut i8 as *const i8);
         exec_exec_sql(db,
             c"SELECT \'INSERT INTO vacuum_db.\' || quote(name) || \' SELECT * FROM main.\' || quote(name) FROM vacuum_db.sqlite_schema WHERE name==\'sqlite_sequence\'".as_ptr()
                     as *mut i8 as *const i8);
+
+        /// Copy the triggers, views, and virtual tables from the main database
+        ///* over to the temporary database.  None of these objects has any
+        ///* associated storage, so all we have to do is copy their entries
+        ///* from the SQLITE_MASTER table.
         exec_sql(db,
             c"INSERT INTO vacuum_db.sqlite_schema   SELECT type, name, tbl_name, rootpage, sql    FROM main.sqlite_schema   WHERE type=\'view\' OR type=\'trigger\'      OR (type=\'table\' AND rootpage=0)".as_ptr()
                     as *mut i8 as *const i8);
+
+        /// Commit the transaction and close the database
         exec_sql(db, c"COMMIT".as_ptr() as *mut i8 as *const i8);
         unsafe {
             printf(c"-- close database\n".as_ptr() as *mut i8 as *const i8)
         };
         unsafe { sqlite3_close(db) };
+
+        /// At this point, zDbToVacuum is unchanged.  zTempDb contains a
+        ///* vacuumed copy of zDbToVacuum.  Rearrange filenames so that
+        ///* zTempDb becomes thenew zDbToVacuum.
         unsafe {
             printf(c"-- rename \"%s\" to \"%s\"\n".as_ptr() as *mut i8 as
                     *const i8, z_db_to_vacuum, z_backup_db)
@@ -162,6 +265,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                     *const i8, z_temp_db, z_db_to_vacuum)
         };
         unsafe { rename(z_temp_db as *const i8, z_db_to_vacuum) };
+
+        /// Release allocated memory
         unsafe { sqlite3_free(z_temp_db as *mut ()) };
         unsafe { sqlite3_free(z_backup_db as *mut ()) };
         return Ok(());

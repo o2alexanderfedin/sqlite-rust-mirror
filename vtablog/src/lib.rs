@@ -1,9 +1,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -26,6 +32,8 @@ struct VtablogCursor {
     i_rowid: Sqlite3Int64,
 }
 
+/// Skip leading whitespace.  Return a pointer to the first non-whitespace
+///* character, or to the zero terminator if the string has only whitespace
 extern "C" fn vtablog_skip_whitespace(mut z: *const i8) -> *const i8 {
     while unsafe { isspace(unsafe { *z.offset(0 as isize) } as u8 as i32) } !=
             0 {
@@ -39,6 +47,7 @@ extern "C" fn vtablog_skip_whitespace(mut z: *const i8) -> *const i8 {
     return z;
 }
 
+/// Remove trailing whitespace from the end of string z[]
 extern "C" fn vtablog_trim_whitespace(z: *mut i8) -> () {
     let mut n: u64 = unsafe { strlen(z as *const i8) };
     while n > 0 as u64 &&
@@ -49,6 +58,7 @@ extern "C" fn vtablog_trim_whitespace(z: *mut i8) -> () {
     unsafe { *z.add(n as usize) = 0 as i8 };
 }
 
+/// Dequote the string
 extern "C" fn vtablog_dequote(z: *mut i8) -> () {
     let mut j: i32 = 0;
     let c_quote: i8 = unsafe { *z.offset(0 as isize) };
@@ -89,6 +99,9 @@ extern "C" fn vtablog_dequote(z: *mut i8) -> () {
     unsafe { *z.offset(j as isize) = 0 as i8 };
 }
 
+/// Check to see if the string is of the form:  "TAG = VALUE" with optional
+///* whitespace before and around tokens.  If it is, return a pointer to the
+///* first character of VALUE.  If it is not, return NULL.
 extern "C" fn vtablog_parameter(z_tag_1: *const i8, n_tag_1: i32,
     mut z: *const i8) -> *const i8 {
     z = vtablog_skip_whitespace(z);
@@ -102,6 +115,9 @@ extern "C" fn vtablog_parameter(z_tag_1: *const i8, n_tag_1: i32,
     return vtablog_skip_whitespace(unsafe { z.offset(1 as isize) });
 }
 
+/// Decode a parameter that requires a dequoted string.
+///*
+///* Return non-zero on an error.
 extern "C" fn vtablog_string_parameter(pz_err_1: &mut *mut i8,
     z_param_1: *const i8, z_arg_1: *const i8, pz_val_1: &mut *mut i8) -> i32 {
     let mut z_value: *const i8 = core::ptr::null();
@@ -134,6 +150,17 @@ extern "C" fn vtablog_string_parameter(pz_err_1: &mut *mut i8,
     return 0;
 }
 
+///* The vtablogConnect() method is invoked to create a new
+///* vtablog_vtab that describes the vtablog virtual table.
+///*
+///* Think of this routine as the constructor for vtablog_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the vtablog_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against vtablog will look like.
 extern "C" fn vtablog_connect_create(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: &mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8, is_create_1: i32) -> i32 {
@@ -397,6 +424,7 @@ extern "C" fn vtablog_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             unsafe { &mut *pp_vtab_1 }, pz_err_1, 0);
 }
 
+///* This method is the destructor for vtablog_vtab objects.
 extern "C" fn vtablog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *const VtablogVtab =
         p_vtab_1 as *mut VtablogVtab as *const VtablogVtab;
@@ -410,6 +438,7 @@ extern "C" fn vtablog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* This method is (also) the destructor for vtablog_vtab objects.
 extern "C" fn vtablog_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *const VtablogVtab =
         p_vtab_1 as *mut VtablogVtab as *const VtablogVtab;
@@ -423,6 +452,7 @@ extern "C" fn vtablog_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Constructor for a new vtablog_cursor object.
 extern "C" fn vtablog_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut VtablogVtab = p as *mut VtablogVtab;
@@ -447,6 +477,7 @@ extern "C" fn vtablog_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a vtablog_cursor.
 extern "C" fn vtablog_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const VtablogCursor =
         cur as *mut VtablogCursor as *const VtablogCursor;
@@ -461,6 +492,7 @@ extern "C" fn vtablog_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Advance a vtablog_cursor to its next row of output.
 extern "C" fn vtablog_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut VtablogCursor = cur as *mut VtablogCursor;
     let p_tab: *const VtablogVtab =
@@ -481,6 +513,8 @@ extern "C" fn vtablog_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the vtablog_cursor
+///* is currently pointing.
 extern "C" fn vtablog_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const VtablogCursor =
@@ -524,6 +558,8 @@ extern "C" fn vtablog_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn vtablog_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const VtablogCursor =
@@ -540,6 +576,8 @@ extern "C" fn vtablog_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn vtablog_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const VtablogCursor =
         cur as *mut VtablogCursor as *const VtablogCursor;
@@ -556,6 +594,7 @@ extern "C" fn vtablog_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+///* Output an sqlite3_value object's value as an SQL literal.
 extern "C" fn vtablog_quote(p: *mut Sqlite3Value) -> () {
     let mut z: [i8; 50] = [0; 50];
     '__s5:
@@ -1047,6 +1086,10 @@ extern "C" fn vtablog_quote(p: *mut Sqlite3Value) -> () {
     }
 }
 
+///* This method is called to "rewind" the vtablog_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to vtablogColumn() or vtablogRowid() or 
+///* vtablogEof().
 extern "C" fn vtablog_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_cur: *mut VtablogCursor = cur as *mut VtablogCursor;
@@ -1061,6 +1104,8 @@ extern "C" fn vtablog_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return 0;
 }
 
+///* Return an sqlite3_index_info operator name in static space.
+///* The name is possibly overwritten on subsequent calls.
 extern "C" fn vtablog_op_name(op: u8) -> *mut i8 {
     unsafe {
         let mut z_out: *mut i8 = core::ptr::null_mut();
@@ -1098,6 +1143,10 @@ extern "C" fn vtablog_op_name(op: u8) -> *mut i8 {
     }
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the vtablog virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
 extern "C" fn vtablog_best_index(tab: *mut Sqlite3Vtab,
     p: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const VtablogVtab =
@@ -1221,6 +1270,11 @@ extern "C" fn vtablog_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* SQLite invokes this method to INSERT, UPDATE, or DELETE content from
+///* the table. 
+///*
+///* This implementation does not actually make any changes to the table
+///* content.  It merely logs the fact that the method was invoked
 extern "C" fn vtablog_update(tab: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_tab: *const VtablogVtab =
@@ -1352,6 +1406,8 @@ extern "C" fn vtablog_rename(tab: *mut Sqlite3Vtab, z_new_1: *const i8)
     return 0;
 }
 
+/// Any table name that contains the text "shadow" is seen as a
+///* shadow table.  Nothing else is.
 extern "C" fn vtablog_shadow_name(z_name_1: *const i8) -> i32 {
     unsafe {
         printf(c"vtablog.xShadowName(\'%s\')\n".as_ptr() as *mut i8 as
@@ -1375,6 +1431,8 @@ extern "C" fn vtablog_integrity(tab: *mut Sqlite3Vtab, z_schema_1: *const i8,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* vtablog virtual table.
 static mut vtablog_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 4,

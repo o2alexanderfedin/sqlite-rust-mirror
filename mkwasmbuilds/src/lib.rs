@@ -1,3 +1,33 @@
+//!* 2024-09-23
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This app's single purpose is to emit parts of the Makefile code for
+//!* sqlite3's canonical WASM build. The main motivation is to generate
+//!* code which "could" be created via GNU Make's eval command but is
+//!* highly illegible when constructed that way. Attempts to write this
+//!* app in Bash and TCL have suffered from the problem that those
+//!* languages require escaping $ symbols, making the resulting script
+//!* code as illegible as the eval spaghetti we want to get away
+//!* from. Maintaining it in C is, somewhat surprisingly, _slightly_
+//!* less illegible than writing it in bash, tcl, or native Make code.
+//!*
+//!* The emitted makefile code is not standalone - it depends on
+//!* variables and $(call)able functions from the main makefile.
+//! Separator to help eyeballs find the different output sections
+
+///* Flags for use with BuildDef::flags.
+///*
+///* Maintenance reminder: do not combine F_... flags within this enum,
+///* e.g. F_BUNDLER_FRIENDLY=0x02|F_ESM, as that will lead to breakage
+///* in some of the flag checks.
 const F_ESM: i32 = 1;
 
 const F_BUNDLER_FRIENDLY: i32 = 2;
@@ -18,6 +48,50 @@ const CP_WASM: i32 = -2147483648;
 
 const CP_ALL: i32 = -1073741824;
 
+///* Info needed for building one concrete JS/WASM combination..
+///*
+///* Notes about Emscripten builds...
+///*
+///* When emcc processes X.js it also generates X.wasm and hard-codes
+///* the name "X.wasm" into the JS file (it has to - there's no reliable
+///* way to derive that name at runtime for certain modes of loading the
+///* WASM file). Because we only need two sqlite3.wasm files (one each
+///* for 32- and 64-bit), the build then copies just those into the
+///* final build directory $(dir.dout).
+///*
+///* To keep parallel builds from stepping on each other, each distinct
+///* build goes into its own subdir $(dir.dout.$(BuildDef::zBaseName).
+///* Builds which produce deliverables we'd like to keep/distribute copy
+///* their final results into the build dir $(dir.dout). See the notes
+///* for the CP_JS enum entry for more details on that.
+///*
+///* The final result of each build is a pair of JS/WASM files, but
+///* getting there requires generation of several files, primarily as
+///* inputs for specific Emscripten flags:
+///*
+///* --pre-js = file gets injected after Emscripten's earliest starting
+///* point, enabling limited customization of Emscripten's
+///* behavior. This code lives/runs within the generated sqlite3InitModule().
+///*
+///* --post-js = gets injected after Emscripten's main work, but still
+///* within the body of sqlite3InitModule().
+///*
+///* --extern-pre-js = gets injected before sqlite3InitModule(), in the
+///* global scope. We inject the license and version info here.
+///*
+///* --extern-post-js = gets injected immediately after
+///* sqlite3InitModule(), in the global scope. In this step we replace
+///* sqlite3InitModule() with a slightly customized one, the main
+///* purpose of which is to (A) give us (not Emscripten) control over
+///* the arguments it accepts and (B) to run the library bootstrap step.
+///*
+///* Then there's sqlite3-api.BuildName.js, which is the entire SQLite3
+///* JS API (generated from the list defined in $(sqlite3-api.jses)). It
+///* gets sandwitched inside --post-js.
+///*
+///* Each of those inputs has to be generated before passing them on to
+///* Emscripten so that any build-specific capabilities can get filtered
+///* in or out (using ./c-pp-lite.c).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuildDef {
@@ -33,6 +107,11 @@ struct BuildDef {
     flags: i32,
 }
 
+///* The set of WASM builds for the library (as opposed to the apps
+///* (fiddle, speedtest1)). Their order in BuildDefs_map is mostly
+///* insignificant, but some makefile vars used by some builds are set
+///* up by prior builds. Because of that, the vanilla, esm, and
+///* bundler-friendly builds should be defined first (in that order).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BuildDefs {
@@ -196,7 +275,12 @@ static mut o_build_defs: BuildDefs =
         },
     };
 
+///* Emits common vars needed by the rest of the emitted code (but not
+///* needed by makefile code outside of these generated pieces).
+#[allow(unused_doc_comments)]
 extern "C" fn mk_prologue() -> () {
+    /// A 0-terminated list of makefile vars which we expect to have been
+    ///* set up by this point in the build process.
     let a_required_vars: [*const i8; 7] =
         [c"dir.top".as_ptr() as *const i8, c"dir.api".as_ptr() as *const i8,
                 c"dir.dout".as_ptr() as *const i8,
@@ -244,6 +328,11 @@ extern "C" fn mk_prologue() -> () {
                     as *mut i8 as *const i8)
     };
     {
+        /// b.do.wasm-opt
+        ///*
+        ///* $1 = build name
+        ///*
+        ///* Runs $(out.$(1).wasm) through $(bin.wasm-opt)
         let z_opt_flags: *const i8 =
             c"--enable-bulk-memory-opt --all-features --post-emscripten --strip-debug --local-cse ".as_ptr()
                     as *mut i8 as *const i8;
@@ -251,6 +340,8 @@ extern "C" fn mk_prologue() -> () {
             puts(c"\n########################################################################\n# post-compilation WASM file optimization".as_ptr()
                         as *mut i8 as *const i8)
         };
+
+        /// b.do.wasm-opt $1 = build name
         unsafe {
             puts(c"ifeq (,$(bin.wasm-opt))".as_ptr() as *mut i8 as *const i8)
         };
@@ -290,6 +381,14 @@ extern "C" fn build_def_basename(p_b_1: &BuildDef) -> *const i8 {
     }
 }
 
+///* Emits makefile code for setting up values for the --pre-js=FILE,
+///* --post-js=FILE, and --extern-post-js=FILE emcc flags, as well as
+///* populating those files. This is necessary for any builds which
+///* embed the library's JS parts of this build (as opposed to parts
+///* which do not use the library-level code).
+///*
+///* pB may be NULL.
+#[allow(unused_doc_comments)]
 extern "C" fn mk_pre_post(z_build_name_1: *const i8, p_b_1: *const BuildDef)
     -> () {
     let z_base_name: *const i8 =
@@ -325,6 +424,17 @@ extern "C" fn mk_pre_post(z_build_name_1: *const i8, p_b_1: *const BuildDef)
             if !(unsafe { (*p_b_1).z_dot_wasm }).is_null() {
                 unsafe { (*p_b_1).z_dot_wasm }
             } else { unsafe { (*p_b_1).z_base_name } };
+
+        ///* See BuildDef::zDotWasm for _why_ we do this. _What_ we're doing
+        ///* is generate $(pre-js.BUILDNAME.js) as above, but:
+        ///*
+        ///* 1) Add an extra -D... flag to activate the custom
+        ///*    Module.intantiateWasm() in the JS code.
+        ///*
+        ///* 2) Amend the generated pre-js.js with the name of the WASM
+        ///*    file which should be loaded. That tells the custom
+        ///*    Module.instantiateWasm() to use that file instead of
+        ///*    the default.
         unsafe {
             printf(c"$(pre-js.%s.js): $(pre-js.in.js) $(bin.c-pp) $(MAKEFILE_LIST)".as_ptr()
                         as *mut i8 as *const i8, z_build_name_1)
@@ -383,11 +493,15 @@ extern "C" fn mk_pre_post(z_build_name_1: *const i8, p_b_1: *const BuildDef)
     unsafe {
         puts(c"\n# --pre/post misc...".as_ptr() as *mut i8 as *const i8)
     };
+
+    /// Combined flags for use with emcc...
     unsafe {
         printf(c"pre-post.%s.flags = --extern-pre-js=$(sqlite3-license-version.js) --pre-js=$(pre-js.%s.js) --post-js=$(post-js.%s.js) --extern-post-js=$(extern-post-js.%s.js)\n".as_ptr()
                     as *mut i8 as *const i8, z_build_name_1, z_build_name_1,
             z_build_name_1, z_build_name_1)
     };
+
+    /// Set up deps...
     unsafe {
         printf(c"pre-post.%s.deps = $(pre-post-jses.common.deps) $(post-js.%s.js) $(extern-post-js.%s.js) $(dir.tmp)/pre-js.%s.js\n".as_ptr()
                     as *mut i8 as *const i8, z_build_name_1, z_build_name_1,
@@ -419,6 +533,7 @@ extern "C" fn emit_logtag(z_build_name_1: *const i8) -> () {
     };
 }
 
+///   Emit rules for sqlite3-api.${zBuildName}.js.
 extern "C" fn emit_api_js(z_build_name_1: *const i8) -> () {
     unsafe {
         printf(c"sqlite3-api.%s.js = $(dir.tmp)/sqlite3-api.%s.js\n".as_ptr()
@@ -439,6 +554,8 @@ extern "C" fn emit_api_js(z_build_name_1: *const i8) -> () {
     };
 }
 
+///* Emits makefile code for one build of the library.
+#[allow(unused_doc_comments)]
 extern "C" fn mk_lib_mode(z_build_name_1: *const i8, p_b_1: *const BuildDef)
     -> () {
     unsafe {
@@ -547,6 +664,8 @@ extern "C" fn mk_lib_mode(z_build_name_1: *const i8, p_b_1: *const BuildDef)
         emit_api_js(z_build_name_1);
         mk_pre_post(z_build_name_1, p_b_1);
         {
+
+            /// build it...
             unsafe {
                 printf(c"\n########################################################################\n$(out.%s.js): $(MAKEFILE_LIST) $(sqlite3-wasm.c.in) $(EXPORTED_FUNCTIONS.api) $(deps.%s) $(bin.mkwb) $(pre-post.%s.deps)\n".as_ptr()
                             as *mut i8 as *const i8, z_build_name_1, z_build_name_1,
@@ -578,6 +697,14 @@ extern "C" fn mk_lib_mode(z_build_name_1: *const i8, p_b_1: *const BuildDef)
                 }
             }
             {
+
+                /// Post-compilation transformations and copying to
+                ///         $(dir.dout)...
+                /// Avoid a 3rd occurrence of the bug fixed by 65798c09a00662a3,
+                ///* which was (in two cases) caused by makefile refactoring and
+                ///* not recognized until after a release was made with the broken
+                ///* sqlite3-bundler-friendly.mjs (which is used by the npm
+                ///* subproject but is otherwise untested/unsupported):
                 unsafe {
                     printf(c"\t@if grep -e \'^ *importScripts(\' $@; then echo \'$(logtag.%s) $(emo.bug)$(emo.fire): bug fixed in 65798c09a00662a3 has re-appeared\'; exit 1; fi;\n".as_ptr()
                                 as *mut i8 as *const i8, z_build_name_1)
@@ -692,12 +819,15 @@ extern "C" fn emit_gz(z_build_name_1: *const i8, z_file_ext_1: *const i8)
     };
 }
 
+///* Emits rules for the fiddle builds.
+#[allow(unused_doc_comments)]
 extern "C" fn mk_fiddle() -> () {
     {
         let mut i: i32 = 0;
         '__b1: loop {
             if !(i < 2) { break '__b1; }
             '__c1: loop {
+                /// 0==normal, 1==debug
                 let is_debug: i32 = (i > 0) as i32;
                 let z_build_name: *const i8 =
                     if i != 0 {
@@ -728,6 +858,8 @@ extern "C" fn mk_fiddle() -> () {
                 emit_api_js(z_build_name);
                 mk_pre_post(z_build_name, core::ptr::null());
                 {
+
+                    /// emcc
                     unsafe {
                         printf(c"$(out.%s.js): $(MAKEFILE_LIST) $(EXPORTED_FUNCTIONS.fiddle) $(fiddle.c.in) $(pre-post.%s.deps) $(dir.dout)/sqlite3-opfs-async-proxy.js".as_ptr()
                                     as *mut i8 as *const i8, z_build_name, z_build_name)
@@ -778,6 +910,12 @@ extern "C" fn mk_fiddle() -> () {
                             c"more".as_ptr() as *mut i8
                         } else { c"all".as_ptr() as *mut i8 }, z_build_name)
                 };
+
+                /// Compress fiddle files. We handle each file separately, rather
+                ///       than compressing them in a loop in the previous target, to help
+                ///       avoid that hand-edited files, like fiddle-worker.js, do not end
+                ///       up with stale .gz files (which althttpd will then serve instead
+                ///       of the up-to-date uncompressed one).
                 emit_gz(z_build_name, c"js".as_ptr() as *mut i8 as *const i8);
                 emit_gz(z_build_name,
                     c"wasm".as_ptr() as *mut i8 as *const i8);
@@ -807,6 +945,7 @@ extern "C" fn mk_fiddle() -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
     -> Result<(), i32> {
     unsafe {
@@ -913,6 +1052,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *const i8)
                 }
             }
         } else {
+
+            ///* Emit the whole shebang...
             mk_prologue();
             mk_lib_mode(c"vanilla".as_ptr() as *mut i8 as *const i8,
                 &o_build_defs.vanilla);

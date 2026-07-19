@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3MemMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -448,6 +463,12 @@ impl Parse {
 
 static mut _sqlite_zone_: *mut malloc_zone_t = unsafe { core::mem::zeroed() };
 
+///* Like malloc(), but remember the size of the allocation
+///* so that we can find it later using sqlite3MemSize().
+///*
+///* For this low-level routine, we are guaranteed that nByte>0 because
+///* cases of nByte<=0 will be intercepted and dealt with by higher level
+///* routines.
 extern "C" fn sqlite3_mem_malloc(n_byte_1: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -463,10 +484,24 @@ extern "C" fn sqlite3_mem_malloc(n_byte_1: i32) -> *mut () {
     }
 }
 
+///* Like free() but works for allocations obtained from sqlite3MemMalloc()
+///* or sqlite3MemRealloc().
+///*
+///* For this low-level routine, we already know that pPrior!=0 since
+///* cases where pPrior==0 will have been intercepted and dealt with
+///* by higher-level routines.
 extern "C" fn sqlite3_mem_free(p_prior_1: *mut ()) -> () {
     unsafe { unsafe { malloc_zone_free(_sqlite_zone_, p_prior_1) }; }
 }
 
+///* Like realloc().  Resize an allocation previously obtained from
+///* sqlite3MemMalloc().
+///*
+///* For this low-level interface, we know that pPrior!=0.  Cases where
+///* pPrior==0 while have been intercepted by higher-level routine and
+///* redirected to xMalloc.  Similarly, we know that nByte>0 because
+///* cases where nByte<=0 will have been intercepted by higher-level
+///* routines and redirected to xFree.
 extern "C" fn sqlite3_mem_realloc(p_prior_1: *mut (), n_byte_1: i32)
     -> *mut () {
     unsafe {
@@ -494,6 +529,8 @@ extern "C" fn sqlite3_mem_realloc(p_prior_1: *mut (), n_byte_1: i32)
     }
 }
 
+///* Report the allocated size of a prior return from xMalloc()
+///* or xRealloc().
 extern "C" fn sqlite3_mem_size(p_prior_1: *mut ()) -> i32 {
     unsafe {
         { let _ = 0; };
@@ -509,39 +546,58 @@ extern "C" fn sqlite3_mem_size(p_prior_1: *mut ()) -> i32 {
     }
 }
 
+///* Round up a request size to the next valid allocation size.
 extern "C" fn sqlite3_mem_roundup(n: i32) -> i32 { return n + 7 & !7; }
 
+///* Initialize this module.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_mem_init(not_used_1: *mut ()) -> i32 {
     unsafe {
         let mut cpu_count: i32 = 0;
         let mut len: u64 = 0 as u64;
         if !(_sqlite_zone_).is_null() { return 0; }
         len = core::mem::size_of::<i32>() as u64;
+
+        /// One usually wants to use hw.activecpu for MT decisions, but not here
         unsafe {
             sysctlbyname(c"hw.ncpu".as_ptr() as *mut i8 as *const i8,
                 &raw mut cpu_count as *mut (), &mut len, 0 as *mut (),
                 0 as u64)
         };
         if cpu_count > 1 {
-            _sqlite_zone_ = unsafe { malloc_default_zone() };
+
+            /// defer MT decisions to system malloc
+            (_sqlite_zone_ = unsafe { malloc_default_zone() });
         } else {
-            _sqlite_zone_ =
-                unsafe { malloc_create_zone(4096 as VmSizeT, 0 as u32) };
+
+            /// only 1 core, use our own zone to contention over global locks,
+            ///* e.g. we have our own dedicated locks
+            (_sqlite_zone_ =
+                unsafe { malloc_create_zone(4096 as VmSizeT, 0 as u32) });
             unsafe {
                 malloc_set_zone_name(_sqlite_zone_,
                     c"Sqlite_Heap".as_ptr() as *mut i8 as *const i8)
             };
         }
+
+        ///  defined(__APPLE__) && !defined(SQLITE_WITHOUT_ZONEMALLOC)
         { let _ = not_used_1; };
+
+        ///  defined(__APPLE__) && !defined(SQLITE_WITHOUT_ZONEMALLOC)
         return 0;
     }
 }
 
+///* Deinitialize this module.
 extern "C" fn sqlite3_mem_shutdown(not_used_1: *mut ()) -> () {
     { let _ = not_used_1; };
     return;
 }
 
+///* This routine is the only routine in this file with external linkage.
+///*
+///* Populate the low-level memory allocation function pointers in
+///* sqlite3GlobalConfig.m with pointers to the routines in this file.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_set_default() -> () {
     unsafe {

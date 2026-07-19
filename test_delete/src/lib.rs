@@ -1,10 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* This routine is a copy of (most of) the code from SQLite function
+///* sqlite3FileSuffix3(). It modifies the filename in buffer z in the
+///* same way as SQLite does when in 8.3 filenames mode.
 extern "C" fn sqlite3_delete83_name(z: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut sz: i32 = 0;
@@ -31,6 +40,11 @@ extern "C" fn sqlite3_delete83_name(z: *mut i8) -> () {
     }
 }
 
+///* zFile is a filename. Assuming no error occurs, if this file exists, 
+///* set *pbExists to true and unlink it. Or, if the file does not exist,
+///* set *pbExists to false before returning.
+///*
+///* If an error occurs, non-zero is returned. Or, if no error occurs, zero.
 extern "C" fn sqlite3_delete_unlink_if_exists(p_vfs_1: *const Sqlite3Vfs,
     z_file_1: *const i8, pb_exists_1: *mut i32) -> i32 {
     let mut rc: i32 = 1;
@@ -54,12 +68,19 @@ extern "C" fn sqlite3_delete_unlink_if_exists(p_vfs_1: *const Sqlite3Vfs,
     return rc;
 }
 
+///* Delete the database file identified by the string argument passed to this
+///* function. The string must contain a filename, not an SQLite URI.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_delete_database(z_file_1: *const i8) -> i32 {
     let mut z_buf: *mut i8 = core::ptr::null_mut();
+    /// Buffer to sprintf() filenames to
     let mut n_buf: i32 = 0;
+    /// Size of buffer in bytes
     let mut rc: i32 = 0;
+    /// System error code
     let mut i: i32 = 0;
+    /// Iterate through azFmt[] and aMFile[]
     let az_fmt: [*const i8; 4] =
         [c"%s".as_ptr() as *const i8, c"%s-journal".as_ptr() as *const i8,
                 c"%s-wal".as_ptr() as *const i8,
@@ -96,7 +117,10 @@ pub extern "C" fn sqlite3_delete_database(z_file_1: *const i8) -> i32 {
                     b83: 1,
                 }];
     let p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
-    n_buf = unsafe { strlen(z_file_1) } as i32 + 100;
+
+    /// Allocate a buffer large enough for any of the files that need to be
+    ///* deleted.
+    (n_buf = unsafe { strlen(z_file_1) } as i32 + 100);
     z_buf = unsafe { sqlite3_malloc(n_buf) } as *mut i8;
     if z_buf == core::ptr::null_mut() { return 7; }
     {

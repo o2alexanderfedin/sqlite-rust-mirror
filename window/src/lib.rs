@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -403,6 +418,8 @@ struct WindowRewrite {
     p_sub_select: *mut Select,
 }
 
+///* Unlink the Window object from the Select to which it is attached,
+///* if it is attached.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_unlink_from_select(p: &mut Window) -> () {
     if !((*p).pp_this).is_null() {
@@ -414,6 +431,7 @@ pub extern "C" fn sqlite3_window_unlink_from_select(p: &mut Window) -> () {
     }
 }
 
+///* Free the Window object passed as the second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_delete(db: *mut Sqlite3, p: *mut Window)
     -> () {
@@ -430,6 +448,7 @@ pub extern "C" fn sqlite3_window_delete(db: *mut Sqlite3, p: *mut Window)
     }
 }
 
+///* Free the linked list of Window objects starting at the second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_list_delete(db: *mut Sqlite3,
     mut p: *mut Window) -> () {
@@ -440,6 +459,11 @@ pub extern "C" fn sqlite3_window_list_delete(db: *mut Sqlite3,
     }
 }
 
+///* The argument expression is an PRECEDING or FOLLOWING offset.  The
+///* value should be a non-negative integer.  If the value is not a
+///* constant, change it to NULL.  The fact that it is then a non-negative
+///* integer will be caught later.  But it is important not to leave
+///* variable values in the expression tree.
 extern "C" fn sqlite3_window_offset_expr(p_parse_1: *mut Parse,
     mut p_expr_1: *mut Expr) -> *mut Expr {
     if 0 ==
@@ -459,7 +483,9 @@ extern "C" fn sqlite3_window_offset_expr(p_parse_1: *mut Parse,
     return p_expr_1;
 }
 
+///* Allocate and return a new Window object describing a Window Definition.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_window_alloc(p_parse: *mut Parse, mut e_type: i32,
     e_start: i32, p_start: *mut Expr, e_end: i32, p_end: *mut Expr,
     mut e_exclude: u8) -> *mut Window {
@@ -467,6 +493,8 @@ pub extern "C" fn sqlite3_window_alloc(p_parse: *mut Parse, mut e_type: i32,
         '__c1: loop {
             let mut p_win: *mut Window = core::ptr::null_mut();
             let mut b_implicit_frame: i32 = 0;
+
+            /// Parser assures the following:
             { let _ = 0; };
             { let _ = 0; };
             { let _ = 0; };
@@ -510,11 +538,27 @@ pub extern "C" fn sqlite3_window_alloc(p_parse: *mut Parse, mut e_type: i32,
         }
         if !(false) { break '__b1; }
     }
+
+    /// Parser assures the following:
+    /// Additionally, the
+    ///* starting boundary type may not occur earlier in the following list than
+    ///* the ending boundary type:
+    ///*
+    ///*   UNBOUNDED PRECEDING
+    ///*   <expr> PRECEDING
+    ///*   CURRENT ROW
+    ///*   <expr> FOLLOWING
+    ///*   UNBOUNDED FOLLOWING
+    ///*
+    ///* The parser ensures that "UNBOUNDED PRECEDING" cannot be used as an ending
+    ///* boundary, and than "UNBOUNDED FOLLOWING" cannot be used as a starting
+    ///* frame boundary.
     unsafe { sqlite3_expr_delete(unsafe { (*p_parse).db }, p_end) };
     unsafe { sqlite3_expr_delete(unsafe { (*p_parse).db }, p_start) };
     return core::ptr::null_mut();
 }
 
+///* Attach window object pWin to expression p.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_attach(p_parse: *mut Parse, p: *mut Expr,
     p_win: *mut Window) -> () {
@@ -538,6 +582,9 @@ pub extern "C" fn sqlite3_window_attach(p_parse: *mut Parse, p: *mut Expr,
     }
 }
 
+///* Return 0 if the two window objects are identical, 1 if they are
+///* different, or 2 if it cannot be determined if the objects are identical
+///* or not. Identical window objects can be processed in a single scan.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_compare(p_parse: *const Parse,
     p1: *const Window, p2: *const Window, b_filter: i32) -> i32 {
@@ -609,6 +656,10 @@ pub extern "C" fn sqlite3_window_compare(p_parse: *const Parse,
     return 0;
 }
 
+///* Possibly link window pWin into the list at pSel->pWin (window functions
+///* to be processed as part of SELECT statement pSel). The window is linked
+///* in if either (a) there are no other windows already linked to this
+///* SELECT, or (b) the windows already linked use a compatible window frame.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_link(p_sel: *mut Select, p_win: *mut Window)
     -> () {
@@ -655,7 +706,11 @@ static lead_name: [i8; 5] =
 
 static lag_name: [i8; 4] = [108 as i8, 97 as i8, 103 as i8, 0 as i8];
 
+///* This is called by code in select.c before it calls sqlite3WhereBegin()
+///* to begin iterating through the sub-query results. It is used to allocate
+///* and initialize registers and cursors used by sqlite3WindowCodeStep().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_window_code_init(p_parse: *mut Parse,
     p_select: &Select) -> () {
     unsafe {
@@ -763,6 +818,12 @@ pub extern "C" fn sqlite3_window_code_init(p_parse: *mut Parse,
                         unsafe { (*p_win).p_w_func } as *const FuncDef;
                     if unsafe { (*p).func_flags } & 4096 as u32 != 0 &&
                             unsafe { (*p_win).e_start } as i32 != 91 {
+                        /// The inline versions of min() and max() require a single ephemeral
+                        ///* table and 3 registers. The registers are used as follows:
+                        ///*
+                        ///*   regApp+0: slot to copy min()/max() argument to for MakeRecord
+                        ///*   regApp+1: integer value used to ensure keys are unique
+                        ///*   regApp+2: output of MakeRecord
                         let mut p_list: *mut ExprList = core::ptr::null_mut();
                         let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
                         { let _ = 0; };
@@ -810,6 +871,9 @@ pub extern "C" fn sqlite3_window_code_init(p_parse: *mut Parse,
                                 &raw const nth_value_name[0 as usize] as *const i8 ||
                             unsafe { (*p).z_name } ==
                                 &raw const first_value_name[0 as usize] as *const i8 {
+
+                        /// Allocate two registers at pWin->regApp. These will be used to
+                        ///* store the start and end index of the current frame.
                         unsafe {
                             (*p_win).reg_app = unsafe { (*p_parse).n_mem } + 1
                         };
@@ -853,6 +917,59 @@ pub extern "C" fn sqlite3_window_code_init(p_parse: *mut Parse,
     }
 }
 
+///* A single instance of this structure is allocated on the stack by
+///* sqlite3WindowCodeStep() and a pointer to it passed to the various helper
+///* routines. This is to reduce the number of arguments required by each
+///* helper function.
+///*
+///* regArg:
+///*   Each window function requires an accumulator register (just as an
+///*   ordinary aggregate function does). This variable is set to the first
+///*   in an array of accumulator registers - one for each window function
+///*   in the WindowCodeArg.pMWin list.
+///*
+///* eDelete:
+///*   The window functions implementation sometimes caches the input rows
+///*   that it processes in a temporary table. If it is not zero, this
+///*   variable indicates when rows may be removed from the temp table (in
+///*   order to reduce memory requirements - it would always be safe just
+///*   to leave them there). Possible values for eDelete are:
+///*
+///*      WINDOW_RETURN_ROW:
+///*        An input row can be discarded after it is returned to the caller.
+///*
+///*      WINDOW_AGGINVERSE:
+///*        An input row can be discarded after the window functions xInverse()
+///*        callbacks have been invoked in it.
+///*
+///*      WINDOW_AGGSTEP:
+///*        An input row can be discarded after the window functions xStep()
+///*        callbacks have been invoked in it.
+///*
+///* start,current,end
+///*   Consider a window-frame similar to the following:
+///*
+///*     (ORDER BY a, b GROUPS BETWEEN 2 PRECEDING AND 2 FOLLOWING)
+///*
+///*   The windows functions implementation caches the input rows in a temp
+///*   table, sorted by "a, b" (it actually populates the cache lazily, and
+///*   aggressively removes rows once they are no longer required, but that's
+///*   a mere detail). It keeps three cursors open on the temp table. One
+///*   (current) that points to the next row to return to the query engine
+///*   once its window function values have been calculated. Another (end)
+///*   points to the next row to call the xStep() method of each window function
+///*   on (so that it is 2 groups ahead of current). And a third (start) that
+///*   points to the next row to call the xInverse() method of each window
+///*   function on.
+///*
+///*   Each cursor (start, current and end) consists of a VDBE cursor
+///*   (WindowCsrAndReg.csr) and an array of registers (starting at
+///*   WindowCodeArg.reg) that always contains a copy of the peer values
+///*   read from the corresponding cursor.
+///*
+///*   Depending on the window-frame in question, all three cursors may not
+///*   be required. In this case both WindowCodeArg.csr and reg are set to
+///*   0.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowCodeArg {
@@ -869,6 +986,7 @@ struct WindowCodeArg {
     end: WindowCsrAndReg,
 }
 
+///* See comments above struct WindowCodeArg.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct WindowCsrAndReg {
@@ -876,6 +994,12 @@ struct WindowCsrAndReg {
     reg: i32,
 }
 
+///* Return true if it can be determined at compile time that expression
+///* pExpr evaluates to a value that, when cast to an integer, is greater
+///* than zero. False otherwise.
+///*
+///* If an OOM error occurs, this function sets the Parse.db.mallocFailed
+///* flag and returns zero.
 extern "C" fn window_expr_gt_zero(p_parse_1: &Parse, p_expr_1: *const Expr)
     -> i32 {
     let mut ret: i32 = 0;
@@ -892,6 +1016,8 @@ extern "C" fn window_expr_gt_zero(p_parse_1: &Parse, p_expr_1: *const Expr)
     return ret;
 }
 
+///* Return true if the current frame should be cached in the ephemeral table,
+///* even if there are no xInverse() calls required.
 extern "C" fn window_cache_frame(p_m_win_1: *mut Window) -> i32 {
     let mut p_win: *const Window = core::ptr::null();
     if unsafe { (*p_m_win_1).reg_start_rowid } != 0 { return 1; }
@@ -920,6 +1046,8 @@ extern "C" fn window_cache_frame(p_m_win_1: *mut Window) -> i32 {
     return 0;
 }
 
+///* Return the number of arguments passed to the window-function associated
+///* with the object passed as the only argument to this function.
 extern "C" fn window_arg_count(p_win_1: &Window) -> i32 {
     unsafe {
         let mut p_list: *const ExprList = core::ptr::null();
@@ -931,6 +1059,10 @@ extern "C" fn window_arg_count(p_win_1: &Window) -> i32 {
     }
 }
 
+///* Generate code to set the accumulator register for each window function
+///* in the linked list passed as the second argument to NULL. And perform
+///* any equivalent initialization required by any built-in window functions
+///* in the list.
 extern "C" fn window_init_accum(p_parse_1: *mut Parse, p_m_win_1: *mut Window)
     -> i32 {
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
@@ -988,6 +1120,12 @@ extern "C" fn window_init_accum(p_parse_1: *mut Parse, p_m_win_1: *mut Window)
     return reg_arg;
 }
 
+///* A "PRECEDING <expr>" (eCond==0) or "FOLLOWING <expr>" (eCond==1) or the
+///* value of the second argument to nth_value() (eCond==2) has just been
+///* evaluated and the result left in register reg. This function generates VM
+///* code to check that the value is a non-negative integer and throws an
+///* exception if it is not.
+#[allow(unused_doc_comments)]
 extern "C" fn window_check_value(p_parse_1: *mut Parse, reg: i32,
     e_cond_1: i32) -> () {
     unsafe {
@@ -1019,6 +1157,8 @@ extern "C" fn window_check_value(p_parse_1: *mut Parse, reg: i32,
                 unsafe { sqlite3_vdbe_current_addr(v) } + 2, reg)
         };
         unsafe { sqlite3_vdbe_change_p5(v, 67 as u16) };
+
+        ///   the OP_Ge
         unsafe { sqlite3_may_abort(p_parse_1) };
         unsafe { sqlite3_vdbe_add_op2(v, 72, 1, 2) };
         unsafe {
@@ -1029,6 +1169,10 @@ extern "C" fn window_check_value(p_parse_1: *mut Parse, reg: i32,
     }
 }
 
+///* Generate VM code to invoke either xValue() (bFin==0) or xFinalize()
+///* (bFin==1) for each window function in the linked list starting at
+///* pMWin. Or, for built-in window-functions that do not use the standard
+///* API, generate the equivalent VM code.
 extern "C" fn window_agg_final(p: &WindowCodeArg, b_fin_1: i32) -> () {
     let p_parse: *mut Parse = (*p).p_parse;
     let p_m_win: *mut Window = (*p).p_m_win;
@@ -1097,6 +1241,8 @@ extern "C" fn window_agg_final(p: &WindowCodeArg, b_fin_1: i32) -> () {
     }
 }
 
+///* Generate VM code to read the window frames peer values from cursor csr into
+///* an array of registers starting at reg.
 extern "C" fn window_read_peer_values(p: &WindowCodeArg, csr: i32, reg: i32)
     -> () {
     let p_m_win: *const Window = (*p).p_m_win as *const Window;
@@ -1128,14 +1274,54 @@ extern "C" fn window_read_peer_values(p: &WindowCodeArg, csr: i32, reg: i32)
     }
 }
 
+///* No-op implementations of xStep() and xFinalize().  Used as place-holders
+///* for built-in window functions that never call those interfaces.
+///*
+///* The noopValueFunc() is called but is expected to do nothing.  The
+///* noopStepFunc() is never called, and so it is marked with NO_TEST to
+///* let the test coverage routine know not to expect this function to be
+///* invoked.
+#[allow(unused_doc_comments)]
 extern "C" fn noop_step_func(p: *mut Sqlite3Context, n: i32,
     a: *mut *mut Sqlite3Value) -> () {
+
+    ///NO_TEST
     { let _ = p; };
+
+    ///NO_TEST
+    ///NO_TEST
     { let _ = n; };
+
+    ///NO_TEST
+    ///NO_TEST
+    ///NO_TEST
     { let _ = a; };
+
+    ///NO_TEST
+    ///NO_TEST
+    ///NO_TEST
+    ///NO_TEST
     { let _ = 0; };
 }
 
+///* Generate VM code to invoke either xStep() (if bInverse is 0) or
+///* xInverse (if bInverse is non-zero) for each window function in the
+///* linked list starting at pMWin. Or, for built-in window functions
+///* that do not use the standard function API, generate the required
+///* inline VM code.
+///*
+///* If argument csr is greater than or equal to 0, then argument reg is
+///* the first register in an array of registers guaranteed to be large
+///* enough to hold the array of arguments for each function. In this case
+///* the arguments are extracted from the current row of csr into the
+///* array of registers before invoking OP_AggStep or OP_AggInverse
+///*
+///* Or, if csr is less than zero, then the array of registers at reg is
+///* already populated with all columns from the current row of the sub-query.
+///*
+///* If argument regPartSize is non-zero, then it is a register containing the
+///* number of rows in the current partition.
+#[allow(unused_doc_comments)]
 extern "C" fn window_agg_step(p: &WindowCodeArg, p_m_win_1: *mut Window,
     csr: i32, b_inverse_1: i32, reg: i32) -> () {
     unsafe {
@@ -1156,6 +1342,9 @@ extern "C" fn window_agg_step(p: &WindowCodeArg, p_m_win_1: *mut Window,
                     let mut i: i32 = 0;
                     let mut addr_if: i32 = 0;
                     { let _ = 0; };
+
+                    /// All OVER clauses in the same window function aggregate step must
+                    ///* be the same.
                     { let _ = 0; };
                     {
                         i = 0;
@@ -1317,15 +1506,24 @@ extern "C" fn window_agg_step(p: &WindowCodeArg, p_m_win_1: *mut Window,
     }
 }
 
+///* Generate code to calculate the current values of all window functions in the
+///* p->pMWin list by doing a full scan of the current window frame. Store the
+///* results in the Window.regResult registers, ready to return the upper
+///* layer.
+#[allow(unused_doc_comments)]
 extern "C" fn window_full_scan(p: *mut WindowCodeArg) -> () {
     let mut p_win: *const Window = core::ptr::null();
     let p_parse: *mut Parse = unsafe { (*p).p_parse };
     let p_m_win: *mut Window = unsafe { (*p).p_m_win };
     let v: *mut Vdbe = unsafe { (*p).p_vdbe };
     let mut reg_c_rowid: i32 = 0;
+    /// Current rowid value
     let mut reg_c_peer: i32 = 0;
+    /// Current peer values
     let mut reg_rowid: i32 = 0;
+    /// AggStep rowid value
     let mut reg_peer: i32 = 0;
+    /// AggStep peer values
     let mut n_peer: i32 = 0;
     let mut lbl_next: i32 = 0;
     let mut lbl_brk: i32 = 0;
@@ -1421,6 +1619,17 @@ extern "C" fn window_full_scan(p: *mut WindowCodeArg) -> () {
     window_agg_final(unsafe { &*p }, 1);
 }
 
+///* Invoke the sub-routine at regGosub (generated by code in select.c) to
+///* return the current row of Window.iEphCsr. If all window functions are
+///* aggregate window functions that use the standard API, a single
+///* OP_Gosub instruction is all that this routine generates. Extra VM code
+///* for per-row processing is only generated for the following built-in window
+///* functions:
+///*
+///*   nth_value()
+///*   first_value()
+///*   lag()
+///*   lead()
 extern "C" fn window_return_one_row(p: *mut WindowCodeArg) -> () {
     unsafe {
         let p_m_win: *mut Window = unsafe { (*p).p_m_win };
@@ -1547,6 +1756,14 @@ extern "C" fn window_return_one_row(p: *mut WindowCodeArg) -> () {
     }
 }
 
+///* regOld and regNew are each the first register in an array of size
+///* pOrderBy->nExpr. This function generates code to compare the two
+///* arrays of registers using the collation sequences and other comparison
+///* parameters specified by pOrderBy.
+///*
+///* If the two arrays are not equal, the contents of regNew is copied to
+///* regOld and control falls through. Otherwise, if the contents of the arrays
+///* are equal, an OP_Goto is executed. The address of the OP_Goto is returned.
 extern "C" fn window_if_new_peer(p_parse_1: *mut Parse,
     p_order_by_1: *mut ExprList, reg_new_1: i32, reg_old_1: i32, addr: i32)
     -> () {
@@ -1570,20 +1787,51 @@ extern "C" fn window_if_new_peer(p_parse_1: *mut Parse,
     } else { unsafe { sqlite3_vdbe_add_op2(v, 9, 0, addr) }; }
 }
 
+///* This function is called as part of generating VM programs for RANGE
+///* offset PRECEDING/FOLLOWING frame boundaries. Assuming "ASC" order for
+///* the ORDER BY term in the window, and that argument op is OP_Ge, it generates
+///* code equivalent to:
+///*
+///*   if( csr1.peerVal + regVal >= csr2.peerVal ) goto lbl;
+///*
+///* The value of parameter op may also be OP_Gt or OP_Le. In these cases the
+///* operator in the above pseudo-code is replaced with ">" or "<=", respectively.
+///*
+///* If the sort-order for the ORDER BY term in the window is DESC, then the
+///* comparison is reversed. Instead of adding regVal to csr1.peerVal, it is
+///* subtracted. And the comparison operator is inverted to - ">=" becomes "<=",
+///* ">" becomes "<", and so on. So, with DESC sort order, if the argument op
+///* is OP_Ge, the generated code is equivalent to:
+///*
+///*   if( csr1.peerVal - regVal <= csr2.peerVal ) goto lbl;
+///*
+///* A special type of arithmetic is used such that if csr1.peerVal is not
+///* a numeric type (real or integer), then the result of the addition
+///* or subtraction is a a copy of csr1.peerVal.
+#[allow(unused_doc_comments)]
 extern "C" fn window_code_range_test(p: *mut WindowCodeArg, mut op: i32,
     csr1: i32, reg_val_1: i32, csr2: i32, lbl: i32) -> () {
     let p_parse: *mut Parse = unsafe { (*p).p_parse };
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
     let p_order_by: *const ExprList =
         unsafe { (*unsafe { (*p).p_m_win }).p_order_by } as *const ExprList;
+    /// ORDER BY clause for window
     let reg1: i32 = unsafe { sqlite3_get_temp_reg(p_parse) };
+    /// Reg. for csr1.peerVal+regVal
     let reg2: i32 = unsafe { sqlite3_get_temp_reg(p_parse) };
+    /// Reg. for csr2.peerVal
     let reg_string: i32 =
         { let __p = unsafe { &mut (*p_parse).n_mem }; *__p += 1; *__p };
+    /// Reg. for constant value ''
     let mut arith: i32 = 107;
+    /// OP_Add or OP_Subtract
     let mut addr_ge: i32 = 0;
+    /// Jump destination
     let addr_done: i32 = unsafe { sqlite3_vdbe_make_label(p_parse) };
+    /// Address past OP_Ge
     let mut p_coll: *mut CollSeq = core::ptr::null_mut();
+
+    /// Read the peer-value from each cursor into a register
     window_read_peer_values(unsafe { &*p }, csr1, reg1);
     window_read_peer_values(unsafe { &*p }, csr2, reg2);
     { let _ = 0; };
@@ -1606,6 +1854,7 @@ extern "C" fn window_code_range_test(p: *mut WindowCodeArg, mut op: i32,
                         (*(unsafe { (*p_order_by).a.as_ptr() } as
                                             *mut ExprListItem).offset(0 as isize)).fg.sort_flags
                     } as i32 & 2 != 0 {
+        /// This block runs if reg1 contains a NULL.
         let addr: i32 = unsafe { sqlite3_vdbe_add_op1(v, 52, reg1) };
         '__s13:
             {
@@ -1617,12 +1866,28 @@ extern "C" fn window_code_range_test(p: *mut WindowCodeArg, mut op: i32,
             }
         }
         unsafe { sqlite3_vdbe_add_op2(v, 9, 0, addr_done) };
+
+        /// This block runs if reg1 is not NULL, but reg2 is.
         unsafe { sqlite3_vdbe_jump_here(v, addr) };
         unsafe {
             sqlite3_vdbe_add_op2(v, 51, reg2,
                 if op == 55 || op == 58 { addr_done } else { lbl })
         };
     }
+
+    /// Register reg1 currently contains csr1.peerVal (the peer-value from csr1).
+    ///* This block adds (or subtracts for DESC) the numeric value in regVal
+    ///* from it. Or, if reg1 is not numeric (it is a NULL, a text value or a blob),
+    ///* then leave reg1 as it is. In pseudo-code, this is implemented as:
+    ///*
+    ///*   if( reg1>='' ) goto addrGe;
+    ///*   reg1 = reg1 +/- regVal
+    ///*   addrGe:
+    ///*
+    ///* Since all strings and blobs are greater-than-or-equal-to an empty string,
+    ///* the add/subtract is skipped for these, as required. If reg1 is a NULL,
+    ///* then the arithmetic is performed, but since adding or subtracting from
+    ///* NULL is always NULL anyway, this case is handled as required too.
     unsafe {
         sqlite3_vdbe_add_op4(v, 118, 0, reg_string, 0,
             c"".as_ptr() as *mut i8 as *const i8, -1)
@@ -1633,6 +1898,10 @@ extern "C" fn window_code_range_test(p: *mut WindowCodeArg, mut op: i32,
     }
     unsafe { sqlite3_vdbe_add_op3(v, arith, reg_val_1, reg1, reg1) };
     unsafe { sqlite3_vdbe_jump_here(v, addr_ge) };
+
+    /// Compare registers reg2 and reg1, taking the jump if required. Note that
+    ///* control skips over this test if the BIGNULL flag is set and either
+    ///* reg1 or reg2 contain a NULL value.
     unsafe { sqlite3_vdbe_add_op3(v, op, reg2, lbl, reg1) };
     p_coll =
         unsafe {
@@ -1650,6 +1919,10 @@ extern "C" fn window_code_range_test(p: *mut WindowCodeArg, mut op: i32,
     unsafe { sqlite3_release_temp_reg(p_parse, reg2) };
 }
 
+///* Helper function for sqlite3WindowCodeStep(). Each call to this function
+///* generates VM code for a single RETURN_ROW, AGGSTEP or AGGINVERSE
+///* operation. Refer to the header comment for sqlite3WindowCodeStep() for
+///* details.
 extern "C" fn window_code_op(p: *mut WindowCodeArg, op: i32,
     reg_countdown_1: i32, jump_on_eof_1: i32) -> i32 {
     let mut csr: i32 = 0;
@@ -1800,7 +2073,341 @@ extern "C" fn window_code_op(p: *mut WindowCodeArg, op: i32,
     return ret;
 }
 
+///* sqlite3WhereBegin() has already been called for the SELECT statement
+///* passed as the second argument when this function is invoked. It generates
+///* code to populate the Window.regResult register for each window function
+///* and invoke the sub-routine at instruction addrGosub once for each row.
+///* sqlite3WhereEnd() is always called before returning.
+///*
+///* This function handles several different types of window frames, which
+///* require slightly different processing. The following pseudo code is
+///* used to implement window frames of the form:
+///*
+///*   ROWS BETWEEN <expr1> PRECEDING AND <expr2> FOLLOWING
+///*
+///* Other window frame types use variants of the following:
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*       if( new partition ){
+///*         Gosub flush
+///*       }
+///*       Insert new row into eph table.
+///*      
+///*       if( first row of partition ){
+///*         // Rewind three cursors, all open on the eph table.
+///*         Rewind(csrEnd);
+///*         Rewind(csrStart);
+///*         Rewind(csrCurrent);
+///*      
+///*         regEnd = <expr2>          // FOLLOWING expression
+///*         regStart = <expr1>        // PRECEDING expression
+///*       }else{
+///*         // First time this branch is taken, the eph table contains two
+///*         // rows. The first row in the partition, which all three cursors
+///*         // currently point to, and the following row.
+///*         AGGSTEP
+///*         if( (regEnd--)<=0 ){
+///*           RETURN_ROW
+///*           if( (regStart--)<=0 ){
+///*             AGGINVERSE
+///*           }
+///*         }
+///*       }
+///*     }
+///*     flush:
+///*       AGGSTEP
+///*       while( 1 ){
+///*         RETURN ROW
+///*         if( csrCurrent is EOF ) break;
+///*         if( (regStart--)<=0 ){
+///*           AggInverse(csrStart)
+///*           Next(csrStart)
+///*         }
+///*       }
+///*
+///* The pseudo-code above uses the following shorthand:
+///*
+///*   AGGSTEP:    invoke the aggregate xStep() function for each window function
+///*               with arguments read from the current row of cursor csrEnd, then
+///*               step cursor csrEnd forward one row (i.e. sqlite3BtreeNext()).
+///*
+///*   RETURN_ROW: return a row to the caller based on the contents of the
+///*               current row of csrCurrent and the current state of all
+///*               aggregates. Then step cursor csrCurrent forward one row.
+///*
+///*   AGGINVERSE: invoke the aggregate xInverse() function for each window
+///*               functions with arguments read from the current row of cursor
+///*               csrStart. Then step csrStart forward one row.
+///*
+///* There are two other ROWS window frames that are handled significantly
+///* differently from the above - "BETWEEN <expr> PRECEDING AND <expr> PRECEDING"
+///* and "BETWEEN <expr> FOLLOWING AND <expr> FOLLOWING". These are special
+///* cases because they change the order in which the three cursors (csrStart,
+///* csrCurrent and csrEnd) iterate through the ephemeral table. Cases that
+///* use UNBOUNDED or CURRENT ROW are much simpler variations on one of these
+///* three.
+///*
+///*   ROWS BETWEEN <expr1> PRECEDING AND <expr2> PRECEDING
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*       if( new partition ){
+///*         Gosub flush
+///*       }
+///*       Insert new row into eph table.
+///*       if( first row of partition ){
+///*         Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*         regEnd = <expr2>
+///*         regStart = <expr1>
+///*       }else{
+///*         if( (regEnd--)<=0 ){
+///*           AGGSTEP
+///*         }
+///*         RETURN_ROW
+///*         if( (regStart--)<=0 ){
+///*           AGGINVERSE
+///*         }
+///*       }
+///*     }
+///*     flush:
+///*       if( (regEnd--)<=0 ){
+///*         AGGSTEP
+///*       }
+///*       RETURN_ROW
+///*
+///*
+///*   ROWS BETWEEN <expr1> FOLLOWING AND <expr2> FOLLOWING
+///*
+///*   ... loop started by sqlite3WhereBegin() ...
+///*     if( new partition ){
+///*       Gosub flush
+///*     }
+///*     Insert new row into eph table.
+///*     if( first row of partition ){
+///*       Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*       regEnd = <expr2>
+///*       regStart = regEnd - <expr1>
+///*     }else{
+///*       AGGSTEP
+///*       if( (regEnd--)<=0 ){
+///*         RETURN_ROW
+///*       }
+///*       if( (regStart--)<=0 ){
+///*         AGGINVERSE
+///*       }
+///*     }
+///*   }
+///*   flush:
+///*     AGGSTEP
+///*     while( 1 ){
+///*       if( (regEnd--)<=0 ){
+///*         RETURN_ROW
+///*         if( eof ) break;
+///*       }
+///*       if( (regStart--)<=0 ){
+///*         AGGINVERSE
+///*         if( eof ) break
+///*       }
+///*     }
+///*     while( !eof csrCurrent ){
+///*       RETURN_ROW
+///*     }
+///*
+///* For the most part, the patterns above are adapted to support UNBOUNDED by
+///* assuming that it is equivalent to "infinity PRECEDING/FOLLOWING" and
+///* CURRENT ROW by assuming that it is equivalent to "0 PRECEDING/FOLLOWING".
+///* This is optimized of course - branches that will never be taken and
+///* conditions that are always true are omitted from the VM code. The only
+///* exceptional case is:
+///*
+///*   ROWS BETWEEN <expr1> FOLLOWING AND UNBOUNDED FOLLOWING
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*     if( new partition ){
+///*       Gosub flush
+///*     }
+///*     Insert new row into eph table.
+///*     if( first row of partition ){
+///*       Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*       regStart = <expr1>
+///*     }else{
+///*       AGGSTEP
+///*     }
+///*   }
+///*   flush:
+///*     AGGSTEP
+///*     while( 1 ){
+///*       if( (regStart--)<=0 ){
+///*         AGGINVERSE
+///*         if( eof ) break
+///*       }
+///*       RETURN_ROW
+///*     }
+///*     while( !eof csrCurrent ){
+///*       RETURN_ROW
+///*     }
+///*
+///* Also requiring special handling are the cases:
+///*
+///*   ROWS BETWEEN <expr1> PRECEDING AND <expr2> PRECEDING
+///*   ROWS BETWEEN <expr1> FOLLOWING AND <expr2> FOLLOWING
+///*
+///* when (expr1 < expr2). This is detected at runtime, not by this function.
+///* To handle this case, the pseudo-code programs depicted above are modified
+///* slightly to be:
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*     if( new partition ){
+///*       Gosub flush
+///*     }
+///*     Insert new row into eph table.
+///*     if( first row of partition ){
+///*       Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*       regEnd = <expr2>
+///*       regStart = <expr1>
+///*       if( regEnd < regStart ){
+///*         RETURN_ROW
+///*         delete eph table contents
+///*         continue
+///*       }
+///*     ...
+///*
+///* The new "continue" statement in the above jumps to the next iteration
+///* of the outer loop - the one started by sqlite3WhereBegin().
+///*
+///* The various GROUPS cases are implemented using the same patterns as
+///* ROWS. The VM code is modified slightly so that:
+///*
+///*   1. The else branch in the main loop is only taken if the row just
+///*      added to the ephemeral table is the start of a new group. In
+///*      other words, it becomes:
+///*
+///*         ... loop started by sqlite3WhereBegin() ...
+///*         if( new partition ){
+///*           Gosub flush
+///*         }
+///*         Insert new row into eph table.
+///*         if( first row of partition ){
+///*           Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*           regEnd = <expr2>
+///*           regStart = <expr1>
+///*         }else if( new group ){
+///*           ...
+///*         }
+///*       }
+///*
+///*   2. Instead of processing a single row, each RETURN_ROW, AGGSTEP or
+///*      AGGINVERSE step processes the current row of the relevant cursor and
+///*      all subsequent rows belonging to the same group.
+///*
+///* RANGE window frames are a little different again. As for GROUPS, the
+///* main loop runs once per group only. And RETURN_ROW, AGGSTEP and AGGINVERSE
+///* deal in groups instead of rows. As for ROWS and GROUPS, there are three
+///* basic cases:
+///*
+///*   RANGE BETWEEN <expr1> PRECEDING AND <expr2> FOLLOWING
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*       if( new partition ){
+///*         Gosub flush
+///*       }
+///*       Insert new row into eph table.
+///*       if( first row of partition ){
+///*         Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*         regEnd = <expr2>
+///*         regStart = <expr1>
+///*       }else{
+///*         AGGSTEP
+///*         while( (csrCurrent.key + regEnd) < csrEnd.key ){
+///*           RETURN_ROW
+///*           while( csrStart.key + regStart) < csrCurrent.key ){
+///*             AGGINVERSE
+///*           }
+///*         }
+///*       }
+///*     }
+///*     flush:
+///*       AGGSTEP
+///*       while( 1 ){
+///*         RETURN ROW
+///*         if( csrCurrent is EOF ) break;
+///*           while( csrStart.key + regStart) < csrCurrent.key ){
+///*             AGGINVERSE
+///*           }
+///*         }
+///*       }
+///*
+///* In the above notation, "csr.key" means the current value of the ORDER BY
+///* expression (there is only ever 1 for a RANGE that uses an <expr> FOLLOWING
+///* or <expr PRECEDING) read from cursor csr.
+///*
+///*   RANGE BETWEEN <expr1> PRECEDING AND <expr2> PRECEDING
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*       if( new partition ){
+///*         Gosub flush
+///*       }
+///*       Insert new row into eph table.
+///*       if( first row of partition ){
+///*         Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*         regEnd = <expr2>
+///*         regStart = <expr1>
+///*       }else{
+///*         while( (csrEnd.key + regEnd) <= csrCurrent.key ){
+///*           AGGSTEP
+///*         }
+///*         while( (csrStart.key + regStart) < csrCurrent.key ){
+///*           AGGINVERSE
+///*         }
+///*         RETURN_ROW
+///*       }
+///*     }
+///*     flush:
+///*       while( (csrEnd.key + regEnd) <= csrCurrent.key ){
+///*         AGGSTEP
+///*       }
+///*       while( (csrStart.key + regStart) < csrCurrent.key ){
+///*         AGGINVERSE
+///*       }
+///*       RETURN_ROW
+///*
+///*   RANGE BETWEEN <expr1> FOLLOWING AND <expr2> FOLLOWING
+///*
+///*     ... loop started by sqlite3WhereBegin() ...
+///*       if( new partition ){
+///*         Gosub flush
+///*       }
+///*       Insert new row into eph table.
+///*       if( first row of partition ){
+///*         Rewind(csrEnd) ; Rewind(csrStart) ; Rewind(csrCurrent)
+///*         regEnd = <expr2>
+///*         regStart = <expr1>
+///*       }else{
+///*         AGGSTEP
+///*         while( (csrCurrent.key + regEnd) < csrEnd.key ){
+///*           while( (csrCurrent.key + regStart) > csrStart.key ){
+///*             AGGINVERSE
+///*           }
+///*           RETURN_ROW
+///*         }
+///*       }
+///*     }
+///*     flush:
+///*       AGGSTEP
+///*       while( 1 ){
+///*         while( (csrCurrent.key + regStart) > csrStart.key ){
+///*           AGGINVERSE
+///*           if( eof ) break "while( 1 )" loop.
+///*         }
+///*         RETURN_ROW
+///*       }
+///*       while( !eof csrCurrent ){
+///*         RETURN_ROW
+///*       }
+///*
+///* The text above leaves out many details. Refer to the code and comments
+///* below for a more complete picture.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
     p_w_info: *mut WhereInfo, reg_gosub: i32, addr_gosub: i32) -> () {
     unsafe {
@@ -1808,11 +2415,13 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
         let p_order_by: *mut ExprList = unsafe { (*p_m_win).p_order_by };
         let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
         let mut csr_write: i32 = 0;
+        /// Cursor used to write to eph. table
         let csr_input: i32 =
             unsafe {
                 (*(unsafe { (*(*p).p_src).a.as_ptr() } as
                                 *mut SrcItem).offset(0 as isize)).i_cursor
             };
+        /// Cursor of sub-select
         let n_input: i32 =
             unsafe {
                     (*unsafe {
@@ -1820,24 +2429,42 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                                                     *mut SrcItem).offset(0 as isize)).p_s_tab
                                 }).n_col
                 } as i32;
+        /// Number of cols returned by sub
         let mut i_input: i32 = 0;
+        /// To iterate through sub cols
         let mut addr_ne: i32 = 0;
+        /// Address of OP_Ne
         let mut addr_gosub_flush: i32 = 0;
+        /// Address of OP_Gosub to flush:
         let mut addr_integer: i32 = 0;
+        /// Address of OP_Integer
         let mut addr_empty: i32 = 0;
+        /// Address of OP_Rewind in flush:
         let mut reg_new: i32 = 0;
+        /// Array of registers holding new input row
         let mut reg_record: i32 = 0;
+        /// regNew array in record form
         let mut reg_new_peer: i32 = 0;
+        /// Peer values for new row (part of regNew)
         let mut reg_peer: i32 = 0;
+        /// Peer values for current row
         let mut reg_flush_part: i32 = 0;
+        /// Register for "Gosub flush_partition"
         let mut s: WindowCodeArg = unsafe { core::mem::zeroed() };
+        /// Context object for sub-routines
         let mut lbl_where_end: i32 = 0;
+        /// Label just before sqlite3WhereEnd() code
         let mut reg_start: i32 = 0;
+        /// Value of <expr> PRECEDING
         let mut reg_end: i32 = 0;
+
+        /// Value of <expr> FOLLOWING
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
         lbl_where_end = unsafe { sqlite3_vdbe_make_label(p_parse) };
+
+        /// Fill in the context object
         unsafe {
             memset(&raw mut s as *mut (), 0,
                 core::mem::size_of::<WindowCodeArg>() as u64)
@@ -1875,7 +2502,11 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                 _ => { s.e_delete = 2; }
             }
         }
-        reg_new = unsafe { (*p_parse).n_mem } + 1;
+
+        /// Allocate registers for the array of values from the sub-query, the
+        ///* same values in record form, and the rowid used to insert said record
+        ///* into the ephemeral table.
+        (reg_new = unsafe { (*p_parse).n_mem } + 1);
         unsafe { (*p_parse).n_mem += n_input };
         reg_record =
             { let __p = unsafe { &mut (*p_parse).n_mem }; *__p += 1; *__p };
@@ -1965,6 +2596,8 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                     unsafe { (*p_m_win).reg_part }, n_part - 1)
             };
         }
+
+        /// Insert the new row into the ephemeral table
         unsafe { sqlite3_vdbe_add_op2(v, 129, csr_write, s.reg_rowid) };
         unsafe {
             sqlite3_vdbe_add_op3(v, 130, csr_write, reg_record, s.reg_rowid)
@@ -1974,7 +2607,9 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                 sqlite3_vdbe_add_op3(v, 53, unsafe { (*p_m_win).reg_one }, 0,
                     s.reg_rowid)
             };
-        s.reg_arg = window_init_accum(p_parse, p_m_win);
+
+        /// This block is run for the first row of each partition
+        (s.reg_arg = window_init_accum(p_parse, p_m_win));
         if reg_start != 0 {
             unsafe {
                 sqlite3_expr_code(p_parse, unsafe { (*p_m_win).p_start },
@@ -2006,6 +2641,8 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                 } else { 56 };
             let addr_ge: i32 =
                 unsafe { sqlite3_vdbe_add_op3(v, op, reg_start, 0, reg_end) };
+
+            ///   values previously checked
             window_agg_final(&s, 0);
             unsafe { sqlite3_vdbe_add_op1(v, 36, s.current.csr) };
             window_return_one_row(&mut s);
@@ -2110,6 +2747,8 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                 }
             }
         }
+
+        /// End of the main input loop
         unsafe { sqlite3_vdbe_resolve_label(v, lbl_where_end) };
         unsafe { sqlite3_where_end(p_w_info) };
         if !(unsafe { (*p_m_win).p_partition }).is_null() {
@@ -2142,6 +2781,10 @@ pub extern "C" fn sqlite3_window_code_step(p_parse: *mut Parse, p: &Select,
                 addr_break2 = window_code_op(&mut s, 2, 0, 1);
             } else {
                 { let _ = 0; };
+
+                /// assert( regStart>=0 );
+                ///* regEnd = regEnd - regStart;
+                ///* regStart = 0;
                 unsafe {
                     sqlite3_vdbe_add_op3(v, 108, reg_start, reg_end, reg_end)
                 };
@@ -2205,6 +2848,8 @@ extern "C" fn disallow_aggregates_in_order_by_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Append a copy of each expression in expression-list pAppend to
+///* expression list pList. Return a pointer to the result list.
 extern "C" fn expr_list_append_list(p_parse_1: *mut Parse,
     mut p_list_1: *mut ExprList, p_append_1: *const ExprList,
     b_int_to_null_1: i32) -> *mut ExprList {
@@ -2274,6 +2919,9 @@ extern "C" fn expr_list_append_list(p_parse_1: *mut Parse,
     }
 }
 
+///* Callback function used by selectWindowRewriteEList(). If necessary,
+///* this function appends to the output expression-list and updates
+///* expression (*ppExpr) in place.
 extern "C" fn select_window_rewrite_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -2693,6 +3341,17 @@ extern "C" fn select_window_rewrite_select_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Iterate through each expression in expression-list pEList. For each:
+///*
+///*   * TK_COLUMN,
+///*   * aggregate function, or
+///*   * window function with a Window object that is not a member of the
+///*     Window list passed as the second argument (pWin).
+///*
+///* Append the node to output expression-list (*ppSub). And replace it
+///* with a TK_COLUMN that reads the (N-1)th element of table
+///* pWin->iEphCsr, where N is the number of elements in (*ppSub) after
+///* appending the new one.
 extern "C" fn select_window_rewrite_e_list(p_parse_1: *mut Parse,
     p_win_1: *mut Window, p_src_1: *mut SrcList, p_e_list_1: *mut ExprList,
     p_tab_1: *mut Table, pp_sub_1: &mut *mut ExprList) -> () {
@@ -2724,6 +3383,12 @@ extern "C" fn select_window_rewrite_e_list(p_parse_1: *mut Parse,
     }
 }
 
+///* When rewriting a query, if the new subquery in the FROM clause
+///* contains TK_AGG_FUNCTION nodes that refer to an outer query,
+///* then we have to increase the Expr->op2 values of those nodes
+///* due to the extra subquery layer that was added.
+///*
+///* See also the incrAggDepth() routine in resolve.c
 extern "C" fn sqlite3_window_extra_agg_func_depth(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     if unsafe { (*p_expr_1).op } as i32 == 169 &&
@@ -2739,7 +3404,13 @@ extern "C" fn sqlite3_window_extra_agg_func_depth(p_walker_1: *mut Walker,
     return 0;
 }
 
+///* If the SELECT statement passed as the second argument does not invoke
+///* any SQL window functions, this function is a no-op. Otherwise, it
+///* rewrites the SELECT statement so that window function xStep functions
+///* are invoked in the correct order as described under "SELECT REWRITING"
+///* at the top of this file.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
     -> i32 {
     unsafe {
@@ -2752,14 +3423,18 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
             let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse) };
             let db: *mut Sqlite3 = unsafe { (*p_parse).db };
             let mut p_sub: *mut Select = core::ptr::null_mut();
+            /// The subquery
             let p_src: *mut SrcList = unsafe { (*p).p_src };
             let p_where: *mut Expr = unsafe { (*p).p_where };
             let p_group_by: *mut ExprList = unsafe { (*p).p_group_by };
             let p_having: *mut Expr = unsafe { (*p).p_having };
             let mut p_sort: *mut ExprList = core::ptr::null_mut();
             let mut p_sublist: *mut ExprList = core::ptr::null_mut();
+            /// Expression list for sub-query
             let p_m_win: *mut Window = unsafe { (*p).p_win };
+            /// Main window object
             let mut p_win: *mut Window = core::ptr::null_mut();
+            /// Window object iterator
             let mut p_tab: *mut Table = core::ptr::null_mut();
             let mut w: Walker = unsafe { core::mem::zeroed() };
             let sel_flags: u32 = unsafe { (*p).sel_flags };
@@ -2786,9 +3461,13 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
             unsafe { (*p).p_having = core::ptr::null_mut() };
             unsafe { (*p).sel_flags &= !(8 as u32) };
             unsafe { (*p).sel_flags |= 1048576 as u32 };
-            p_sort =
+
+            /// Create the ORDER BY clause for the sub-select. This is the concatenation
+            ///* of the window PARTITION and ORDER BY clauses. Then, if this makes it
+            ///* redundant, remove the ORDER BY from the parent SELECT.
+            (p_sort =
                 expr_list_append_list(p_parse, core::ptr::null_mut(),
-                    unsafe { (*p_m_win).p_partition } as *const ExprList, 1);
+                    unsafe { (*p_m_win).p_partition } as *const ExprList, 1));
             p_sort =
                 expr_list_append_list(p_parse, p_sort,
                     unsafe { (*p_m_win).p_order_by } as *const ExprList, 1);
@@ -2812,6 +3491,10 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
                 }
                 unsafe { (*p_sort).n_expr = n_save };
             }
+
+            /// Assign a cursor number for the ephemeral table used to buffer rows.
+            ///* The OpenEphemeral instruction is coded later, after it is known how
+            ///* many columns the table will have.
             unsafe {
                 (*p_m_win).i_eph_csr =
                     {
@@ -2832,9 +3515,13 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
                         unsafe { (*p_sublist).n_expr }
                     } else { 0 }
             };
-            p_sublist =
+
+            /// Append the PARTITION BY and ORDER BY expressions to the to the
+            ///* sub-select expression list. They are required to figure out where
+            ///* boundaries for partitions and sets of peer rows lie.
+            (p_sublist =
                 expr_list_append_list(p_parse, p_sublist,
-                    unsafe { (*p_m_win).p_partition } as *const ExprList, 0);
+                    unsafe { (*p_m_win).p_partition } as *const ExprList, 0));
             p_sublist =
                 expr_list_append_list(p_parse, p_sublist,
                     unsafe { (*p_m_win).p_order_by } as *const ExprList, 0);
@@ -2952,7 +3639,11 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
                     };
                 unsafe { (*p_sub).sel_flags |= sel_flags & 8 as u32 };
                 if p_tab2 == core::ptr::null_mut() {
-                    rc = 7;
+
+                    /// Might actually be some other kind of error, but in that case
+                    ///* pParse->nErr will be set, so if SQLITE_NOMEM is set, we will get
+                    ///* the correct error message regardless.
+                    (rc = 7);
                 } else {
                     unsafe {
                         memcpy(p_tab as *mut (), p_tab2 as *const (),
@@ -2976,6 +3667,10 @@ pub extern "C" fn sqlite3_window_rewrite(p_parse: *mut Parse, p: *mut Select)
                 }
             }
             if unsafe { (*db).malloc_failed } != 0 { rc = 7; }
+
+            /// Defer deleting the temporary table pTab because if an error occurred,
+            ///* there could still be references to that table embedded in the
+            ///* result-set or ORDER BY clause of the SELECT statement p.
             unsafe {
                 sqlite3_parser_add_cleanup(p_parse, Some(sqlite3_db_free),
                     p_tab as *mut ())
@@ -3015,6 +3710,11 @@ extern "C" fn window_find(p_parse_1: *mut Parse, p_list_1: *mut Window,
     return p;
 }
 
+///* Window *pWin has just been created from a WINDOW clause. Token pBase
+///* is the base window. Earlier windows from the same WINDOW clause are
+///* stored in the linked list starting at pWin->pNextWin. This function
+///* either updates *pWin according to the base specification, or else
+///* leaves an error in pParse.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_chain(p_parse: *mut Parse,
     p_win: &mut Window, p_list: *mut Window) -> () {
@@ -3061,6 +3761,12 @@ pub extern "C" fn sqlite3_window_chain(p_parse: *mut Parse,
     }
 }
 
+///* Static names for the built-in window function names.  These static
+///* names are used, rather than string literals, so that FuncDef objects
+///* can be associated with a particular window function by direct
+///* comparison of the zName pointer.  Example:
+///*
+///*       if( pFuncDef->zName==row_valueName ){ ... }
 static row_number_name: [i8; 11] =
     [114 as i8, 111 as i8, 119 as i8, 95 as i8, 110 as i8, 117 as i8,
             109 as i8, 98 as i8, 101 as i8, 114 as i8, 0 as i8];
@@ -3084,6 +3790,21 @@ static cume_dist_name: [i8; 10] =
 static ntile_name: [i8; 6] =
     [110 as i8, 116 as i8, 105 as i8, 108 as i8, 101 as i8, 0 as i8];
 
+///* This function is called immediately after resolving the function name
+///* for a window function within a SELECT statement. Argument pList is a
+///* linked list of WINDOW definitions for the current SELECT statement.
+///* Argument pFunc is the function definition just resolved and pWin
+///* is the Window object representing the associated OVER clause. This
+///* function updates the contents of pWin as follows:
+///*
+///*   * If the OVER clause referred to a named window (as in "max(x) OVER win"),
+///*     search list pList for a matching WINDOW definition, and update pWin
+///*     accordingly. If no such WINDOW clause can be found, leave an error
+///*     in pParse.
+///*
+///*   * If the function is a built-in window function that requires the
+///*     window to be coerced (see "BUILT-IN WINDOW FUNCTIONS" at the top
+///*     of this file), pWin is updated here.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_update(p_parse: *mut Parse,
     p_list: *mut Window, p_win: *mut Window, p_func: *mut FuncDef) -> () {
@@ -3245,6 +3966,9 @@ pub extern "C" fn sqlite3_window_update(p_parse: *mut Parse,
     unsafe { (*p_win).p_w_func = p_func };
 }
 
+///* Allocate and return a duplicate of the Window object indicated by the
+///* third argument. Set the Window.pOwner field of the new object to
+///* pOwner.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_dup(db: *mut Sqlite3, p_owner: *mut Expr,
     p: *mut Window) -> *mut Window {
@@ -3322,6 +4046,8 @@ pub extern "C" fn sqlite3_window_dup(db: *mut Sqlite3, p_owner: *mut Expr,
     return p_new;
 }
 
+///* Return a copy of the linked list of Window objects passed as the
+///* second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_list_dup(db: *mut Sqlite3, p: *mut Window)
     -> *mut Window {
@@ -3346,6 +4072,10 @@ pub extern "C" fn sqlite3_window_list_dup(db: *mut Sqlite3, p: *mut Window)
     return p_ret;
 }
 
+///* Implementation of built-in window function row_number(). Assumes that the
+///* window frame has been coerced to:
+///*
+///*   ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 extern "C" fn row_number_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let p: *mut i64 =
@@ -3372,6 +4102,8 @@ extern "C" fn row_number_value_func(p_ctx_1: *mut Sqlite3Context) -> () {
     };
 }
 
+///* Context object type used by rank(), dense_rank(), percent_rank() and
+///* cume_dist().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct CallCount {
@@ -3380,6 +4112,10 @@ struct CallCount {
     n_total: i64,
 }
 
+///* Implementation of built-in window function dense_rank(). Assumes that
+///* the window frame has been set to:
+///*
+///*   RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 extern "C" fn dense_rank_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut CallCount = core::ptr::null_mut();
@@ -3414,6 +4150,10 @@ extern "C" fn dense_rank_value_func(p_ctx_1: *mut Sqlite3Context) -> () {
     }
 }
 
+///* Implementation of built-in window function rank(). Assumes that
+///* the window frame has been set to:
+///*
+///*   RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 extern "C" fn rank_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut CallCount = core::ptr::null_mut();
@@ -3450,6 +4190,10 @@ extern "C" fn rank_value_func(p_ctx_1: *mut Sqlite3Context) -> () {
     }
 }
 
+///* Implementation of built-in window function percent_rank(). Assumes that
+///* the window frame has been set to:
+///*
+///*   GROUPS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 extern "C" fn percent_rank_step_func(p_ctx_1: *mut Sqlite3Context,
     n_arg_1: i32, ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut CallCount = core::ptr::null_mut();
@@ -3503,6 +4247,10 @@ extern "C" fn percent_rank_inv_func(p_ctx_1: *mut Sqlite3Context,
     { let __p = unsafe { &mut (*p).n_step }; let __t = *__p; *__p += 1; __t };
 }
 
+///* Implementation of built-in window function cume_dist(). Assumes that
+///* the window frame has been set to:
+///*
+///*   GROUPS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
 extern "C" fn cume_dist_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut CallCount = core::ptr::null_mut();
@@ -3548,6 +4296,7 @@ extern "C" fn cume_dist_inv_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     { let __p = unsafe { &mut (*p).n_step }; let __t = *__p; *__p += 1; __t };
 }
 
+///* Context object for ntile() window function.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct NtileCtx {
@@ -3556,6 +4305,10 @@ struct NtileCtx {
     i_row: i64,
 }
 
+///* Implementation of ntile(). This assumes that the window frame has
+///* been coerced to:
+///*
+///*   ROWS CURRENT ROW AND UNBOUNDED FOLLOWING
 extern "C" fn ntile_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut NtileCtx = core::ptr::null_mut();
@@ -3642,6 +4395,7 @@ extern "C" fn ntile_inv_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     { let __p = unsafe { &mut (*p).i_row }; let __t = *__p; *__p += 1; __t };
 }
 
+///* Context object for last_value() window function.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct LastValueCtx {
@@ -3649,6 +4403,7 @@ struct LastValueCtx {
     n_val: i32,
 }
 
+///* Implementation of last_value().
 extern "C" fn last_value_step_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut LastValueCtx = core::ptr::null_mut();
@@ -3730,6 +4485,9 @@ static last_value_name: [i8; 11] =
     [108 as i8, 97 as i8, 115 as i8, 116 as i8, 95 as i8, 118 as i8, 97 as i8,
             108 as i8, 117 as i8, 101 as i8, 0 as i8];
 
+///* Implementation of built-in window function nth_value(). This
+///* implementation is used in "slow mode" only - when the EXCLUDE clause
+///* is not set to the default value "NO OTHERS".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct NthValueCtx {
@@ -3913,6 +4671,7 @@ extern "C" fn first_value_finalize_func(p_ctx_1: *mut Sqlite3Context) -> () {
     }
 }
 
+///* Register those built-in window functions that are not also aggregates.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_functions() -> () {
     unsafe {
@@ -3925,6 +4684,9 @@ pub extern "C" fn sqlite3_window_functions() -> () {
     }
 }
 
+///* Attach PARTITION and ORDER BY clauses pPartition and pOrderBy to window
+///* pWin. Also, if parameter pBase is not NULL, set pWin->zBase to the
+///* equivalent nul-terminated string.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_window_assemble(p_parse: &Parse, p_win: *mut Window,
     p_partition: *mut ExprList, p_order_by: *mut ExprList, p_base: *mut Token)

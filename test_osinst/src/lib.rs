@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
@@ -88,6 +94,7 @@ extern "C" fn vfslog_call(p_vfs: *mut Sqlite3Vfs, e_event: i32, i_fileid: i32,
     unsafe { (*p).n_buf += 24 };
 }
 
+///* Method declarations for vfslog_file.
 extern "C" fn vfslog_close(p_file: *mut Sqlite3File) -> i32 {
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut rc: i32 = 0;
@@ -109,6 +116,7 @@ extern "C" fn vfslog_close(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Read data from an vfslog-file.
 extern "C" fn vfslog_read(p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -129,6 +137,7 @@ extern "C" fn vfslog_read(p_file: *mut Sqlite3File, z_buf: *mut (),
     return rc;
 }
 
+///* Write data to an vfslog-file.
 extern "C" fn vfslog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -149,6 +158,7 @@ extern "C" fn vfslog_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     return rc;
 }
 
+///* Truncate an vfslog-file.
 extern "C" fn vfslog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let mut rc: i32 = 0;
@@ -169,6 +179,7 @@ extern "C" fn vfslog_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     return rc;
 }
 
+///* Sync an vfslog-file.
 extern "C" fn vfslog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -188,6 +199,7 @@ extern "C" fn vfslog_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     return rc;
 }
 
+///* Return the current file-size of an vfslog-file.
 extern "C" fn vfslog_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -208,6 +220,7 @@ extern "C" fn vfslog_file_size(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* Lock an vfslog-file.
 extern "C" fn vfslog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -227,6 +240,7 @@ extern "C" fn vfslog_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Unlock an vfslog-file.
 extern "C" fn vfslog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -246,6 +260,7 @@ extern "C" fn vfslog_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Check if another file-handle holds a RESERVED lock on an vfslog-file.
 extern "C" fn vfslog_check_reserved_lock(p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -266,6 +281,7 @@ extern "C" fn vfslog_check_reserved_lock(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* File control method. For custom operations on an vfslog-file.
 extern "C" fn vfslog_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let p: *const VfslogFile = p_file as *mut VfslogFile as *const VfslogFile;
@@ -289,6 +305,7 @@ extern "C" fn vfslog_file_control(p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for an vfslog-file.
 extern "C" fn vfslog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -308,6 +325,7 @@ extern "C" fn vfslog_sector_size(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Return the device characteristic flags supported by an vfslog-file.
 extern "C" fn vfslog_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut t: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -450,6 +468,7 @@ extern "C" fn vfslog_string(p_vfs: *mut Sqlite3Vfs, z_str: *const i8) -> () {
     unsafe { (*p).n_buf += 4 + n_str };
 }
 
+///* Method declarations for vfslog_vfs.
 extern "C" fn vfslog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -492,6 +511,9 @@ extern "C" fn vfslog_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     }
 }
 
+///* Delete the file located at zPath. If the dirSync argument is true,
+///* ensure the file-system modifications are synced to disk before
+///* returning.
 extern "C" fn vfslog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -512,6 +534,8 @@ extern "C" fn vfslog_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Test for access permissions. Return true if the requested permission
+///* is available, or false otherwise.
 extern "C" fn vfslog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -533,6 +557,9 @@ extern "C" fn vfslog_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Populate buffer zOut with the full canonical pathname corresponding
+///* to the pathname in zPath. zOut is guaranteed to point to a buffer
+///* of at least (INST_MAX_PATHNAME+1) bytes.
 extern "C" fn vfslog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     return unsafe {
@@ -545,6 +572,7 @@ extern "C" fn vfslog_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
         };
 }
 
+///* Open the dynamic library located at zPath and return a handle.
 extern "C" fn vfslog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -556,6 +584,9 @@ extern "C" fn vfslog_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
         };
 }
 
+///* Populate the buffer zErrMsg (size nByte bytes) with a human readable
+///* utf-8 string describing the most recent error encountered associated 
+///* with dynamic libraries.
 extern "C" fn vfslog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -568,6 +599,7 @@ extern "C" fn vfslog_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     };
 }
 
+///* Return a pointer to the symbol zSymbol in the dynamic library pHandle.
 extern "C" fn vfslog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -579,6 +611,7 @@ extern "C" fn vfslog_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
         };
 }
 
+///* Close the dynamic library handle pHandle.
 extern "C" fn vfslog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     -> () {
     unsafe {
@@ -590,6 +623,8 @@ extern "C" fn vfslog_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     };
 }
 
+///* Populate the buffer pointed to by zBufOut with nByte bytes of 
+///* random data.
 extern "C" fn vfslog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -602,6 +637,8 @@ extern "C" fn vfslog_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
         };
 }
 
+///* Sleep for nMicro microseconds. Return the number of microseconds 
+///* actually slept.
 extern "C" fn vfslog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -612,6 +649,7 @@ extern "C" fn vfslog_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
         };
 }
 
+///* Return the current time as a Julian Day number in *pTimeOut.
 extern "C" fn vfslog_current_time(p_vfs: *mut Sqlite3Vfs,
     p_time_out: *mut f64) -> i32 {
     return unsafe {
@@ -849,6 +887,7 @@ extern "C" fn vfslog_eventname(e_event_1: i32) -> *const i8 {
     return z_event;
 }
 
+///* Virtual table type for the vfslog reader module.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogVtab {
@@ -858,6 +897,7 @@ struct VfslogVtab {
     z_file: *mut i8,
 }
 
+///* Virtual table cursor type for the vfslog reader module.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct VfslogCsr {
@@ -877,12 +917,19 @@ extern "C" fn get32bits(p: *const u8) -> u32 {
                 unsafe { *p.offset(3 as isize) } as i32) as u32;
 }
 
+///* The argument must point to a buffer containing a nul-terminated string.
+///* If the string begins with an SQL quote character it is overwritten by
+///* the dequoted version. Otherwise the buffer is left unmodified.
+#[allow(unused_doc_comments)]
 extern "C" fn dequote(z: *mut i8) -> () {
     let mut quote: i8 = 0 as i8;
-    quote = unsafe { *z.offset(0 as isize) };
+
+    /// Quote character (if any )
+    (quote = unsafe { *z.offset(0 as isize) });
     if quote as i32 == '[' as i32 || quote as i32 == '\'' as i32 ||
                 quote as i32 == '\"' as i32 || quote as i32 == '`' as i32 {
         let mut i_in: i32 = 1;
+        /// Index of next byte to read from input
         let mut i_out: i32 = 0;
         if quote as i32 == '[' as i32 { quote = ']' as i32 as i8; }
         while unsafe { *z.offset(i_in as isize) } != 0 {
@@ -923,11 +970,15 @@ extern "C" fn dequote(z: *mut i8) -> () {
     }
 }
 
+///* Connect to or create a vfslog virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn vlog_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+    /// VFS used to read log file
     let mut flags: i32 = 0;
+    /// flags passed to pVfs->xOpen()
     let mut p: *mut VfslogVtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
     let mut n_byte: i32 = 0;
@@ -995,12 +1046,15 @@ extern "C" fn vlog_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* There is no "best-index". This virtual table always does a linear
+///* scan of the binary VFS log file.
 extern "C" fn vlog_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     unsafe { (*p_idx_info_1).estimated_cost = 10.0 };
     return 0;
 }
 
+///* Disconnect from or destroy a vfslog virtual table.
 extern "C" fn vlog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut VfslogVtab = p_vtab_1 as *mut VfslogVtab;
     if !(unsafe { (*unsafe { (*p).p_fd }).p_methods }).is_null() {
@@ -1017,12 +1071,16 @@ extern "C" fn vlog_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Open a new vfslog cursor.
+#[allow(unused_doc_comments)]
 extern "C" fn vlog_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut VfslogCsr = core::ptr::null_mut();
-    p_csr =
+
+    /// Newly allocated cursor object
+    (p_csr =
         unsafe { sqlite3_malloc(core::mem::size_of::<VfslogCsr>() as i32) } as
-            *mut VfslogCsr;
+            *mut VfslogCsr);
     if (p_csr).is_null() as i32 != 0 { return 7; }
     unsafe {
         memset(p_csr as *mut (), 0, core::mem::size_of::<VfslogCsr>() as u64)
@@ -1031,6 +1089,7 @@ extern "C" fn vlog_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a vfslog cursor.
 extern "C" fn vlog_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut VfslogCsr = p_cursor_1 as *mut VfslogCsr;
     let mut i: i32 = 0;
@@ -1055,6 +1114,7 @@ extern "C" fn vlog_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Move a vfslog cursor to the next entry in the file.
 extern "C" fn vlog_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut VfslogCsr = p_cursor_1 as *mut VfslogCsr;
     let p: *const VfslogVtab =
@@ -1256,8 +1316,35 @@ extern "C" fn vlog_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vfslog_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         unsafe {
             sqlite3_create_module(db,
                 c"vfslog".as_ptr() as *mut i8 as *const i8,

@@ -1,12 +1,20 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// 
+///* A fuzzer virtual-table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzerVtab {
@@ -16,6 +24,8 @@ struct FuzzerVtab {
     n_cursor: i32,
 }
 
+///* Each transformation rule is stored as an instance of this object.
+///* All rules are kept on a linked list sorted by rCost.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzerRule {
@@ -28,12 +38,20 @@ struct FuzzerRule {
     z_to: [i8; 4],
 }
 
+///* Various types.
+///*
+///* fuzzer_cost is the "cost" of an edit operation.
+///*
+///* fuzzer_len is the length of a matching string.  
+///*
+///* fuzzer_ruleid is an ruleset identifier.
 type FuzzerCost = i32;
 
 type FuzzerLen = i8;
 
 type FuzzerRuleid = i32;
 
+/// A fuzzer cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzerCursor {
@@ -53,6 +71,15 @@ struct FuzzerCursor {
     ap_hash: [*mut FuzzerStem; 4001],
 }
 
+///* A stem object is used to generate variants.  It is also used to record
+///* previously generated outputs.
+///*
+///* Every stem is added to a hash table as it is output.  Generation of
+///* duplicate stems is suppressed.
+///*
+///* Active stems (those that might generate new outputs) are kept on a linked
+///* list sorted by increasing cost.  The cost is the sum of rBaseCost and
+///* pRule->rCost.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct FuzzerStem {
@@ -72,6 +99,9 @@ struct FuzzerSeen {
     _opaque: [u8; 0],
 }
 
+///* The two input rule lists are both sorted in order of increasing
+///* cost.  Merge them together into a single list, sorted by cost, and
+///* return a pointer to the head of that list.
 extern "C" fn fuzzer_merge_rules(mut p_a_1: *mut FuzzerRule,
     mut p_b_1: *mut FuzzerRule) -> *mut FuzzerRule {
     let mut head: FuzzerRule = unsafe { core::mem::zeroed() };
@@ -94,6 +124,14 @@ extern "C" fn fuzzer_merge_rules(mut p_a_1: *mut FuzzerRule,
     return head.p_next;
 }
 
+///* Statement pStmt currently points to a row in the fuzzer data table. This
+///* function allocates and populates a fuzzer_rule structure according to
+///* the content of the row.
+///*
+///* If successful, *ppRule is set to point to the new object and SQLITE_OK
+///* is returned. Otherwise, *ppRule is zeroed, *pzErr may be set to point
+///* to an error message and an SQLite error code returned.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_load_one_rule(p: &FuzzerVtab, p_stmt_1: *mut Sqlite3Stmt,
     pp_rule_1: &mut *mut FuzzerRule, pz_err_1: &mut *mut i8) -> i32 {
     let i_ruleset: Sqlite3Int64 =
@@ -104,8 +142,11 @@ extern "C" fn fuzzer_load_one_rule(p: &FuzzerVtab, p_stmt_1: *mut Sqlite3Stmt,
         unsafe { sqlite3_column_text(p_stmt_1, 2) } as *const i8;
     let n_cost: i32 = unsafe { sqlite3_column_int(p_stmt_1, 3) };
     let mut rc: i32 = 0;
+    /// Return code
     let mut n_from: i32 = 0;
+    /// Size of string zFrom, in bytes
     let mut n_to: i32 = 0;
+    /// Size of string zTo, in bytes
     let mut p_rule: *mut FuzzerRule = core::ptr::null_mut();
     if z_from == core::ptr::null() {
         z_from = c"".as_ptr() as *mut i8 as *const i8;
@@ -182,10 +223,14 @@ extern "C" fn fuzzer_load_one_rule(p: &FuzzerVtab, p_stmt_1: *mut Sqlite3Stmt,
     return rc;
 }
 
+///* Load the content of the fuzzer data table into memory.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_load_rules(db: *mut Sqlite3, p: *mut FuzzerVtab,
     z_db_1: *const i8, z_data_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut z_sql: *mut i8 = core::ptr::null_mut();
+    /// SELECT used to read from rules table
     let mut p_head: *mut FuzzerRule = core::ptr::null_mut();
     z_sql =
         unsafe {
@@ -196,6 +241,7 @@ extern "C" fn fuzzer_load_rules(db: *mut Sqlite3, p: *mut FuzzerVtab,
         rc = 7;
     } else {
         let mut rc2: i32 = 0;
+        /// finalize() return code
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
         rc =
             unsafe {
@@ -295,14 +341,35 @@ extern "C" fn fuzzer_load_rules(db: *mut Sqlite3, p: *mut FuzzerVtab,
         unsafe {
             (*p).p_rule = fuzzer_merge_rules(unsafe { (*p).p_rule }, p_x)
         };
-    } else { { let _ = 0; }; unsafe { (*p).p_rule = p_head }; }
+    } else {
+
+        /// An error has occurred. Setting p->pRule to point to the head of the
+        ///* allocated list ensures that the list will be cleaned up in this case.
+        { let _ = 0; };
+        unsafe { (*p).p_rule = p_head };
+    }
     return rc;
 }
 
+///* This function converts an SQL quoted string into an unquoted string
+///* and returns a pointer to a buffer allocated using sqlite3_malloc() 
+///* containing the result. The caller should eventually free this buffer
+///* using sqlite3_free.
+///*
+///* Examples:
+///*
+///*     "abc"   becomes   abc
+///*     'xyz'   becomes   xyz
+///*     [pqr]   becomes   pqr
+///*     `mno`   becomes   mno
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_dequote(z_in_1: *const i8) -> *mut i8 {
     let mut n_in: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of input string, in bytes
     let mut z_out: *mut i8 = core::ptr::null_mut();
-    n_in = unsafe { strlen(z_in_1) } as Sqlite3Int64;
+
+    /// Output (dequoted) string
+    (n_in = unsafe { strlen(z_in_1) } as Sqlite3Int64);
     z_out =
         unsafe {
                 sqlite3_malloc64((n_in + 1 as Sqlite3Int64) as Sqlite3Uint64)
@@ -317,6 +384,7 @@ extern "C" fn fuzzer_dequote(z_in_1: *const i8) -> *mut i8 {
             };
         } else {
             let mut i_out: i32 = 0;
+            /// Index of next byte to write to output
             let mut i_in: i32 = 0;
             if q as i32 == '[' as i32 { q = ']' as i32 as i8; }
             {
@@ -349,6 +417,7 @@ extern "C" fn fuzzer_dequote(z_in_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* xDisconnect/xDestroy method for the fuzzer module.
 extern "C" fn fuzzer_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut FuzzerVtab = p_vtab_1 as *mut FuzzerVtab;
     { let _ = 0; };
@@ -361,11 +430,20 @@ extern "C" fn fuzzer_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* xConnect/xCreate method for the fuzzer module. Arguments are:
+///*
+///*   argv[0]   -> module name  ("fuzzer")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[3]   -> fuzzer rule table name
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut p_new: *mut FuzzerVtab = core::ptr::null_mut();
+    /// New virtual table
     let z_module: *const i8 = unsafe { *argv.offset(0 as isize) };
     let z_db: *const i8 = unsafe { *argv.offset(1 as isize) };
     if argc != 4 {
@@ -379,7 +457,9 @@ extern "C" fn fuzzer_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
         rc = 1;
     } else {
         let mut n_module: Sqlite3Int64 = 0 as Sqlite3Int64;
-        n_module = unsafe { strlen(z_module) } as Sqlite3Int64;
+
+        /// Length of zModule, in bytes
+        (n_module = unsafe { strlen(z_module) } as Sqlite3Int64);
         p_new =
             unsafe {
                     sqlite3_malloc64(core::mem::size_of::<FuzzerVtab>() as u64 +
@@ -389,6 +469,8 @@ extern "C" fn fuzzer_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             rc = 7;
         } else {
             let mut z_tab: *mut i8 = core::ptr::null_mut();
+
+            /// Dequoted name of fuzzer data table
             unsafe {
                 memset(p_new as *mut (), 0,
                     core::mem::size_of::<FuzzerVtab>() as u64)
@@ -429,6 +511,7 @@ extern "C" fn fuzzer_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Open a new fuzzer cursor.
 extern "C" fn fuzzer_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut FuzzerVtab = p_v_tab_1 as *mut FuzzerVtab;
@@ -454,6 +537,7 @@ extern "C" fn fuzzer_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Free all stems in a list.
 extern "C" fn fuzzer_clear_stem_list(mut p_stem_1: *mut FuzzerStem) -> () {
     while !(p_stem_1).is_null() {
         let p_next: *mut FuzzerStem = unsafe { (*p_stem_1).p_next };
@@ -462,6 +546,8 @@ extern "C" fn fuzzer_clear_stem_list(mut p_stem_1: *mut FuzzerStem) -> () {
     }
 }
 
+///* Free up all the memory allocated by a cursor.  Set it rLimit to 0
+///* to indicate that it is at EOF.
 extern "C" fn fuzzer_clear_cursor(p_cur_1: &mut FuzzerCursor,
     clear_hash_1: i32) -> () {
     let mut i: i32 = 0;
@@ -497,6 +583,7 @@ extern "C" fn fuzzer_clear_cursor(p_cur_1: &mut FuzzerCursor,
     (*p_cur_1).n_stem = 0;
 }
 
+///* Close a fuzzer cursor.
 extern "C" fn fuzzer_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FuzzerCursor = cur as *mut FuzzerCursor;
     fuzzer_clear_cursor(unsafe { &mut *p_cur }, 0);
@@ -511,14 +598,19 @@ extern "C" fn fuzzer_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Compute the current output term for a fuzzer_stem.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_render(p_stem_1: &FuzzerStem, pz_buf_1: &mut *mut i8,
     pn_buf_1: &mut i32) -> i32 {
     let p_rule: *const FuzzerRule = (*p_stem_1).p_rule;
     let mut n: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Size of output term without nul-term
     let mut z: *mut i8 = core::ptr::null_mut();
-    n =
+
+    /// Buffer to assemble output term in
+    (n =
         ((*p_stem_1).n_basis as i32 + unsafe { (*p_rule).n_to } as i32 -
-                unsafe { (*p_rule).n_from } as i32) as Sqlite3Int64;
+                unsafe { (*p_rule).n_from } as i32) as Sqlite3Int64);
     if (*pn_buf_1 as Sqlite3Int64) < n + 1 as Sqlite3Int64 {
         *pz_buf_1 =
             unsafe {
@@ -562,6 +654,7 @@ extern "C" fn fuzzer_render(p_stem_1: &FuzzerStem, pz_buf_1: &mut *mut i8,
     return 0;
 }
 
+///* Compute a hash on zBasis.
 extern "C" fn fuzzer_hash(mut z: *const i8) -> u32 {
     let mut h: u32 = 0 as u32;
     while unsafe { *z } != 0 {
@@ -579,6 +672,7 @@ extern "C" fn fuzzer_hash(mut z: *const i8) -> u32 {
     return h % 4001 as u32;
 }
 
+///* Current cost of a stem
 extern "C" fn fuzzer_cost_1(p_stem_1: &mut FuzzerStem) -> FuzzerCost {
     return {
             (*p_stem_1).r_cost_x =
@@ -588,6 +682,9 @@ extern "C" fn fuzzer_cost_1(p_stem_1: &mut FuzzerStem) -> FuzzerCost {
         };
 }
 
+///* Return 1 if the string to which the cursor is point has already
+///* been emitted.  Return 0 if not.  Return -1 on a memory allocation
+///* failures.
 extern "C" fn fuzzer_seen_2(p_cur_1: &mut FuzzerCursor,
     p_stem_1: *mut FuzzerStem) -> i32 {
     let mut h: u32 = 0 as u32;
@@ -608,6 +705,12 @@ extern "C" fn fuzzer_seen_2(p_cur_1: &mut FuzzerCursor,
     return (p_lookup != core::ptr::null_mut()) as i32;
 }
 
+///* If argument pRule is NULL, this function returns false.
+///*
+///* Otherwise, it returns true if rule pRule should be skipped. A rule 
+///* should be skipped if it does not belong to rule-set iRuleset, or if
+///* applying it to stem pStem would create a string longer than 
+///* FUZZER_MX_OUTPUT_LENGTH bytes.
 extern "C" fn fuzzer_skip_rule(p_rule_1: *const FuzzerRule,
     p_stem_1: &FuzzerStem, i_ruleset_1: i32) -> i32 {
     return (!(p_rule_1).is_null() &&
@@ -618,6 +721,10 @@ extern "C" fn fuzzer_skip_rule(p_rule_1: *const FuzzerRule,
                             unsafe { (*p_rule_1).n_from } as i32 > 100)) as i32;
 }
 
+///* Advance a fuzzer_stem to its next value.   Return 0 if there are
+///* no more values that can be generated by this fuzzer_stem.  Return
+///* -1 on a memory allocation failure.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_advance(p_cur_1: *mut FuzzerCursor,
     p_stem_1: *mut FuzzerStem) -> i32 {
     let mut p_rule: *const FuzzerRule = core::ptr::null();
@@ -643,6 +750,7 @@ extern "C" fn fuzzer_advance(p_cur_1: *mut FuzzerCursor,
                                     } as *const (), unsafe { (*p_rule).z_from } as *const (),
                                 unsafe { (*p_rule).n_from } as u64)
                         } == 0 {
+                /// Found a rewrite case.  Make sure it is not a duplicate
                 let rc: i32 =
                     fuzzer_seen_2(unsafe { &mut *p_cur_1 }, p_stem_1);
                 if rc < 0 { return -1; }
@@ -673,6 +781,9 @@ extern "C" fn fuzzer_advance(p_cur_1: *mut FuzzerCursor,
     return 0;
 }
 
+///* The two input stem lists are both sorted in order of increasing
+///* rCostX.  Merge them together into a single list, sorted by rCostX, and
+///* return a pointer to the head of that new list.
 extern "C" fn fuzzer_merge_stems(mut p_a_1: *mut FuzzerStem,
     mut p_b_1: *mut FuzzerStem) -> *mut FuzzerStem {
     let mut head: FuzzerStem = unsafe { core::mem::zeroed() };
@@ -695,6 +806,8 @@ extern "C" fn fuzzer_merge_stems(mut p_a_1: *mut FuzzerStem,
     return head.p_next;
 }
 
+///* Load pCur->pStem with the lowest-cost stem.  Return a pointer
+///* to the lowest-cost stem.
 extern "C" fn fuzzer_lowest_cost_stem(p_cur_1: &mut FuzzerCursor)
     -> *mut FuzzerStem {
     let mut p_best: *mut FuzzerStem = core::ptr::null_mut();
@@ -730,6 +843,11 @@ extern "C" fn fuzzer_lowest_cost_stem(p_cur_1: &mut FuzzerCursor)
     return (*p_cur_1).p_stem;
 }
 
+///* Insert pNew into queue of pending stems.  Then find the stem
+///* with the lowest rCostX and move it into pCur->pStem.
+///* list.  The insert is done such the pNew is in the correct order
+///* according to fuzzer_stem.zBaseCost+fuzzer_stem.pRule->rCost.
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_insert(p_cur_1: *mut FuzzerCursor,
     mut p_new_1: *mut FuzzerStem) -> *mut FuzzerStem {
     let mut p_x: *mut FuzzerStem = core::ptr::null_mut();
@@ -740,6 +858,8 @@ extern "C" fn fuzzer_insert(p_cur_1: *mut FuzzerCursor,
         unsafe { (*p_cur_1).p_stem = p_new_1 };
         p_new_1 = p_x;
     }
+
+    /// Insert the new value
     unsafe { (*p_new_1).p_next = core::ptr::null_mut() };
     p_x = p_new_1;
     {
@@ -778,6 +898,8 @@ extern "C" fn fuzzer_insert(p_cur_1: *mut FuzzerCursor,
     return fuzzer_lowest_cost_stem(unsafe { &mut *p_cur_1 });
 }
 
+///* Allocate a new fuzzer_stem.  Add it to the hash table but do not
+///* link it into either the pCur->pStem or pCur->pDone lists.
 extern "C" fn fuzzer_new_stem(p_cur_1: &mut FuzzerCursor, z_word_1: *const i8,
     r_base_cost_1: FuzzerCost) -> *mut FuzzerStem {
     let mut p_new: *mut FuzzerStem = core::ptr::null_mut();
@@ -822,6 +944,8 @@ extern "C" fn fuzzer_new_stem(p_cur_1: &mut FuzzerCursor, z_word_1: *const i8,
     return p_new;
 }
 
+///* Advance a cursor to its next row of output
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FuzzerCursor = cur as *mut FuzzerCursor;
     let mut rc: i32 = 0;
@@ -833,7 +957,10 @@ extern "C" fn fuzzer_next(cur: *mut Sqlite3VtabCursor) -> i32 {
         *__p += 1;
         __t
     };
-    p_stem = unsafe { (*p_cur).p_stem };
+
+    /// Use the element the cursor is currently point to to create
+    ///* a new stem and insert the new stem into the priority queue.
+    (p_stem = unsafe { (*p_cur).p_stem });
     if unsafe { (*p_stem).r_cost_x } > 0 {
         rc =
             fuzzer_render(unsafe { &*p_stem }, unsafe { &mut (*p_cur).z_buf },
@@ -876,10 +1003,19 @@ extern "C" fn fuzzer_next(cur: *mut Sqlite3VtabCursor) -> i32 {
             if rc == 0 { return 0; }
         }
     }
+
+    /// Reach this point only if queue has been exhausted and there is
+    ///* nothing left to be output.
     unsafe { (*p_cur).r_limit = 0 as FuzzerCost };
+
+    /// Reach this point only if queue has been exhausted and there is
+    ///* nothing left to be output.
     return 0;
 }
 
+///* Called to "rewind" a cursor back to the beginning so that
+///* it starts its output over again.  Always called at least once
+///* prior to any fuzzerColumn, fuzzerRowid, or fuzzerEof call.
 extern "C" fn fuzzer_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -947,6 +1083,9 @@ extern "C" fn fuzzer_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Only the word and distance columns have values.  All other columns
+///* return NULL
+#[allow(unused_doc_comments)]
 extern "C" fn fuzzer_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *mut FuzzerCursor = cur as *mut FuzzerCursor;
@@ -966,14 +1105,21 @@ extern "C" fn fuzzer_column(cur: *mut Sqlite3VtabCursor,
                     }))
         };
     } else if i == 1 {
+
+        /// the "distance" column
         unsafe {
             sqlite3_result_int(ctx,
                 unsafe { (*unsafe { (*p_cur).p_stem }).r_cost_x })
         };
-    } else { unsafe { sqlite3_result_null(ctx) }; }
+    } else {
+
+        /// All other columns are NULL
+        unsafe { sqlite3_result_null(ctx) };
+    }
     return 0;
 }
 
+///* The rowid.
 extern "C" fn fuzzer_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const FuzzerCursor =
@@ -982,12 +1128,34 @@ extern "C" fn fuzzer_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* When the fuzzer_cursor.rLimit value is 0 or less, that is a signal
+///* that the cursor has nothing more to output.
 extern "C" fn fuzzer_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FuzzerCursor =
         cur as *mut FuzzerCursor as *const FuzzerCursor;
     return (unsafe { (*p_cur).r_limit } <= 0 as FuzzerCost) as i32;
 }
 
+///* Search for terms of these forms:
+///*
+///*   (A)    word MATCH $str
+///*   (B1)   distance < $value
+///*   (B2)   distance <= $value
+///*   (C)    ruleid == $ruleid
+///*
+///* The distance< and distance<= are both treated as distance<=.
+///* The query plan number is a bit vector:
+///*
+///*   bit 1:   Term of the form (A) found
+///*   bit 2:   Term like (B1) or (B2) found
+///*   bit 3:   Term like (C) found
+///*
+///* If bit-1 is set, $str is always in filter.argv[0].  If bit-2 is set
+///* then $value is in filter.argv[0] if bit-1 is clear and is in 
+///* filter.argv[1] if bit-1 is set.  If bit-3 is set, then $ruleid is
+///* in filter.argv[0] if bit-1 and bit-2 are both zero, is in
+///* filter.argv[1] if exactly one of bit-1 and bit-2 are set, and is in
+///* filter.argv[2] if both bit-1 and bit-2 are set.
 extern "C" fn fuzzer_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i_plan: i32 = 0;
@@ -1105,6 +1273,7 @@ extern "C" fn fuzzer_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* A virtual table module that implements the "fuzzer".
 static mut fuzzer_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,

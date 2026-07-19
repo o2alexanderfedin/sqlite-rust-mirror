@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod where_int_h;
-pub(crate) use crate::where_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, Window, With,
+    YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
+use crate::where_int_h::{
+    WhereAndInfo, WhereClause, WhereInfo, WhereLevel, WhereLoopU0S1,
+    WhereMaskSet, WhereOrInfo, WhereTerm,
+};
 
 type DarwinSizeT = u64;
 
@@ -462,6 +480,11 @@ impl WhereLoopU0S1 {
     }
 }
 
+///* If pExpr is one of "like", "glob", "match", or "regexp", then
+///* return the corresponding SQLITE_INDEX_CONSTRAINT_xxxx value.
+///* If not, return 0.
+///*
+///* pExpr is guaranteed to be a TK_FUNCTION.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_is_like_operator(p_expr: &Expr) -> i32 {
     unsafe {
@@ -494,6 +517,7 @@ pub extern "C" fn sqlite3_expr_is_like_operator(p_expr: &Expr) -> i32 {
     }
 }
 
+/// whereexpr.c:
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_clause_init(p_wc: &mut WhereClause,
     p_w_info: *mut WhereInfo) -> () {
@@ -508,18 +532,23 @@ pub extern "C" fn sqlite3_where_clause_init(p_wc: &mut WhereClause,
     (*p_wc).a = &raw mut (*p_wc).a_static[0 as usize] as *mut WhereTerm;
 }
 
+///* Deallocate all memory associated with a WhereOrInfo object.
 extern "C" fn where_or_info_delete(db: *mut Sqlite3, p: *mut WhereOrInfo)
     -> () {
     sqlite3_where_clause_clear(unsafe { &(*p).wc });
     unsafe { sqlite3_db_free(db, p as *mut ()) };
 }
 
+///* Deallocate all memory associated with a WhereAndInfo object.
 extern "C" fn where_and_info_delete(db: *mut Sqlite3, p: *mut WhereAndInfo)
     -> () {
     sqlite3_where_clause_clear(unsafe { &(*p).wc });
     unsafe { sqlite3_db_free(db, p as *mut ()) };
 }
 
+///* Deallocate a WhereClause structure.  The WhereClause structure
+///* itself is not freed.  This routine is the inverse of
+///* sqlite3WhereClauseInit().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_clause_clear(p_wc: &WhereClause) -> () {
     unsafe {
@@ -558,6 +587,23 @@ pub extern "C" fn sqlite3_where_clause_clear(p_wc: &WhereClause) -> () {
     }
 }
 
+///* Add a single new WhereTerm entry to the WhereClause object pWC.
+///* The new WhereTerm object is constructed from Expr p and with wtFlags.
+///* The index in pWC->a[] of the new WhereTerm is returned on success.
+///* 0 is returned if the new WhereTerm could not be added due to a memory
+///* allocation error.  The memory allocation failure will be recorded in
+///* the db->mallocFailed flag so that higher-level functions can detect it.
+///*
+///* This routine will increase the size of the pWC->a[] array as necessary.
+///*
+///* If the wtFlags argument includes TERM_DYNAMIC, then responsibility
+///* for freeing the expression p is assumed by the WhereClause object pWC.
+///* This is true even if this routine fails to allocate a new WhereTerm.
+///*
+///* WARNING:  This routine might reallocate the space used to store
+///* WhereTerms.  All pointers to WhereTerms should be invalidated after
+///* calling this routine.  Such pointers may be reinitialized by referencing
+///* the pWC->a[] array.
 extern "C" fn where_clause_insert(p_wc_1: *mut WhereClause, p: *mut Expr,
     wt_flags_1: u16) -> i32 {
     let mut p_term: *mut WhereTerm = core::ptr::null_mut();
@@ -629,6 +675,21 @@ extern "C" fn where_clause_insert(p_wc_1: *mut WhereClause, p: *mut Expr,
     return idx;
 }
 
+///* This routine identifies subexpressions in the WHERE clause where
+///* each subexpression is separated by the AND operator or some other
+///* operator specified in the op parameter.  The WhereClause structure
+///* is filled with pointers to subexpressions.  For example:
+///*
+///*    WHERE  a=='hello' AND coalesce(b,11)<10 AND (c+12!=d OR c==22)
+///*           \________/     \_______________/     \________________/
+///*            slot[0]            slot[1]               slot[2]
+///*
+///* The original WHERE clause in pExpr is unaltered.  All this routine
+///* does is make slot[] entries point to substructure within pExpr.
+///*
+///* In the previous sentence and in the diagram, "slot[]" refers to
+///* the WhereClause.a[] array.  The slot[] array grows as needed to contain
+///* all terms of the WHERE clause.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_split(p_wc: *mut WhereClause,
     p_expr: *mut Expr, op: u8) -> () {
@@ -646,6 +707,15 @@ pub extern "C" fn sqlite3_where_split(p_wc: *mut WhereClause,
     }
 }
 
+///* Add either a LIMIT (if eMatchOp==SQLITE_INDEX_CONSTRAINT_LIMIT) or
+///* OFFSET (if eMatchOp==SQLITE_INDEX_CONSTRAINT_OFFSET) term to the
+///* where-clause passed as the first argument. The value for the term
+///* is found in register iReg.
+///*
+///* In the common case where the value is a simple integer
+///* (example: "LIMIT 5 OFFSET 10") then the expression codes as a
+///* TK_INTEGER so that it will be available to sqlite3_vtab_rhs_value().
+///* If not, then it codes as a TK_REGISTER expression.
 extern "C" fn where_add_limit_expr(p_wc_1: *mut WhereClause, i_reg_1: i32,
     p_expr_1: *const Expr, i_csr_1: i32, e_match_op_1: i32) -> () {
     let p_parse: *mut Parse =
@@ -684,7 +754,24 @@ extern "C" fn where_add_limit_expr(p_wc_1: *mut WhereClause, i_reg_1: i32,
     }
 }
 
+///* Possibly add terms corresponding to the LIMIT and OFFSET clauses of the
+///* SELECT statement passed as the second argument. These terms are only
+///* added if:
+///*
+///*   1. The SELECT statement has a LIMIT clause, and
+///*   2. The SELECT statement is not an aggregate or DISTINCT query, and
+///*   3. The SELECT statement has exactly one object in its FROM clause, and
+///*      that object is a virtual table, and
+///*   4. There are no terms in the WHERE clause that will not be passed
+///*      to the virtual table xBestIndex method.
+///*   5. The ORDER BY clause, if any, will be made available to the xBestIndex
+///*      method.
+///*
+///* LIMIT and OFFSET terms are ignored by most of the planner code. They
+///* exist only so that they may be passed to the xBestIndex method of the
+///* single virtual table in the FROM clause of the SELECT.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
     -> () {
     unsafe {
@@ -714,6 +801,9 @@ pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
                         if unsafe {
                                             (*unsafe { (*p_wc).a.offset(ii as isize) }).wt_flags
                                         } as i32 & 4 != 0 {
+
+                            /// This term is a vector operation that has been decomposed into
+                            ///* other, subsequent terms.  It can be ignored. See tag-20220128a
                             { let _ = 0; };
                             { let _ = 0; };
                             break '__c2;
@@ -721,6 +811,11 @@ pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
                         if unsafe {
                                     (*unsafe { (*p_wc).a.offset(ii as isize) }).n_child
                                 } != 0 {
+
+                            /// If this term has child terms, then they are also part of the
+                            ///* pWC->a[] array. So this term can be ignored, as a LIMIT clause
+                            ///* will only be added if each of the child terms passes the
+                            ///* (leftCursor==iCsr) test below.
                             break '__c2;
                         }
                         if unsafe {
@@ -748,6 +843,8 @@ pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
                                 break '__c2;
                             }
                         }
+
+                        /// This term will not be passed through. Do not add a LIMIT clause.
                         return;
                         break '__c2;
                     }
@@ -779,6 +876,8 @@ pub extern "C" fn sqlite3_where_add_limit(p_wc: *mut WhereClause, p: &Select)
                     }
                 }
             }
+
+            /// All conditions are met. Add the terms to the where-clause object.
             { let _ = 0; };
             if (*p).i_offset != 0 && (*p).sel_flags & 256 as u32 == 0 as u32 {
                 where_add_limit_expr(p_wc, (*p).i_offset,
@@ -820,6 +919,9 @@ pub extern "C" fn sqlite3_where_expr_list_usage(p_mask_set: *mut WhereMaskSet,
     return mask;
 }
 
+///* Recursively walk the expressions of a SELECT statement and generate
+///* a bitmask indicating which tables are used in that expression
+///* tree.
 extern "C" fn expr_select_usage(p_mask_set_1: *mut WhereMaskSet,
     mut p_s_1: *const Select) -> Bitmask {
     unsafe {
@@ -896,6 +998,35 @@ extern "C" fn expr_select_usage(p_mask_set_1: *mut WhereMaskSet,
     }
 }
 
+///* These routines walk (recursively) an expression tree and generate
+///* a bitmask indicating which tables are used in that expression
+///* tree.
+///*
+///* sqlite3WhereExprUsage(MaskSet, Expr) ->
+///*
+///*       Return a Bitmask of all tables referenced by Expr.  Expr can be
+///*       be NULL, in which case 0 is returned.
+///*
+///* sqlite3WhereExprUsageNN(MaskSet, Expr) ->
+///*
+///*       Same as sqlite3WhereExprUsage() except that Expr must not be
+///*       NULL.  The "NN" suffix on the name stands for "Not Null".
+///*
+///* sqlite3WhereExprListUsage(MaskSet, ExprList) ->
+///*
+///*       Return a Bitmask of all tables referenced by every expression
+///*       in the expression list ExprList.  ExprList can be NULL, in which
+///*       case 0 is returned.
+///*
+///* sqlite3WhereExprUsageFull(MaskSet, ExprList) ->
+///*
+///*       Internal use only.  Called only by sqlite3WhereExprUsageNN() for
+///*       complex expressions that require pushing register values onto
+///*       the stack.  Many calls to sqlite3WhereExprUsageNN() do not need
+///*       the more complex analysis done by this routine.  Hence, the
+///*       computations done by this routine are broken out into a separate
+///*       "no-inline" function to avoid the stack push overhead in the
+///*       common case where it is not needed.
 extern "C" fn sqlite3_where_expr_usage_full(p_mask_set_1: *mut WhereMaskSet,
     p: &Expr) -> Bitmask {
     unsafe {
@@ -961,6 +1092,9 @@ pub extern "C" fn sqlite3_where_expr_usage(p_mask_set: *mut WhereMaskSet,
         } else { 0 as Bitmask };
 }
 
+///* Return TRUE if the given operator is one of the operators that is
+///* allowed for an indexable WHERE clause term.  The allowed operators are
+///* "=", "<", ">", "<=", ">=", "IN", "IS", and "IS NULL"
 extern "C" fn allowed_op(op: i32) -> i32 {
     { let _ = 0; };
     { let _ = 0; };
@@ -974,6 +1108,17 @@ extern "C" fn allowed_op(op: i32) -> i32 {
     return (op == 50 || op == 51 || op == 45) as i32;
 }
 
+///* Expression pExpr is one operand of a comparison operator that might
+///* be useful for indexing.  This routine checks to see if pExpr appears
+///* in any index.  Return TRUE (1) if pExpr is an indexed term and return
+///* FALSE (0) if not.  If TRUE is returned, also set aiCurCol[0] to the cursor
+///* number of the table that is indexed and aiCurCol[1] to the column number
+///* of the column that is indexed, or XN_EXPR (-2) if an expression is being
+///* indexed.
+///*
+///* If pExpr is a TK_COLUMN column reference, then this routine always returns
+///* true even if that particular column is not indexed, because the column
+///* might be added to an automatic index later.
 extern "C" fn expr_might_be_indexed2(p_from_1: &SrcList,
     ai_cur_col_1: *mut i32, p_expr_1: *mut Expr, mut j: i32) -> i32 {
     let mut p_idx: *const Index = core::ptr::null();
@@ -1050,10 +1195,15 @@ extern "C" fn expr_might_be_indexed2(p_from_1: &SrcList,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn expr_might_be_indexed(p_from_1: *mut SrcList,
     ai_cur_col_1: *mut i32, mut p_expr_1: *mut Expr, op: i32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
+
+        /// If this expression is a vector to the left or right of a
+        ///* inequality constraint (>, <, >= or <=), perform the processing
+        ///* on the first element of the vector.
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -1111,6 +1261,7 @@ extern "C" fn expr_might_be_indexed(p_from_1: *mut SrcList,
     }
 }
 
+///* Translate from TK_xx operator to WO_xx bitmask.
 extern "C" fn operator_mask(op: i32) -> u16 {
     let mut c: u16 = 0 as u16;
     { let _ = 0; };
@@ -1133,6 +1284,7 @@ extern "C" fn operator_mask(op: i32) -> u16 {
     return c;
 }
 
+///* Mark term iChild as being a child of term iParent
 extern "C" fn mark_term_as_child(p_wc_1: &WhereClause, i_child_1: i32,
     i_parent_1: i32) -> () {
     unsafe {
@@ -1154,6 +1306,21 @@ extern "C" fn mark_term_as_child(p_wc_1: &WhereClause, i_child_1: i32,
     };
 }
 
+///* We already know that pExpr is a binary operator where both operands are
+///* column references.  This routine checks to see if pExpr is an equivalence
+///* relation:
+///*   1.  The SQLITE_Transitive optimization must be enabled
+///*   2.  Must be either an == or an IS operator
+///*   3.  Not originating in the ON clause of an OUTER JOIN
+///*   4.  The operator is not IS or else the query does not contain RIGHT JOIN
+///*   5.  The affinities of A and B must be compatible
+///*   6.  Both operands use the same collating sequence, and they must not
+///*       use explicit COLLATE clauses.
+///* If this routine returns TRUE, that means that the RHS can be substituted
+///* for the LHS anyplace else in the WHERE clause where the LHS column occurs.
+///* This is an optimization.  No harm comes from returning 0.  But if 1 is
+///* returned when it should not be, then incorrect answers might result.
+#[allow(unused_doc_comments)]
 extern "C" fn term_is_equivalence(p_parse_1: *mut Parse, p_expr_1: &Expr,
     p_src_1: &SrcList) -> i32 {
     let mut aff1: i8 = 0 as i8;
@@ -1166,6 +1333,8 @@ extern "C" fn term_is_equivalence(p_parse_1: *mut Parse, p_expr_1: &Expr,
         return 0;
     }
     if (*p_expr_1).flags & (1 | 512) as u32 != 0 as u32 { return 0; }
+
+    /// (3)
     { let _ = 0; };
     if (*p_expr_1).op as i32 == 45 && (*p_src_1).n_src >= 2 &&
             unsafe {
@@ -1193,6 +1362,8 @@ extern "C" fn term_is_equivalence(p_parse_1: *mut Parse, p_expr_1: &Expr,
     return 1;
 }
 
+///* Commute a comparison operator.  Expressions of the form "X op Y"
+///* are converted into "Y op X".
 extern "C" fn expr_commute(p_parse_1: *mut Parse, p_expr_1: &mut Expr)
     -> u16 {
     if unsafe { (*(*p_expr_1).p_left).op } as i32 == 177 ||
@@ -1225,6 +1396,8 @@ extern "C" fn expr_commute(p_parse_1: *mut Parse, p_expr_1: &mut Expr)
     return 0 as u16;
 }
 
+///* If the pBase expression originated in the ON or USING clause of
+///* a join, then transfer the appropriate markings over to derived.
 extern "C" fn transfer_join_markings(p_derived_1: *mut Expr, p_base_1: &Expr)
     -> () {
     unsafe {
@@ -1238,6 +1411,9 @@ extern "C" fn transfer_join_markings(p_derived_1: *mut Expr, p_base_1: &Expr)
     }
 }
 
+///* Return the N-th AND-connected subterm of pTerm.  Or if pTerm is not
+///* a conjunction, then return just pTerm when N==0.  If N is exceeds
+///* the number of available subterms, return NULL.
 extern "C" fn where_nth_subterm(p_term_1: *mut WhereTerm, n_1: i32)
     -> *mut WhereTerm {
     unsafe {
@@ -1257,15 +1433,38 @@ extern "C" fn where_nth_subterm(p_term_1: *mut WhereTerm, n_1: i32)
     }
 }
 
+///* Subterms pOne and pTwo are contained within WHERE clause pWC.  The
+///* two subterms are in disjunction - they are OR-ed together.
+///*
+///* If these two terms are both of the form:  "A op B" with the same
+///* A and B values but different operators and if the operators are
+///* compatible (if one is = and the other is <, for example) then
+///* add a new virtual AND term to pWC that is the combination of the
+///* two.
+///*
+///* Some examples:
+///*
+///*    x<y OR x=y    -->     x<=y
+///*    x=y OR x=y    -->     x=y
+///*    x<=y OR x<y   -->     x<=y
+///*
+///* The following is NOT generated:
+///*
+///*    x<y OR x>y    -->     x!=y
+#[allow(unused_doc_comments)]
 extern "C" fn where_combine_disjuncts(p_src_1: *mut SrcList,
     p_wc_1: *mut WhereClause, p_one_1: &WhereTerm, p_two_1: &WhereTerm)
     -> () {
     let mut e_op: u16 =
         ((*p_one_1).e_operator as i32 | (*p_two_1).e_operator as i32) as u16;
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
+    /// Database connection (for malloc)
     let mut p_new: *mut Expr = core::ptr::null_mut();
+    /// New virtual expression
     let mut op: i32 = 0;
+    /// Operator for the combined expression
     let mut idx_new: i32 = 0;
+    /// Index in pWC of the next virtual term
     let mut p_a: *const Expr = core::ptr::null();
     let mut p_b: *const Expr = core::ptr::null();
     if ((*p_one_1).wt_flags as i32 | (*p_two_1).wt_flags as i32) & 128 != 0 {
@@ -1328,23 +1527,124 @@ extern "C" fn where_combine_disjuncts(p_src_1: *mut SrcList,
     expr_analyze(p_src_1, p_wc_1, idx_new);
 }
 
+///* Analyze a term that consists of two or more OR-connected
+///* subterms.  So in:
+///*
+///*     ... WHERE  (a=5) AND (b=7 OR c=9 OR d=13) AND (d=13)
+///*                          ^^^^^^^^^^^^^^^^^^^^
+///*
+///* This routine analyzes terms such as the middle term in the above example.
+///* A WhereOrTerm object is computed and attached to the term under
+///* analysis, regardless of the outcome of the analysis.  Hence:
+///*
+///*     WhereTerm.wtFlags   |=  TERM_ORINFO
+///*     WhereTerm.u.pOrInfo  =  a dynamically allocated WhereOrTerm object
+///*
+///* The term being analyzed must have two or more of OR-connected subterms.
+///* A single subterm might be a set of AND-connected sub-subterms.
+///* Examples of terms under analysis:
+///*
+///*     (A)     t1.x=t2.y OR t1.x=t2.z OR t1.y=15 OR t1.z=t3.a+5
+///*     (B)     x=expr1 OR expr2=x OR x=expr3
+///*     (C)     t1.x=t2.y OR (t1.x=t2.z AND t1.y=15)
+///*     (D)     x=expr1 OR (y>11 AND y<22 AND z LIKE '*hello*')
+///*     (E)     (p.a=1 AND q.b=2 AND r.c=3) OR (p.x=4 AND q.y=5 AND r.z=6)
+///*     (F)     x>A OR (x=A AND y>=B)
+///*
+///* CASE 1:
+///*
+///* If all subterms are of the form T.C=expr for some single column of C and
+///* a single table T (as shown in example B above) then create a new virtual
+///* term that is an equivalent IN expression.  In other words, if the term
+///* being analyzed is:
+///*
+///*      x = expr1  OR  expr2 = x  OR  x = expr3
+///*
+///* then create a new virtual term like this:
+///*
+///*      x IN (expr1,expr2,expr3)
+///*
+///* CASE 2:
+///*
+///* If there are exactly two disjuncts and one side has x>A and the other side
+///* has x=A (for the same x and A) then add a new virtual conjunct term to the
+///* WHERE clause of the form "x>=A".  Example:
+///*
+///*      x>A OR (x=A AND y>B)    adds:    x>=A
+///*
+///* The added conjunct can sometimes be helpful in query planning.
+///*
+///* CASE 3:
+///*
+///* If all subterms are indexable by a single table T, then set
+///*
+///*     WhereTerm.eOperator              =  WO_OR
+///*     WhereTerm.u.pOrInfo->indexable  |=  the cursor number for table T
+///*
+///* A subterm is "indexable" if it is of the form
+///* "T.C <op> <expr>" where C is any column of table T and
+///* <op> is one of "=", "<", "<=", ">", ">=", "IS NULL", or "IN".
+///* A subterm is also indexable if it is an AND of two or more
+///* subsubterms at least one of which is indexable.  Indexable AND
+///* subterms have their eOperator set to WO_AND and they have
+///* u.pAndInfo set to a dynamically allocated WhereAndTerm object.
+///*
+///* From another point of view, "indexable" means that the subterm could
+///* potentially be used with an index if an appropriate index exists.
+///* This analysis does not consider whether or not the index exists; that
+///* is decided elsewhere.  This analysis only looks at whether subterms
+///* appropriate for indexing exist.
+///*
+///* All examples A through E above satisfy case 3.  But if a term
+///* also satisfies case 1 (such as B) we know that the optimizer will
+///* always prefer case 1, so in that case we pretend that case 3 is not
+///* satisfied.
+///*
+///* It might be the case that multiple tables are indexable.  For example,
+///* (E) above is indexable on tables P, Q, and R.
+///*
+///* Terms that satisfy case 3 are candidates for lookup by using
+///* separate indices to find rowids for each subterm and composing
+///* the union of all rowids using a RowSet object.  This is similar
+///* to "bitmap indices" in other database engines.
+///*
+///* OTHERWISE:
+///*
+///* If none of cases 1, 2, or 3 apply, then leave the eOperator set to
+///* zero.  This term is not useful for search.
+#[allow(unused_doc_comments)]
 extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
     p_wc_1: *mut WhereClause, idx_term_1: i32) -> () {
     unsafe {
         let p_w_info: *mut WhereInfo = unsafe { (*p_wc_1).p_w_info };
+        /// WHERE clause processing context
         let p_parse: *mut Parse = unsafe { (*p_w_info).p_parse };
+        /// Parser context
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+        /// Database connection
         let p_term: *mut WhereTerm =
             unsafe {
                 &mut *unsafe { (*p_wc_1).a.offset(idx_term_1 as isize) }
             };
+        /// The term to be analyzed
         let p_expr: *mut Expr = unsafe { (*p_term).p_expr };
+        /// The expression of the term
         let mut i: i32 = 0;
+        /// Loop counters
         let mut p_or_wc: *mut WhereClause = core::ptr::null_mut();
+        /// Breakup of pTerm into subterms
         let mut p_or_term: *mut WhereTerm = core::ptr::null_mut();
+        /// A Sub-term within the pOrWc
         let mut p_or_info: *mut WhereOrInfo = core::ptr::null_mut();
+        /// Additional information associated with pTerm
         let mut chng_to_in: Bitmask = 0 as Bitmask;
+        /// Tables that might satisfy case 1
         let mut indexable: Bitmask = 0 as Bitmask;
+
+        /// Tables that are indexable, satisfying case 2
+        ///* Break the OR clause into its separate subterms.  The subterms are
+        ///* stored in a WhereClause structure containing within the WhereOrInfo
+        ///* object that is attached to the original OR clause term.
         { let _ = 0; };
         { let _ = 0; };
         unsafe {
@@ -1371,8 +1671,12 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
         sqlite3_where_expr_analyze(p_src_1, p_or_wc);
         if unsafe { (*db).malloc_failed } != 0 { return; }
         { let _ = 0; };
-        indexable = !(0 as Bitmask);
-        chng_to_in = !(0 as Bitmask);
+
+        ///* Compute the set of tables that might satisfy cases 1 or 3.
+        (indexable = !(0 as Bitmask));
+
+        ///* Compute the set of tables that might satisfy cases 1 or 3.
+        (chng_to_in = !(0 as Bitmask));
         {
             {
                 i = unsafe { (*p_or_wc).n_term } - 1;
@@ -1488,6 +1792,9 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                 };
             }
         }
+
+        ///* Record the set of tables that satisfy case 3.  The set might be
+        ///* empty.
         unsafe { (*p_or_info).indexable = indexable };
         unsafe { (*p_term).e_operator = 512 as u16 };
         unsafe { (*p_term).left_cursor = -1 };
@@ -1520,8 +1827,11 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
         }
         if chng_to_in != 0 {
             let mut ok_to_chng_to_in: i32 = 0;
+            /// True if the conversion to IN is valid
             let mut i_column: i32 = -1;
+            /// Column index on lhs of IN operator
             let mut i_cursor: i32 = -1;
+            /// Table cursor common to all terms
             let mut j: i32 = 0;
             {
                 j = 0;
@@ -1540,6 +1850,9 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                                     { let _ = 0; };
                                     unsafe { (*p_or_term).wt_flags &= !64 as u16 };
                                     if unsafe { (*p_or_term).left_cursor } == i_cursor {
+
+                                        /// This is the 2-bit case and we are on the second iteration and
+                                        ///* current term is from the first iteration.  So skip this term.
                                         { let _ = 0; };
                                         break '__c18;
                                     }
@@ -1572,12 +1885,18 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                             }
                         }
                         if i < 0 {
+
+                            /// No candidate table+column was found.  This can only occur
+                            ///* on the second iteration
                             { let _ = 0; };
                             { let _ = 0; };
                             { let _ = 0; };
                             break '__b17;
                         }
-                        ok_to_chng_to_in = 1;
+
+                        /// We have found a candidate table and column.  Check to see if that
+                        ///* table and column is common to every term in the OR clause
+                        (ok_to_chng_to_in = 1);
                         {
                             '__b19: loop {
                                 if !(i >= 0 && ok_to_chng_to_in != 0) { break '__b19; }
@@ -1598,12 +1917,16 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                                     } else {
                                         let mut aff_left: i32 = 0;
                                         let mut aff_right: i32 = 0;
-                                        aff_right =
+
+                                        /// If the right-hand side is also a column, then the affinities
+                                        ///* of both right and left sides must be such that no type
+                                        ///* conversions are required on the right.  (Ticket #2249)
+                                        (aff_right =
                                             unsafe {
                                                     sqlite3_expr_affinity(unsafe {
                                                                 (*unsafe { (*p_or_term).p_expr }).p_right
                                                             } as *const Expr)
-                                                } as i32;
+                                                } as i32);
                                         aff_left =
                                             unsafe {
                                                     sqlite3_expr_affinity(unsafe {
@@ -1634,9 +1957,13 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
             }
             if ok_to_chng_to_in != 0 {
                 let mut p_dup: *mut Expr = core::ptr::null_mut();
+                /// A transient duplicate expression
                 let mut p_list: *mut ExprList = core::ptr::null_mut();
+                /// The RHS of the IN operator
                 let mut p_left_1: *const Expr = core::ptr::null();
+                /// The LHS of the IN operator
                 let mut p_coll_seq: *mut CollSeq = core::ptr::null_mut();
+                /// Collating sequence to use
                 let mut p_new: *mut Expr = core::ptr::null_mut();
                 {
                     {
@@ -1680,6 +2007,8 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                                                 p_this as *const Expr)
                                         } {
                                     p_left_1 = core::ptr::null_mut();
+
+                                    /// Collating sequence mismatch
                                     break '__b20;
                                 }
                             }
@@ -1724,6 +2053,8 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
                     idx_new =
                         where_clause_insert(p_wc_1, p_new, (2 | 1) as u16);
                     expr_analyze(p_src_1, p_wc_1, idx_new);
+
+                    /// pTerm = &pWC->a[idxTerm]; // would be needed if pTerm where reused
                     mark_term_as_child(unsafe { &*p_wc_1 }, idx_new,
                         idx_term_1);
                 } else { unsafe { sqlite3_expr_list_delete(db, p_list) }; }
@@ -1732,20 +2063,39 @@ extern "C" fn expr_analyze_or_term(p_src_1: *mut SrcList,
     }
 }
 
+///* Check to see if the given expression is a LIKE or GLOB operator that
+///* can be optimized using inequality constraints.  Return TRUE if it is
+///* so and false if not.
+///*
+///* In order for the operator to be optimizible, the RHS must be a string
+///* literal that does not begin with a wildcard.  The LHS must be a column
+///* that may only be NULL, a string, or a BLOB, never a number. (This means
+///* that virtual tables cannot participate in the LIKE optimization.)  The
+///* collating sequence for the column on the LHS must be appropriate for
+///* the operator.
+#[allow(unused_doc_comments)]
 extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     pp_prefix_1: &mut *mut Expr, pis_complete_1: &mut i32,
     pno_case_1: *mut i32) -> i32 {
     unsafe {
         let mut z: *const u8 = core::ptr::null();
+        /// String on RHS of LIKE operator
         let mut p_right: *mut Expr = core::ptr::null_mut();
         let mut p_left: *const Expr = core::ptr::null();
+        /// Right and left size of LIKE operator
         let mut p_list: *const ExprList = core::ptr::null();
+        /// List of operands to the LIKE operator
         let mut c: u8 = 0 as u8;
+        /// One character in z[]
         let mut cnt: i32 = 0;
+        /// Number of non-wildcard prefix characters
         let mut wc: [u8; 4] = [0; 4];
+        /// Wildcard characters
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// Database connection
         let mut p_val: *mut Sqlite3Value = core::ptr::null_mut();
         let mut op: i32 = 0;
+        /// Opcode of pRight
         let mut rc: i32 = 0;
         if (unsafe {
                             sqlite3_is_like_function(db, p_expr_1, pno_case_1,
@@ -1789,7 +2139,14 @@ extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
             z = unsafe { (*p_right).u.z_token } as *mut u8 as *const u8;
         }
         if !(z).is_null() {
-            cnt = 0;
+
+            /// Count the number of prefix bytes prior to the first wildcard,
+            ///* U+fffd character, or malformed utf-8. If the underlying database
+            ///* has a UTF16LE encoding, then only consider ASCII characters.  Note that
+            ///* the encoding of z[] is UTF8 - we are dealing with only UTF8 here in this
+            ///* code, but the database engine itself might be processing content using a
+            ///* different encoding.
+            (cnt = 0);
             while { c = unsafe { *z.offset(cnt as isize) } as u8; c } as i32
                                 != 0 && c as i32 != wc[0 as usize] as i32 &&
                         c as i32 != wc[1 as usize] as i32 &&
@@ -1819,12 +2176,18 @@ extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
                     255 != unsafe { *z.offset((cnt - 1) as isize) } as u8 as i32
                 {
                 let mut p_prefix: *mut Expr = core::ptr::null_mut();
-                *pis_complete_1 =
+
+                /// A "complete" match if the pattern ends with "*" or "%"
+                (*pis_complete_1 =
                     (c as i32 == wc[0 as usize] as i32 &&
                                 unsafe { *z.offset((cnt + 1) as isize) } as i32 == 0 &&
-                            unsafe { (*db).enc } as i32 != 2) as i32;
-                p_prefix =
-                    unsafe { sqlite3_expr(db, 118, z as *mut i8 as *const i8) };
+                            unsafe { (*db).enc } as i32 != 2) as i32);
+
+                /// Get the pattern prefix.  Remove all escapes from the prefix.
+                (p_prefix =
+                    unsafe {
+                        sqlite3_expr(db, 118, z as *mut i8 as *const i8)
+                    });
                 if !(p_prefix).is_null() {
                     let mut i_from: i32 = 0;
                     let mut i_to: i32 = 0;
@@ -1910,6 +2273,11 @@ extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
                             unsafe {
                                     *unsafe { (*p_right).u.z_token.offset(1 as isize) }
                                 } != 0 {
+                        /// If the rhs of the LIKE expression is a variable, and the current
+                        ///* value of the variable means there is no need to invoke the LIKE
+                        ///* function, then no OP_Variable will be added to the program.
+                        ///* This causes problems for the sqlite3_bind_parameter_name()
+                        ///* API. To work around them, add a dummy OP_Variable here.
                         let r1: i32 = unsafe { sqlite3_get_temp_reg(p_parse_1) };
                         unsafe { sqlite3_expr_code_target(p_parse_1, p_right, r1) };
                         unsafe {
@@ -1927,6 +2295,31 @@ extern "C" fn is_like_or_glob(p_parse_1: *mut Parse, p_expr_1: *mut Expr,
     }
 }
 
+///* Check to see if the pExpr expression is a form that needs to be passed
+///* to the xBestIndex method of virtual tables.  Forms of interest include:
+///*
+///*          Expression                   Virtual Table Operator
+///*          -----------------------      ---------------------------------
+///*      1.  column MATCH expr            SQLITE_INDEX_CONSTRAINT_MATCH
+///*      2.  column GLOB expr             SQLITE_INDEX_CONSTRAINT_GLOB
+///*      3.  column LIKE expr             SQLITE_INDEX_CONSTRAINT_LIKE
+///*      4.  column REGEXP expr           SQLITE_INDEX_CONSTRAINT_REGEXP
+///*      5.  column != expr               SQLITE_INDEX_CONSTRAINT_NE
+///*      6.  expr != column               SQLITE_INDEX_CONSTRAINT_NE
+///*      7.  column IS NOT expr           SQLITE_INDEX_CONSTRAINT_ISNOT
+///*      8.  expr IS NOT column           SQLITE_INDEX_CONSTRAINT_ISNOT
+///*      9.  column IS NOT NULL           SQLITE_INDEX_CONSTRAINT_ISNOTNULL
+///*
+///* In every case, "column" must be a column of a virtual table.  If there
+///* is a match, set *ppLeft to the "column" expression, set *ppRight to the
+///* "expr" expression (even though in forms (6) and (8) the column is on the
+///* right and the expression is on the left).  Also set *peOp2 to the
+///* appropriate virtual table operator.  The return value is 1 or 2 if there
+///* is a match.  The usual return is 1, but if the RHS is also a column
+///* of virtual table in forms (5) or (7) then return 2.
+///*
+///* If the expression matches none of the patterns above, return 0.
+#[allow(unused_doc_comments)]
 extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
     p_expr_1: *const Expr, pe_op2_1: &mut u8, pp_left_1: &mut *mut Expr,
     pp_right_1: &mut *mut Expr) -> i32 {
@@ -1934,6 +2327,7 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
         if unsafe { (*p_expr_1).op } as i32 == 172 {
             let mut p_list: *const ExprList = core::ptr::null();
             let mut p_col: *mut Expr = core::ptr::null_mut();
+            /// Column reference
             let mut i: i32 = 0;
             { let _ = 0; };
             p_list = unsafe { (*p_expr_1).x.p_list };
@@ -1941,11 +2335,18 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
                     unsafe { (*p_list).n_expr } != 2 {
                 return 0;
             }
-            p_col =
+
+            /// Built-in operators MATCH, GLOB, LIKE, and REGEXP attach to a
+            ///* virtual table on their second argument, which is the same as
+            ///* the left-hand side operand in their in-fix form.
+            ///*
+            ///*       vtab_column MATCH expression
+            ///*       MATCH(expression,vtab_column)
+            (p_col =
                 unsafe {
                     (*(unsafe { (*p_list).a.as_ptr() } as
                                     *mut ExprListItem).offset(1 as isize)).p_expr
-                };
+                });
             { let _ = 0; };
             if unsafe { (*p_col).op } as i32 == 168 &&
                         unsafe { (*unsafe { (*p_col).y.p_tab }).e_tab_type } as i32
@@ -1963,11 +2364,21 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
                 *pp_left_1 = p_col;
                 return 1;
             }
-            p_col =
+
+            /// We can also match against the first column of overloaded
+            ///* functions where xFindFunction returns a value of at least
+            ///* SQLITE_INDEX_CONSTRAINT_FUNCTION.
+            ///*
+            ///*      OVERLOADED(vtab_column,expression)
+            ///*
+            ///* Historically, xFindFunction expected to see lower-case function
+            ///* names.  But for this use case, xFindFunction is expected to deal
+            ///* with function names in an arbitrary case.
+            (p_col =
                 unsafe {
                     (*(unsafe { (*p_list).a.as_ptr() } as
                                     *mut ExprListItem).offset(0 as isize)).p_expr
-                };
+                });
             { let _ = 0; };
             { let _ = 0; };
             if unsafe { (*p_col).op } as i32 == 168 &&
@@ -2015,6 +2426,9 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
                 }
             }
         } else if unsafe { (*p_expr_1).op } as i32 >= 54 {
+
+            /// Comparison operators are a common case.  Save a few comparisons for
+            ///* that common case by terminating early.
             { let _ = 0; };
             { let _ = 0; };
             { let _ = 0; };
@@ -2056,24 +2470,40 @@ extern "C" fn is_auxiliary_vtab_operator(db: *mut Sqlite3,
     }
 }
 
+/// Forward declarations
+#[allow(unused_doc_comments)]
 extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
     idx_term: i32) -> () {
     unsafe {
         unsafe {
             let p_w_info: *mut WhereInfo = unsafe { (*p_wc).p_w_info };
+            /// WHERE clause processing context
             let mut p_term: *mut WhereTerm = core::ptr::null_mut();
+            /// The term to be analyzed
             let mut p_mask_set: *mut WhereMaskSet = core::ptr::null_mut();
+            /// Set of table index masks
             let mut p_expr: *mut Expr = core::ptr::null_mut();
+            /// The expression to be analyzed
             let mut prereq_left: Bitmask = 0 as Bitmask;
+            /// Prerequisites of the pExpr->pLeft
             let mut prereq_all: Bitmask = 0 as Bitmask;
+            /// Prerequisites of pExpr
             let mut extra_right: Bitmask = 0 as Bitmask;
+            /// Extra dependencies on LEFT JOIN
             let mut p_str1: *mut Expr = core::ptr::null_mut();
+            /// RHS of LIKE/GLOB operator
             let mut is_complete: i32 = 0;
+            /// RHS of LIKE/GLOB ends with wildcard
             let mut no_case: i32 = 0;
+            /// uppercase equivalent to lowercase
             let mut op: i32 = 0;
+            /// Top-level operator.  pExpr->op
             let p_parse: *mut Parse = unsafe { (*p_w_info).p_parse };
+            /// Parsing context
             let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+            /// Database connection
             let mut e_op2: u8 = 0 as u8;
+            /// op2 value for LIKE/REGEXP/GLOB
             let mut n_left: i32 = 0;
             if unsafe { (*db).malloc_failed } != 0 { return; }
             { let _ = 0; };
@@ -2082,6 +2512,8 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
             p_mask_set = unsafe { &mut (*p_w_info).s_mask_set };
             p_expr = unsafe { (*p_term).p_expr };
             { let _ = 0; };
+
+            /// Because malloc() has not failed
             { let _ = 0; };
             unsafe { (*p_mask_set).b_var_select = 0 };
             prereq_left =
@@ -2193,6 +2625,8 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                     let mut p_new: *mut WhereTerm = core::ptr::null_mut();
                     let mut p_dup: *mut Expr = core::ptr::null_mut();
                     let mut e_extra_op: u16 = 0 as u16;
+
+                    /// Extra bits for pNew->eOperator
                     { let _ = 0; };
                     if unsafe { (*p_term).left_cursor } >= 0 {
                         let mut idx_new: i32 = 0;
@@ -2244,7 +2678,9 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                     { let _ = 0; };
                     unsafe { (*p_expr).op = 171 as u8 };
                     unsafe {
-                        (*p_expr).u.z_token = c"false".as_ptr() as *mut i8
+
+                        /// See tag-20230504-1
+                        ((*p_expr).u.z_token = c"false".as_ptr() as *mut i8)
                     };
                     unsafe { (*p_expr).flags |= 536870912 as u32 };
                     unsafe { (*p_term).prereq_all = 0 as Bitmask };
@@ -2349,12 +2785,15 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                     is_like_or_glob(p_parse, p_expr, &mut p_str1,
                             &mut is_complete, &mut no_case) != 0 {
                 let mut p_left_2: *const Expr = core::ptr::null();
+                /// LHS of LIKE/GLOB operator
                 let mut p_str2: *mut Expr = core::ptr::null_mut();
+                /// Copy of pStr1 - RHS of LIKE/GLOB operator
                 let mut p_new_expr1: *mut Expr = core::ptr::null_mut();
                 let mut p_new_expr2: *mut Expr = core::ptr::null_mut();
                 let mut idx_new1: i32 = 0;
                 let mut idx_new2: i32 = 0;
                 let mut z_coll_seq_name: *const i8 = core::ptr::null();
+                /// Name of collating sequence
                 let wt_flags: u16 = (256 | 2 | 1) as u16;
                 { let _ = 0; };
                 p_left_2 =
@@ -2408,7 +2847,9 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                 }
                 if (unsafe { (*db).malloc_failed } == 0) as i32 != 0 {
                     let mut p_c: *mut u8 = core::ptr::null_mut();
-                    p_c =
+
+                    /// Last character before the first wildcard
+                    (p_c =
                         unsafe {
                                 &raw mut *unsafe {
                                             (*p_str2).u.z_token.offset((unsafe {
@@ -2416,7 +2857,7 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                                                                     *const i8)
                                                         } - 1) as isize)
                                         }
-                            } as *mut u8;
+                            } as *mut u8);
                     if no_case != 0 {
                         if unsafe { *p_c } as i32 == 'A' as i32 - 1 {
                             is_complete = 0;
@@ -2440,6 +2881,8 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                         };
                     }
                     { let _ = 0; };
+
+                    /// isLikeOrGlob() guarantees this
                     {
                         let __p = unsafe { &mut *p_c };
                         let __t = *__p;
@@ -2538,6 +2981,8 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
                 p_term =
                     unsafe { unsafe { (*p_wc).a.offset(idx_term as isize) } };
                 unsafe { (*p_term).wt_flags |= (4 | 2) as u16 };
+
+                /// Disable the original
                 unsafe { (*p_term).e_operator = 8192 as u16 };
             } else if unsafe { (*p_expr).op } as i32 == 50 &&
                                             unsafe { (*p_term).u.x.i_field } == 0 &&
@@ -2656,6 +3101,12 @@ extern "C" fn expr_analyze(p_src: *mut SrcList, p_wc: *mut WhereClause,
     }
 }
 
+///* Call exprAnalyze on all terms in a WHERE clause. 
+///*
+///* Note that exprAnalyze() might add new virtual terms onto the
+///* end of the WHERE clause.  We do not want to analyze these new
+///* virtual terms, so start analyzing at the end and work forward
+///* so that the added virtual terms are never processed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_expr_analyze(p_tab_list: *mut SrcList,
     p_wc: *mut WhereClause) -> () {
@@ -2670,7 +3121,13 @@ pub extern "C" fn sqlite3_where_expr_analyze(p_tab_list: *mut SrcList,
     }
 }
 
+///* For table-valued-functions, transform the function arguments into
+///* new WHERE clause terms. 
+///*
+///* Each function argument translates into an equality constraint against
+///* a HIDDEN column in the table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_where_tab_func_args(p_parse: *mut Parse,
     p_item: &mut SrcItem, p_wc: *mut WhereClause) -> () {
     unsafe {
@@ -2744,8 +3201,14 @@ pub extern "C" fn sqlite3_where_tab_func_args(p_parse: *mut Parse,
                     p_term =
                         unsafe { sqlite3_p_expr(p_parse, 54, p_col_ref, p_rhs) };
                     if (*p_item).fg.jointype as i32 & (8 | 16) != 0 {
-                        join_type = 1 as u32;
-                    } else { join_type = 2 as u32; }
+
+                        /// testtag-20230227b
+                        (join_type = 1 as u32);
+                    } else {
+
+                        /// testtag-20230227c
+                        (join_type = 2 as u32);
+                    }
                     unsafe {
                         sqlite3_set_join_expr(p_term, (*p_item).i_cursor, join_type)
                     };

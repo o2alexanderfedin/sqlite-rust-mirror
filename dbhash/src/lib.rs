@@ -2,7 +2,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -14,6 +20,7 @@ struct SHA1Context {
     buffer: [u8; 64],
 }
 
+///* All global variables are gathered into the "g" singleton.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct GlobalVars {
@@ -27,6 +34,7 @@ struct GlobalVars {
 pub static mut g: GlobalVars = unsafe { core::mem::zeroed() };
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -1379,6 +1387,8 @@ pub extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
                         } + 3395469782u32 +
                 (qq[1 as usize] << 5 | qq[1 as usize] >> 32 - 5);
         qq[2 as usize] = qq[2 as usize] << 32 - 2 | qq[2 as usize] >> 2;
+
+        /// Add the working vars back into context.state[]
         unsafe { *state.offset(0 as isize) += qq[0 as usize] };
         unsafe { *state.offset(1 as isize) += qq[1 as usize] };
         unsafe { *state.offset(2 as isize) += qq[2 as usize] };
@@ -1387,9 +1397,13 @@ pub extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     }
 }
 
+/// Initialize the SHA1 hash
+#[allow(unused_doc_comments)]
 extern "C" fn hash_init() -> () {
     unsafe {
-        g.cx.state[0 as usize] = 1732584193 as u32;
+
+        /// SHA1 initialization constants
+        (g.cx.state[0 as usize] = 1732584193 as u32);
         g.cx.state[1 as usize] = 4023233417u32;
         g.cx.state[2 as usize] = 2562383102u32;
         g.cx.state[3 as usize] = 271733878 as u32;
@@ -1399,6 +1413,7 @@ extern "C" fn hash_init() -> () {
     }
 }
 
+/// Add new content to the SHA1 hash
 extern "C" fn hash_step(data: *const u8, len: u32) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -1443,6 +1458,7 @@ extern "C" fn hash_step(data: *const u8, len: u32) -> () {
     }
 }
 
+/// Add padding and compute and output the message digest.
 extern "C" fn hash_finish(z_name_1: *const i8) -> () {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -1504,6 +1520,8 @@ extern "C" fn hash_finish(z_name_1: *const i8) -> () {
     }
 }
 
+///* Print an error resulting from faulting command-line arguments and
+///* abort the program.
 unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -1524,6 +1542,8 @@ unsafe extern "C" fn cmdline_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Print an error message for an error that occurs at runtime, then
+///* abort the program.
 unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
@@ -1540,6 +1560,8 @@ unsafe extern "C" fn runtime_error(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Prepare a new SQL statement.  Print an error and abort if anything
+///* goes wrong.
 extern "C" fn db_vprepare(z_format_1: *const i8, ap: *mut i8)
     -> *mut Sqlite3Stmt {
     unsafe {
@@ -1580,13 +1602,21 @@ unsafe extern "C" fn db_prepare(z_format_1: *const i8, mut __va0: ...)
     return p_stmt;
 }
 
+///* Compute the hash for all rows of the query formed from the printf-style
+///* zFormat and its argument.
+#[allow(unused_doc_comments)]
 unsafe extern "C" fn hash_one_query(z_format_1: *const i8, mut __va0: ...)
     -> () {
     unsafe {
         let mut ap: *mut i8 = core::ptr::null_mut();
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// The query defined by zFormat and "..."
         let mut n_col: i32 = 0;
+        /// Number of columns in the result set
         let mut i: i32 = 0;
+
+        /// Loop counter
+        /// Prepare the query defined by zFormat and "..."
         unsafe { ap = core::mem::transmute_copy(&__va0) };
         p_stmt = db_vprepare(z_format_1, ap);
         ();
@@ -1913,6 +1943,7 @@ unsafe extern "C" fn hash_one_query(z_format_1: *const i8, mut __va0: ...)
     }
 }
 
+///* Print sketchy documentation for this utility program
 extern "C" fn show_help() -> () {
     unsafe {
         unsafe {
@@ -1926,18 +1957,29 @@ extern "C" fn show_help() -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut z_db: *const i8 = core::ptr::null();
+        /// Name of the database currently being hashed
         let mut i: i32 = 0;
+        /// Loop counter
         let mut rc: i32 = 0;
+        /// Subroutine return code
         let mut z_err_msg: *mut i8 = core::ptr::null_mut();
+        /// Error message when opening database
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// An SQLite query
         let mut z_like: *const i8 = core::ptr::null();
+        /// LIKE pattern of tables to hash
         let mut omit_schema: i32 = 0;
+        /// True to compute hash on content only
         let mut omit_content: i32 = 0;
+        /// True to compute hash on schema only
         let mut n_file: i32 = 0;
-        g.z_argv0 = unsafe { *argv.offset(0 as isize) } as *const i8;
+
+        /// Number of input filenames seen
+        (g.z_argv0 = unsafe { *argv.offset(0 as isize) } as *const i8);
         unsafe { sqlite3_config(1) };
         {
             i = 1;
@@ -2049,7 +2091,9 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
             '__b11: loop {
                 if !(i <= n_file) { break '__b11; }
                 '__c11: loop {
-                    z_db = unsafe { *argv.offset(i as isize) } as *const i8;
+
+                    /// Read/write so hot journals can recover
+                    (z_db = unsafe { *argv.offset(i as isize) } as *const i8);
                     rc =
                         unsafe {
                             sqlite3_open_v2(z_db, &mut g.db, open_flags,
@@ -2079,6 +2123,8 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
                         };
                         break '__c11;
                     }
+
+                    /// Start the hash
                     hash_init();
                     if (omit_content == 0) as i32 != 0 {
                         p_stmt =
@@ -2087,6 +2133,13 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
                                             as *mut i8 as *const i8, z_like)
                             };
                         while 100 == unsafe { sqlite3_step(p_stmt) } {
+
+                            /// We want rows of the table to be hashed in PRIMARY KEY order.
+                            ///* Technically, an ORDER BY clause is required to guarantee that
+                            ///* order.  However, though not guaranteed by the documentation, every
+                            ///* historical version of SQLite has always output rows in PRIMARY KEY
+                            ///* order when there is no WHERE or GROUP BY clause, so the ORDER BY
+                            ///* can be safely omitted.
                             unsafe {
                                 hash_one_query(c"SELECT * FROM \"%w\"".as_ptr() as *mut i8
                                         as *const i8, unsafe { sqlite3_column_text(p_stmt, 0) })
@@ -2100,6 +2153,8 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
                                         as *mut i8 as *const i8, z_like)
                         };
                     }
+
+                    /// Finish and output the hash and close the database connection.
                     hash_finish(z_db);
                     unsafe { sqlite3_close(g.db) };
                     break '__c11;

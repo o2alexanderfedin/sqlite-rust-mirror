@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexConstraintUsage, Sqlite3IndexInfo,
+    Sqlite3Int64, Sqlite3Module, Sqlite3Mutex, Sqlite3MutexMethods,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type TclWideInt = i64;
 
@@ -430,6 +446,8 @@ impl Parse {
     }
 }
 
+/// 
+///* A tclvar virtual-table object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclvarVtab {
@@ -437,6 +455,7 @@ struct TclvarVtab {
     interp: *mut TclInterp,
 }
 
+/// A tclvar cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TclvarCursor {
@@ -447,14 +466,21 @@ struct TclvarCursor {
     i2: i32,
 }
 
+/// Methods for the tclvar module
+#[allow(unused_doc_comments)]
 extern "C" fn tclvar_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_vtab: *mut TclvarVtab = core::ptr::null_mut();
-    p_vtab =
+
+    /// Base name
+    /// Array index
+    /// Value
+    /// base(index) name
+    (p_vtab =
         unsafe {
                 sqlite3_malloc_zero(core::mem::size_of::<TclvarVtab>() as u64)
-            } as *mut TclvarVtab;
+            } as *mut TclvarVtab);
     if p_vtab == core::ptr::null_mut() { return 7; }
     unsafe { *pp_vtab_1 = unsafe { &mut (*p_vtab).base } };
     unsafe { (*p_vtab).interp = p_aux_1 as *mut TclInterp };
@@ -464,11 +490,14 @@ extern "C" fn tclvar_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return 0;
 }
 
+/// Note that for this virtual table, the xCreate and xConnect
+///* methods are identical.
 extern "C" fn tclvar_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Open a new tclvar cursor.
 extern "C" fn tclvar_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut TclvarCursor = core::ptr::null_mut();
@@ -481,6 +510,7 @@ extern "C" fn tclvar_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a tclvar cursor.
 extern "C" fn tclvar_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut TclvarCursor = cur as *mut TclvarCursor;
     if !(unsafe { (*p_cur).p_list1 }).is_null() {
@@ -519,6 +549,7 @@ extern "C" fn tclvar_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Returns 1 if data is ready, or 0 if not.
 extern "C" fn next2(interp: *mut TclInterp, p_cur_1: &mut TclvarCursor,
     p_obj_1: *mut TclObj) -> i32 {
     let mut p: *mut TclObj = core::ptr::null_mut();
@@ -1000,6 +1031,12 @@ extern "C" fn tclvar_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     return if !(unsafe { (*p_cur).p_list2 }).is_null() { 0 } else { 1 };
 }
 
+///* If nul-terminated string zStr does not already contain the character 
+///* passed as the second argument, append it and return 0. Or, if there is
+///* already an instance of x in zStr, do nothing return 1;
+///*
+///* There is guaranteed to be enough room in the buffer pointed to by zStr
+///* for the new character and nul-terminator.
 extern "C" fn tclvar_add_to_idxstr(z_str_1: *mut i8, x: i8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -1022,6 +1059,8 @@ extern "C" fn tclvar_add_to_idxstr(z_str_1: *mut i8, x: i8) -> i32 {
     return 0;
 }
 
+///* Return true if variable $::tclvar_set_omit exists and is set to true.
+///* False otherwise.
 extern "C" fn tclvar_set_omit(interp: *mut TclInterp) -> i32 {
     let mut rc: i32 = 0;
     let mut res: i32 = 0;
@@ -1042,6 +1081,17 @@ extern "C" fn tclvar_set_omit(interp: *mut TclInterp) -> i32 {
     return (rc == 0 && res != 0) as i32;
 }
 
+///* The xBestIndex() method. This virtual table supports the following
+///* operators:
+///*
+///*     name = ?                    (omit flag clear)
+///*     name MATCH ?                (omit flag set)
+///*     value GLOB ?                (omit flag set iff $::tclvar_set_omit)
+///*     value REGEXP ?              (omit flag set iff $::tclvar_set_omit)
+///*     value LIKE ?                (omit flag set iff $::tclvar_set_omit)
+///*
+///* For each constraint present, the corresponding TCLVAR_XXX character is
+///* appended to the idxStr value.
 extern "C" fn tclvar_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p_tab: *const TclvarVtab =
@@ -1143,11 +1193,14 @@ extern "C" fn tclvar_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Invoked for any UPDATE, INSERT, or DELETE against a tclvar table
+#[allow(unused_doc_comments)]
 extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
     argv: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_tab: *const TclvarVtab =
         tab as *mut TclvarVtab as *const TclvarVtab;
     if argc == 1 {
+        /// A DELETE operation.  The variable to be deleted is stored in argv[0]
         let z_var: *const i8 =
             unsafe { sqlite3_value_text(unsafe { *argv.offset(0 as isize) }) }
                 as *const i8;
@@ -1156,6 +1209,7 @@ extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
     }
     if unsafe { sqlite3_value_type(unsafe { *argv.offset(0 as isize) }) } == 5
         {
+        /// An INSERT operation
         let z_value: *const i8 =
             unsafe { sqlite3_value_text(unsafe { *argv.offset(4 as isize) }) }
                 as *const i8;
@@ -1187,6 +1241,7 @@ extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
             &&
             unsafe { sqlite3_value_type(unsafe { *argv.offset(1 as isize) }) }
                 == 3 {
+        /// An UPDATE operation
         let z_old_name: *const i8 =
             unsafe { sqlite3_value_text(unsafe { *argv.offset(0 as isize) }) }
                 as *const i8;
@@ -1220,6 +1275,8 @@ extern "C" fn tclvar_update(tab: *mut Sqlite3Vtab, argc: i32,
     return 1;
 }
 
+///* A virtual table module that provides read-only access to a
+///* Tcl global variable namespace.
 static mut tclvar_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -1249,6 +1306,7 @@ static mut tclvar_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Register the echo virtual table module.
 extern "C" fn register_tclvar_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {

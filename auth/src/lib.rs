@@ -1,19 +1,93 @@
+//!* 2003 January 11
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* This file contains code used to implement the sqlite3_set_authorizer()
+//!* API.  This facility is an optional feature of the library.  Embedded
+//!* systems that do not need this facility may omit it by recompiling
+//!* the library with -DSQLITE_OMIT_AUTHORIZATION=1
+//!* All of the code in this file may be omitted by defining a single
+//!* macro.
+//!* Set or clear the access authorization function.
+//!*
+//!* The access authorization function is be called during the compilation
+//!* phase to verify that the user has read and/or write access permission on
+//!* various fields of the database.  The first argument to the auth function
+//!* is a copy of the 3rd argument to this routine.  The second argument
+//!* to the auth function is one of these constants:
+//!*
+//!*       SQLITE_CREATE_INDEX
+//!*       SQLITE_CREATE_TABLE
+//!*       SQLITE_CREATE_TEMP_INDEX
+//!*       SQLITE_CREATE_TEMP_TABLE
+//!*       SQLITE_CREATE_TEMP_TRIGGER
+//!*       SQLITE_CREATE_TEMP_VIEW
+//!*       SQLITE_CREATE_TRIGGER
+//!*       SQLITE_CREATE_VIEW
+//!*       SQLITE_DELETE
+//!*       SQLITE_DROP_INDEX
+//!*       SQLITE_DROP_TABLE
+//!*       SQLITE_DROP_TEMP_INDEX
+//!*       SQLITE_DROP_TEMP_TABLE
+//!*       SQLITE_DROP_TEMP_TRIGGER
+//!*       SQLITE_DROP_TEMP_VIEW
+//!*       SQLITE_DROP_TRIGGER
+//!*       SQLITE_DROP_VIEW
+//!*       SQLITE_INSERT
+//!*       SQLITE_PRAGMA
+//!*       SQLITE_READ
+//!*       SQLITE_SELECT
+//!*       SQLITE_TRANSACTION
+//!*       SQLITE_UPDATE
+//!*
+//!* The third and fourth arguments to the auth function are the name of
+//!* the table and the column that are being accessed.  The auth function
+//!* should return either SQLITE_OK, SQLITE_DENY, or SQLITE_IGNORE.  If
+//!* SQLITE_OK is returned, it means that access is allowed.  SQLITE_DENY
+//!* means that the SQL statement will never-run - the sqlite3_exec() call
+//!* will return with an error.  SQLITE_IGNORE means that the SQL statement
+//!* should run but attempts to read the specified column will return NULL
+//!* and attempts to write the column will be ignored.
+//!*
+//!* Setting the auth function to NULL disables this hook.  The default
+//!* setting of the auth function is NULL.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,6 +465,105 @@ impl Parse {
     }
 }
 
+///* CAPI3REF: Compile-Time Authorization Callbacks
+///* METHOD: sqlite3
+///* KEYWORDS: {authorizer callback}
+///*
+///* ^This routine registers an authorizer callback with a particular
+///* [database connection], supplied in the first argument.
+///* ^The authorizer callback is invoked as SQL statements are being compiled
+///* by [sqlite3_prepare()] or its variants [sqlite3_prepare_v2()],
+///* [sqlite3_prepare_v3()], [sqlite3_prepare16()], [sqlite3_prepare16_v2()],
+///* and [sqlite3_prepare16_v3()].  ^At various
+///* points during the compilation process, as logic is being created
+///* to perform various actions, the authorizer callback is invoked to
+///* see if those actions are allowed.  ^The authorizer callback should
+///* return [SQLITE_OK] to allow the action, [SQLITE_IGNORE] to disallow the
+///* specific action but allow the SQL statement to continue to be
+///* compiled, or [SQLITE_DENY] to cause the entire SQL statement to be
+///* rejected with an error.  ^If the authorizer callback returns
+///* any value other than [SQLITE_IGNORE], [SQLITE_OK], or [SQLITE_DENY]
+///* then the [sqlite3_prepare_v2()] or equivalent call that triggered
+///* the authorizer will fail with an error message.
+///*
+///* When the callback returns [SQLITE_OK], that means the operation
+///* requested is ok.  ^When the callback returns [SQLITE_DENY], the
+///* [sqlite3_prepare_v2()] or equivalent call that triggered the
+///* authorizer will fail with an error message explaining that
+///* access is denied.
+///*
+///* ^The first parameter to the authorizer callback is a copy of the third
+///* parameter to the sqlite3_set_authorizer() interface. ^The second parameter
+///* to the callback is an integer [SQLITE_READ | action code] that specifies
+///* the particular action to be authorized. ^The third through sixth parameters
+///* to the callback are either NULL pointers or zero-terminated strings
+///* that contain additional details about the action to be authorized.
+///* Applications must always be prepared to encounter a NULL pointer in any
+///* of the third through the sixth parameters of the authorization callback.
+///*
+///* ^If the action code is [SQLITE_READ]
+///* and the callback returns [SQLITE_IGNORE] then the
+///* [prepared statement] statement is constructed to substitute
+///* a NULL value in place of the table column that would have
+///* been read if [SQLITE_OK] had been returned.  The [SQLITE_IGNORE]
+///* return can be used to deny an untrusted user access to individual
+///* columns of a table.
+///* ^When a table is referenced by a [SELECT] but no column values are
+///* extracted from that table (for example in a query like
+///* "SELECT count(*) FROM tab") then the [SQLITE_READ] authorizer callback
+///* is invoked once for that table with a column name that is an empty string.
+///* ^If the action code is [SQLITE_DELETE] and the callback returns
+///* [SQLITE_IGNORE] then the [DELETE] operation proceeds but the
+///* [truncate optimization] is disabled and all rows are deleted individually.
+///*
+///* An authorizer is used when [sqlite3_prepare | preparing]
+///* SQL statements from an untrusted source, to ensure that the SQL statements
+///* do not try to access data they are not allowed to see, or that they do not
+///* try to execute malicious statements that damage the database.  For
+///* example, an application may allow a user to enter arbitrary
+///* SQL queries for evaluation by a database.  But the application does
+///* not want the user to be able to make arbitrary changes to the
+///* database.  An authorizer could then be put in place while the
+///* user-entered SQL is being [sqlite3_prepare | prepared] that
+///* disallows everything except [SELECT] statements.
+///*
+///* Applications that need to process SQL from untrusted sources
+///* might also consider lowering resource limits using [sqlite3_limit()]
+///* and limiting database size using the [max_page_count] [PRAGMA]
+///* in addition to using an authorizer.
+///*
+///* ^(Only a single authorizer can be in place on a database connection
+///* at a time.  Each call to sqlite3_set_authorizer overrides the
+///* previous call.)^  ^Disable the authorizer by installing a NULL callback.
+///* The authorizer is disabled by default.
+///*
+///* <h3>Limitations And Caveats</h3><ul>
+///*
+///* <li>The authorizer callback must not do anything that will modify
+///* the database connection that invoked the authorizer callback.
+///* Note that [sqlite3_prepare_v2()] and [sqlite3_step()] both modify their
+///* database connections for the meaning of "modify" in this paragraph.
+///*
+///* <li>^When [sqlite3_prepare_v2()] is used to prepare a statement, the
+///* statement might be re-prepared during [sqlite3_step()] due to a
+///* schema change.  Hence, the application should ensure that the
+///* correct authorizer callback remains in place during the [sqlite3_step()].
+///*
+///* <li>^The authorizer callback is invoked only during
+///* [sqlite3_prepare()] or its variants.  Authorization is not
+///* performed during statement evaluation in [sqlite3_step()], unless
+///* as stated in the previous paragraph, sqlite3_step() invokes
+///* sqlite3_prepare_v2() to reprepare a statement after a schema change.
+///*
+///* <li>Authorizer callbacks for the expressions of a
+///* [generated column] are invoked when the schema is parsed (and specifically
+///* when the [CREATE TABLE] statement that contains the generated column is
+///* parsed) not when the generated column is used in a DML statement.
+///* This is deliberate, as one of the purposes of generated columns
+///* is to give schema designers the ability to provide gated access
+///* to privileged columns and/or functions.
+///*
+///* </ul>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_authorizer(db: *mut Sqlite3,
     x_auth_1:
@@ -417,6 +590,8 @@ pub extern "C" fn sqlite3_set_authorizer(db: *mut Sqlite3,
     return 0;
 }
 
+///* Write an error message into pParse->zErrMsg that explains that the
+///* user-supplied authorization function returned an illegal value.
 extern "C" fn sqlite_auth_bad_return_code(p_parse_1: *mut Parse) -> () {
     unsafe {
         sqlite3_error_msg(p_parse_1,
@@ -425,14 +600,24 @@ extern "C" fn sqlite_auth_bad_return_code(p_parse_1: *mut Parse) -> () {
     unsafe { (*p_parse_1).rc = 1 };
 }
 
+///* Invoke the authorization callback for permission to read column zCol from
+///* table zTab in database zDb. This function assumes that an authorization
+///* callback has been registered (i.e. that sqlite3.xAuth is not NULL).
+///*
+///* If SQLITE_IGNORE is returned and pExpr is not NULL, then pExpr is changed
+///* to an SQL NULL expression. Otherwise, if pExpr is NULL, then SQLITE_IGNORE
+///* is treated as SQLITE_DENY. In this case an error is left in pParse.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_auth_read_col(p_parse_1: *mut Parse,
     z_tab_1: *const i8, z_col_1: *const i8, i_db_1: i32) -> i32 {
     let db: *const Sqlite3 = unsafe { (*p_parse_1).db } as *const Sqlite3;
+    /// Database handle
     let z_db: *mut i8 =
         unsafe {
             (*unsafe { (*db).a_db.offset(i_db_1 as isize) }).z_db_s_name
         };
+    /// Schema name of attached database
     let mut rc: i32 = 0;
     if unsafe { (*db).init.busy } != 0 { return 0; }
     rc =
@@ -465,15 +650,29 @@ pub extern "C" fn sqlite3_auth_read_col(p_parse_1: *mut Parse,
     return rc;
 }
 
+///* The pExpr should be a TK_COLUMN expression.  The table referred to
+///* is in pTabList or else it is the NEW or OLD table of a trigger.  
+///* Check to see if it is OK to read this particular column.
+///*
+///* If the auth function returns SQLITE_IGNORE, change the TK_COLUMN 
+///* instruction into a TK_NULL.  If the auth function returns SQLITE_DENY,
+///* then generate an error.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_auth_read(p_parse_1: *mut Parse,
     p_expr_1: &mut Expr, p_schema_1: *mut Schema, p_tab_list_1: &SrcList)
     -> () {
     let mut p_tab: *const Table = core::ptr::null();
+    /// The table being read
     let mut z_col: *const i8 = core::ptr::null();
+    /// Name of the column of the table
     let mut i_src: i32 = 0;
+    /// Index in pTabList->a[] of table being read
     let mut i_db: i32 = 0;
+    /// The index of the database the expression refers to
     let mut i_col: i32 = 0;
+
+    /// Index of column in table
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -481,7 +680,12 @@ pub extern "C" fn sqlite3_auth_read(p_parse_1: *mut Parse,
         unsafe {
             sqlite3_schema_to_index(unsafe { (*p_parse_1).db }, p_schema_1)
         };
-    if i_db < 0 { return; }
+    if i_db < 0 {
+
+        /// An attempt to read a column out of a subquery or other
+        ///* temporary table.
+        return;
+    }
     if (*p_expr_1).op as i32 == 78 {
         p_tab = unsafe { (*p_parse_1).p_trigger_tab };
     } else {
@@ -536,10 +740,24 @@ pub extern "C" fn sqlite3_auth_read(p_parse_1: *mut Parse,
     }
 }
 
+///* Do an authorization check using the code and arguments given.  Return
+///* either SQLITE_OK (zero) or SQLITE_IGNORE or SQLITE_DENY.  If SQLITE_DENY
+///* is returned, then the error count and error message in pParse are
+///* modified appropriately.
+///*
+///* Divided into two routines.  realAuthCheck() does the work.  The
+///* sqlite3AuthCheck() routine is usually a fast no-op but invokes
+///* realAuthCheck() (and spends time doing some stack pushes and pops
+///* as a result) in the uncommon case where an authorization check is
+///* actually needed.
+#[allow(unused_doc_comments)]
 extern "C" fn real_auth_check(p_parse_1: *mut Parse, code: i32,
     z_arg1_1: *const i8, z_arg2_1: *const i8, z_arg3_1: *const i8) -> i32 {
     let db: *const Sqlite3 = unsafe { (*p_parse_1).db } as *const Sqlite3;
     let mut rc: i32 = 0;
+
+    /// Don't do any authorization checks if the database is initializing
+    ///* or if the parser is being invoked from within sqlite3_declare_vtab.
     { let _ = 0; };
     if unsafe { (*p_parse_1).e_parse_mode } as i32 != 0 { return 0; }
     rc =
@@ -571,6 +789,9 @@ pub extern "C" fn sqlite3_auth_check(p_parse_1: *mut Parse, code: i32,
     } else { return 0; }
 }
 
+///* Push an authorization context.  After this routine is called, the
+///* zArg3 argument to authorization callbacks will be zContext until
+///* popped.  Or if pParse==0, this routine is a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_context_push(p_parse_1: *mut Parse,
     p_context_1: &mut AuthContext, z_context_1: *const i8) -> () {
@@ -580,6 +801,8 @@ pub extern "C" fn sqlite3_auth_context_push(p_parse_1: *mut Parse,
     unsafe { (*p_parse_1).z_auth_context = z_context_1 };
 }
 
+///* Pop an authorization context that was previously pushed
+///* by sqlite3AuthContextPush
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_auth_context_pop(p_context_1: &mut AuthContext)
     -> () {

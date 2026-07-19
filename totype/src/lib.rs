@@ -1,14 +1,21 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
 static totype_one: i32 = 1 as i32;
 
+///* Return TRUE if character c is a whitespace character
 extern "C" fn totype_isspace(c: u8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                             c as i32 == '\n' as i32 || c as i32 == '\u{b}' as i32 ||
@@ -16,13 +23,28 @@ extern "C" fn totype_isspace(c: u8) -> i32 {
             i32;
 }
 
+///* Return TRUE if character c is a digit
 extern "C" fn totype_isdigit(c: u8) -> i32 {
     return (c as i32 >= '0' as i32 && c as i32 <= '9' as i32) as i32;
 }
 
+///* Compare the 19-character string zNum against the text representation
+///* value 2^63:  9223372036854775808.  Return negative, zero, or positive
+///* if zNum is less than, equal to, or greater than the string.
+///* Note that zNum must contain exactly 19 characters.
+///*
+///* Unlike memcmp() this routine is guaranteed to return the difference
+///* in the values of the last digit if the only difference is in the
+///* last digit.  So, for example,
+///*
+///*      totypeCompare2pow63("9223372036854775800")
+///*
+///* will return -8.
+#[allow(unused_doc_comments)]
 extern "C" fn totype_compare2pow63(z_num_1: *const i8) -> i32 {
     let mut c: i32 = 0;
     let mut i: i32 = 0;
+    /// 012345678901234567
     let pow63: *const i8 =
         c"922337203685477580".as_ptr() as *mut i8 as *const i8;
     {
@@ -44,10 +66,26 @@ extern "C" fn totype_compare2pow63(z_num_1: *const i8) -> i32 {
     return c;
 }
 
+///* Convert zNum to a 64-bit signed integer.
+///*
+///* If the zNum value is representable as a 64-bit twos-complement
+///* integer, then write that value into *pNum and return 0.
+///*
+///* If zNum is exactly 9223372036854665808, return 2.  This special
+///* case is broken out because while 9223372036854665808 cannot be a
+///* signed 64-bit integer, its negative -9223372036854665808 can be.
+///*
+///* If zNum is too big for a 64-bit integer and is not
+///* 9223372036854665808  or if zNum contains any non-numeric text,
+///* then return 1.
+///*
+///* The string is not necessarily zero-terminated.
+#[allow(unused_doc_comments)]
 extern "C" fn totype_atoi64(mut z_num_1: *const i8,
     p_num_1: &mut Sqlite3Int64, length: i32) -> i32 {
     let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut neg: i32 = 0;
+    /// assume positive
     let mut i: i32 = 0;
     let mut c: i32 = 0;
     let non_num: i32 = 0;
@@ -118,8 +156,13 @@ extern "C" fn totype_atoi64(mut z_num_1: *const i8,
     } else { *p_num_1 = u as Sqlite3Int64; }
     if c != 0 && unsafe { z_num_1.offset(i as isize) } < z_end ||
                     i == 0 && z_start == z_num_1 || i > 19 || non_num != 0 {
+
+        /// zNum is empty or contains non-numeric text or is longer
+        ///* than 19 digits (thus guaranteeing that it is too large)
         return 1;
     } else if i < 19 {
+
+        /// Less than 19 digits, so we know that it fits in 64 bits
         if !(u <=
                                 (4294967295u32 as Sqlite3Int64 |
                                         (2147483647 as Sqlite3Int64) << 32) as u64) as i32 as i64 !=
@@ -132,8 +175,12 @@ extern "C" fn totype_atoi64(mut z_num_1: *const i8,
         } else { { let _ = 0; } };
         return 0;
     } else {
-        c = totype_compare2pow63(z_num_1);
+
+        /// zNum is a 19-digit numbers.  Compare it against 9223372036854775808.
+        (c = totype_compare2pow63(z_num_1));
         if c < 0 {
+
+            /// zNum is less than 9223372036854775808 so it fits
             if !(u <=
                                     (4294967295u32 as Sqlite3Int64 |
                                             (2147483647 as Sqlite3Int64) << 32) as u64) as i32 as i64 !=
@@ -146,8 +193,13 @@ extern "C" fn totype_atoi64(mut z_num_1: *const i8,
             } else { { let _ = 0; } };
             return 0;
         } else if c > 0 {
+
+            /// zNum is greater than 9223372036854775808 so it overflows
             return 1;
         } else {
+
+            /// zNum is exactly 9223372036854775808.  Fits if negative.  The
+            ///* special case 2 overflow if positive
             if !(u - 1 as Sqlite3Uint64 ==
                                     (4294967295u32 as Sqlite3Int64 |
                                             (2147483647 as Sqlite3Int64) << 32) as u64) as i32 as i64 !=
@@ -173,18 +225,68 @@ extern "C" fn totype_atoi64(mut z_num_1: *const i8,
     }
 }
 
+///* The string z[] is an text representation of a real number.
+///* Convert this string to a double and write it into *pResult.
+///*
+///* The string is not necessarily zero-terminated.
+///*
+///* Return TRUE if the result is a valid real number (or integer) and FALSE
+///* if the string is empty or contains extraneous text.  Valid numbers
+///* are in one of these formats:
+///*
+///*    [+-]digits[E[+-]digits]
+///*    [+-]digits.[digits][E[+-]digits]
+///*    [+-].digits[E[+-]digits]
+///*
+///* Leading and trailing whitespace is ignored for the purpose of determining
+///* validity.
+///*
+///* If some prefix of the input string is a valid number, this routine
+///* returns FALSE but it still converts the prefix and writes the result
+///* into *pResult.
+#[allow(unused_doc_comments)]
 extern "C" fn totype_ato_f(mut z: *const i8, p_result_1: &mut f64,
     length: i32) -> i32 {
     let mut z_end: *const i8 = core::ptr::null();
+    /// sign * significand * (10 ^ (esign * exponent))
     let mut sign: i32 = 0;
+    /// sign of significand
     let mut s: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// significand
     let mut d: i32 = 0;
+    /// adjust exponent for shifting decimal point
     let mut esign: i32 = 0;
+    /// sign of exponent
     let mut e: i32 = 0;
+    /// exponent
     let mut e_valid: i32 = 0;
+    /// True exponent is either not used or is well-formed
     let mut result: f64 = 0.0;
     let mut n_digits: i32 = 0;
     let mut non_num: i32 = 0;
+    /// Default return value, in case of an error
+    /// skip leading spaces
+    /// get sign of significand
+    /// skip leading zeroes
+    /// copy max significant digits to significand
+    /// skip non-significant significand digits
+    ///* (increase exponent by d to shift decimal left)
+    /// if decimal point is present
+    /// copy digits from after decimal to significand
+    ///* (decrease exponent by d to shift decimal right)
+    /// skip non-significant digits
+    /// if exponent is present
+    /// get sign of exponent
+    /// copy digits to exponent
+    /// skip trailing spaces
+    /// adjust exponent by d, and update sign
+    /// if 0 significand
+    /// In the IEEE 754 standard, zero is signed.
+    ///* Add the sign if we've seen at least one digit
+    /// attempt to reduce exponent
+    /// adjust the sign of significand
+    /// if exponent, scale significand as appropriate
+    ///* and store in result.
     let mut scale: f64 = 0.0;
     let mut __state: i32 = 0;
     loop {
@@ -576,15 +678,62 @@ extern "C" fn totype_ato_f(mut z: *const i8, p_result_1: &mut f64,
             }
         }
     }
+
+    /// sign * significand * (10 ^ (esign * exponent))
+    /// sign of significand
+    /// significand
+    /// adjust exponent for shifting decimal point
+    /// sign of exponent
+    /// exponent
+    /// True exponent is either not used or is well-formed
+    /// Default return value, in case of an error
+    /// skip leading spaces
+    /// get sign of significand
+    /// skip leading zeroes
+    /// copy max significant digits to significand
+    /// skip non-significant significand digits
+    ///* (increase exponent by d to shift decimal left)
+    /// if decimal point is present
+    /// copy digits from after decimal to significand
+    ///* (decrease exponent by d to shift decimal right)
+    /// skip non-significant digits
+    /// if exponent is present
+    /// get sign of exponent
+    /// copy digits to exponent
+    /// skip trailing spaces
+    /// adjust exponent by d, and update sign
+    /// if 0 significand
+    /// In the IEEE 754 standard, zero is signed.
+    ///* Add the sign if we've seen at least one digit
+    /// attempt to reduce exponent
+    /// adjust the sign of significand
+    /// if exponent, scale significand as appropriate
+    ///* and store in result.
+    /// attempt to handle extremely small/large numbers better
+    /// Infinity
+    /// 1.0e+22 is the largest power of 10 than can be
+    ///* represented exactly.
+    /// store the result
+    /// return true if number and no extra non-whitespace characters after
     unreachable!();
 }
 
+/// 
+///* Convert a floating point value to an integer. Or, if this cannot be
+///* done in a way that avoids 'outside the range of representable values' 
+///* warnings from UBSAN, return 0.
+///*
+///* This function is a modified copy of internal SQLite function
+///* sqlite3RealToI64().
 extern "C" fn totype_double_to_int(r: f64) -> Sqlite3Int64 {
     if r < -9.223372036854775e18 { return 0 as Sqlite3Int64; }
     if r > 9.223372036854775e18 { return 0 as Sqlite3Int64; }
     return r as Sqlite3Int64;
 }
 
+///* tointeger(X):  If X is any value (integer, double, blob, or string) that
+///* can be losslessly converted into an integer, then make the conversion and
+///* return the result.  Otherwise, return NULL.
 extern "C" fn tointeger_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -1326,18 +1475,21 @@ extern "C" fn toreal_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_totype_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"tointeger".as_ptr() as *mut i8 as *const i8, 1,
                 1 | 2048 | 2097152, core::ptr::null_mut(),
                 Some(tointeger_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

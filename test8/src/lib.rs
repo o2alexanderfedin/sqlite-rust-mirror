@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexConstraintUsage, Sqlite3IndexInfo,
+    Sqlite3Int64, Sqlite3Module, Sqlite3Mutex, Sqlite3MutexMethods,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type ClientData = *mut ();
 
@@ -419,6 +435,16 @@ impl Parse {
     }
 }
 
+/// 
+///* An echo virtual-table object.
+///*
+///* echo.vtab.aIndex is an array of booleans. The nth entry is true if 
+///* the nth column of the real table is the left-most column of an index
+///* (implicit or otherwise). In other words, if SQLite can optimize
+///* a query like "SELECT * FROM real_table WHERE col = ?".
+///*
+///* Member variable aCol[] contains copies of the column names of the real
+///* table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EchoVtab {
@@ -435,6 +461,7 @@ struct EchoVtab {
     a_col: *mut *mut i8,
 }
 
+/// An echo cursor object
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EchoCursor {
@@ -467,6 +494,17 @@ extern "C" fn simulate_vtab_error(p: &mut EchoVtab, z_method_1: *const i8)
     return (z_err != core::ptr::null()) as i32;
 }
 
+///* Convert an SQL-style quoted string into a normal string by removing
+///* the quote characters.  The conversion is done in-place.  If the
+///* input does not begin with a quote character, then this routine
+///* is a no-op.
+///*
+///* Examples:
+///*
+///*     "abc"   becomes   abc
+///*     'xyz'   becomes   xyz
+///*     [pqr]   becomes   pqr
+///*     `mno`   becomes   mno
 extern "C" fn dequote_string(z: *mut i8) -> () {
     let mut quote: i32 = 0;
     let mut i: i32 = 0;
@@ -527,6 +565,15 @@ extern "C" fn dequote_string(z: *mut i8) -> () {
     }
 }
 
+///* Retrieve the column names for the table named zTab via database
+///* connection db. SQLITE_OK is returned on success, or an sqlite error
+///* code otherwise.
+///*
+///* If successful, the number of columns is written to *pnCol. *paCol is
+///* set to point at sqlite3_malloc()'d space containing the array of
+///* nCol column names. The caller is responsible for calling sqlite3_free
+///* on *paCol.
+#[allow(unused_doc_comments)]
 extern "C" fn get_column_names(db: *mut Sqlite3, z_tab_1: *const i8,
     pa_col_1: &mut *mut *mut i8, pn_col_1: &mut i32) -> i32 {
     let mut a_col: *mut *mut i8 = core::ptr::null_mut();
@@ -534,9 +581,14 @@ extern "C" fn get_column_names(db: *mut Sqlite3, z_tab_1: *const i8,
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut rc: i32 = 0;
     let mut n_col: i32 = 0;
+    /// Prepare the statement "SELECT * FROM <tbl>". The column names
+    ///* of the result set of the compiled SELECT will be the same as
+    ///* the column names of table <tbl>.
     let mut ii: i32 = 0;
     let mut n_bytes: i32 = 0;
     let mut z_space: *mut i8 = core::ptr::null_mut();
+    /// Figure out how much space to allocate for the array of column names 
+    ///* (including space for the strings themselves). Then allocate it.
     let mut z_name: *const i8 = core::ptr::null();
     let mut __state: i32 = 0;
     loop {
@@ -671,15 +723,38 @@ extern "C" fn get_column_names(db: *mut Sqlite3, z_tab_1: *const i8,
             }
         }
     }
+
+    /// Prepare the statement "SELECT * FROM <tbl>". The column names
+    ///* of the result set of the compiled SELECT will be the same as
+    ///* the column names of table <tbl>.
+    /// Figure out how much space to allocate for the array of column names 
+    ///* (including space for the strings themselves). Then allocate it.
+    /// Copy the column names into the allocated space and set up the
+    ///* pointers in the aCol[] array.
     unreachable!();
 }
 
+///* Parameter zTab is the name of a table in database db with nCol 
+///* columns. This function allocates an array of integers nCol in 
+///* size and populates it according to any implicit or explicit 
+///* indices on table zTab.
+///*
+///* If successful, SQLITE_OK is returned and *paIndex set to point 
+///* at the allocated array. Otherwise, an error code is returned.
+///*
+///* See comments associated with the member variable aIndex above 
+///* "struct echo_vtab" for details of the contents of the array.
+#[allow(unused_doc_comments)]
 extern "C" fn get_index_array(db: *mut Sqlite3, z_tab_1: *const i8,
     n_col_1: i32, pa_index_1: &mut *mut i32) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut a_index: *mut i32 = core::ptr::null_mut();
     let mut rc: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
+    /// Allocate space for the index array
+    /// Compile an sqlite pragma to loop through all indices on table zTab
+    /// For each index, figure out the left-most column and set the 
+    ///* corresponding entry in aIndex[] to 1.
     let mut z_idx: *const i8 = core::ptr::null();
     let mut p_stmt2: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut cid: i32 = 0;
@@ -831,9 +906,16 @@ extern "C" fn get_index_array(db: *mut Sqlite3, z_tab_1: *const i8,
             }
         }
     }
+
+    /// Allocate space for the index array
+    /// Compile an sqlite pragma to loop through all indices on table zTab
+    /// For each index, figure out the left-most column and set the 
+    ///* corresponding entry in aIndex[] to 1.
     unreachable!();
 }
 
+///* Global Tcl variable $echo_module is a list. This routine appends
+///* the string element zArg to that list in interpreter interp.
 extern "C" fn append_to_echo_module(interp: *mut TclInterp,
     z_arg_1: *const i8) -> () {
     let flags: i32 = 4 | 8 | 1;
@@ -845,6 +927,21 @@ extern "C" fn append_to_echo_module(interp: *mut TclInterp,
     };
 }
 
+///* This function is called from within the echo-modules xCreate and
+///* xConnect methods. The argc and argv arguments are copies of those 
+///* passed to the calling method. This function is responsible for
+///* calling sqlite3_declare_vtab() to declare the schema of the virtual
+///* table being created or connected.
+///*
+///* If the constructor was passed just one argument, i.e.:
+///*
+///*   CREATE TABLE t1 AS echo(t2);
+///*
+///* Then t2 is assumed to be the name of a *real* database table. The
+///* schema of the virtual table is declared by passing a copy of the 
+///* CREATE TABLE statement for the real table to sqlite3_declare_vtab().
+///* Hence, the virtual table should have exactly the same column names and 
+///* types as the real table.
 extern "C" fn echo_declare_vtab(p_vtab_1: &mut EchoVtab, db: *mut Sqlite3)
     -> i32 {
     let mut rc: i32 = 0;
@@ -888,6 +985,8 @@ extern "C" fn echo_declare_vtab(p_vtab_1: &mut EchoVtab, db: *mut Sqlite3)
     return rc;
 }
 
+///* This function frees all runtime structures associated with the virtual
+///* table pVtab.
 extern "C" fn echo_destructor(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *mut EchoVtab = p_vtab_1 as *mut EchoVtab;
     unsafe { sqlite3_free(unsafe { (*p).a_index } as *mut ()) };
@@ -906,21 +1005,29 @@ struct EchoModule {
     db: *mut Sqlite3,
 }
 
+///* This function is called to do the work of the xConnect() method -
+///* to allocate the required in-memory structures for a newly connected
+///* virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn echo_constructor(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: &mut *mut Sqlite3Vtab,
     pz_err_1: *const *mut i8) -> i32 {
     let mut rc: i32 = 0;
     let mut i: i32 = 0;
     let mut p_vtab: *mut EchoVtab = core::ptr::null_mut();
-    p_vtab =
+
+    /// Allocate the sqlite3_vtab/echo_vtab structure itself
+    (p_vtab =
         unsafe {
                 sqlite3_malloc_zero(core::mem::size_of::<EchoVtab>() as u64)
-            } as *mut EchoVtab;
+            } as *mut EchoVtab);
     if (p_vtab).is_null() as i32 != 0 { return 7; }
     unsafe {
         (*p_vtab).interp = unsafe { (*(p_aux_1 as *mut EchoModule)).interp }
     };
     unsafe { (*p_vtab).db = db };
+
+    /// Allocate echo_vtab.zThis
     unsafe {
         (*p_vtab).z_this =
             unsafe {
@@ -978,12 +1085,20 @@ extern "C" fn echo_constructor(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
-    rc = echo_declare_vtab(unsafe { &mut *p_vtab }, db);
+
+    /// Invoke sqlite3_declare_vtab and set up other members of the echo_vtab
+    ///* structure. If an error occurs, delete the sqlite3_vtab structure and
+    ///* return an error code.
+    (rc = echo_declare_vtab(unsafe { &mut *p_vtab }, db));
     if rc != 0 { echo_destructor(p_vtab as *mut Sqlite3Vtab); return rc; }
-    *pp_vtab_1 = unsafe { &mut (*p_vtab).base };
+
+    /// Success. Set *ppVtab and return
+    (*pp_vtab_1 = unsafe { &mut (*p_vtab).base });
     return 0;
 }
 
+/// 
+///* Echo virtual table module xCreate method.
 extern "C" fn echo_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1038,6 +1153,8 @@ extern "C" fn echo_create(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+/// 
+///* Echo virtual table module xConnect method.
 extern "C" fn echo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -1047,12 +1164,16 @@ extern "C" fn echo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
             unsafe { &mut *pp_vtab_1 }, pz_err_1 as *const *mut i8);
 }
 
+/// 
+///* Echo virtual table module xDisconnect method.
 extern "C" fn echo_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     append_to_echo_module(unsafe { (*(p_vtab_1 as *mut EchoVtab)).interp },
         c"xDisconnect".as_ptr() as *mut i8 as *const i8);
     return echo_destructor(p_vtab_1);
 }
 
+/// 
+///* Echo virtual table module xDestroy method.
 extern "C" fn echo_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p: *const EchoVtab = p_vtab_1 as *mut EchoVtab as *const EchoVtab;
@@ -1076,6 +1197,8 @@ extern "C" fn echo_destroy(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+/// 
+///* Echo virtual table module xOpen method.
 extern "C" fn echo_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut EchoCursor = core::ptr::null_mut();
@@ -1091,6 +1214,8 @@ extern "C" fn echo_open(p_v_tab_1: *mut Sqlite3Vtab,
     return if !(p_cur).is_null() { 0 } else { 7 };
 }
 
+/// 
+///* Echo virtual table module xClose method.
 extern "C" fn echo_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
     let p_cur: *mut EchoCursor = cur as *mut EchoCursor;
@@ -1101,12 +1226,16 @@ extern "C" fn echo_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+///* Return non-zero if the cursor does not currently point to a valid record
+///* (i.e if the scan has finished), or zero otherwise.
 extern "C" fn echo_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     return if !(unsafe { (*(cur as *mut EchoCursor)).p_stmt }).is_null() {
             0
         } else { 1 };
 }
 
+/// 
+///* Echo virtual table module xNext method.
 extern "C" fn echo_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -1129,6 +1258,8 @@ extern "C" fn echo_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+/// 
+///* Echo virtual table module xColumn method.
 extern "C" fn echo_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     unsafe {
@@ -1153,6 +1284,8 @@ extern "C" fn echo_column(cur: *mut Sqlite3VtabCursor,
     }
 }
 
+/// 
+///* Echo virtual table module xRowid method.
 extern "C" fn echo_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     unsafe {
@@ -1168,6 +1301,13 @@ extern "C" fn echo_rowid(cur: *mut Sqlite3VtabCursor,
     }
 }
 
+///* Compute a simple hash of the null terminated string zString.
+///*
+///* This module uses only sqlite3_index_info.idxStr, not 
+///* sqlite3_index_info.idxNum. So to test idxNum, when idxStr is set
+///* in echoBestIndex(), idxNum is set to the corresponding hash value.
+///* In echoFilter(), code assert()s that the supplied idxNum value is
+///* indeed the hash of the supplied idxStr.
 extern "C" fn hash_string(z_string_1: *const i8) -> i32 {
     let mut val: u32 = 0 as u32;
     let mut ii: i32 = 0;
@@ -1189,6 +1329,9 @@ extern "C" fn hash_string(z_string_1: *const i8) -> i32 {
     return (val & 2147483647 as u32) as i32;
 }
 
+/// 
+///* Echo virtual table module xFilter method.
+#[allow(unused_doc_comments)]
 extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -1203,7 +1346,11 @@ extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
                     c"xFilter".as_ptr() as *mut i8 as *const i8) != 0 {
             return 1;
         }
+
+        /// Check that idxNum matches idxStr
         { let _ = 0; };
+
+        /// Log arguments to the ::echo_module Tcl variable
         append_to_echo_module(unsafe { (*p_vtab).interp },
             c"xFilter".as_ptr() as *mut i8 as *const i8);
         append_to_echo_module(unsafe { (*p_vtab).interp }, idx_str_1);
@@ -1223,11 +1370,14 @@ extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         }
         unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) };
         unsafe { (*p_cur).p_stmt = core::ptr::null_mut() };
-        rc =
+
+        /// Prepare the SQL statement created by echoBestIndex and bind the
+        ///* runtime parameters passed to this function to it.
+        (rc =
             unsafe {
                 sqlite3_prepare(db, idx_str_1, -1,
                     unsafe { &mut (*p_cur).p_stmt }, core::ptr::null_mut())
-            };
+            });
         { let _ = 0; };
         {
             i = 0;
@@ -1249,6 +1399,17 @@ extern "C" fn echo_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     }
 }
 
+///* A helper function used by echoUpdate() and echoBestIndex() for
+///* manipulating strings in concert with the sqlite3_mprintf() function.
+///*
+///* Parameter pzStr points to a pointer to a string allocated with
+///* sqlite3_mprintf. The second parameter, zAppend, points to another
+///* string. The two strings are concatenated together and *pzStr
+///* set to point at the result. The initial buffer pointed to by *pzStr
+///* is deallocated via sqlite3_free().
+///*
+///* If the third argument, doFree, is true, then sqlite3_free() is
+///* also called to free the buffer pointed to by zAppend.
 extern "C" fn string_concat(pz_str_1: *mut *mut i8, z_append_1: *mut i8,
     do_free_1: i32, p_rc_1: &mut i32) -> () {
     let mut z_in: *mut i8 = unsafe { *pz_str_1 };
@@ -1280,6 +1441,14 @@ extern "C" fn string_concat(pz_str_1: *mut *mut i8, z_append_1: *mut i8,
     if do_free_1 != 0 { unsafe { sqlite3_free(z_append_1 as *mut ()) }; }
 }
 
+///* This function returns a pointer to an sqlite3_malloc()ed buffer 
+///* containing the select-list (the thing between keywords SELECT and FROM)
+///* to query the underlying real table with for the scan described by
+///* argument pIdxInfo.
+///*
+///* If the current SQLite version is earlier than 3.10.0, this is just "*"
+///* (select all columns). Or, for version 3.10.0 and greater, the list of
+///* columns identified by the pIdxInfo->colUsed mask.
 extern "C" fn echo_select_list(p_tab_1: &EchoVtab,
     p_idx_info_1: &Sqlite3IndexInfo) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -1319,6 +1488,26 @@ extern "C" fn echo_select_list(p_tab_1: &EchoVtab,
     return z_ret;
 }
 
+///* The echo module implements the subset of query constraints and sort
+///* orders that may take advantage of SQLite indices on the underlying
+///* real table. For example, if the real table is declared as:
+///*
+///*     CREATE TABLE real(a, b, c);
+///*     CREATE INDEX real_index ON real(b);
+///*
+///* then the echo module handles WHERE or ORDER BY clauses that refer
+///* to the column "b", but not "a" or "c". If a multi-column index is
+///* present, only its left most column is considered. 
+///*
+///* This xBestIndex method encodes the proposed search strategy as
+///* an SQL query on the real table underlying the virtual echo module 
+///* table and stores the query in sqlite3_index_info.idxStr. The SQL
+///* statement is of the form:
+///*
+///*   SELECT rowid, * FROM <real-table> ?<where-clause>? ?<order-by-clause>?
+///*
+///* where the <where-clause> and <order-by-clause> are determined
+///* by the contents of the structure pointed to by the pIdxInfo argument.
 extern "C" fn echo_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut ii: i32 = 0;
@@ -1529,7 +1718,20 @@ extern "C" fn echo_best_index(tab: *mut Sqlite3Vtab,
     return rc;
 }
 
+///* The xUpdate method for echo module virtual tables.
+///* 
+///*    apData[0]  apData[1]  apData[2..]
+///*
+///*    INTEGER                              DELETE            
+///*
+///*    INTEGER    NULL       (nCol args)    UPDATE (do not set rowid)
+///*    INTEGER    INTEGER    (nCol args)    UPDATE (with SET rowid = <arg1>)
+///*
+///*    NULL       NULL       (nCol args)    INSERT INTO (automatic rowid value)
+///*    NULL       INTEGER    (nCol args)    INSERT (incl. rowid value)
+///*
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn echo_update(tab: *mut Sqlite3Vtab, n_data_1: i32,
     ap_data_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
@@ -1537,10 +1739,18 @@ pub extern "C" fn echo_update(tab: *mut Sqlite3Vtab, n_data_1: i32,
     let mut rc: i32 = 0;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// SQL statement to execute
     let mut bind_arg_zero: i32 = 0;
+    /// True to bind apData[0] to sql var no. nData
     let mut bind_arg_one: i32 = 0;
+    /// True to bind apData[1] to sql var no. 1
     let mut i: i32 = 0;
+
+    /// Counter variable used by for loops
     { let _ = 0; };
+
+    /// Ticket #3083 - make sure we always start a transaction prior to
+    ///* making any changes to a virtual table
     { let _ = 0; };
     if simulate_vtab_error(unsafe { &mut *p_vtab },
                 c"xUpdate".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -1726,6 +1936,9 @@ pub extern "C" fn echo_update(tab: *mut Sqlite3Vtab, n_data_1: i32,
     return rc;
 }
 
+///* xBegin, xSync, xCommit and xRollback callbacks for echo module
+///* virtual tables. Do nothing other than add the name of the callback
+///* to the $::echo_module Tcl variable.
 extern "C" fn echo_transaction_call(tab: *mut Sqlite3Vtab,
     z_call_1: *const i8) -> i32 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -1742,11 +1955,15 @@ extern "C" fn echo_transaction_call(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn echo_begin(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
     let interp: *mut TclInterp = unsafe { (*p_vtab).interp };
     let mut z_val: *const i8 = core::ptr::null();
+
+    /// Ticket #3083 - do not start a transaction if we are already in
+    ///* a transaction
     { let _ = 0; };
     if simulate_vtab_error(unsafe { &mut *p_vtab },
                 c"xBegin".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -1756,12 +1973,16 @@ extern "C" fn echo_begin(tab: *mut Sqlite3Vtab) -> i32 {
         echo_transaction_call(tab,
             c"xBegin".as_ptr() as *mut i8 as *const i8);
     if rc == 0 {
-        z_val =
+
+        /// Check if the $::echo_module_begin_fail variable is defined. If it is,
+        ///* and it is set to the name of the real table underlying this virtual
+        ///* echo module table, then cause this xSync operation to fail.
+        (z_val =
             unsafe {
                 Tcl_GetVar(interp,
                     c"echo_module_begin_fail".as_ptr() as *mut i8 as *const i8,
                     1)
-            };
+            });
         if !(z_val).is_null() &&
                 0 ==
                     unsafe {
@@ -1775,11 +1996,15 @@ extern "C" fn echo_begin(tab: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn echo_sync(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
     let interp: *mut TclInterp = unsafe { (*p_vtab).interp };
     let mut z_val: *const i8 = core::ptr::null();
+
+    /// Ticket #3083 - Only call xSync if we have previously started a
+    ///* transaction
     { let _ = 0; };
     if simulate_vtab_error(unsafe { &mut *p_vtab },
                 c"xSync".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -1788,12 +2013,16 @@ extern "C" fn echo_sync(tab: *mut Sqlite3Vtab) -> i32 {
     rc =
         echo_transaction_call(tab, c"xSync".as_ptr() as *mut i8 as *const i8);
     if rc == 0 {
-        z_val =
+
+        /// Check if the $::echo_module_sync_fail variable is defined. If it is,
+        ///* and it is set to the name of the real table underlying this virtual
+        ///* echo module table, then cause this xSync operation to fail.
+        (z_val =
             unsafe {
                 Tcl_GetVar(interp,
                     c"echo_module_sync_fail".as_ptr() as *mut i8 as *const i8,
                     1)
-            };
+            });
         if !(z_val).is_null() &&
                 0 ==
                     unsafe {
@@ -1806,9 +2035,13 @@ extern "C" fn echo_sync(tab: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn echo_commit(tab: *mut Sqlite3Vtab) -> i32 {
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
     let mut rc: i32 = 0;
+
+    /// Ticket #3083 - Only call xCommit if we have previously started
+    ///* a transaction
     { let _ = 0; };
     if simulate_vtab_error(unsafe { &mut *p_vtab },
                 c"xCommit".as_ptr() as *mut i8 as *const i8) != 0 {
@@ -1823,9 +2056,13 @@ extern "C" fn echo_commit(tab: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn echo_rollback(tab: *mut Sqlite3Vtab) -> i32 {
     let mut rc: i32 = 0;
     let p_vtab: *mut EchoVtab = tab as *mut EchoVtab;
+
+    /// Ticket #3083 - Only call xRollback if we have previously started
+    ///* a transaction
     { let _ = 0; };
     rc =
         echo_transaction_call(tab,
@@ -1834,6 +2071,9 @@ extern "C" fn echo_rollback(tab: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+///* Implementation of "GLOB" function on the echo module.  Pass
+///* all arguments to the ::echo_glob_overload procedure of TCL
+///* and return the result of that procedure as a string.
 extern "C" fn overloaded_glob_function(p_context_1: *mut Sqlite3Context,
     n_arg_1: i32, ap_arg_1: *mut *mut Sqlite3Value) -> () {
     let interp: *mut TclInterp =
@@ -1886,6 +2126,12 @@ extern "C" fn overloaded_glob_function(p_context_1: *mut Sqlite3Context,
     unsafe { Tcl_ResetResult(interp) };
 }
 
+///* This is the xFindFunction implementation for the echo module.
+///* SQLite calls this routine when the first argument of a function
+///* is a column of an echo virtual table.  This routine can optionally
+///* override the implementation of that function.  It will choose to
+///* do so if the function is named "glob", and a TCL command named
+///* ::echo_glob_overload exists.
 extern "C" fn echo_find_function(vtab: *mut Sqlite3Vtab, n_arg_1: i32,
     z_func_name_1: *const i8,
     px_func_1:
@@ -1962,6 +2208,8 @@ extern "C" fn echo_rollback_to(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* A virtual table module that merely "echos" the contents of another
+///* table (like an SQL VIEW).
 static mut echo_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 1,
@@ -2030,6 +2278,8 @@ extern "C" fn module_destroy(p: *mut ()) -> () {
     unsafe { sqlite3_free(p) };
 }
 
+///* Register the echo virtual table module.
+#[allow(unused_doc_comments)]
 extern "C" fn register_echo_module(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -2051,10 +2301,12 @@ extern "C" fn register_echo_module(client_data_1: ClientData,
                 } != 0 {
             return 1;
         }
-        p_mod =
+
+        /// Virtual table module "echo"
+        (p_mod =
             unsafe {
                     sqlite3_malloc(core::mem::size_of::<EchoModule>() as i32)
-                } as *mut EchoModule;
+                } as *mut EchoModule);
         unsafe { (*p_mod).interp = interp };
         unsafe { (*p_mod).db = db };
         rc =
@@ -2090,6 +2342,9 @@ extern "C" fn register_echo_module(client_data_1: ClientData,
     }
 }
 
+///* Tcl interface to sqlite3_declare_vtab, invoked as follows from Tcl:
+///*
+///* sqlite3_declare_vtab DB SQL
 extern "C" fn declare_vtab(client_data_1: ClientData, interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -2128,6 +2383,7 @@ extern "C" fn declare_vtab(client_data_1: ClientData, interp: *mut TclInterp,
     return 0;
 }
 
+///* Register commands with the TCL interpreter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlitetest8_init(interp: *mut TclInterp) -> i32 {
     unsafe {

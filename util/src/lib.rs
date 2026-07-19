@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -396,6 +411,7 @@ impl Parse {
     }
 }
 
+///* Internal function prototypes
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_i_cmp(z_left: *const i8, z_right: *const i8)
     -> i32 {
@@ -445,6 +461,12 @@ pub extern "C" fn sqlite3_str_i_cmp(z_left: *const i8, z_right: *const i8)
     }
 }
 
+///* CAPI3REF: String Comparison
+///*
+///* ^The [sqlite3_stricmp()] and [sqlite3_strnicmp()] APIs allow applications
+///* and extensions to compare the contents of two buffers containing UTF-8
+///* strings in a case-independent fashion, using the same definition of "case
+///* independence" that SQLite uses internally when comparing identifiers.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stricmp(z_left: *const i8, z_right: *const i8)
     -> i32 {
@@ -503,12 +525,23 @@ pub extern "C" fn sqlite3_strnicmp(z_left: *const i8, z_right: *const i8,
     }
 }
 
+///* Compute a string length that is limited to what can be stored in
+///* lower 30 bits of a 32-bit signed integer.
+///*
+///* The value returned will never be negative.  Nor will it ever be greater
+///* than the actual length of the string.  For very long strings (greater
+///* than 1GiB) the value returned might be less than the true string length.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_strlen30(z: *const i8) -> i32 {
     if z == core::ptr::null() { return 0; }
     return 1073741823 & unsafe { strlen(z) } as i32;
 }
 
+///* Return the declared type of a column.  Or return zDflt if the column
+///* has no declared type.
+///*
+///* The column type is an extra string stored after the zero-terminator on
+///* the column name if and only if the COLFLAG_HASTYPE flag is set.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3ColumnType(p_col: &Column, z_dflt: *mut i8)
     -> *mut i8 {
@@ -532,10 +565,17 @@ pub extern "C" fn sqlite3ColumnType(p_col: &Column, z_dflt: *mut i8)
     }
 }
 
+///* Return true if the floating point value is Not a Number (NaN).
+///*
+///* Use the math library isnan() function if compiled with SQLITE_HAVE_ISNAN.
+///* Otherwise, we have our own implementation that works on most systems.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_is_na_n(x: f64) -> i32 {
     let mut rc: i32 = 0;
-    rc =
+
+    /// The value return
+    (rc =
         if core::mem::size_of::<f64>() as u64 ==
                 core::mem::size_of::<f32>() as u64 {
             unsafe { __inline_isnanf(x as f32) }
@@ -544,13 +584,16 @@ pub extern "C" fn sqlite3_is_na_n(x: f64) -> i32 {
                     core::mem::size_of::<f64>() as u64 {
                 unsafe { __inline_isnand(x as f64) }
             } else { unsafe { __inline_isnanl(x as f64) } }
-        };
+        });
     return rc;
 }
 
+///* Return true if the floating point value is NaN or +Inf or -Inf.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_is_overflow(mut x: f64) -> i32 {
     let mut rc: i32 = 0;
+    /// The value return
     let mut y: u64 = 0 as u64;
     unsafe {
         memcpy(&raw mut y as *mut (), &raw mut x as *const (),
@@ -560,18 +603,31 @@ pub extern "C" fn sqlite3_is_overflow(mut x: f64) -> i32 {
     return rc;
 }
 
+///* Count leading zeros for a 64-bit unsigned integer.
 extern "C" fn count_leading_zeros(m: u64) -> i32 {
     return m.leading_zeros() as i32;
 }
 
 extern "C" fn pwr2to10(p: i32) -> i32 { return p * 78913 >> 18; }
 
+///* Two inputs are multiplied to get a 128-bit result.  Write the
+///* lower 64-bits of the result into *pLo, and return the high-order
+///* 64 bits.
 extern "C" fn sqlite3_multiply128(a: u64, b: u64, p_lo_1: &mut u64) -> u64 {
     let r: Uint128T = a as Uint128T * b as Uint128T;
     *p_lo_1 = r as u64;
     return (r >> 64) as u64;
 }
 
+///* A is an unsigned 96-bit integer formed by (a<<32)+aLo.
+///* B is an unsigned 64-bit integer.
+///*
+///* Compute the upper 96 bits of 160-bit result of A*B.
+///*
+///* Write ((A*B)>>64 & 0xffffffff) (the middle 32 bits of A*B)
+///* into *pLo.  Return the upper 64 bits of A*B.
+///*
+///* The lower 64 bits of A*B are discarded.
 extern "C" fn sqlite3_multiply160(a: u64, a_lo_1: u32, b: u64,
     p_lo_1: &mut u32) -> u64 {
     let mut r: Uint128T = a as Uint128T * b as Uint128T;
@@ -580,7 +636,57 @@ extern "C" fn sqlite3_multiply160(a: u64, a_lo_1: u32, b: u64,
     return (r >> 64) as u64;
 }
 
+///* For any p between -348 and +347, return the integer part of
+///*
+///*    pow(10,p) * pow(2,63-pow10to2(p))
+///*
+///* Or, in other words, for any p in range, return the most significant
+///* 64 bits of pow(10,p).  The pow(10,p) value is shifted left or right,
+///* as appropriate so the most significant 64 bits fit exactly into a
+///* 64-bit unsigned integer.
+///*
+///* Write into *pLo the next 32 significant bits of the answer after
+///* the first 64.
+///*
+///* Algorithm:
+///*
+///* (1) For p between 0 and 26, return the value directly from the aBase[]
+///*     lookup table.
+///*
+///* (2) For p outside the range 0 to 26, use aScale[] for the initial value
+///*     then refine that result (if necessary) by a single multiplication
+///*     against aBase[].
+///*
+///* The constant tables aBase[], aScale[], and aScaleLo[] are generated
+///* by the C program at ../tool/mkfptab.c run with the --round option.
+#[allow(unused_doc_comments)]
 extern "C" fn power_of_ten(p: i32, p_lo_1: &mut u32) -> u64 {
+    ///  0: 1.0e-351 << 1229
+    ///  1: 1.0e-324 << 1140
+    ///  2: 1.0e-297 << 1050
+    ///  3: 1.0e-270 << 960
+    ///  4: 1.0e-243 << 871
+    ///  5: 1.0e-216 << 781
+    ///  6: 1.0e-189 << 691
+    ///  7: 1.0e-162 << 602
+    ///  8: 1.0e-135 << 512
+    ///  9: 1.0e-108 << 422
+    /// 10: 1.0e-81 << 333
+    /// 11: 1.0e-54 << 243
+    /// 12: 1.0e-27 << 153
+    /// 13: 1.0e-1 << 67 (special case)
+    /// 14: 1.0e+27 >> 26
+    /// 15: 1.0e+54 >> 116
+    /// 16: 1.0e+81 >> 206
+    /// 17: 1.0e+108 >> 295
+    /// 18: 1.0e+135 >> 385
+    /// 19: 1.0e+162 >> 475
+    /// 20: 1.0e+189 >> 564
+    /// 21: 1.0e+216 >> 654
+    /// 22: 1.0e+243 >> 744
+    /// 23: 1.0e+270 >> 833
+    /// 24: 1.0e+297 >> 923
+    /// 25: 1.0e+324 >> 1013
     let mut g: i32 = 0;
     let mut n: i32 = 0;
     let mut s: u64 = 0 as u64;
@@ -615,8 +721,30 @@ extern "C" fn power_of_ten(p: i32, p_lo_1: &mut u32) -> u64 {
     return x;
 }
 
+///* pow10to2(x) computes floor(log2(pow(10,x))).
+///* pow2to10(y) computes floor(log10(pow(2,y))).
+///*
+///* Conceptually, pow10to2(p) converts a base-10 exponent p into
+///* a corresponding base-2 exponent, and pow2to10(e) converts a base-2
+///* exponent into a base-10 exponent.
+///*
+///* The conversions are based on the observation that:
+///*
+///*     ln(10.0)/ln(2.0) == 108853/32768     (approximately)
+///*     ln(2.0)/ln(10.0) == 78913/262144     (approximately)
+///*
+///* These ratios are approximate, but they are accurate to 5 digits,
+///* which is close enough for the usage here.  Right-shift is used
+///* for division so that rounding of negative numbers happens in the
+///* right direction.
 extern "C" fn pwr10to2(p: i32) -> i32 { return p * 108853 >> 15; }
 
+///* Given m and e, which represent a quantity r == m*pow(2,e),
+///* return values *pD and *pP such that r == (*pD)*pow(10,*pP),
+///* approximately.  *pD should contain at least n significant digits.
+///*
+///* The input m is required to have its highest bit set.  In other words,
+///* m should be left-shifted, and e decremented, to maximize the value of m.
 extern "C" fn sqlite3_fp2_convert10(m: u64, e: i32, n: i32, p_d_1: *mut u64,
     p_p_1: &mut i32) -> () {
     let mut p: i32 = 0;
@@ -635,6 +763,8 @@ extern "C" fn sqlite3_fp2_convert10(m: u64, e: i32, n: i32, p_d_1: *mut u64,
     *p_p_1 = -p;
 }
 
+///* Digit pairs used to convert a U64 or I64 into text, two digits
+///* at a time.
 #[repr(C)]
 #[derive(Copy, Clone)]
 union AnonU0 {
@@ -680,6 +810,10 @@ static sqlite3_digit_pairs: AnonU0 =
                 57 as i8, 57 as i8, 0 as i8],
     };
 
+///* Return an IEEE754 floating point value that approximates d*pow(10,p).
+///*
+///* The (current) algorithm is adapted from the work of Ross Cox at
+///* https://github.com/rsc/fpfmt
 extern "C" fn sqlite3_fp10_convert2(d: u64, p: i32) -> f64 {
     let mut b: i32 = 0;
     let mut lp: i32 = 0;
@@ -733,18 +867,41 @@ extern "C" fn sqlite3_fp10_convert2(d: u64, p: i32) -> f64 {
     return r;
 }
 
+///* Decode a floating-point value into an approximate decimal
+///* representation.
+///*
+///* If iRound<=0 then round to -iRound significant digits to the
+///* the right of the decimal point, or to a maximum of mxRound total
+///* significant digits.
+///*
+///* If iRound>0 round to min(iRound,mxRound) significant digits total.
+///*
+///* mxRound must be positive.
+///*
+///* The significant digits of the decimal representation are
+///* stored in p->z[] which is a often (but not always) a pointer
+///* into the middle of p->zBuf[].  There are p->n significant digits.
+///* The p->z[] array is *not* zero-terminated.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fp_decode(p: &mut FpDecode, mut r: f64,
     mut i_round: i32, mx_round: i32) -> () {
     unsafe {
         let mut i: i32 = 0;
+        /// Index into zBuf[] where to put next character
         let mut n: i32 = 0;
+        /// Number of digits
         let mut v: u64 = 0 as u64;
+        /// mantissa
         let mut e: i32 = 0;
         let mut exp: i32 = 0;
+        /// Base-2 and base-10 exponent
         let mut z_buf: *mut i8 = core::ptr::null_mut();
+        /// Local alias for p->zBuf
         let mut z: *mut i8 = core::ptr::null_mut();
-        (*p).is_special = 0 as i8;
+
+        /// Local alias for p->z
+        ((*p).is_special = 0 as i8);
         { let _ = 0; };
         if r < 0.0 {
             (*p).sign = '-' as i32 as i8;
@@ -777,6 +934,10 @@ pub extern "C" fn sqlite3_fp_decode(p: &mut FpDecode, mut r: f64,
         sqlite3_fp2_convert10(v, e,
             if i_round <= 0 || i_round >= 18 { 18 } else { i_round + 1 },
             &mut v, &mut exp);
+
+        /// Extract significant digits, start at the right-most slot in p->zBuf
+        ///* and working back to the right.  "i" keeps track of the next slot in
+        ///* which to store a digit.
         { let _ = 0; };
         { let _ = 0; };
         z_buf = &raw mut (*p).z_buf[0 as usize] as *mut i8;
@@ -804,8 +965,12 @@ pub extern "C" fn sqlite3_fp_decode(p: &mut FpDecode, mut r: f64,
                     = (v + '0' as i32 as u64) as i8
             };
         }
+
+        /// SQLITE_AVOID_U64_DIVIDE
         { let _ = 0; };
         n = 20 - i;
+
+        /// Total number of digits extracted
         { let _ = 0; };
         { let _ = 0; };
         (*p).i_dp = n + exp;
@@ -953,6 +1118,7 @@ pub extern "C" fn sqlite3_fp_decode(p: &mut FpDecode, mut r: f64,
     }
 }
 
+///* Check for interrupts and invoke progress callback.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_progress_check(p: &mut Parse) -> () {
     unsafe {
@@ -992,6 +1158,14 @@ pub extern "C" fn sqlite3_progress_check(p: &mut Parse) -> () {
     }
 }
 
+///* Add an error message to pParse->zErrMsg and increment pParse->nErr.
+///*
+///* This function should be used to report any error that occurs while
+///* compiling an SQL statement (i.e. within sqlite3_prepare()). The
+///* last thing the sqlite3_prepare() function does is copy the error
+///* stored by this function into the database handle using sqlite3Error().
+///* Functions sqlite3Error() or sqlite3ErrorWithMsg() should be used
+///* during statement execution (sqlite3_step() etc.).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_error_msg(p_parse: &mut Parse,
     z_format: *const i8, mut __va0: ...) -> () {
@@ -1027,6 +1201,9 @@ pub unsafe extern "C" fn sqlite3_error_msg(p_parse: &mut Parse,
     }
 }
 
+///* If database connection db is currently parsing SQL, then transfer
+///* error code errCode to that parser if the parser has not already
+///* encountered some other kind of error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_error_to_parser(db: *mut Sqlite3, err_code: i32)
     -> i32 {
@@ -1046,6 +1223,21 @@ pub extern "C" fn sqlite3_error_to_parser(db: *mut Sqlite3, err_code: i32)
     return err_code;
 }
 
+///* Convert an SQL-style quoted string into a normal string by removing
+///* the quote characters.  The conversion is done in-place.  If the
+///* input does not begin with a quote character, then this routine
+///* is a no-op.
+///*
+///* The input string must be zero-terminated.  A new zero-terminator
+///* is added to the dequoted string.
+///*
+///* The return value is -1 if no dequoting occurs or the length of the
+///* dequoted string, exclusive of the zero terminator, if dequoting does
+///* occur.
+///*
+///* 2002-02-14: This routine is extended to remove MS-Access style
+///* brackets from around identifiers.  For example:  "[a-b-c]" becomes
+///* "a-b-c".
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dequote(z: *mut i8) -> () {
     unsafe {
@@ -1112,6 +1304,15 @@ pub extern "C" fn sqlite3_dequote_expr(p: &mut Expr) -> () {
     }
 }
 
+///* If the input token p is quoted, try to adjust the token to remove
+///* the quotes.  This is not always possible:
+///*
+///*     "abc"     ->   abc
+///*     "ab""cd"  ->   (not possible because of the interior "")
+///*
+///* Remove the quotes if possible.  This is a optimization.  The overall
+///* system should still return the correct answer even if this routine
+///* is always a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dequote_token(p: &mut Token) -> () {
     unsafe {
@@ -1153,6 +1354,9 @@ pub extern "C" fn sqlite3_dequote_token(p: &mut Token) -> () {
     }
 }
 
+///* Translate a single byte of Hex into an integer.
+///* This routine only works if h really is a valid hexadecimal
+///* character:  0..9a..fA..F
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_hex_to_int(mut h: i32) -> u8 {
     { let _ = 0; };
@@ -1160,6 +1364,14 @@ pub extern "C" fn sqlite3_hex_to_int(mut h: i32) -> u8 {
     return (h & 15) as u8;
 }
 
+///* If zNum represents an integer that will fit in 32-bits, then set
+///* *pValue to that integer and return true.  Otherwise return false.
+///*
+///* This routine accepts both decimal and hexadecimal notation for integers.
+///*
+///* Any non-numeric characters that following zNum are ignored.
+///* This is different from sqlite3Atoi64() which requires the
+///* input number to be zero-terminated.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_int32(mut z_num: *const i8, p_value: *mut i32)
     -> i32 {
@@ -1282,6 +1494,9 @@ pub extern "C" fn sqlite3_get_int32(mut z_num: *const i8, p_value: *mut i32)
     }
 }
 
+///* Expression p is a QNUMBER (quoted number). Dequote the value in p->u.zToken
+///* and set the type to INTEGER or FLOAT. "Quoted" integers or floats are those
+///* that contain '_' characters that must be removed before further processing.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dequote_number(p_parse: *mut Parse, p: *mut Expr)
     -> () {
@@ -1371,6 +1586,7 @@ pub extern "C" fn sqlite3_dequote_number(p_parse: *mut Parse, p: *mut Expr)
     }
 }
 
+///* Generate a Token object from a string
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_token_init(p: &mut Token, z: *mut i8) -> () {
     unsafe {
@@ -1390,6 +1606,9 @@ pub extern "C" fn sqlite3_fault_sim(i_test: i32) -> i32 {
     }
 }
 
+///* Log an error that is an API call on a connection pointer that should
+///* not have been used.  The "type" of connection pointer is given as the
+///* argument.  The zType is a word like "NULL" or "closed" or "invalid".
 extern "C" fn log_bad_connection(z_type_1: *const i8) -> () {
     unsafe {
         sqlite3_log(21,
@@ -1409,6 +1628,18 @@ pub extern "C" fn sqlite3_safety_check_sick_or_ok(db: &Sqlite3) -> i32 {
     } else { return 1; }
 }
 
+///* Check to make sure we have a valid db pointer.  This test is not
+///* foolproof but it does provide some measure of protection against
+///* misuse of the interface such as passing in db pointers that are
+///* NULL or which have been previously closed.  If this routine returns
+///* 1 it means that the db pointer is valid and 0 if it should not be
+///* dereferenced for any reason.  The calling function should invoke
+///* SQLITE_MISUSE immediately.
+///*
+///* sqlite3SafetyCheckOk() requires that the db pointer be valid for
+///* use.  sqlite3SafetyCheckSickOrOk() allows a db pointer that failed to
+///* open properly and is not fit for general use but which can be
+///* used as an argument to sqlite3_errmsg() or sqlite3_close().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_safety_check_ok(db: *mut Sqlite3) -> i32 {
     let mut e_open_state: u8 = 0 as u8;
@@ -1425,6 +1656,12 @@ pub extern "C" fn sqlite3_safety_check_ok(db: *mut Sqlite3) -> i32 {
     } else { return 1; }
 }
 
+///* Render an signed 64-bit integer as text.  Store the result in zOut[] and
+///* return the length of the string that was stored, in bytes.  The value
+///* returned does not include the zero terminator at the end of the output
+///* string.
+///*
+///* The caller must ensure that zOut[] is at least 21 bytes in size.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_int64_to_text(v: i64, z_out: *mut i8) -> i32 {
     unsafe {
@@ -1478,16 +1715,71 @@ pub extern "C" fn sqlite3_int64_to_text(v: i64, z_out: *mut i8) -> i32 {
     }
 }
 
+///* The string z[] is an text representation of a real number.
+///* Convert this string to a double and write it into *pResult.
+///*
+///* z[] must be UTF-8 and zero-terminated.
+///*
+///* Return positive if the result is a valid real number (or integer) and
+///* zero or negative if the string is empty or contains extraneous text.
+///* Lower bits of the return value contain addition information about the
+///* parse:
+///*
+///*   bit 0       =>   Set if any prefix of the input is valid.  Clear if
+///*                    there is no prefix of the input that can be seen as
+///*                    a valid floating point number.
+///*   bit 1       =>   Set if the input contains a decimal point or eNNN
+///*                    clause.  Zero if the input is an integer.
+///*   bit 2       =>   The input is exactly 0.0, not an underflow from
+///*                    some value near zero.
+///*   bit 3       =>   Set if there are more than about 19 significant
+///*                    digits in the input.
+///*
+///* If the input contains a syntax error but begins with text that might
+///* be a valid number of some kind, then the result is negative.  The
+///* result is only zero if no prefix of the input could be interpreted as
+///* a number.
+///*
+///* Leading and trailing whitespace is ignored.  Valid numbers are in
+///* one of the formats below:
+///*
+///*    [+-]digits[E[+-]digits]
+///*    [+-]digits.[digits][E[+-]digits]
+///*    [+-].digits[E[+-]digits]
+///*
+///* Algorithm sketch:  Compute an unsigned 64-bit integer s and a base-10
+///* exponent d such that the value encoding by the input is s*pow(10,d).
+///* Then invoke sqlite3Fp10Convert2() to calculated the closest possible
+///* IEEE754 double.  The sign is added back afterwards, if the input string
+///* starts with a "-".  The use of an unsigned 64-bit s mantissa means that
+///* only about the first 19 significant digits of the input can contribute
+///* to the result.  This can result in suboptimal rounding decisions when
+///* correct rounding requires more than 19 input digits.  For example,
+///* this routine renders "3500000000000000.2500001" as
+///* 3500000000000000.0 instead of 3500000000000000.5 because the decision
+///* to round up instead of using banker's rounding to round down is determined
+///* by the 23rd significant digit, which this routine ignores. It is not
+///* possible to do better without some kind of BigNum.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_ato_f(z_in: *const i8, p_result: &mut f64) -> i32 {
     unsafe {
         let mut z: *const u8 = core::ptr::null();
         let mut neg: i32 = 0;
+        /// True for a negative value
         let mut s: u64 = 0 as u64;
+        /// mantissa
         let mut d: i32 = 0;
+        /// Value is s * pow(10,d)
         let mut m_state: i32 = 0;
+        /// 1: digit seen 2: fp 4: hard-zero
         let mut v: u32 = 0 as u32;
+        /// Value of a single digit
+        /// if decimal point is present
+        /// if exponent is present
         let mut esign: i32 = 0;
+        /// get sign of exponent
+        /// copy digits to exponent
         let mut exp: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -1876,10 +2168,29 @@ pub extern "C" fn sqlite3_ato_f(z_in: *const i8, p_result: &mut f64) -> i32 {
                 }
             }
         }
+
+        /// True for a negative value
+        /// mantissa
+        /// Value is s * pow(10,d)
+        /// 1: digit seen 2: fp 4: hard-zero
+        /// Value of a single digit
+        /// if decimal point is present
+        /// if exponent is present
+        /// get sign of exponent
+        /// copy digits to exponent
+        /// Leave z[0] at 'e' or '+' or '-',
+        ///* so that the return is 0 or -1
+        /// Convert s*pow(10,d) into real
+        /// return true if number and no extra non-whitespace characters after
+        /// SQLITE_OMIT_FLOATING_POINT
         unreachable!();
     }
 }
 
+///* Try to convert z into an unsigned 32-bit integer.  Return true on
+///* success and false if there is an error.
+///*
+///* Only decimal notation is accepted.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_u_int32(z: *const i8, p_i: &mut u32) -> i32 {
     unsafe {
@@ -1914,6 +2225,8 @@ pub extern "C" fn sqlite3_get_u_int32(z: *const i8, p_i: &mut u32) -> i32 {
     }
 }
 
+///* Return a 32-bit integer value extracted from a string.  If the
+///* string is not an integer, just return 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_atoi(z: *const i8) -> i32 {
     let mut x: i32 = 0;
@@ -1921,6 +2234,8 @@ pub extern "C" fn sqlite3_atoi(z: *const i8) -> i32 {
     return x;
 }
 
+///* Convert an integer into a LogEst.  In other words, compute an
+///* approximation for 10*log2(x).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_log_est(mut x: u64) -> LogEst {
     unsafe {
@@ -1937,6 +2252,10 @@ pub extern "C" fn sqlite3_log_est(mut x: u64) -> LogEst {
     }
 }
 
+///* Find (an approximate) sum of two LogEst values.  This computation is
+///* not a simple "+" operator because LogEst is stored as a logarithmic
+///* value.
+///*
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_log_est_add(a: LogEst, b: LogEst) -> LogEst {
     if a as i32 >= b as i32 {
@@ -1952,6 +2271,8 @@ pub extern "C" fn sqlite3_log_est_add(a: LogEst, b: LogEst) -> LogEst {
     }
 }
 
+///* Convert a double into a LogEst
+///* In other words, compute an approximation for 10*log2(x).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_log_est_from_double(mut x: f64) -> LogEst {
     let mut a: u64 = 0 as u64;
@@ -1966,6 +2287,7 @@ pub extern "C" fn sqlite3_log_est_from_double(mut x: f64) -> LogEst {
     return (e as i32 * 10) as LogEst;
 }
 
+///* Convert a LogEst into an integer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_log_est_to_int(mut x: LogEst) -> u64 {
     let mut n: u64 = 0 as u64;
@@ -1982,17 +2304,57 @@ pub extern "C" fn sqlite3_log_est_to_int(mut x: LogEst) -> u64 {
         } else { n + 8 as u64 >> 3 - x as i32 };
 }
 
+///* Add a new name/number pair to a VList.  This might require that the
+///* VList object be reallocated, so return the new VList.  If an OOM
+///* error occurs, the original VList returned and the
+///* db->mallocFailed flag is set.
+///*
+///* A VList is really just an array of integers.  To destroy a VList,
+///* simply pass it to sqlite3DbFree().
+///*
+///* The first integer is the number of integers allocated for the whole
+///* VList.  The second integer is the number of integers actually used.
+///* Each name/number pair is encoded by subsequent groups of 3 or more
+///* integers.
+///*
+///* Each name/number pair starts with two integers which are the numeric
+///* value for the pair and the size of the name/number pair, respectively.
+///* The text name overlays one or more following integers.  The text name
+///* is always zero-terminated.
+///*
+///* Conceptually:
+///*
+///*    struct VList {
+///*      int nAlloc;   // Number of allocated slots
+///*      int nUsed;    // Number of used slots
+///*      struct VListEntry {
+///*        int iValue;    // Value for this entry
+///*        int nSlot;     // Slots used by this entry
+///*        // ... variable name goes here
+///*      } a[0];
+///*    }
+///*
+///* During code generation, pointers to the variable names within the
+///* VList are taken.  When that happens, nAlloc is set to zero as an
+///* indication that the VList may never again be enlarged, since the
+///* accompanying realloc() would invalidate the pointers.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_v_list_add(db: *mut Sqlite3, mut p_in: *mut VList,
     z_name: *const i8, n_name: i32, i_val: i32) -> *mut VList {
     let mut n_int: i32 = 0;
+    /// number of sizeof(int) objects needed for zName
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// Pointer to where zName will be stored
     let mut i: i32 = 0;
-    n_int = n_name / 4 + 3;
+
+    /// Index in pIn[] where zName is stored
+    (n_int = n_name / 4 + 3);
     { let _ = 0; };
     if p_in == core::ptr::null_mut() ||
             unsafe { *p_in.offset(1 as isize) } + n_int >
                 unsafe { *p_in.offset(0 as isize) } {
+        /// Enlarge the allocation
         let n_alloc: Sqlite3Int64 =
             if !(p_in).is_null() {
                     2 as Sqlite3Int64 *
@@ -2021,6 +2383,9 @@ pub extern "C" fn sqlite3_v_list_add(db: *mut Sqlite3, mut p_in: *mut VList,
     return p_in;
 }
 
+///* Return a pointer to the name of a variable in the given VList that
+///* has the value iVal.  Or return a NULL if there is no such variable in
+///* the list
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_v_list_num_to_name(p_in: *mut VList, i_val: i32)
     -> *const i8 {
@@ -2043,6 +2408,8 @@ pub extern "C" fn sqlite3_v_list_num_to_name(p_in: *mut VList, i_val: i32)
     return core::ptr::null();
 }
 
+///* Return the number of the variable named zName, if it is in VList.
+///* or return 0 if there is no such variable.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_v_list_name_to_num(p_in: *mut VList,
     z_name: *const i8, n_name: i32) -> i32 {
@@ -2068,6 +2435,14 @@ pub extern "C" fn sqlite3_v_list_name_to_num(p_in: *mut VList,
     return 0;
 }
 
+///* Write a 64-bit variable-length integer to memory starting at p[0].
+///* The length of data write will be between 1 and 9 bytes.  The number
+///* of bytes written is returned.
+///*
+///* A variable-length integer consists of the lower 7 bits of each byte
+///* for all bytes that have the 8th bit set and one byte with the 8th
+///* bit clear.  Except, if we get to the 9th byte, it stores the full
+///* 8 bits and is the last byte.
 extern "C" fn put_varint64(p: *mut u8, mut v: u64) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -2121,6 +2496,9 @@ extern "C" fn put_varint64(p: *mut u8, mut v: u64) -> i32 {
     return n;
 }
 
+///* Routines to read and write variable-length integers.  These used to
+///* be defined locally, but now we use the varint routines in the util.c
+///* file.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_put_varint(p: *mut u8, v: u64) -> i32 {
     if v <= 127 as u64 {
@@ -2137,7 +2515,10 @@ pub extern "C" fn sqlite3_put_varint(p: *mut u8, v: u64) -> i32 {
     return put_varint64(p, v);
 }
 
+///* Read a 64-bit variable-length integer from memory starting at p[0].
+///* Return the number of bytes read.  The value is stored in *v.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     let mut a: u32 = 0 as u32;
     let mut b: u32 = 0 as u32;
@@ -2152,6 +2533,8 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
                     unsafe { *p.offset(1 as isize) } as u32) as u64;
         return 2 as u8;
     }
+
+    /// Verify that constants are precomputed correctly
     { let _ = 0; };
     { let _ = 0; };
     a = (unsafe { *p.offset(0 as isize) } as u32) << 14;
@@ -2170,7 +2553,9 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
         *v = a as u64;
         return 3 as u8;
     }
-    a &= 2080895 as u32;
+
+    /// CSE1 from below
+    (a &= 2080895 as u32);
     {
         let __p = &mut p;
         let __t = *__p;
@@ -2181,13 +2566,24 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
         b &= 2080895 as u32;
-        a = a << 7;
+
+        /// moved CSE1 up */
+        ///    /* a &= (0x7f<<14)|(0x7f);
+        (a = a << 7);
         a |= b;
         *v = a as u64;
         return 4 as u8;
     }
-    b &= 2080895 as u32;
+
+    /// a: p0<<14 | p2 (masked) */
+    ///  /* b: p1<<14 | p3 (unmasked) */
+    ///  /* 1:save off p0<<21 | p1<<14 | p2<<7 | p3 (masked) */
+    ///  /* moved CSE1 up */
+    ///  /* a &= (0x7f<<14)|(0x7f);
+    (b &= 2080895 as u32);
     s = a;
+
+    /// s: p0<<14 | p2 (masked)
     {
         let __p = &mut p;
         let __t = *__p;
@@ -2197,14 +2593,23 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     a = a << 14;
     a |= unsafe { *p } as u32;
     if (a & 128 as u32 == 0) as i32 != 0 {
-        b = b << 7;
+
+        /// we can skip these cause they were (effectively) done above
+        ///* while calculating s */
+        ///    /* a &= (0x7f<<28)|(0x7f<<14)|(0x7f); */
+        ///    /* b &= (0x7f<<14)|(0x7f);
+        (b = b << 7);
         a |= b;
         s = s >> 18;
         *v = (s as u64) << 32 | a as u64;
         return 5 as u8;
     }
-    s = s << 7;
+
+    /// 2:save off p0<<21 | p1<<14 | p2<<7 | p3 (masked)
+    (s = s << 7);
     s |= b;
+
+    /// s: p0<<21 | p1<<14 | p2<<7 | p3 (masked)
     {
         let __p = &mut p;
         let __t = *__p;
@@ -2214,7 +2619,10 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     b = b << 14;
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
-        a &= 2080895 as u32;
+
+        /// we can skip this cause it was (effectively) done above in calc'ing s */
+        ///    /* b &= (0x7f<<28)|(0x7f<<14)|(0x7f);
+        (a &= 2080895 as u32);
         a = a << 7;
         a |= b;
         s = s >> 18;
@@ -2238,7 +2646,9 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
         *v = (s as u64) << 32 | a as u64;
         return 7 as u8;
     }
-    a &= 2080895 as u32;
+
+    /// CSE2 from below
+    (a &= 2080895 as u32);
     {
         let __p = &mut p;
         let __t = *__p;
@@ -2249,7 +2659,10 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     b |= unsafe { *p } as u32;
     if (b & 128 as u32 == 0) as i32 != 0 {
         b &= 4028612735u32;
-        a = a << 7;
+
+        /// moved CSE2 up */
+        ///    /* a &= (0x7f<<14)|(0x7f);
+        (a = a << 7);
         a |= b;
         s = s >> 4;
         *v = (s as u64) << 32 | a as u64;
@@ -2263,7 +2676,11 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     };
     a = a << 15;
     a |= unsafe { *p } as u32;
-    b &= 2080895 as u32;
+
+    /// a: p4<<29 | p6<<15 | p8 (unmasked)
+    /// moved CSE2 up */
+    ///  /* a &= (0x7f<<29)|(0x7f<<15)|(0xff);
+    (b &= 2080895 as u32);
     b = b << 8;
     a |= b;
     s = s << 4;
@@ -2275,25 +2692,44 @@ pub extern "C" fn sqlite3_get_varint(mut p: *const u8, v: &mut u64) -> u8 {
     return 9 as u8;
 }
 
+///* Read a 32-bit variable-length integer from memory starting at p[0].
+///* Return the number of bytes read.  The value is stored in *v.
+///*
+///* If the varint stored in p[0] is larger than can fit in a 32-bit unsigned
+///* integer, then set *v to 0xffffffff.
+///*
+///* A MACRO version, getVarint32, is provided which inlines the
+///* single-byte case.  All code should use the MACRO version as
+///* this function assumes the single-byte case has already been handled.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_get_varint32(p: *const u8, v: &mut u32) -> u8 {
     let mut v64: u64 = 0 as u64;
     let mut n: u8 = 0 as u8;
+
+    /// Assume that the single-byte case has already been handled by
+    ///* the getVarint32() macro
     { let _ = 0; };
     if unsafe { *p.offset(1 as isize) } as i32 & 128 == 0 {
-        *v =
+
+        /// This is the two-byte case
+        (*v =
             ((unsafe { *p.offset(0 as isize) } as i32 & 127) << 7 |
-                    unsafe { *p.offset(1 as isize) } as i32) as u32;
+                    unsafe { *p.offset(1 as isize) } as i32) as u32);
         return 2 as u8;
     }
     if unsafe { *p.offset(2 as isize) } as i32 & 128 == 0 {
-        *v =
+
+        /// This is the three-byte case
+        (*v =
             ((unsafe { *p.offset(0 as isize) } as i32 & 127) << 14 |
                         (unsafe { *p.offset(1 as isize) } as i32 & 127) << 7 |
-                    unsafe { *p.offset(2 as isize) } as i32) as u32;
+                    unsafe { *p.offset(2 as isize) } as i32) as u32);
         return 3 as u8;
     }
-    n = sqlite3_get_varint(p, &mut v64);
+
+    /// four or more bytes
+    (n = sqlite3_get_varint(p, &mut v64));
     { let _ = 0; };
     if v64 & ((1 as u64) << 32) - 1 as u64 != v64 {
         *v = 4294967295u32;
@@ -2301,6 +2737,8 @@ pub extern "C" fn sqlite3_get_varint32(p: *const u8, v: &mut u32) -> u8 {
     return n;
 }
 
+///* Return the number of bytes that will be needed to store the given
+///* 64-bit integer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_varint_len(mut v: u64) -> i32 {
     let mut i: i32 = 0;
@@ -2315,9 +2753,23 @@ pub extern "C" fn sqlite3_varint_len(mut v: u64) -> i32 {
     return i;
 }
 
+///* Compare the 19-character string zNum against the text representation
+///* value 2^63:  9223372036854775808.  Return negative, zero, or positive
+///* if zNum is less than, equal to, or greater than the string.
+///* Note that zNum must contain exactly 19 characters.
+///*
+///* Unlike memcmp() this routine is guaranteed to return the difference
+///* in the values of the last digit if the only difference is in the
+///* last digit.  So, for example,
+///*
+///*      compare2pow63("9223372036854775800", 1)
+///*
+///* will return -8.
+#[allow(unused_doc_comments)]
 extern "C" fn compare2pow63(z_num_1: *const i8, incr: i32) -> i32 {
     let mut c: i32 = 0;
     let mut i: i32 = 0;
+    /// 012345678901234567
     let pow63: *const i8 =
         c"922337203685477580".as_ptr() as *mut i8 as *const i8;
     {
@@ -2341,18 +2793,36 @@ extern "C" fn compare2pow63(z_num_1: *const i8, incr: i32) -> i32 {
     return c;
 }
 
+///* Convert zNum to a 64-bit signed integer.  zNum must be decimal. This
+///* routine does *not* accept hexadecimal notation.
+///*
+///* Returns:
+///*
+///*    -1    Not even a prefix of the input text looks like an integer
+///*     0    Successful transformation.  Fits in a 64-bit signed integer.
+///*     1    Excess non-space text after the integer value
+///*     2    Integer too large for a 64-bit signed integer or is malformed
+///*     3    Special case of 9223372036854775808
+///*
+///* length is the number of bytes in the string (bytes, not characters).
+///* The string is not necessarily zero-terminated.  The encoding is
+///* given by enc.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
     mut length: i32, enc: u8) -> i32 {
     unsafe {
         let mut incr: i32 = 0;
         let mut u: u64 = 0 as u64;
         let mut neg: i32 = 0;
+        /// assume positive
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         let mut c: u32 = 0 as u32;
         let mut non_num: i32 = 0;
+        /// True if input contains UTF16 with high byte non-zero
         let mut rc: i32 = 0;
+        /// Baseline return code
         let mut z_start: *const i8 = core::ptr::null();
         let mut z_end: *const i8 = unsafe { z_num.offset(length as isize) };
         { let _ = 0; };
@@ -2434,20 +2904,30 @@ pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
             }
         }
         if u > (4294967295u32 as i64 | (2147483647 as i64) << 32) as u64 {
-            *p_num =
+
+            /// This test and assignment is needed only to suppress UB warnings
+            ///* from clang and -fsanitize=undefined.  This test and assignment make
+            ///* the code a little larger and slower, and no harm comes from omitting
+            ///* them, but we must appease the undefined-behavior pharisees.
+            (*p_num =
                 if neg != 0 {
                     -1 as i64 -
                         (4294967295u32 as i64 | (2147483647 as i64) << 32)
-                } else { 4294967295u32 as i64 | (2147483647 as i64) << 32 };
+                } else { 4294967295u32 as i64 | (2147483647 as i64) << 32 });
         } else if neg != 0 {
             *p_num = -(u as i64);
         } else { *p_num = u as i64; }
         rc = 0;
         if i == 0 && z_start == z_num {
-            rc = -1;
+
+            /// No digits
+            (rc = -1);
         } else if non_num != 0 {
-            rc = 1;
+
+            /// UTF16 with high-order bytes non-zero
+            (rc = 1);
         } else if unsafe { z_num.offset(i as isize) } < z_end {
+            /// Extra bytes at the end
             let mut jj: i32 = i;
             '__b34: loop {
                 '__c34: loop {
@@ -2457,6 +2937,8 @@ pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
                                                             as usize)
                                             } as i32 & 1 == 0) as i32 != 0 {
                         rc = 1;
+
+                        /// Extra non-space text after the integer
                         break '__b34;
                     }
                     jj += incr;
@@ -2468,11 +2950,17 @@ pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
             }
         }
         if i < 19 * incr {
+
+            /// Less than 19 digits, so we know that it fits in 64 bits
             { let _ = 0; };
             return rc;
         } else {
-            j = if i > 19 * incr { 1 } else { compare2pow63(z_num, incr) };
+
+            /// zNum is a 19-digit numbers.  Compare it against 9223372036854775808.
+            (j = if i > 19 * incr { 1 } else { compare2pow63(z_num, incr) });
             if j < 0 {
+
+                /// zNum is less than 9223372036854775808 so it fits
                 { let _ = 0; };
                 return rc;
             } else {
@@ -2482,8 +2970,13 @@ pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
                             (4294967295u32 as i64 | (2147483647 as i64) << 32)
                     } else { 4294967295u32 as i64 | (2147483647 as i64) << 32 };
                 if j > 0 {
+
+                    /// zNum is greater than 9223372036854775808 so it overflows
                     return 2;
                 } else {
+
+                    /// zNum is exactly 9223372036854775808.  Fits if negative.  The
+                    ///* special case 2 overflow if positive
                     { let _ = 0; };
                     return if neg != 0 { rc } else { 3 };
                 }
@@ -2492,6 +2985,16 @@ pub extern "C" fn sqlite3_atoi64(mut z_num: *const i8, p_num: &mut i64,
     }
 }
 
+///* Transform a UTF-8 integer literal, in either decimal or hexadecimal,
+///* into a 64-bit signed integer.  This routine accepts hexadecimal literals,
+///* whereas sqlite3Atoi64() does not.
+///*
+///* Returns:
+///*
+///*     0    Successful transformation.  Fits in a 64-bit signed integer.
+///*     1    Excess text after the integer value
+///*     2    Integer too large for a 64-bit signed integer or is malformed
+///*     3    Special case of 9223372036854775808
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_dec_or_hex_to_i64(z: *const i8, p_out: *mut i64)
     -> i32 {
@@ -2554,6 +3057,8 @@ pub extern "C" fn sqlite3_dec_or_hex_to_i64(z: *const i8, p_out: *mut i64)
     }
 }
 
+///* Load the sqlite3.iSysErrno field if that is an appropriate thing
+///* to do based on the SQLite error code in rc.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_system_error(db: &mut Sqlite3, mut rc: i32) -> () {
     if rc == 10 | 12 << 8 { return; }
@@ -2563,6 +3068,9 @@ pub extern "C" fn sqlite3_system_error(db: &mut Sqlite3, mut rc: i32) -> () {
     }
 }
 
+///* Helper function for sqlite3Error() - called rarely.  Broken out into
+///* a separate routine to avoid unnecessary register saves on entry to
+///* sqlite3Error().
 extern "C" fn sqlite3_error_finish(db: *mut Sqlite3, err_code: i32) -> () {
     if !(unsafe { (*db).p_err }).is_null() {
         unsafe { sqlite3_value_set_null(unsafe { (*db).p_err }) };
@@ -2570,6 +3078,9 @@ extern "C" fn sqlite3_error_finish(db: *mut Sqlite3, err_code: i32) -> () {
     sqlite3_system_error(unsafe { &mut *db }, err_code);
 }
 
+///* Set the current error code to err_code and clear any prior error message.
+///* Also set iSysErrno (by calling sqlite3System) if the err_code indicates
+///* that would be appropriate.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_error(db: *mut Sqlite3, err_code: i32) -> () {
     { let _ = 0; };
@@ -2579,6 +3090,16 @@ pub extern "C" fn sqlite3_error(db: *mut Sqlite3, err_code: i32) -> () {
     } else { unsafe { (*db).err_byte_offset = -1 }; }
 }
 
+///* Set the most recent error code and error string for the sqlite
+///* handle "db". The error code is set to "err_code".
+///*
+///* If it is not NULL, string zFormat specifies the format of the
+///* error string.  zFormat and any string tokens that follow it are
+///* assumed to be encoded in UTF-8.
+///*
+///* To clear the most recent error for sqlite handle "db", sqlite3Error
+///* should be called with err_code set to SQLITE_OK and zFormat set
+///* to NULL.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_error_with_msg(db: *mut Sqlite3,
     err_code: i32, z_format: *const i8, mut __va0: ...) -> () {
@@ -2610,6 +3131,8 @@ pub unsafe extern "C" fn sqlite3_error_with_msg(db: *mut Sqlite3,
     }
 }
 
+///* The equivalent of sqlite3Error(db, SQLITE_OK).  Clear the error state
+///* and error message.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_error_clear(db: &mut Sqlite3) -> () {
     { let _ = 0; };
@@ -2620,6 +3143,10 @@ pub extern "C" fn sqlite3_error_clear(db: &mut Sqlite3) -> () {
     }
 }
 
+///* Convert a BLOB literal of the form "x'hhhhhh'" into its binary
+///* value.  Return a pointer to its binary value.  Space to hold the
+///* binary value has been obtained from malloc and must be freed by
+///* the calling routine.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_hex_to_blob(db: *mut Sqlite3, z: *const i8,
     mut n: i32) -> *mut () {
@@ -2652,6 +3179,10 @@ pub extern "C" fn sqlite3_hex_to_blob(db: *mut Sqlite3, z: *const i8,
     return z_blob as *mut ();
 }
 
+///* Attempt to add, subtract, or multiply the 64-bit signed value iB against
+///* the other 64-bit signed integer at *pA and store the result in *pA.
+///* Return 0 on success.  Or if the operation would have resulted in an
+///* overflow, leave *pA unchanged and return 1.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_int64(p_a: &mut i64, i_b: i64) -> i32 {
     let i_a: i64 = *p_a;
@@ -2721,6 +3252,8 @@ pub extern "C" fn sqlite3_mul_int64(p_a: &mut i64, i_b: i64) -> i32 {
     return 0;
 }
 
+///* Compute the absolute value of a 32-bit signed integer, if possible.  Or
+///* if the integer has a value of -2147483648, return +2147483647
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_abs_int32(x: i32) -> i32 {
     if x >= 0 { return x; }
@@ -2728,6 +3261,7 @@ pub extern "C" fn sqlite3_abs_int32(x: i32) -> i32 {
     return -x;
 }
 
+///* Compute an 8-bit hash on a string that is insensitive to case differences
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_i_hash(mut z: *const i8) -> u8 {
     unsafe {
@@ -2751,6 +3285,7 @@ pub extern "C" fn sqlite3_str_i_hash(mut z: *const i8) -> u8 {
     }
 }
 
+///* Read or write a four-byte big-endian integer value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get4byte(p: *const u8) -> u32 {
     return (unsafe { *p.offset(0 as isize) } as u32) << 24 |

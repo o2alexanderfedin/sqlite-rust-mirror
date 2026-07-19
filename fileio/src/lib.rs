@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -108,6 +114,16 @@ struct Dirent {
     d_name: [i8; 1024],
 }
 
+///* Set the result stored by context ctx to a blob containing the 
+///* contents of file zName.  Or, leave the result unchanged (NULL)
+///* if the file does not exist or is unreadable.
+///*
+///* If the file exceeds the SQLite blob size limit, through an
+///* SQLITE_TOOBIG error.
+///*
+///* Throw an SQLITE_IOERR if there are difficulties pulling the file
+///* off of disk.
+#[allow(unused_doc_comments)]
 extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     z_name_1: *const i8) -> () {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -116,7 +132,11 @@ extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
     let mut mx_blob: i32 = 0;
     in_ = unsafe { fopen(z_name_1, c"rb".as_ptr() as *mut i8 as *const i8) };
-    if in_ == core::ptr::null_mut() { return; }
+    if in_ == core::ptr::null_mut() {
+
+        /// File does not exist or is unreadable. Leave the result set to NULL.
+        return;
+    }
     unsafe { fseek(in_, 0 as i64, 2) };
     n_in = unsafe { ftell(in_) } as Sqlite3Int64;
     unsafe { rewind(in_) };
@@ -151,17 +171,25 @@ extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     unsafe { fclose(in_) };
 }
 
+///* Implementation of the "readfile(X)" SQL function.  The entire content
+///* of the file named X is read and returned as a BLOB.  NULL is returned
+///* if the file does not exist or is unreadable.
+#[allow(unused_doc_comments)]
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
     { let _ = argc; };
-    z_name =
+
+    /// Unused parameter
+    (z_name =
         unsafe { sqlite3_value_text(unsafe { *argv.offset(0 as isize) }) } as
-            *const i8;
+            *const i8);
     if z_name == core::ptr::null() { return; }
     read_file_contents(context, z_name);
 }
 
+///* Set the error message contained in context ctx to the results of
+///* vprintf(zFmt, ...).
 unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -173,15 +201,30 @@ unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     ();
 }
 
+///* This function is used in place of stat().  On Windows, special handling
+///* is required in order for the included time to be returned as UTC.  On all
+///* other systems, this function simply calls stat().
 extern "C" fn file_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat) -> i32 {
     return unsafe { stat(z_path_1, p_stat_buf_1) };
 }
 
+///* This function is used in place of lstat().  On Windows, special handling
+///* is required in order for the included time to be returned as UTC.  On all
+///* other systems, this function simply calls lstat().
 extern "C" fn file_link_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat)
     -> i32 {
     return unsafe { lstat(z_path_1, p_stat_buf_1) };
 }
 
+///* Argument zFile is the name of a file that will be created and/or written
+///* by SQL function writefile(). This function ensures that the directory
+///* zFile will be written to exists, creating it if required. The permissions
+///* for any path components created by this function are set in accordance
+///* with the current umask.
+///*
+///* If an OOM condition is encountered, SQLITE_NOMEM is returned. Otherwise,
+///* SQLITE_OK is returned if the directory is successfully created, or
+///* SQLITE_ERROR otherwise.
 extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     let z_copy: *mut i8 =
         unsafe {
@@ -226,6 +269,9 @@ extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     return rc;
 }
 
+///* This function does the work for the writefile() UDF. Refer to 
+///* header comments at the top of this file for details.
+#[allow(unused_doc_comments)]
 extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     p_data_1: *mut Sqlite3Value, mode: ModeT, mtime: Sqlite3Int64) -> i32 {
     if z_file_1 == core::ptr::null() { return 1; }
@@ -238,6 +284,10 @@ extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     } else {
         if mode as i32 & 61440 == 16384 {
             if unsafe { mkdir(z_file_1, mode) } != 0 {
+                /// The mkdir() call to create the directory failed. This might not
+                ///* be an error though - if there is already a directory at the same
+                ///* path and either the permissions already match or can be changed
+                ///* to do so using chmod(), it is not an error.
                 let mut s_stat: Stat = unsafe { core::mem::zeroed() };
                 if unsafe { *unsafe { __error() } } != 17 ||
                                 0 != file_stat(z_file_1, &mut s_stat) ||
@@ -297,6 +347,8 @@ extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     return 0;
 }
 
+///* Implementation of the "writefile(W,X[,Y[,Z]]])" SQL function.  
+///* Refer to header comments at the top of this file for details.
 extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_file: *const i8 = core::ptr::null();
@@ -359,6 +411,10 @@ extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL function:   lsmode(MODE)
+///*
+///* Given a numberic st_mode from stat(), convert it into a human-readable
+///* text string in the style of "ls -l".
 extern "C" fn ls_mode_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -437,6 +493,7 @@ struct FsdirTab {
     base: Sqlite3Vtab,
 }
 
+///* Construct a new fsdir virtual table object.
 extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -469,11 +526,13 @@ extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* This method is the destructor for fsdir vtab objects.
 extern "C" fn fsdir_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new fsdir_cursor object.
 extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsdirCursor = core::ptr::null_mut();
@@ -493,6 +552,8 @@ extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset a cursor back to the state it was in when first returned
+///* by fsdirOpen().
 extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     let mut i: i32 = 0;
     {
@@ -523,6 +584,7 @@ extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     (*p_cur_1).i_rowid = 1 as Sqlite3Int64;
 }
 
+///* Destructor for an fsdir_cursor.
 extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     fsdir_reset_cursor(unsafe { &mut *p_cur });
@@ -530,6 +592,8 @@ extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Set the error message for the virtual table associated with cursor
+///* pCur to the results of vprintf(zFmt, ...).
 unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -541,6 +605,8 @@ unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     ();
 }
 
+///* Advance an fsdir_cursor to its next row of output.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     let m: ModeT = unsafe { (*p_cur).s_stat.st_mode };
@@ -552,6 +618,7 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     if m as i32 & 61440 == 16384 &&
             unsafe { (*p_cur).i_lvl } + 3 < unsafe { (*p_cur).mx_lvl } {
+        /// Descend into this directory
         let i_new: i32 = unsafe { (*p_cur).i_lvl } + 1;
         let mut p_lvl: *mut FsdirLevel = core::ptr::null_mut();
         if i_new >= unsafe { (*p_cur).n_lvl } {
@@ -649,11 +716,16 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
             __t
         };
     }
+
+    /// EOF
     unsafe { sqlite3_free(unsafe { (*p_cur).z_path } as *mut ()) };
     unsafe { (*p_cur).z_path = core::ptr::null_mut() };
     return 0;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -751,13 +823,30 @@ extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
                     sqlite3_result_int(ctx, unsafe { (*p_cur).i_lvl } + 2)
                 };
             }
-            5 => { { break '__s5; } }
-            _ => { { break '__s5; } }
+            5 => {
+                {
+
+                    /// The FSDIR_COLUMN_PATH and FSDIR_COLUMN_DIR are input parameters.
+                    ///* always return their values as NULL
+                    break '__s5;
+                }
+            }
+            _ => {
+                {
+
+                    /// The FSDIR_COLUMN_PATH and FSDIR_COLUMN_DIR are input parameters.
+                    ///* always return their values as NULL
+                    break '__s5;
+                }
+            }
         }
     }
     return 0;
 }
 
+///* Return the rowid for the current row. In this implementation, the
+///* first row returned is assigned rowid value 1, and each subsequent
+///* row a value 1 more than that of the previous.
 extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -766,12 +855,21 @@ extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn fsdir_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FsdirCursor =
         cur as *mut FsdirCursor as *const FsdirCursor;
     return (unsafe { (*p_cur).z_path } == core::ptr::null_mut()) as i32;
 }
 
+///* xFilter callback.
+///*
+///* idxNum bit      Meaning
+///*     0x01         PATH=N
+///*     0x02         DIR=N
+///*     0x04         LEVEL<N
+///*     0x08         LEVEL<=N
 extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let mut z_dir: *const i8 = core::ptr::null();
@@ -896,16 +994,38 @@ extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return 0;
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the generate_series virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* In this implementation idxNum is used to represent the
+///* query plan.  idxStr is unused.
+///*
+///* The query plan is represented by bits in idxNum:
+///*
+///*  0x01  The path value is supplied by argv[0]
+///*  0x02  dir is in argv[1]
+///*  0x04  maxdepth is in argv[1] or [2]
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop over constraints
     let mut idx_path: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of PATH=
     let mut idx_dir: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of DIR=
     let mut idx_level: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of LEVEL< or <=
     let mut idx_level_eq: i32 = 0;
+    /// 0x08 for LEVEL<= or LEVEL=.  0x04 for LEVEL<
     let mut omit_level: i32 = 0;
+    /// omit the LEVEL constraint
     let mut seen_path: i32 = 0;
+    /// True if an unusable PATH= constraint is seen
     let mut seen_dir: i32 = 0;
+    /// True if an unusable DIR= constraint is seen
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
     { let _ = tab; };
     p_constraint =
@@ -999,9 +1119,16 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
             };
         }
     }
-    if seen_path != 0 || seen_dir != 0 { return 19; }
+    if seen_path != 0 || seen_dir != 0 {
+
+        /// If input parameters are unusable, disallow this plan
+        return 19;
+    }
     if idx_path < 0 {
         unsafe { (*p_idx_info_1).idx_num = 0 };
+
+        /// The pIdxInfo->estimatedCost should have been initialized to a huge
+        ///* number.  Leave it unchanged.
         unsafe {
             (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64
         };
@@ -1055,8 +1182,35 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Register the "fsdir" virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         let rc: i32 =
             unsafe {
                 sqlite3_create_module(db,
@@ -1068,9 +1222,16 @@ extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
     }
 }
 
+///* This version of realpath() works on any system.  The string
+///* returned is held in memory allocated using sqlite3_malloc64().
+///* The caller is responsible for calling sqlite3_free().
+#[allow(unused_doc_comments)]
 extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
+    /// BEGIN unix
     let mut z_out: *mut i8 = core::ptr::null_mut();
+    /// Result
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// Temporary buffer
     let mut z_buf: [i8; 1025] = [0; 1025];
     if z_path_1 == core::ptr::null() { return core::ptr::null_mut(); }
     z = unsafe { realpath(z_path_1, &raw mut z_buf[0 as usize] as *mut i8) };
@@ -1082,7 +1243,9 @@ extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
             };
     }
     if z_out == core::ptr::null_mut() {
-        z = unsafe { realpath(z_path_1, 0 as *mut () as *mut i8) };
+
+        /// Try POSIX.1-2008 malloc behavior
+        (z = unsafe { realpath(z_path_1, 0 as *mut () as *mut i8) });
         if !(z).is_null() {
             z_out =
                 unsafe {
@@ -1094,13 +1257,30 @@ extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* SQL function:   realpath(X)
+///*
+///* Try to convert file or pathname X into its real, absolute pathname.
+///* Return NULL if unable.
+///*
+///* The file or directory X is not required to exist.  The answer is formed
+///* by calling system realpath() on the prefix of X that does exist and
+///* appending the tail of X that does not (yet) exist.
+///*
+///* FIXME:  This routine sometimes returns NULL rather than raising
+///* an SQLITE_NOMEM error if an OOM is encountered.
+#[allow(unused_doc_comments)]
 extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_path: *const i8 = core::ptr::null();
+    /// Original input path
     let mut z_copy: *mut i8 = core::ptr::null_mut();
+    /// An editable copy of zPath
     let mut z_out: *mut i8 = core::ptr::null_mut();
+    /// The result
     let mut c_sep: i8 = 0 as i8;
+    /// Separator turned into \000
     let mut len: u64 = 0 as u64;
+    /// Prefix length before cSep
     let is_win: i32 = 0 as i32;
     { let _ = argc; };
     z_path =
@@ -1173,6 +1353,10 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_free(z_copy as *mut ()) };
     if !(z_out).is_null() {
+        /// Simplify any "/./" or "/../" that might have snuck into the
+        ///* pathname due to appending of zCopy.  We only have to consider
+        ///* unix "/" separators, because the _wfilepath() system call on
+        ///* Windows will have already done this simplification for us.
         let mut i: u64 = 0 as u64;
         let mut j: u64 = 0 as u64;
         let mut n: u64 = 0 as u64;
@@ -1226,6 +1410,8 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
             }
         }
         unsafe { *z_out.add(j as usize) = 0 as i8 };
+
+        /// Return the result
         unsafe {
             sqlite3_result_text(context, z_out as *const i8, -1,
                 Some(sqlite3_free))
@@ -1234,17 +1420,20 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fileio_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"readfile".as_ptr() as *mut i8 as *const i8, 1, 1 | 524288,
                 core::ptr::null_mut(), Some(readfile_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {

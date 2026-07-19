@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3IoMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+/// An open file
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFile {
@@ -401,6 +417,41 @@ struct MemFile {
     e_lock: i32,
 }
 
+/// Storage for a memdb file.
+///*
+///* An memdb object can be shared or separate.  Shared memdb objects can be
+///* used by more than one database connection.  Mutexes are used by shared
+///* memdb objects to coordinate access.  Separate memdb objects are only
+///* connected to a single database connection and do not require additional
+///* mutexes.
+///*
+///* Shared memdb objects have .zFName!=0 and .pMutex!=0.  They are created
+///* using "file:/name?vfs=memdb".  The first character of the name must be
+///* "/" or else the object will be a separate memdb object.  All shared
+///* memdb objects are stored in memdb_g.apMemStore[] in an arbitrary order.
+///*
+///* Separate memdb objects are created using a name that does not begin
+///* with "/" or using sqlite3_deserialize().
+///*
+///* Access rules for shared MemStore objects:
+///*
+///*   *  .zFName is initialized when the object is created and afterwards
+///*      is unchanged until the object is destroyed.  So it can be accessed
+///*      at any time as long as we know the object is not being destroyed,
+///*      which means while either the SQLITE_MUTEX_STATIC_VFS1 or
+///*      .pMutex is held or the object is not part of memdb_g.apMemStore[].
+///*
+///*   *  Can .pMutex can only be changed while holding the 
+///*      SQLITE_MUTEX_STATIC_VFS1 mutex or while the object is not part
+///*      of memdb_g.apMemStore[].
+///*
+///*   *  Other fields can only be changed while holding the .pMutex mutex
+///*      or when the .nRef is less than zero and the object is not part of
+///*      memdb_g.apMemStore[].
+///*
+///*   *  The .aData pointer has the added requirement that it can can only
+///*      be changed (for resizing) when nMmap is zero.
+///*
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemStore {
@@ -417,6 +468,10 @@ struct MemStore {
     z_f_name: *mut i8,
 }
 
+///* File-scope variables for holding the memdb files that are accessible
+///* to multiple database connections in separate threads.
+///*
+///* Must hold SQLITE_MUTEX_STATIC_VFS1 to access any part of this object.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct MemFS {
@@ -434,6 +489,7 @@ extern "C" fn memdb_leave(p: &MemStore) -> () {
     unsafe { sqlite3_mutex_leave((*p).p_mutex) };
 }
 
+///* Methods for MemFile
 extern "C" fn memdb_close(p_file: *mut Sqlite3File) -> i32 {
     unsafe {
         let p: *mut MemStore = unsafe { (*(p_file as *mut MemFile)).p_store };
@@ -493,6 +549,7 @@ extern "C" fn memdb_close(p_file: *mut Sqlite3File) -> i32 {
     }
 }
 
+///* Read data from an memdb-file.
 extern "C" fn memdb_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     unsafe {
@@ -520,6 +577,7 @@ extern "C" fn memdb_read(p_file: *mut Sqlite3File, z_buf: *mut (), i_amt: i32,
     }
 }
 
+///* Try to enlarge the memory allocation to hold at least sz bytes
 extern "C" fn memdb_enlarge(p: &mut MemStore, mut new_sz_1: Sqlite3Int64)
     -> i32 {
     let mut p_new: *mut u8 = core::ptr::null_mut();
@@ -536,12 +594,17 @@ extern "C" fn memdb_enlarge(p: &mut MemStore, mut new_sz_1: Sqlite3Int64)
     return 0;
 }
 
+///* Write data to an memdb-file.
+#[allow(unused_doc_comments)]
 extern "C" fn memdb_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     i_ofst: Sqlite3Int64) -> i32 {
     unsafe {
         let p: *mut MemStore = unsafe { (*(p_file as *mut MemFile)).p_store };
         memdb_enter(unsafe { &*p });
         if unsafe { (*p).m_flags } & 4 as u32 != 0 {
+
+            /// Can't happen: memdbLock() will return SQLITE_READONLY before
+            ///* reaching this point
             memdb_leave(unsafe { &*p });
             return 10 | 3 << 8;
         }
@@ -575,6 +638,12 @@ extern "C" fn memdb_write(p_file: *mut Sqlite3File, z: *const (), i_amt: i32,
     }
 }
 
+///* Truncate an memdb-file.
+///*
+///* In rollback mode (which is always the case for memdb, as it does not
+///* support WAL mode) the truncate() method is only used to reduce
+///* the size of a file, never to increase the size.
+#[allow(unused_doc_comments)]
 extern "C" fn memdb_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     unsafe {
@@ -582,19 +651,23 @@ extern "C" fn memdb_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
         let mut rc: i32 = 0;
         memdb_enter(unsafe { &*p });
         if size > unsafe { (*p).sz } {
-            rc = 11;
+
+            /// This can only happen with a corrupt wal mode db
+            (rc = 11);
         } else { unsafe { (*p).sz = size }; }
         memdb_leave(unsafe { &*p });
         return rc;
     }
 }
 
+///* Sync an memdb-file.
 extern "C" fn memdb_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     { let _ = p_file; };
     { let _ = flags; };
     return 0;
 }
 
+///* Return the current file-size of an memdb-file.
 extern "C" fn memdb_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     unsafe {
@@ -606,6 +679,7 @@ extern "C" fn memdb_file_size(p_file: *mut Sqlite3File,
     }
 }
 
+///* Lock an memdb-file.
 extern "C" fn memdb_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p_this: *mut MemFile = p_file as *mut MemFile;
     let p: *mut MemStore = unsafe { (*p_this).p_store };
@@ -718,6 +792,7 @@ extern "C" fn memdb_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Unlock an memdb-file.
 extern "C" fn memdb_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p_this: *mut MemFile = p_file as *mut MemFile;
     let p: *mut MemStore = unsafe { (*p_this).p_store };
@@ -754,6 +829,7 @@ extern "C" fn memdb_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return 0;
 }
 
+/// static int memdbCheckReservedLock(sqlite3_file*, int *pResOut);// not used
 extern "C" fn memdb_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     unsafe {
@@ -787,11 +863,13 @@ extern "C" fn memdb_file_control(p_file: *mut Sqlite3File, op: i32,
     }
 }
 
+/// static int memdbSectorSize(sqlite3_file*); // not used
 extern "C" fn memdb_device_characteristics(p_file: *mut Sqlite3File) -> i32 {
     { let _ = p_file; };
     return 1 | 4096 | 512 | 1024;
 }
 
+/// Fetch a page of a memory-mapped file
 extern "C" fn memdb_fetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     unsafe {
@@ -818,6 +896,7 @@ extern "C" fn memdb_fetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     }
 }
 
+/// Release a memory-mapped page
 extern "C" fn memdb_unfetch(p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     let p: *mut MemStore = unsafe { (*(p_file as *mut MemFile)).p_store };
@@ -852,6 +931,8 @@ static memdb_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(memdb_unfetch),
     };
 
+///* Translate a database connection pointer and schema name into a
+///* MemFile pointer.
 extern "C" fn memdb_from_db_schema(db: *mut Sqlite3, z_schema_1: *const i8)
     -> *mut MemFile {
     let mut p: *mut MemFile = core::ptr::null_mut();
@@ -874,6 +955,48 @@ extern "C" fn memdb_from_db_schema(db: *mut Sqlite3, z_schema_1: *const i8)
     return p;
 }
 
+///* CAPI3REF: Serialize a database
+///*
+///* The sqlite3_serialize(D,S,P,F) interface returns a pointer to
+///* memory that is a serialization of the S database on
+///* [database connection] D.  If S is a NULL pointer, the main database is used.
+///* If P is not a NULL pointer, then the size of the database in bytes
+///* is written into *P.
+///*
+///* For an ordinary on-disk database file, the serialization is just a
+///* copy of the disk file.  For an in-memory database or a "TEMP" database,
+///* the serialization is the same sequence of bytes which would be written
+///* to disk if that database were backed up to disk.
+///*
+///* The usual case is that sqlite3_serialize() copies the serialization of
+///* the database into memory obtained from [sqlite3_malloc64()] and returns
+///* a pointer to that memory.  The caller is responsible for freeing the
+///* returned value to avoid a memory leak.  However, if the F argument
+///* contains the SQLITE_SERIALIZE_NOCOPY bit, then no memory allocations
+///* are made, and the sqlite3_serialize() function will return a pointer
+///* to the contiguous memory representation of the database that SQLite
+///* is currently using for that database, or NULL if no such contiguous
+///* memory representation of the database exists.  A contiguous memory
+///* representation of the database will usually only exist if there has
+///* been a prior call to [sqlite3_deserialize(D,S,...)] with the same
+///* values of D and S.
+///* The size of the database is written into *P even if the
+///* SQLITE_SERIALIZE_NOCOPY bit is set but no contiguous copy
+///* of the database exists.
+///*
+///* After the call, if the SQLITE_SERIALIZE_NOCOPY bit had been set,
+///* the returned buffer content will remain accessible and unchanged
+///* until either the next write operation on the connection or when
+///* the connection is closed, and applications must not modify the
+///* buffer. If the bit had been clear, the returned buffer will not
+///* be accessed by SQLite after the call.
+///*
+///* A call to sqlite3_serialize(D,S,P,F) might return NULL even if the
+///* SQLITE_SERIALIZE_NOCOPY bit is omitted from argument F if a memory
+///* allocation error occurs.
+///*
+///* This interface is omitted if SQLite is compiled with the
+///* [SQLITE_OMIT_DESERIALIZE] option.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_serialize(db: *mut Sqlite3,
     mut z_schema_1: *const i8, pi_size_1: *mut Sqlite3Int64, m_flags_1: u32)
@@ -1165,6 +1288,59 @@ pub extern "C" fn sqlite3_serialize(db: *mut Sqlite3,
     }
 }
 
+///* CAPI3REF: Deserialize a database
+///*
+///* The sqlite3_deserialize(D,S,P,N,M,F) interface causes the
+///* [database connection] D to disconnect from database S and then
+///* reopen S as an in-memory database based on the serialization
+///* contained in P.  If S is a NULL pointer, the main database is
+///* used. The serialized database P is N bytes in size.  M is the size
+///* of the buffer P, which might be larger than N.  If M is larger than
+///* N, and the SQLITE_DESERIALIZE_READONLY bit is not set in F, then
+///* SQLite is permitted to add content to the in-memory database, in
+///* page-sized chunks, as long as the total size does not exceed M bytes.
+///*
+///* The parameter M must be greater than or equal to N.  Ideally, M
+///* should have a value which is N+(512&times;K)+20 where K determines how
+///* must extra space is available to hold new content as the database
+///* grows.  K can be 0 if the database is read-only.
+///*
+///* If the database content in P is malformed in a malicious way then
+///* it is possible that SQLite might try to read a few more than N bytes
+///* from P.  If the veracity of the database content P is uncertain,
+///* then applications are advised to allocate about 20 extra bytes on
+///* the end of the P buffer to avoid a memory error.
+///*
+///* If the SQLITE_DESERIALIZE_FREEONCLOSE bit is set in F, then SQLite will
+///* invoke sqlite3_free() on the serialization buffer when the database
+///* connection closes.  If the SQLITE_DESERIALIZE_RESIZEABLE bit is set, then
+///* SQLite will try to increase the buffer size using sqlite3_realloc64()
+///* if writes on the database cause it to grow larger than M bytes.
+///*
+///* Applications must not modify the buffer P or invalidate it before
+///* the database connection D is closed.
+///*
+///* The sqlite3_deserialize() interface will fail with SQLITE_BUSY if the
+///* database is currently in a read transaction or is involved in a backup
+///* operation.
+///*
+///* It is not possible to deserialize into the TEMP database.  If the
+///* S argument to sqlite3_deserialize(D,S,P,N,M,F) is "temp" then the
+///* function returns SQLITE_ERROR.
+///*
+///* The deserialized database should not be in [WAL mode].  If the database
+///* is in WAL mode, then any attempt to use the database file will result
+///* in an [SQLITE_CANTOPEN] error.  The application can set the
+///* [file format version numbers] (bytes 18 and 19) of the input database P
+///* to 0x01 prior to invoking sqlite3_deserialize(D,S,P,N,M,F) to force the
+///* database file into rollback mode and work around this limitation.
+///*
+///* If sqlite3_deserialize(D,S,P,N,M,F) fails for any reason and if the
+///* SQLITE_DESERIALIZE_FREEONCLOSE bit is set in argument F, then
+///* [sqlite3_free()] is invoked on argument P prior to returning.
+///*
+///* This interface is omitted if SQLite is compiled with the
+///* [SQLITE_OMIT_DESERIALIZE] option.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_deserialize(db: *mut Sqlite3,
     mut z_schema_1: *const i8, mut p_data_1: *mut u8, sz_db_1: Sqlite3Int64,
@@ -1239,6 +1415,7 @@ pub extern "C" fn sqlite3_deserialize(db: *mut Sqlite3,
     }
 }
 
+///* Methods for MemVfs
 extern "C" fn memdb_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_fd: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     unsafe {
@@ -1371,6 +1548,7 @@ extern "C" fn memdb_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     }
 }
 
+/// static int memdbDelete(sqlite3_vfs*, const char *zName, int syncDir);
 extern "C" fn memdb_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     { let _ = p_vfs; };
@@ -1380,6 +1558,9 @@ extern "C" fn memdb_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return 0;
 }
 
+///* Populate buffer zOut with the full canonical pathname corresponding
+///* to the pathname in zPath. zOut is guaranteed to point to a buffer
+///* of at least (INST_MAX_PATHNAME+1) bytes.
 extern "C" fn memdb_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     n_out: i32, z_out: *mut i8) -> i32 {
     { let _ = p_vfs; };
@@ -1390,6 +1571,7 @@ extern "C" fn memdb_full_pathname(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return 0;
 }
 
+///* Open the dynamic library located at zPath and return a handle.
 extern "C" fn memdb_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     return unsafe {
@@ -1400,6 +1582,9 @@ extern "C" fn memdb_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
         };
 }
 
+///* Populate the buffer zErrMsg (size nByte bytes) with a human readable
+///* utf-8 string describing the most recent error encountered associated 
+///* with dynamic libraries.
 extern "C" fn memdb_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     unsafe {
@@ -1411,6 +1596,7 @@ extern "C" fn memdb_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     };
 }
 
+///* Return a pointer to the symbol zSymbol in the dynamic library pHandle.
 extern "C" fn memdb_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     return unsafe {
@@ -1422,6 +1608,7 @@ extern "C" fn memdb_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
         };
 }
 
+///* Close the dynamic library handle pHandle.
 extern "C" fn memdb_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     -> () {
     unsafe {
@@ -1432,6 +1619,8 @@ extern "C" fn memdb_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     };
 }
 
+///* Populate the buffer pointed to by zBufOut with nByte bytes of 
+///* random data.
 extern "C" fn memdb_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     return unsafe {
@@ -1443,6 +1632,8 @@ extern "C" fn memdb_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
         };
 }
 
+///* Sleep for nMicro microseconds. Return the number of microseconds 
+///* actually slept.
 extern "C" fn memdb_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     return unsafe {
             (unsafe {
@@ -1452,6 +1643,7 @@ extern "C" fn memdb_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
         };
 }
 
+/// static int memdbCurrentTime(sqlite3_vfs*, double*);
 extern "C" fn memdb_get_last_error(p_vfs: *mut Sqlite3Vfs, a: i32, b: *mut i8)
     -> i32 {
     return unsafe {
@@ -1498,7 +1690,11 @@ static mut memdb_vfs: Sqlite3Vfs =
         x_next_system_call: None,
     };
 
+/// 
+///* This routine is called when the extension is loaded.
+///* Register the new VFS.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_memdb_init() -> i32 {
     unsafe {
         let p_lower: *mut Sqlite3Vfs =
@@ -1510,11 +1706,14 @@ pub extern "C" fn sqlite3_memdb_init() -> i32 {
         if (sz as u64) < core::mem::size_of::<MemFile>() as u64 {
             sz = core::mem::size_of::<MemFile>() as u32;
         }
-        memdb_vfs.sz_os_file = sz as i32;
+
+        ///NO_TEST
+        (memdb_vfs.sz_os_file = sz as i32);
         return unsafe { sqlite3_vfs_register(&mut memdb_vfs, 0) };
     }
 }
 
+///* Return true if the VFS is the memvfs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_memdb(p_vfs: *const Sqlite3Vfs) -> i32 {
     unsafe {
@@ -1522,6 +1721,7 @@ pub extern "C" fn sqlite3_is_memdb(p_vfs: *const Sqlite3Vfs) -> i32 {
     }
 }
 
+///* Forward declaration of objects used by this utility
 type MemVfs = Sqlite3Vfs;
 
 extern "C" {

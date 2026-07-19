@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3Pcache, Sqlite3PcacheMethods2, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Str, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -18,6 +24,14 @@ struct TestpcacheGlobalType {
 static mut testpcache_global: TestpcacheGlobalType =
     unsafe { core::mem::zeroed() };
 
+///* Initializer.
+///*
+///* Verify that the initializer is only called when the system is
+///* uninitialized.  Allocate some memory and report SQLITE_NOMEM if
+///* the allocation fails.  This provides a means to test the recovery
+///* from a failed initialization attempt.  It also verifies that the
+///* the destructor always gets call - otherwise there would be a
+///* memory leak.
 extern "C" fn testpcache_init(p_arg_1: *mut ()) -> i32 {
     unsafe {
         if !(p_arg_1 == &raw mut testpcache_global as *mut ()) as i32 as i64
@@ -53,6 +67,10 @@ extern "C" fn testpcache_init(p_arg_1: *mut ()) -> i32 {
     }
 }
 
+///* Destructor
+///*
+///* Verify that this is only called after initialization.
+///* Free the memory allocated by the initializer.
 extern "C" fn testpcache_shutdown(p_arg_1: *mut ()) -> () {
     unsafe {
         if !(p_arg_1 == &raw mut testpcache_global as *mut ()) as i32 as i64
@@ -107,6 +125,7 @@ struct TestpcachePage {
     is_pinned: i32,
 }
 
+///* Get a random number using the PRNG in the given page cache.
 extern "C" fn testpcache_random(p: &mut Testpcache) -> u32 {
     let mut x: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -125,6 +144,7 @@ extern "C" fn testpcache_random(p: &mut Testpcache) -> u32 {
     return x;
 }
 
+///* Allocate a new page cache instance.
 extern "C" fn testpcache_create(mut sz_page_1: i32, mut sz_extra_1: i32,
     b_purgeable_1: i32) -> *mut Sqlite3Pcache {
     unsafe {
@@ -190,6 +210,7 @@ extern "C" fn testpcache_create(mut sz_page_1: i32, mut sz_extra_1: i32,
     }
 }
 
+///* Set the cache size
 extern "C" fn testpcache_cachesize(p_cache_1: *mut Sqlite3Pcache,
     new_size_1: i32) -> () {
     unsafe {
@@ -223,6 +244,8 @@ extern "C" fn testpcache_cachesize(p_cache_1: *mut Sqlite3Pcache,
     }
 }
 
+///* Return the number of pages in the cache that are being used.
+///* This includes both pinned and unpinned pages.
 extern "C" fn testpcache_pagecount(p_cache_1: *mut Sqlite3Pcache) -> i32 {
     unsafe {
         let p: *const Testpcache =
@@ -256,6 +279,8 @@ extern "C" fn testpcache_pagecount(p_cache_1: *mut Sqlite3Pcache) -> i32 {
     }
 }
 
+///* Fetch a page.
+#[allow(unused_doc_comments)]
 extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
     create_flag_1: i32) -> *mut Sqlite3PcachePage {
     unsafe {
@@ -377,6 +402,8 @@ extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
                     };
                 }
             }
+
+            /// The prior loop always finds a freepage to allocate
             if (0 == 0) as i32 as i64 != 0 {
                 unsafe {
                     __assert_rtn(c"testpcacheFetch".as_ptr() as *const i8,
@@ -386,7 +413,10 @@ extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
             } else { { let _ = 0; } };
         }
         if unsafe { (*p).b_purgeable } == 0 { return core::ptr::null_mut(); }
-        j = (testpcache_random(unsafe { &mut *p }) % 217 as u32) as i32;
+
+        /// If there are no free pages, recycle a page.  The page to
+        ///* recycle is selected at random from all unpinned pages.
+        (j = (testpcache_random(unsafe { &mut *p }) % 217 as u32) as i32);
         {
             i = 0;
             '__b4: loop {
@@ -429,6 +459,8 @@ extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
                 };
             }
         }
+
+        /// The previous loop always finds a page to recycle.
         if (0 == 0) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"testpcacheFetch".as_ptr() as *const i8,
@@ -440,6 +472,8 @@ extern "C" fn testpcache_fetch(p_cache_1: *mut Sqlite3Pcache, key: u32,
     }
 }
 
+///* Unpin a page.
+#[allow(unused_doc_comments)]
 extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
     p_old_page_1: *mut Sqlite3PcachePage, mut discard: i32) -> () {
     unsafe {
@@ -482,6 +516,8 @@ extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
                 '__c5: loop {
                     if unsafe { &raw mut (*p).a[i as usize].page } as
                                 *mut Sqlite3PcachePage == p_old_page_1 {
+
+                        /// The pOldPage pointer always points to a pinned page
                         if (unsafe { (*p).a[i as usize].is_pinned } == 0) as i32 as
                                     i64 != 0 {
                             unsafe {
@@ -528,6 +564,8 @@ extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// The pOldPage pointer always points to a valid page
         if (0 == 0) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"testpcacheUnpin".as_ptr() as *const i8,
@@ -538,6 +576,8 @@ extern "C" fn testpcache_unpin(p_cache_1: *mut Sqlite3Pcache,
     }
 }
 
+///* Rekey a single page.
+#[allow(unused_doc_comments)]
 extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
     p_old_page_1: *mut Sqlite3PcachePage, old_key_1: u32, new_key_1: u32)
     -> () {
@@ -575,6 +615,8 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
                 if !(i < 217) { break '__b6; }
                 '__c6: loop {
                     if unsafe { (*p).a[i as usize].key } == new_key_1 {
+
+                        /// The new key is never a page that is already pinned
                         if !(unsafe { (*p).a[i as usize].is_pinned } == 0) as i32 as
                                     i64 != 0 {
                             unsafe {
@@ -611,6 +653,8 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
                 if !(i < 217) { break '__b7; }
                 '__c7: loop {
                     if unsafe { (*p).a[i as usize].key } == old_key_1 {
+
+                        /// The oldKey and pOldPage parameters match
                         if !(unsafe { &raw mut (*p).a[i as usize].page } as
                                                     *mut Sqlite3PcachePage == p_old_page_1) as i32 as i64 != 0 {
                             unsafe {
@@ -619,6 +663,8 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
                                     c"&p->a[i].page==pOldPage".as_ptr() as *mut i8 as *const i8)
                             }
                         } else { { let _ = 0; } };
+
+                        /// Page to be rekeyed must be pinned
                         if (unsafe { (*p).a[i as usize].is_pinned } == 0) as i32 as
                                     i64 != 0 {
                             unsafe {
@@ -635,6 +681,8 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
+
+        /// Rekey is always given a valid page to work with
         if (0 == 0) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"testpcacheRekey".as_ptr() as *const i8,
@@ -645,6 +693,8 @@ extern "C" fn testpcache_rekey(p_cache_1: *mut Sqlite3Pcache,
     }
 }
 
+///* Truncate the page cache.  Every page with a key of iLimit or larger
+///* is discarded.
 extern "C" fn testpcache_truncate(p_cache_1: *mut Sqlite3Pcache,
     i_limit_1: u32) -> () {
     unsafe {
@@ -720,6 +770,7 @@ extern "C" fn testpcache_truncate(p_cache_1: *mut Sqlite3Pcache,
     }
 }
 
+///* Destroy a page cache.
 extern "C" fn testpcache_destroy(p_cache_1: *mut Sqlite3Pcache) -> () {
     unsafe {
         let p: *mut Testpcache = p_cache_1 as *mut Testpcache;
@@ -759,6 +810,16 @@ extern "C" fn testpcache_destroy(p_cache_1: *mut Sqlite3Pcache) -> () {
     }
 }
 
+///* Invoke this routine to register or unregister the testing pager cache
+///* implemented by this file.
+///*
+///* Install the test pager cache if installFlag is 1 and uninstall it if
+///* installFlag is 0.
+///*
+///* When installing, discardChance is a number between 0 and 100 that
+///* indicates the probability of discarding a page when unpinning the
+///* page.  0 means never discard (unless the discard flag is set).
+///* 100 means always discard.
 #[unsafe(no_mangle)]
 pub extern "C" fn install_test_p_cache(install_flag_1: i32,
     discard_chance_1: u32, prng_seed_1: u32, high_stress_1: u32) -> () {

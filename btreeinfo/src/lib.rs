@@ -1,12 +1,19 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
+/// The sqlite_btreeinfo table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BinfoTable {
@@ -14,6 +21,7 @@ struct BinfoTable {
     db: *mut Sqlite3,
 }
 
+/// A cursor for the sqlite_btreeinfo table
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct BinfoCursor {
@@ -28,6 +36,7 @@ struct BinfoCursor {
     z_schema: *mut i8,
 }
 
+///* Connect to the sqlite_btreeinfo virtual table.
 extern "C" fn binfo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -59,15 +68,23 @@ extern "C" fn binfo_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Disconnect from or destroy a btreeinfo virtual table.
 extern "C" fn binfo_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* idxNum:
+///*
+///*     0     Use "main" for the schema
+///*     1     Schema identified by parameter ?1
+#[allow(unused_doc_comments)]
 extern "C" fn binfo_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
     unsafe { (*p_idx_info_1).estimated_cost = 10000.0 };
+
+    /// Cost estimate
     unsafe { (*p_idx_info_1).estimated_rows = 100 as Sqlite3Int64 };
     {
         i = 0;
@@ -105,6 +122,7 @@ extern "C" fn binfo_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Open a new btreeinfo cursor.
 extern "C" fn binfo_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_csr: *mut BinfoCursor = core::ptr::null_mut();
@@ -126,6 +144,7 @@ extern "C" fn binfo_open(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Close a btreeinfo cursor.
 extern "C" fn binfo_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut BinfoCursor = p_cursor_1 as *mut BinfoCursor;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_stmt }) };
@@ -134,6 +153,7 @@ extern "C" fn binfo_close(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Move a btreeinfo cursor to the next entry in the file.
 extern "C" fn binfo_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut BinfoCursor = p_cursor_1 as *mut BinfoCursor;
     unsafe {
@@ -143,12 +163,15 @@ extern "C" fn binfo_next(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     return if unsafe { (*p_csr).rc } == 1 { 1 } else { 0 };
 }
 
+/// We have reached EOF if previous sqlite3_step() returned
+///* anything other than SQLITE_ROW;
 extern "C" fn binfo_eof(p_cursor_1: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const BinfoCursor =
         p_cursor_1 as *mut BinfoCursor as *const BinfoCursor;
     return (unsafe { (*p_csr).rc } != 100) as i32;
 }
 
+/// Position a cursor back to the beginning.
 extern "C" fn binfo_filter(p_cursor_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_csr: *mut BinfoCursor = p_cursor_1 as *mut BinfoCursor;
@@ -196,6 +219,7 @@ extern "C" fn binfo_filter(p_cursor_1: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+/// Decode big-endian integers
 extern "C" fn get_uint16(a: *const u8) -> u32 {
     return ((unsafe { *a.offset(0 as isize) } as i32) << 8 |
                 unsafe { *a.offset(1 as isize) } as i32) as u32;
@@ -208,6 +232,8 @@ extern "C" fn get_uint32(a: *const u8) -> u32 {
                 unsafe { *a.offset(3 as isize) } as i32) as u32;
 }
 
+/// Examine the b-tree rooted at pgno and estimate its size.
+///* Return non-zero if anything goes wrong.
 extern "C" fn binfo_compute(db: *mut Sqlite3, mut pgno: i32,
     p_csr_1: &mut BinfoCursor) -> i32 {
     let mut n_entry: Sqlite3Int64 = 1 as Sqlite3Int64;
@@ -292,6 +318,7 @@ extern "C" fn binfo_compute(db: *mut Sqlite3, mut pgno: i32,
     return rc;
 }
 
+/// Return a column for the sqlite_btreeinfo table
 extern "C" fn binfo_column(p_cursor_1: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *mut BinfoCursor = p_cursor_1 as *mut BinfoCursor;
@@ -635,6 +662,7 @@ extern "C" fn binfo_column(p_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// Return the ROWID for the sqlite_btreeinfo table
 extern "C" fn binfo_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_csr: *const BinfoCursor =
@@ -646,9 +674,37 @@ extern "C" fn binfo_rowid(p_cursor_1: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Invoke this routine to register the "sqlite_btreeinfo" virtual table module
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_binfo_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         return unsafe {
                 sqlite3_create_module(db,
                     c"sqlite_btreeinfo".as_ptr() as *mut i8 as *const i8,

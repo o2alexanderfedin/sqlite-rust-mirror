@@ -1,14 +1,56 @@
+//!* 2022-11-20
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This source allows multiple SQLite extensions to be either: combined
+//!* into a single runtime-loadable library; or built into the SQLite shell
+//!* using a preprocessing convention set by src/shell.c.in (and shell.c).
+//!*
+//!* Presently, it combines the base64.c and base85.c extensions. However,
+//!* it can be used as a template for other combinations.
+//!*
+//!* Example usages:
+//!*
+//!*  - Build a runtime-loadable extension from SQLite checkout directory:
+//!* *Nix, OSX: gcc -O2 -shared -I. -fPIC -o basexx.so ext/misc/basexx.c
+//!* Win32: cl /Os -I. ext/misc/basexx.c -link -dll -out:basexx.dll
+//!*
+//!*  - Incorporate as built-in in sqlite3 shell:
+//!* *Nix, OSX with gcc on a like platform:
+//!*  export mop1=-DSQLITE_SHELL_EXTSRC=ext/misc/basexx.c
+//!*  export mop2=-DSQLITE_SHELL_EXTFUNCS=BASEXX
+//!*  make sqlite3 "OPTS=$mop1 $mop2"
+//!* Win32 with Microsoft toolset on Windows:
+//!*  set mop1=-DSQLITE_SHELL_EXTSRC=ext/misc/basexx.c
+//!*  set mop2=-DSQLITE_SHELL_EXTFUNCS=BASEXX
+//!*  set mops="OPTS=%mop1% %mop2%"
+//!*  nmake -f Makefile.msc sqlite3.exe %mops%
+//! Guard for #include as built-in extension.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 extern "C" fn init_api_ptr(p_api_1: *const Sqlite3ApiRoutines) -> () {
     { let _ = p_api_1; };
 }
 
+/// Decoding table, ASCII (7-bit) value to base 64 digit value or other
 static b64_digit_values: [u8; 128] =
     [130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8,
             130 as u8, 130 as u8, 130 as u8, 129 as u8, 129 as u8, 129 as u8,
@@ -46,6 +88,8 @@ static b64_numerals: [i8; 65] =
             51 as i8, 52 as i8, 53 as i8, 54 as i8, 55 as i8, 56 as i8,
             57 as i8, 43 as i8, 47 as i8, 0 as i8];
 
+/// Encode a byte buffer into base64 text with linefeeds appended to limit
+///* encoded group lengths to B64_DARK_MAX or to terminate the last group.
 extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -164,6 +208,7 @@ extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Skip over text which is not base64 numeral(s).
 extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut nc; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -176,6 +221,7 @@ extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     return s;
 }
 
+/// Decode base64 text into a byte buffer.
 extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -285,6 +331,7 @@ extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// This function does the work for the SQLite base64(x) UDF.
 extern "C" fn base64(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -544,6 +591,7 @@ pub extern "C" fn sqlite3_base64_init(db: *mut Sqlite3,
         };
 }
 
+/// Provide digitValue to b85Numeral offset as a function of above class.
 static mut b85_c_offset: [u8; 5] =
     [0 as u8, '#' as i32 as u8, 0 as u8, ('*' as i32 - 4) as u8, 0 as u8];
 
@@ -585,6 +633,9 @@ extern "C" fn putcs(mut pc: *mut i8, mut s: *const i8) -> *mut i8 {
     return pc;
 }
 
+/// Encode a byte buffer into base85 text. If pSep!=0, it's a C string
+///* to be appended to encoded groups to limit their length to B85_DARK_MAX
+///* or to terminate the last group (to aid concatenation.)
 extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8, p_sep_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -674,6 +725,7 @@ extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Decode base85 text into a byte buffer.
 extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -813,6 +865,7 @@ extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// Say whether input char sequence is all (base85 and/or whitespace).
 extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut len; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -838,6 +891,7 @@ extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     return 1;
 }
 
+/// This function does the work for the SQLite is_base85(t) UDF.
 extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     if !(na == 1) as i32 as i64 != 0 {
@@ -876,6 +930,7 @@ extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     }
 }
 
+/// This function does the work for the SQLite base85(x) UDF.
 extern "C" fn base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;

@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, SqliteUint64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, PrintfArguments, RCStr, RowSet,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    Uptr, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinVaList = *mut i8;
 
@@ -396,6 +411,18 @@ impl Parse {
     }
 }
 
+///* Initialize a string accumulator.
+///*
+///* p:     The accumulator to be initialized.
+///* db:    Pointer to a database connection.  May be NULL.  Lookaside
+///*        memory is used if not NULL. db->mallocFailed is set appropriately
+///*        when not NULL.
+///* zBase: An initial buffer.  May be NULL in which case the initial buffer
+///*        is malloced.
+///* n:     Size of zBase in bytes.  If total space requirements never exceed
+///*        n then no memory allocations ever occur.
+///* mx:    Maximum number of bytes to accumulate.  If mx==0 then no memory
+///*        allocations will ever occur.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_init(p: &mut StrAccum, db: *mut Sqlite3,
     z_base_1: *mut i8, n: i32, mx: i32) -> () {
@@ -408,8 +435,11 @@ pub extern "C" fn sqlite3_str_accum_init(p: &mut StrAccum, db: *mut Sqlite3,
     (*p).printf_flags = 0 as u8;
 }
 
+///* An "etByte" is an 8-bit unsigned value.
 type EtByte = u8;
 
+///* Each builtin conversion character (ex: the 'd' in "%d") is described
+///* by an instance of the following structure
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct EtInfo {
@@ -422,6 +452,7 @@ struct EtInfo {
     i_nxt: i8,
 }
 
+///* Reset an StrAccum string.  Reclaim all malloced memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_reset(p: *mut StrAccum) -> () {
     unsafe {
@@ -440,6 +471,7 @@ pub extern "C" fn sqlite3_str_reset(p: *mut StrAccum) -> () {
     }
 }
 
+///* Set the StrAccum object to an error mode.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_accum_set_error(p: *mut StrAccum, e_error_1: u8)
     -> () {
@@ -455,7 +487,13 @@ pub extern "C" fn sqlite3_str_accum_set_error(p: *mut StrAccum, e_error_1: u8)
     }
 }
 
+///* Enlarge the memory allocation on a StrAccum object so that it is
+///* able to accept at least N more bytes of text.
+///*
+///* Return the number of bytes of text that StrAccum is able to accept
+///* after the attempted enlargement.  The value returned might be zero.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_str_accum_enlarge(p: *mut StrAccum, n_1: i64)
     -> i32 {
     let mut z_new: *mut i8 = core::ptr::null_mut();
@@ -473,7 +511,10 @@ pub extern "C" fn sqlite3_str_accum_enlarge(p: *mut StrAccum, n_1: i64)
         let mut sz_new: i64 = unsafe { (*p).n_char } as i64 + n_1 + 1 as i64;
         if sz_new + unsafe { (*p).n_char } as i64 <=
                 unsafe { (*p).mx_alloc } as i64 {
-            sz_new += unsafe { (*p).n_char } as i64;
+
+            /// Force exponential buffer size growth as long as it does not overflow,
+            ///* to avoid having to call this routine too often
+            (sz_new += unsafe { (*p).n_char } as i64);
         }
         if sz_new > unsafe { (*p).mx_alloc } as i64 {
             unsafe { sqlite3_str_reset(p as *mut Sqlite3Str) };
@@ -522,6 +563,12 @@ pub extern "C" fn sqlite3_str_accum_enlarge(p: *mut StrAccum, n_1: i64)
     return n_1 as i32;
 }
 
+///* The StrAccum "p" is not large enough to accept N new bytes of z[].
+///* So enlarge if first, then do the append.
+///*
+///* This is a helper routine to sqlite3_str_append() that does special-case
+///* work (enlarging the buffer) using tail recursion, so that the
+///* sqlite3_str_append() routine can use fast calling semantics.
 extern "C" fn enlarge_and_append(p: *mut StrAccum, z: *const i8, mut n_1: i32)
     -> () {
     n_1 = sqlite3_str_accum_enlarge(p, n_1 as i64);
@@ -538,6 +585,7 @@ extern "C" fn enlarge_and_append(p: *mut StrAccum, z: *const i8, mut n_1: i32)
     }
 }
 
+/// Forward reference
 extern "C" fn sqlite3_str_append64(p: *mut Sqlite3Str, z: *const i8, n_1: i64)
     -> () {
     { let _ = 0; };
@@ -560,6 +608,8 @@ extern "C" fn sqlite3_str_append64(p: *mut Sqlite3Str, z: *const i8, n_1: i64)
     }
 }
 
+///* Append N bytes of text from z to the StrAccum object.  Increase the
+///* size of the memory allocation for StrAccum if necessary.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_append(p: *mut Sqlite3Str, z: *const i8,
     n_1: i32) -> () {
@@ -583,6 +633,7 @@ pub extern "C" fn sqlite3_str_append(p: *mut Sqlite3Str, z: *const i8,
     }
 }
 
+///* Extra argument values from a PrintfArguments object
 extern "C" fn get_int_arg(p: &mut PrintfArguments) -> Sqlite3Int64 {
     if (*p).n_arg <= (*p).n_used { return 0 as Sqlite3Int64; }
     return unsafe {
@@ -824,6 +875,13 @@ static fmtinfo: [EtInfo; 25] =
                 i_nxt: 23 as i8,
             }];
 
+///* Allocate memory for a temporary buffer needed for printf rendering.
+///*
+///* If the requested size of the temp buffer is larger than the size
+///* of the output buffer in pAccum, then cause an SQLITE_TOOBIG error.
+///* Do the size check before the memory allocation to prevent rogue
+///* SQL from requesting large allocations using the precision or width
+///* field of the printf() function.
 extern "C" fn printf_temp_buf(p_accum_1: *mut Sqlite3Str, n: Sqlite3Int64)
     -> *mut i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -842,6 +900,7 @@ extern "C" fn printf_temp_buf(p_accum_1: *mut Sqlite3Str, n: Sqlite3Int64)
     return z;
 }
 
+///** End of script *******
 static a_digits: [i8; 33] =
     [48 as i8, 49 as i8, 50 as i8, 51 as i8, 52 as i8, 53 as i8, 54 as i8,
             55 as i8, 56 as i8, 57 as i8, 65 as i8, 66 as i8, 67 as i8,
@@ -915,12 +974,14 @@ pub extern "C" fn sqlite3_str_accum_enlarge_if_needed(p: *mut StrAccum,
     return unsafe { (*p).acc_error } as i32;
 }
 
+/// Return the current length of p in bytes
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_length(p: *const Sqlite3Str) -> i32 {
     return if !(p).is_null() { unsafe { (*p).n_char } } else { 0 as u32 } as
             i32;
 }
 
+///* Append N copies of character c to the given string buffer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_appendchar(p: *mut Sqlite3Str, mut n_1: i32,
     c: i8) -> () {
@@ -952,6 +1013,33 @@ static a_hex: [i8; 17] =
             55 as i8, 56 as i8, 57 as i8, 97 as i8, 98 as i8, 99 as i8,
             100 as i8, 101 as i8, 102 as i8, 0 as i8];
 
+///* CAPI3REF: Status Of A Dynamic String
+///* METHOD: sqlite3_str
+///*
+///* These interfaces return the current status of an [sqlite3_str] object.
+///*
+///* ^If any prior errors have occurred while constructing the dynamic string
+///* in sqlite3_str X, then the [sqlite3_str_errcode(X)] method will return
+///* an appropriate error code.  ^The [sqlite3_str_errcode(X)] method returns
+///* [SQLITE_NOMEM] following any out-of-memory error, or
+///* [SQLITE_TOOBIG] if the size of the dynamic string exceeds
+///* [SQLITE_MAX_LENGTH], or [SQLITE_OK] if there have been no errors.
+///*
+///* ^The [sqlite3_str_length(X)] method returns the current length, in bytes,
+///* of the dynamic string under construction in [sqlite3_str] object X.
+///* ^The length returned by [sqlite3_str_length(X)] does not include the
+///* zero-termination byte.
+///*
+///* ^The [sqlite3_str_value(X)] method returns a pointer to the current
+///* content of the dynamic string under construction in X.  The value
+///* returned by [sqlite3_str_value(X)] is managed by the sqlite3_str object X
+///* and might be freed or altered by any subsequent method on the same
+///* [sqlite3_str] object.  Applications must not use the pointer returned by
+///* [sqlite3_str_value(X)] after any subsequent method call on the same
+///* object.  ^Applications may change the content of the string returned
+///* by [sqlite3_str_value(X)] as long as they do not write into any bytes
+///* outside the range of 0 to [sqlite3_str_length(X)] and do not read or
+///* write any byte after any subsequent sqlite3_str method call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_errcode(p: *const Sqlite3Str) -> i32 {
     return if !(p).is_null() {
@@ -959,6 +1047,7 @@ pub extern "C" fn sqlite3_str_errcode(p: *const Sqlite3Str) -> i32 {
         } else { 7 };
 }
 
+/// Return the current value for p
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_value(p: *const Sqlite3Str) -> *mut i8 {
     if p == core::ptr::null_mut() || unsafe { (*p).n_char } == 0 as u32 {
@@ -970,12 +1059,15 @@ pub extern "C" fn sqlite3_str_value(p: *const Sqlite3Str) -> *mut i8 {
     return unsafe { (*p).z_text };
 }
 
+///* Append the complete text of zero-terminated string z[] to the p string.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_appendall(p: *mut Sqlite3Str, z: *const i8)
     -> () {
     sqlite3_str_append(p, z, unsafe { sqlite3_strlen30(z) });
 }
 
+///* If pExpr has a byte offset for the start of a token, record that as
+///* as the error offset.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_record_error_offset_of_expr(db: &mut Sqlite3,
     mut p_expr_1: *const Expr) -> () {
@@ -993,6 +1085,10 @@ pub extern "C" fn sqlite3_record_error_offset_of_expr(db: &mut Sqlite3,
     }
 }
 
+///* The z string points to the first character of a token that is
+///* associated with an error.  If db does not already have an error
+///* byte offset recorded, try to compute the error byte offset for
+///* z and set the error byte offset in db.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_record_error_byte_offset(db: *mut Sqlite3,
     z: *const i8) -> () {
@@ -1015,6 +1111,40 @@ pub extern "C" fn sqlite3_record_error_byte_offset(db: *mut Sqlite3,
     }
 }
 
+///* CAPI3REF: Add Content To A Dynamic String
+///* METHOD: sqlite3_str
+///*
+///* These interfaces add or remove content to an sqlite3_str object
+///* previously obtained from [sqlite3_str_new()].
+///*
+///* ^The [sqlite3_str_appendf(X,F,...)] and
+///* [sqlite3_str_vappendf(X,F,V)] interfaces uses the [built-in printf]
+///* functionality of SQLite to append formatted text onto the end of
+///* [sqlite3_str] object X.
+///*
+///* ^The [sqlite3_str_append(X,S,N)] method appends exactly N bytes from string S
+///* onto the end of the [sqlite3_str] object X.  N must be non-negative.
+///* S must contain at least N non-zero bytes of content.  To append a
+///* zero-terminated string in its entirety, use the [sqlite3_str_appendall()]
+///* method instead.
+///*
+///* ^The [sqlite3_str_appendall(X,S)] method appends the complete content of
+///* zero-terminated string S onto the end of [sqlite3_str] object X.
+///*
+///* ^The [sqlite3_str_appendchar(X,N,C)] method appends N copies of the
+///* single-byte character C onto the end of [sqlite3_str] object X.
+///* ^This method can be used, for example, to add whitespace indentation.
+///*
+///* ^The [sqlite3_str_reset(X)] method resets the string under construction
+///* inside [sqlite3_str] object X back to zero bytes in length.
+///*
+///* ^The [sqlite3_str_truncate(X,N)] method changes the length of the string
+///* under construction to be N bytes or less.  This routine is a no-op if
+///* N is negative or if the string is already N bytes or smaller in size.
+///*
+///* These methods do not return a result code.  ^If an error occurs, that fact
+///* is recorded in the [sqlite3_str] object and can be recovered by a
+///* subsequent call to [sqlite3_str_errcode(X)].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_str_appendf(p: *mut StrAccum,
     z_format_1: *const i8, mut __va0: ...) -> () {
@@ -1024,75 +1154,175 @@ pub unsafe extern "C" fn sqlite3_str_appendf(p: *mut StrAccum,
     ();
 }
 
+///* Render a string given by "fmt" into the StrAccum object.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_str_vappendf(p_accum_1: *mut Sqlite3Str,
     mut fmt: *const i8, mut ap: *const i8) -> () {
     unsafe {
         let mut c: i32 = 0;
+        /// Next character in the format string
         let mut bufpt: *mut i8 = core::ptr::null_mut();
+        /// Pointer to the conversion buffer
         let mut precision: i64 = 0 as i64;
+        /// Precision of the current field
         let mut length: i64 = 0 as i64;
+        /// Length of the field
         let mut idx: i32 = 0;
+        /// A general purpose loop counter
         let mut width: i64 = 0 as i64;
+        /// Width of the current field
         let mut flag_leftjustify: EtByte = 0 as EtByte;
+        /// True if "-" flag is present
         let mut flag_prefix: EtByte = 0 as EtByte;
+        /// '+' or ' ' or 0 for prefix
         let mut flag_alternateform: EtByte = 0 as EtByte;
+        /// True if "#" flag is present
         let mut flag_altform2: EtByte = 0 as EtByte;
+        /// True if "!" flag is present
         let mut flag_zeropad: EtByte = 0 as EtByte;
+        /// True if field width constant starts with zero
         let mut flag_long: EtByte = 0 as EtByte;
+        /// 1 for the "l" flag, 2 for "ll", 0 by default
         let mut done: EtByte = 0 as EtByte;
+        /// Loop termination flag
         let mut c_thousand: EtByte = 0 as EtByte;
+        /// Thousands separator for %d and %u
         let mut xtype: EtByte = 0 as EtByte;
+        /// Conversion paradigm
         let mut b_arg_list: u8 = 0 as u8;
+        /// True for SQLITE_PRINTF_SQLFUNC
         let mut prefix: i8 = 0 as i8;
+        /// Prefix character.  "+" or "-" or " " or '\0'.
         let mut longvalue: SqliteUint64 = 0 as SqliteUint64;
+        /// Value for integer types
         let mut realvalue: f64 = 0.0;
+        /// Value for real types
         let mut infop: *const EtInfo = core::ptr::null();
+        /// Pointer to the appropriate info structure
         let mut z_out: *mut i8 = core::ptr::null_mut();
+        /// Rendering buffer
         let mut n_out: i32 = 0;
+        /// Size of the rendering buffer
         let mut z_extra: *mut i8 = core::ptr::null_mut();
+        /// Malloced memory used by some conversion
         let mut exp: i32 = 0;
         let mut e2: i32 = 0;
+        /// exponent of real numbers
         let mut flag_dp: EtByte = 0 as EtByte;
+        /// True if decimal point should be shown
         let mut flag_rtz: EtByte = 0 as EtByte;
+        /// True if trailing zeros should be removed
         let mut p_arg_list: *mut PrintfArguments = core::ptr::null_mut();
+        /// Arguments for SQLITE_PRINTF_SQLFUNC
         let mut buf: [i8; 70] = [0; 70];
+        /// Conversion buffer
+        /// pAccum never starts out with an empty buffer that was obtained from 
+        ///* malloc().  This precondition is required by the mprintf("%z...")
+        ///* optimization.
+        /// Find out what flags are present
         let mut wx: u32 = 0 as u32;
         let mut px: u32 = 0 as u32;
+        /// Fetch the info entry for the field
+        /// Fast hash-table lookup
+        ///* At this point, variables are initialized as follows:
+        ///*
+        ///*   flag_alternateform          TRUE if a '#' is present.
+        ///*   flag_altform2               TRUE if a '!' is present.
+        ///*   flag_prefix                 '+' or ' ' or zero
+        ///*   flag_leftjustify            TRUE if a '-' is present or if the
+        ///*                               field width was negative.
+        ///*   flag_zeropad                TRUE if the width began with 0.
+        ///*   flag_long                   1 for "l", 2 for "ll"
+        ///*   width                       The specified field width.  This is
+        ///*                               always non-negative.  Zero is the default.
+        ///*   precision                   The specified precision.  The default
+        ///*                               is -1.
+        ///*   xtype                       The class of the conversion.
+        ///*   infop                       Pointer to the appropriate info struct.
+        /// no break
+        /// no break
         let mut v: i64 = 0 as i64;
         let mut n: u64 = 0 as u64;
         let mut x: i32 = 0;
         let mut cset: *const i8 = core::ptr::null();
         let mut base: u8 = 0 as u8;
+        /// Convert to ascii
+        /// zero pad
         let mut nn: i64 = 0 as i64;
         let mut nn__1: i64 = 0 as i64;
+        /// Number of "," to insert
         let mut ix: i64 = 0 as i64;
         let mut ii: i32 = 0;
+        /// Add sign
+        /// Add "0" or "0x"
         let mut pre: *const i8 = core::ptr::null();
         let mut x__1: i8 = 0 as i8;
         let mut s: FpDecode = unsafe { core::mem::zeroed() };
         let mut i_round: i32 = 0;
         let mut j: i32 = 0;
         let mut sz_buf_needed: i64 = 0 as i64;
+        /// Size needed to hold the output
+        /// Set default precision
+        /// no-op
+        /// Suppress the minus sign if all of the following are true:
+        ///*   *  The value displayed is zero
+        ///*   *  The '#' flag is used
+        ///*   *  The '+' flag is not used, and
+        ///*   *  The format is %f
+        ///* If the field type is etGENERIC, then convert to either etEXP
+        ///* or etFLOAT, as appropriate.
+        /// Unable to allocate space in pAccum, perhaps because it
+        ///* is coming from sqlite3_snprintf() or similar.  We'll have
+        ///* to render into temporary space and the memcpy() it over.
+        /// The sign in front of the number
+        /// Digits prior to the decimal point
+        /// The decimal point
+        /// "0" digits after the decimal point but before the first
+        ///* significant digit of the number
         let mut nn__2: i32 = 0;
+        /// Significant digits after the decimal point
         let mut nn__3: i32 = 0;
+        /// Remove trailing zeros and the "." if no digits follow the "."
+        /// Add the "eNNN" suffix
+        /// 100's digit
+        /// 10's digit
+        /// 1's digit
         let mut n_pad: i64 = 0 as i64;
         let mut adj: i32 = 0;
+        /// The result is being rendered directory into pAccum.  This
+        ///* is the common and fast case
+        /// We were unable to render directly into pAccum because we
+        ///* couldn't allocate sufficient memory.  We need to memcpy()
+        ///* the rendering (or some prefix thereof) into the output
+        ///* buffer.
         let mut ch: u32 = 0 as u32;
         let mut n_prior: i64 = 0 as i64;
         let mut n_copy_bytes: i64 = 0 as i64;
+        /// Special optimization for sqlite3_mprintf("%z..."):
+        ///* Extend an existing memory allocation rather than creating
+        ///* a new one.
+        /// Set length to the number of bytes needed in order to display
+        ///* precision characters
         let mut z: *const u8 = core::ptr::null();
+        /// Adjust width to account for extra bytes in UTF-8 characters
         let mut ii__1: i64 = 0 as i64;
+        /// %j: JSON string literal w/o "..."
+        /// %J: Generate a JSON string literal
         let mut escarg: *mut i8 = core::ptr::null_mut();
         let mut i: i64 = 0 as i64;
         let mut j__1: i64 = 0 as i64;
         let mut px__1: i64 = 0 as i64;
         let mut i_start: i64 = 0 as i64;
         let mut ch__1: u8 = 0 as u8;
+        /// Convert precision from code-points to bytes
         let mut n__1: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut len: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut zz: *mut i8 = core::ptr::null_mut();
         let mut sp: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// %q: Escape ' characters
+        /// %Q: Escape ' and enclose in '...'
+        /// %w: Escape " characters
         let mut i__1: i64 = 0 as i64;
         let mut j__2: i64 = 0 as i64;
         let mut k: i64 = 0 as i64;
@@ -1101,11 +1331,22 @@ pub extern "C" fn sqlite3_str_vappendf(p_accum_1: *mut Sqlite3Str,
         let mut ch__2: i8 = 0 as i8;
         let mut escarg__1: *mut i8 = core::ptr::null_mut();
         let mut q: i8 = 0 as i8;
+        /// For %q, %Q, and %w, the precision is the number of bytes (or
+        ///* characters if the ! flags is present) to use from the input.
+        ///* Because of the extra quoting characters inserted, the number
+        ///* of output characters may be larger than the precision.
+        /// For %#q, do unistr()-style backslash escapes for
+        ///* all control characters, and for backslash itself.
+        ///* For %#Q, do the same but only if there is at least
+        ///* one control character.
         let mut n_back: i64 = 0 as i64;
         let mut n_ctrl: i64 = 0 as i64;
+        /// %#T means an Expr pointer that uses Expr.u.zToken
         let mut p_expr: *mut Expr = core::ptr::null_mut();
+        /// %T means a Token pointer
         let mut p_token: *const Token = core::ptr::null();
         let mut p_item: *const SrcItem = core::ptr::null();
+        /// Because of tag-20240424-1
         let mut p_sel: *const Select = core::ptr::null();
         let mut __state: i32 = 0;
         loop {
@@ -4065,6 +4306,9 @@ pub extern "C" fn sqlite3_str_vappendf(p_accum_1: *mut Sqlite3Str,
     }
 }
 
+///* Finish off a string by making sure it is zero-terminated.
+///* Return a pointer to the resulting string.  Return a NULL
+///* pointer if any kind of error was encountered.
 extern "C" fn str_accum_finish_realloc(p: *mut StrAccum) -> *mut i8 {
     let mut z_text: *mut i8 = core::ptr::null_mut();
     { let _ = 0; };
@@ -4099,6 +4343,8 @@ pub extern "C" fn sqlite3_str_accum_finish(p: *mut StrAccum) -> *mut i8 {
     return unsafe { (*p).z_text };
 }
 
+///* Print into memory obtained from sqlite3_malloc().  Omit the internal
+///* %-conversion extensions.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vmprintf(z_format: *const i8, ap: *mut i8)
     -> *mut i8 {
@@ -4115,6 +4361,44 @@ pub extern "C" fn sqlite3_vmprintf(z_format: *const i8, ap: *mut i8)
     return z;
 }
 
+///* CAPI3REF: Formatted String Printing Functions
+///*
+///* These routines are work-alikes of the "printf()" family of functions
+///* from the standard C library.
+///* These routines understand most of the common formatting options from
+///* the standard library printf()
+///* plus some additional non-standard formats ([%q], [%Q], [%w], and [%z]).
+///* See the [built-in printf()] documentation for details.
+///*
+///* ^The sqlite3_mprintf() and sqlite3_vmprintf() routines write their
+///* results into memory obtained from [sqlite3_malloc64()].
+///* The strings returned by these two routines should be
+///* released by [sqlite3_free()].  ^Both routines return a
+///* NULL pointer if [sqlite3_malloc64()] is unable to allocate enough
+///* memory to hold the resulting string.
+///*
+///* ^(The sqlite3_snprintf() routine is similar to "snprintf()" from
+///* the standard C library.  The result is written into the
+///* buffer supplied as the second parameter whose size is given by
+///* the first parameter. Note that the order of the
+///* first two parameters is reversed from snprintf().)^  This is an
+///* historical accident that cannot be fixed without breaking
+///* backwards compatibility.  ^(Note also that sqlite3_snprintf()
+///* returns a pointer to its buffer instead of the number of
+///* characters actually written into the buffer.)^  We admit that
+///* the number of characters written would be a more useful return
+///* value but we cannot change the implementation of sqlite3_snprintf()
+///* now without breaking compatibility.
+///*
+///* ^As long as the buffer size is greater than zero, sqlite3_snprintf()
+///* guarantees that the buffer is always zero-terminated.  ^The first
+///* parameter "n" is the total size of the buffer, including space for
+///* the zero terminator.  So the longest string that can be completely
+///* written will be n-1 characters.
+///*
+///* ^The sqlite3_vsnprintf() routine is a varargs version of sqlite3_snprintf().
+///*
+///* See also:  [built-in printf()], [printf() SQL function]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_mprintf(z_format: *const i8, mut __va0: ...)
     -> *mut i8 {
@@ -4142,6 +4426,17 @@ pub unsafe extern "C" fn sqlite3_snprintf(n: i32, z_buf: *mut i8,
     return z_buf;
 }
 
+///* sqlite3_snprintf() works like snprintf() except that it ignores the
+///* current locale settings.  This is important for SQLite because we
+///* are not able to use a "," as the decimal point in place of "." as
+///* specified by some locales.
+///*
+///* Oops:  The first two arguments of sqlite3_snprintf() are backwards
+///* from the snprintf() standard.  Unfortunately, it is too late to change
+///* this without breaking compatibility, so we just have to live with the
+///* mistake.
+///*
+///* sqlite3_vsnprintf() is the varargs version.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vsnprintf(n: i32, z_buf: *mut i8,
     z_format: *const i8, ap: *mut i8) -> *mut i8 {
@@ -4154,6 +4449,29 @@ pub extern "C" fn sqlite3_vsnprintf(n: i32, z_buf: *mut i8,
     return z_buf;
 }
 
+///* CAPI3REF: Create A New Dynamic String Object
+///* CONSTRUCTOR: sqlite3_str
+///*
+///* ^The [sqlite3_str_new(D)] interface allocates and initializes
+///* a new [sqlite3_str] object.  To avoid memory leaks, the object returned by
+///* [sqlite3_str_new()] must be freed by a subsequent call to
+///* [sqlite3_str_finish(X)].
+///*
+///* ^The [sqlite3_str_new(D)] interface always returns a pointer to a
+///* valid [sqlite3_str] object, though in the event of an out-of-memory
+///* error the returned object might be a special singleton that will
+///* silently reject new text, always return SQLITE_NOMEM from
+///* [sqlite3_str_errcode()], always return 0 for
+///* [sqlite3_str_length()], and always return NULL from
+///* [sqlite3_str_finish(X)].  It is always safe to use the value
+///* returned by [sqlite3_str_new(D)] as the sqlite3_str parameter
+///* to any of the other [sqlite3_str] methods.
+///*
+///* The D parameter to [sqlite3_str_new(D)] may be NULL.  If the
+///* D parameter in [sqlite3_str_new(D)] is not NULL, then the maximum
+///* length of the string contained in the [sqlite3_str] object will be
+///* the value set for [sqlite3_limit](D,[SQLITE_LIMIT_LENGTH]) instead
+///* of [SQLITE_MAX_LENGTH].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_new(db: *const Sqlite3) -> *mut Sqlite3Str {
     unsafe {
@@ -4173,6 +4491,21 @@ pub extern "C" fn sqlite3_str_new(db: *const Sqlite3) -> *mut Sqlite3Str {
     }
 }
 
+///* CAPI3REF: Finalize A Dynamic String
+///* DESTRUCTOR: sqlite3_str
+///*
+///* ^The [sqlite3_str_finish(X)] interface destroys the sqlite3_str object X
+///* and returns a pointer to a memory buffer obtained from [sqlite3_malloc64()]
+///* that contains the constructed string.  The calling application should
+///* pass the returned value to [sqlite3_free()] to avoid a memory leak.
+///* ^The [sqlite3_str_finish(X)] interface may return a NULL pointer if any
+///* errors were encountered during construction of the string.  ^The
+///* [sqlite3_str_finish(X)] interface might also return a NULL pointer if the
+///* string in [sqlite3_str] object X is zero bytes long.
+///*
+///* ^The [sqlite3_str_free(X)] interface destroys both the sqlite3_str object
+///* X and the string content it contains.  Calling sqlite3_str_free(X) is
+///* the equivalent of calling [sqlite3_free](sqlite3_str_finish(X)).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_finish(p: *mut Sqlite3Str) -> *mut i8 {
     unsafe {
@@ -4186,6 +4519,8 @@ pub extern "C" fn sqlite3_str_finish(p: *mut Sqlite3Str) -> *mut i8 {
     }
 }
 
+///* Destroy a dynamically allocate sqlite3_str object and all
+///* of its content, all in one call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_free(p: *mut Sqlite3Str) -> () {
     unsafe {
@@ -4197,6 +4532,7 @@ pub extern "C" fn sqlite3_str_free(p: *mut Sqlite3Str) -> () {
     }
 }
 
+/// Truncate the text of the string to be no more than N bytes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_str_truncate(p: *mut Sqlite3Str, n_1: i32) -> () {
     if p != core::ptr::null_mut() && n_1 >= 0 &&
@@ -4209,11 +4545,27 @@ pub extern "C" fn sqlite3_str_truncate(p: *mut Sqlite3Str, n_1: i32) -> () {
     }
 }
 
+///* This is the routine that actually formats the sqlite3_log() message.
+///* We house it in a separate routine from sqlite3_log() to avoid using
+///* stack space on small-stack systems when logging is disabled.
+///*
+///* sqlite3_log() must render into a static buffer.  It cannot dynamically
+///* allocate memory because it might be called while the memory allocator
+///* mutex is held.
+///*
+///* sqlite3_str_vappendf() might ask for *temporary* memory allocations for
+///* certain format characters (%q) or for very large precisions or widths.
+///* Care must be taken that any sqlite3_log() calls that occur while the
+///* memory mutex is held do not use these mechanisms.
+#[allow(unused_doc_comments)]
 extern "C" fn render_log_msg(i_err_code_1: i32, z_format_1: *const i8,
     ap: *mut i8) -> () {
     unsafe {
         let mut acc: StrAccum = unsafe { core::mem::zeroed() };
+        /// String accumulator
         let mut z_msg: [i8; 700] = [0; 700];
+
+        /// Complete log message
         sqlite3_str_accum_init(&mut acc, core::ptr::null_mut(),
             &raw mut z_msg[0 as usize] as *mut i8,
             core::mem::size_of::<[i8; 700]>() as i32, 0);
@@ -4226,6 +4578,25 @@ extern "C" fn render_log_msg(i_err_code_1: i32, z_format_1: *const i8,
     }
 }
 
+///* CAPI3REF: Error Logging Interface
+///*
+///* ^The [sqlite3_log()] interface writes a message into the [error log]
+///* established by the [SQLITE_CONFIG_LOG] option to [sqlite3_config()].
+///* ^If logging is enabled, the zFormat string and subsequent arguments are
+///* used with [sqlite3_snprintf()] to generate the final output string.
+///*
+///* The sqlite3_log() interface is intended for use by extensions such as
+///* virtual tables, collating functions, and SQL functions.  While there is
+///* nothing to prevent an application from calling sqlite3_log(), doing so
+///* is considered bad form.
+///*
+///* The zFormat string must not be NULL.
+///*
+///* To avoid deadlocks and other threading problems, the sqlite3_log() routine
+///* will not use dynamically allocated memory.  The log message is stored in
+///* a fixed-length buffer on the stack.  If the log message is longer than
+///* a few hundred characters, it will be truncated to the length of the
+///* buffer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_log(i_err_code: i32, z_format: *const i8,
     mut __va0: ...) -> () {
@@ -4239,6 +4610,8 @@ pub unsafe extern "C" fn sqlite3_log(i_err_code: i32, z_format: *const i8,
     }
 }
 
+///* Print into memory obtained from sqliteMalloc().  Use the internal
+///* %-conversion extensions.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vm_printf(db: *mut Sqlite3, z_format_1: *const i8,
     ap: *mut i8) -> *mut i8 {
@@ -4258,6 +4631,8 @@ pub extern "C" fn sqlite3_vm_printf(db: *mut Sqlite3, z_format_1: *const i8,
     return z;
 }
 
+///* Print into memory obtained from sqliteMalloc().  Use the internal
+///* %-conversion extensions.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_m_printf(db: *mut Sqlite3,
     z_format_1: *const i8, mut __va0: ...) -> *mut i8 {
@@ -4269,6 +4644,9 @@ pub unsafe extern "C" fn sqlite3_m_printf(db: *mut Sqlite3,
     return z;
 }
 
+///* Increase the reference count of the string by one.
+///*
+///* The input parameter is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_ref(z: *mut i8) -> *mut i8 {
     let mut p: *mut RCStr = z as *mut RCStr;
@@ -4288,6 +4666,8 @@ pub extern "C" fn sqlite3_rc_str_ref(z: *mut i8) -> *mut i8 {
     return z;
 }
 
+///* Decrease the reference count by one.  Free the string when the
+///* reference count reaches zero.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_unref(z: *mut ()) -> () {
     let mut p: *mut RCStr = z as *mut RCStr;
@@ -4309,6 +4689,13 @@ pub extern "C" fn sqlite3_rc_str_unref(z: *mut ()) -> () {
     } else { unsafe { sqlite3_free(p as *mut ()) }; }
 }
 
+///* Create a new string that is capable of holding N bytes of text, not counting
+///* the zero byte at the end.  The string is uninitialized.
+///*
+///* The reference count is initially 1.  Call sqlite3RCStrUnref() to free the
+///* newly allocated string.
+///*
+///* This routine returns 0 on an OOM.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_new(n: u64) -> *mut i8 {
     let p: *mut RCStr =
@@ -4321,6 +4708,8 @@ pub extern "C" fn sqlite3_rc_str_new(n: u64) -> *mut i8 {
     return unsafe { &raw mut *p.offset(1 as isize) } as *mut i8;
 }
 
+///* Change the size of the string so that it is able to hold N bytes.
+///* The string might be reallocated, so return the new allocation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rc_str_resize(z: *mut i8, n: u64) -> *mut i8 {
     let mut p: *mut RCStr = z as *mut RCStr;

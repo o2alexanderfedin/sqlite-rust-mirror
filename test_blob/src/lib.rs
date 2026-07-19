@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -399,6 +414,9 @@ impl Parse {
     }
 }
 
+///* Return a pointer to a buffer containing a text representation of the
+///* pointer passed as the only argument. The original pointer may be extracted
+///* from the text using sqlite3TestTextToPtr().
 extern "C" fn ptr_to_text(p: *mut ()) -> *mut i8 {
     unsafe {
         unsafe {
@@ -410,6 +428,16 @@ extern "C" fn ptr_to_text(p: *mut ()) -> *mut i8 {
     }
 }
 
+///* Attempt to extract a blob handle (type sqlite3_blob*) from the Tcl
+///* object passed as the second argument. If successful, set *ppBlob to
+///* point to the blob handle and return TCL_OK. Otherwise, store an error
+///* message in the tcl interpreter and return TCL_ERROR. The final value
+///* of *ppBlob is undefined in this case.
+///*
+///* If the object contains a string that begins with "incrblob_", then it
+///* is assumed to be the name of a Tcl channel opened using the [db incrblob] 
+///* command (see tclsqlite.c). Otherwise, it is assumed to be a pointer 
+///* encoded using the ptrToText() routine or similar.
 extern "C" fn blob_handle_from_obj(interp: *mut TclInterp,
     p_obj_1: *mut TclObj, pp_blob_1: &mut *mut Sqlite3Blob) -> i32 {
     let mut z: *const i8 = core::ptr::null();
@@ -441,6 +469,8 @@ extern "C" fn blob_handle_from_obj(interp: *mut TclInterp,
     return 0;
 }
 
+///* Like Tcl_GetString(), except that if the string is 0 bytes in size, a
+///* NULL Pointer is returned.
 extern "C" fn blob_string_from_obj(p_obj_1: *mut TclObj) -> *mut i8 {
     let mut n: i32 = 0;
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -448,6 +478,10 @@ extern "C" fn blob_string_from_obj(p_obj_1: *mut TclObj) -> *mut i8 {
     return if n != 0 { z } else { core::ptr::null_mut() };
 }
 
+///* sqlite3_blob_open DB DATABASE TABLE COLUMN ROWID FLAGS VARNAME
+///*
+///* Tcl test harness for the sqlite3_blob_open() function.
+#[allow(unused_doc_comments)]
 extern "C" fn test_blob_open(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -459,6 +493,7 @@ extern "C" fn test_blob_open(client_data_1: ClientData,
     let mut z_varname: *const i8 = core::ptr::null();
     let mut n_varname: i32 = 0;
     let mut p_blob: *mut Sqlite3Blob = &raw mut flags as *mut Sqlite3Blob;
+    /// Non-zero initialization
     let mut rc: i32 = 0;
     if objc != 8 {
         let z_usage: *const i8 =
@@ -533,6 +568,7 @@ extern "C" fn test_blob_open(client_data_1: ClientData,
     return 0;
 }
 
+///* sqlite3_blob_close  HANDLE
 extern "C" fn test_blob_close(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_blob: *mut Sqlite3Blob = core::ptr::null_mut();
@@ -561,6 +597,7 @@ extern "C" fn test_blob_close(client_data_1: ClientData,
     return 0;
 }
 
+///* sqlite3_blob_bytes  HANDLE
 extern "C" fn test_blob_bytes(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_blob: *mut Sqlite3Blob = core::ptr::null_mut();
@@ -581,6 +618,19 @@ extern "C" fn test_blob_bytes(client_data_1: ClientData,
     return 0;
 }
 
+///* sqlite3_blob_read  CHANNEL OFFSET N
+///*
+///*   This command is used to test the sqlite3_blob_read() in ways that
+///*   the Tcl channel interface does not. The first argument should
+///*   be the name of a valid channel created by the [incrblob] method
+///*   of a database handle. This function calls sqlite3_blob_read()
+///*   to read N bytes from offset OFFSET from the underlying SQLite
+///*   blob handle.
+///*
+///*   On success, a byte-array object containing the read data is 
+///*   returned. On failure, the interpreter result is set to the
+///*   text representation of the returned error code (i.e. "SQLITE_NOMEM")
+///*   and a Tcl exception is thrown.
 extern "C" fn test_blob_read(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_blob: *mut Sqlite3Blob = core::ptr::null_mut();
@@ -644,6 +694,18 @@ extern "C" fn test_blob_read(client_data_1: ClientData,
     return if rc == 0 { 0 } else { 1 };
 }
 
+///* sqlite3_blob_write HANDLE OFFSET DATA ?NDATA?
+///*
+///*   This command is used to test the sqlite3_blob_write() in ways that
+///*   the Tcl channel interface does not. The first argument should
+///*   be the name of a valid channel created by the [incrblob] method
+///*   of a database handle. This function calls sqlite3_blob_write()
+///*   to write the DATA byte-array to the underlying SQLite blob handle.
+///*   at offset OFFSET.
+///*
+///*   On success, an empty string is returned. On failure, the interpreter
+///*   result is set to the text representation of the returned error code 
+///*   (i.e. "SQLITE_NOMEM") and a Tcl exception is thrown.
 extern "C" fn test_blob_write(client_data_1: ClientData,
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut p_blob: *mut Sqlite3Blob = core::ptr::null_mut();

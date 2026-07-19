@@ -1,10 +1,52 @@
+//!* 2016-08-09
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This file demonstrates how to create an SQL function that is a pass-through
+//!* for integer values (it returns a copy of its argument) but also saves the
+//!* value that is passed through into a C-language variable.  The address of
+//!* the C-language variable is supplied as the second argument.
+//!*
+//!* This allows, for example, a counter to incremented and the original
+//!* value retrieved, atomically, using a single statement:
+//!*
+//!*    UPDATE counterTab SET cnt=remember(cnt,$PTR)+1 WHERE id=$ID
+//!*
+//!* Prepare the above statement once.  Then to use it, bind the address
+//!* of the output variable to $PTR using sqlite3_bind_pointer() with a
+//!* pointer type of "carray" and bind the id of the counter to $ID and
+//!* run the prepared statement.
+//!*
+//!* This implementation of the remember() function uses a "carray"
+//!* pointer so that it can share pointers with the carray() extension.
+//!*
+//!* One can imagine doing similar things with floating-point values and
+//!* strings, but this demonstration extension will stick to using just
+//!* integers.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+///*      remember(V,PTR)
+///*
+///* Return the integer value V.  Also save the value of V in a
+///* C-language variable whose address is PTR.
 extern "C" fn remember_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut v: Sqlite3Int64 = 0 as Sqlite3Int64;

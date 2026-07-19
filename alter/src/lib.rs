@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDefU0, FuncDestructor, IdList, IdListItem,
+    Index, KeyInfo, LogEst, Module, NameContext, OnOrUsing, Parse, RowSet,
+    SColMap, SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -394,6 +409,21 @@ impl Parse {
     }
 }
 
+///* Each RenameToken object maps an element of the parse tree into
+///* the token that generated that element.  The parse tree element
+///* might be one of:
+///*
+///*     *  A pointer to an Expr that represents an ID
+///*     *  The name of a table column in Column.zName
+///*
+///* A list of RenameToken objects can be constructed during parsing.
+///* Each new object is created by sqlite3RenameTokenMap().
+///* As the parse tree is transformed, the sqlite3RenameTokenRemap()
+///* routine is used to keep the mapping current.
+///*
+///* After the parse finishes, renameTokenFind() routine can be used
+///* to look up the actual token value that created some element in
+///* the parse tree.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct RenameToken {
@@ -412,6 +442,8 @@ struct RenameCtx {
     z_old: *const i8,
 }
 
+///* Parse the SQL statement zSql using Parse object (*p). The Parse object
+///* is initialized by this function before it is used.
 extern "C" fn rename_parse_sql(p: *mut Parse, z_db_1: *const i8,
     db: *mut Sqlite3, z_sql_1: *const i8, b_temp_1: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -449,6 +481,13 @@ extern "C" fn rename_parse_sql(p: *mut Parse, z_db_1: *const i8,
     return rc;
 }
 
+///* Search the Parse object passed as the first argument for a RenameToken
+///* object associated with parse tree element pPtr. If found, return a pointer
+///* to it. Otherwise, return NULL.
+///*
+///* If the second argument passed to this function is not NULL and a matching
+///* RenameToken object is found, remove it from the Parse object and add it to
+///* the list maintained by the RenameCtx object.
 extern "C" fn rename_token_find(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_ptr_1: *const ()) -> *mut RenameToken {
     unsafe {
@@ -483,6 +522,13 @@ extern "C" fn rename_token_find(p_parse_1: *mut Parse,
     }
 }
 
+///* This is a Walker expression callback.
+///*
+///* For every TK_COLUMN node in the expression tree, search to see
+///* if the column being references is the column being renamed by an
+///* ALTER TABLE statement.  If it is, then attach its associated
+///* RenameToken object to the list of RenameToken objects being
+///* constructed in RenameCtx object at pWalker->u.pRename.
 extern "C" fn rename_column_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -507,6 +553,9 @@ extern "C" fn rename_column_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* It is assumed that there is already a RenameToken object associated
+///* with parse tree element pFrom. This function remaps the associated token
+///* to parse tree element pTo.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_token_remap(p_parse: &Parse, p_to: *const (),
     p_from: *const ()) -> () {
@@ -529,6 +578,7 @@ pub extern "C" fn sqlite3_rename_token_remap(p_parse: &Parse, p_to: *const (),
     }
 }
 
+///* Walker callback used by sqlite3RenameExprUnmap().
 extern "C" fn rename_unmap_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -545,6 +595,8 @@ extern "C" fn rename_unmap_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Remove all nodes that are part of expression-list pEList from the
+///* rename list.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_exprlist_unmap(p_parse: *mut Parse,
     p_e_list: *mut ExprList) -> () {
@@ -582,6 +634,9 @@ pub extern "C" fn sqlite3_rename_exprlist_unmap(p_parse: *mut Parse,
     }
 }
 
+///* Iterate through the Select objects that are part of WITH clauses attached
+///* to select statement pSelect.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_walk_with(p_walker_1: *mut Walker, p_select_1: &Select)
     -> () {
     unsafe {
@@ -597,10 +652,16 @@ extern "C" fn rename_walk_with(p_walker_1: *mut Walker, p_select_1: &Select)
                                                             *mut Cte).offset(0 as isize)).p_select
                                         }).sel_flags
                         } & 64 as u32 == 0 as u32 {
-                p_copy =
+
+                /// Push a copy of the With object onto the with-stack. We use a copy
+                ///* here as the original will be expanded and resolved (flags SF_Expanded
+                ///* and SF_Resolved) below. And the parser code that uses the with-stack
+                ///* fails if the Select objects on it have already been expanded and
+                ///* resolved.
+                (p_copy =
                     unsafe {
                         sqlite3_with_dup(unsafe { (*p_parse).db }, p_with)
-                    };
+                    });
                 p_copy =
                     unsafe { sqlite3_with_push(p_parse, p_copy, 1 as u8) };
             }
@@ -645,6 +706,9 @@ extern "C" fn rename_walk_with(p_walker_1: *mut Walker, p_select_1: &Select)
     }
 }
 
+///* This is a Walker select callback. It does nothing. It is only required
+///* because without a dummy callback, sqlite3WalkExpr() and similar do not
+///* descend into sub-select statements.
 extern "C" fn rename_column_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     -> i32 {
     if unsafe { (*p).sel_flags } & (2097152 | 67108864) as u32 != 0 {
@@ -654,6 +718,11 @@ extern "C" fn rename_column_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     return 0;
 }
 
+///* An error occurred while parsing or otherwise processing a database
+///* object (either pParse->pNewTable, pNewIndex or pNewTrigger) as part of an
+///* ALTER TABLE RENAME COLUMN program. The error message emitted by the
+///* sub-routine is currently stored in pParse->zErrMsg. This function
+///* adds context to the error message and then stores it in pCtx.
 extern "C" fn rename_column_parse_error(p_ctx_1: *mut Sqlite3Context,
     z_when_1: *const i8, p_type_1: *mut Sqlite3Value,
     p_object_1: *mut Sqlite3Value, p_parse_1: &Parse) -> () {
@@ -675,6 +744,7 @@ extern "C" fn rename_column_parse_error(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_db_free((*p_parse_1).db, z_err as *mut ()) };
 }
 
+///* Set all pEList->a[].fg.eEName fields in the expression-list to val.
 extern "C" fn rename_set_e_names(p_e_list_1: *mut ExprList, val: i32) -> () {
     { let _ = 0; };
     if !(p_e_list_1).is_null() {
@@ -698,6 +768,11 @@ extern "C" fn rename_set_e_names(p_e_list_1: *mut ExprList, val: i32) -> () {
     }
 }
 
+///* Resolve all symbols in the trigger at pParse->pNewTrigger, assuming
+///* it was read from the schema of database zDb. Return SQLITE_OK if
+///* successful. Otherwise, return an SQLite error code and leave an error
+///* message in the Parse object.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_resolve_trigger(p_parse_1: *mut Parse) -> i32 {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
@@ -776,6 +851,15 @@ extern "C" fn rename_resolve_trigger(p_parse_1: *mut Parse) -> i32 {
                                 p_src = core::ptr::null_mut();
                                 rc = 7;
                             } else {
+
+                                /// pStep->pExprList contains an expression-list used for an UPDATE
+                                ///* statement. So the a[].zEName values are the RHS of the
+                                ///* "<col> = <expr>" clauses of the UPDATE statement. So, before
+                                ///* running SelectPrep(), change all the eEName values in
+                                ///* pStep->pExprList to ENAME_SPAN (from their current value of
+                                ///* ENAME_NAME). This is to prevent any ids in ON() clauses that are
+                                ///* part of pSrc from being incorrectly resolved against the
+                                ///* a[].zEName values as if they were column aliases.
                                 rename_set_e_names(unsafe { (*p_step).p_expr_list }, 1);
                                 unsafe {
                                     sqlite3_select_prep(p_parse_1, p_sel, core::ptr::null_mut())
@@ -884,6 +968,10 @@ extern "C" fn rename_resolve_trigger(p_parse_1: *mut Parse) -> i32 {
     }
 }
 
+///* For each name in the the expression-list pEList (i.e. each
+///* pEList->a[i].zName) that matches the string in zOld, extract the
+///* corresponding rename-token from Parse object pParse and add it
+///* to the RenameCtx pCtx.
 extern "C" fn rename_column_elist_names(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_e_list_1: *const ExprList, z_old_1: *const i8)
     -> () {
@@ -914,6 +1002,9 @@ extern "C" fn rename_column_elist_names(p_parse_1: *mut Parse,
     }
 }
 
+///* For each name in the the id-list pIdList (i.e. each pIdList->a[i].zName)
+///* that matches the string in zOld, extract the corresponding rename-token
+///* from Parse object pParse and add it to the RenameCtx pCtx.
 extern "C" fn rename_column_idlist_names(p_parse_1: *mut Parse,
     p_ctx_1: *mut RenameCtx, p_id_list_1: *const IdList, z_old_1: *const i8)
     -> () {
@@ -940,10 +1031,15 @@ extern "C" fn rename_column_idlist_names(p_parse_1: *mut Parse,
     }
 }
 
+///* Invoke sqlite3WalkExpr() or sqlite3WalkSelect() on all Select or Expr
+///* objects that are part of the trigger passed as the second argument.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_walk_trigger(p_walker_1: *mut Walker,
     p_trigger_1: &Trigger) -> () {
     unsafe {
         let mut p_step: *const TriggerStep = core::ptr::null();
+
+        /// Find tokens to edit in WHEN clause
         unsafe { sqlite3_walk_expr(p_walker_1, (*p_trigger_1).p_when) };
         {
             p_step = (*p_trigger_1).step_list;
@@ -1019,6 +1115,13 @@ extern "C" fn rename_walk_trigger(p_walker_1: *mut Walker,
     }
 }
 
+///* The RenameCtx contains a list of tokens that reference a column that
+///* is being renamed by an ALTER TABLE statement.  Return the "last"
+///* RenameToken in the RenameCtx and remove that RenameToken from the
+///* RenameContext.  "Last" means the last RenameToken encountered when
+///* the input SQL is parsed from left to right.  Repeated calls to this routine
+///* return all column name tokens in the order that they are encountered
+///* in the SQL statement.
 extern "C" fn rename_column_token_next(p_ctx_1: &mut RenameCtx)
     -> *mut RenameToken {
     unsafe {
@@ -1051,6 +1154,14 @@ extern "C" fn rename_column_token_next(p_ctx_1: &mut RenameCtx)
     }
 }
 
+///* This function edits SQL statement zSql, replacing each token identified
+///* by the linked list pRename with the text of zNew. If argument bQuote is
+///* true, then zNew is always quoted first. If no error occurs, the result
+///* is loaded into context object pCtx as the result.
+///*
+///* Or, if an error occurs (i.e. an OOM condition), an error is left in
+///* pCtx and an SQLite error code returned.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
     p_rename_1: *mut RenameCtx, z_sql_1: *const i8, z_new_1: *const i8,
     b_quote_1: i32) -> i32 {
@@ -1065,11 +1176,17 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
         let mut z_buf1: *mut i8 = core::ptr::null_mut();
         let mut z_buf2: *mut i8 = core::ptr::null_mut();
         if !(z_new_1).is_null() {
-            z_quot =
+
+            /// Set zQuot to point to a buffer containing a quoted copy of the
+            ///* identifier zNew. If the corresponding identifier in the original
+            ///* ALTER TABLE statement was quoted (bQuote==1), then set zNew to
+            ///* point to zQuot so that all substitutions are made using the
+            ///* quoted version of the new column name.
+            (z_quot =
                 unsafe {
                     sqlite3_m_printf(db,
                         c"\"%w\" ".as_ptr() as *mut i8 as *const i8, z_new_1)
-                };
+                });
             if z_quot == core::ptr::null_mut() {
                 return 7;
             } else {
@@ -1111,6 +1228,7 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
             };
             while !(unsafe { (*p_rename_1).p_list }).is_null() {
                 let mut i_off: i32 = 0;
+                /// Offset of token to replace in zOut
                 let mut n_replace: i64 = 0 as i64;
                 let mut z_replace: *const i8 = core::ptr::null();
                 let p_best: *mut RenameToken =
@@ -1141,6 +1259,13 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
                         }
                     }
                 } else {
+
+                    /// Dequote the double-quoted token. Then requote it again, this time
+                    ///* using single quotes. If the character immediately following the
+                    ///* original token within the input SQL was a single quote ('), then
+                    ///* add another space after the new, single-quoted version of the
+                    ///* token. This is so that (SELECT "string"'alias') maps to
+                    ///* (SELECT 'string' 'alias'), and not (SELECT 'string''alias').
                     unsafe {
                         memcpy(z_buf1 as *mut (),
                             unsafe { (*p_best).t.z } as *const (),
@@ -1151,6 +1276,8 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
                     };
                     unsafe { sqlite3_dequote(z_buf1) };
                     { let _ = 0; };
+
+                    /// otherwise malloc would have failed
                     unsafe {
                         sqlite3_snprintf((n_sql * 2 as i64) as i32, z_buf2,
                             c"%Q%s".as_ptr() as *mut i8 as *const i8, z_buf1,
@@ -1206,6 +1333,7 @@ extern "C" fn rename_edit_sql(p_ctx_1: *mut Sqlite3Context,
     }
 }
 
+///* Free the list of RenameToken objects given in the second argument
 extern "C" fn rename_token_free(db: *mut Sqlite3, p_token_1: *mut RenameToken)
     -> () {
     let mut p_next: *mut RenameToken = core::ptr::null_mut();
@@ -1224,6 +1352,8 @@ extern "C" fn rename_token_free(db: *mut Sqlite3, p_token_1: *mut RenameToken)
     }
 }
 
+///* Free the contents of Parse object (*pParse). Do not free the memory
+///* occupied by the Parse object itself.
 extern "C" fn rename_parse_cleanup(p_parse_1: *mut Parse) -> () {
     unsafe {
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
@@ -1250,6 +1380,29 @@ extern "C" fn rename_parse_cleanup(p_parse_1: *mut Parse) -> () {
     }
 }
 
+///* SQL function:
+///*
+///*     sqlite_rename_column(SQL,TYPE,OBJ,DB,TABLE,COL,NEWNAME,QUOTE,TEMP)
+///*
+///*   0. zSql:     SQL statement to rewrite
+///*   1. type:     Type of object ("table", "view" etc.)
+///*   2. object:   Name of object
+///*   3. Database: Database name (e.g. "main")
+///*   4. Table:    Table name
+///*   5. iCol:     Index of column to rename
+///*   6. zNew:     New column name
+///*   7. bQuote:   Non-zero if the new column name should be quoted.
+///*   8. bTemp:    True if zSql comes from temp schema
+///*
+///* Do a column rename operation on the CREATE statement given in zSql.
+///* The iCol-th column (left-most is 0) of table zTable is renamed from zCol
+///* into zNew.  The name should be quoted if bQuote is true.
+///*
+///* This function is used internally by the ALTER TABLE RENAME COLUMN command.
+///* It is only accessible to SQL created using sqlite3NestedParse().  It is
+///* not reachable from ordinary SQL passed into sqlite3_prepare() unless the
+///* SQLITE_TESTCTRL_INTERNAL_FUNCTIONS test setting is enabled.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_column_func(context: *mut Sqlite3Context,
     not_used_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1277,10 +1430,13 @@ extern "C" fn rename_column_func(context: *mut Sqlite3Context,
                         unsafe extern "C" fn(*mut (), i32, *const i8, *const i8,
                             *const i8, *const i8) -> i32>(0 as *const ())
             };
+        /// Find tokens that need to be replaced.
         let mut p_select: *mut Select = core::ptr::null_mut();
+        /// A regular table
         let mut b_fk_only: i32 = 0;
         let mut p_f_key: *mut FKey = core::ptr::null_mut();
         let mut p_expr: *mut Expr = core::ptr::null_mut();
+        /// A trigger
         let mut p_step: *const TriggerStep = core::ptr::null();
         let mut p_target: *mut Table = core::ptr::null_mut();
         let mut p_upsert_set: *const ExprList = core::ptr::null();
@@ -1834,6 +1990,7 @@ extern "C" fn rename_column_func(context: *mut Sqlite3Context,
     }
 }
 
+///* Walker expression callback used by "RENAME TABLE".
 extern "C" fn rename_table_expr_cb(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
@@ -1850,6 +2007,7 @@ extern "C" fn rename_table_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* Walker select callback used by "RENAME TABLE".
 extern "C" fn rename_table_select_cb(p_walker_1: *mut Walker,
     p_select_1: *mut Select) -> i32 {
     unsafe {
@@ -1885,6 +2043,23 @@ extern "C" fn rename_table_select_cb(p_walker_1: *mut Walker,
     }
 }
 
+///* This C function implements an SQL user function that is used by SQL code
+///* generated by the ALTER TABLE ... RENAME command to modify the definition
+///* of any foreign key constraints that use the table being renamed as the
+///* parent table. It is passed three arguments:
+///*
+///*   0: The database containing the table being renamed.
+///*   1. type:     Type of object ("table", "view" etc.)
+///*   2. object:   Name of object
+///*   3: The complete text of the schema statement being modified,
+///*   4: The old name of the table being renamed, and
+///*   5: The new name of the table being renamed.
+///*   6: True if the schema statement comes from the temp db.
+///*
+///* It returns the new schema statement. For example:
+///*
+///* sqlite_rename_table('main', 'CREATE TABLE t1(a REFERENCES t2)','t2','t3',0)
+///*       -> 'CREATE TABLE t1(a REFERENCES t3)'
 extern "C" fn rename_table_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2101,6 +2276,30 @@ extern "C" fn rename_table_func(context: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+/// Function:  sqlite_rename_test(DB,SQL,TYPE,NAME,ISTEMP,WHEN,DQS)
+///*
+///* An SQL user function that checks that there are no parse or symbol
+///* resolution problems in a CREATE TRIGGER|TABLE|VIEW|INDEX statement.
+///* After an ALTER TABLE .. RENAME operation is performed and the schema
+///* reloaded, this function is called on each SQL statement in the schema
+///* to ensure that it is still usable.
+///*
+///*   0: Database name ("main", "temp" etc.).
+///*   1: SQL statement.
+///*   2: Object type ("view", "table", "trigger" or "index").
+///*   3: Object name.
+///*   4: True if object is from temp schema.
+///*   5: "when" part of error message.
+///*   6: True to disable the DQS quirk when parsing SQL.
+///*
+///* The return value is computed as follows:
+///*
+///*   A. If an error is seen and not in PRAGMA writable_schema=ON mode,
+///*      then raise the error.
+///*   B. Else if a trigger is created and the the table that the trigger is
+///*      attached to is in database zDb, then return 1.
+///*   C. Otherwise return NULL.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_table_test(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2167,12 +2366,18 @@ extern "C" fn rename_table_test(context: *mut Sqlite3Context, not_used_1: i32,
                                     unsafe { (*s_parse.p_new_trigger).p_tab_schema })
                             };
                         let i2: i32 = unsafe { sqlite3_find_db_name(db, z_db) };
-                        if i1 == i2 { unsafe { sqlite3_result_int(context, 1) }; }
+                        if i1 == i2 {
+
+                            /// Handle output case B
+                            unsafe { sqlite3_result_int(context, 1) };
+                        }
                     }
                 }
             }
             if rc != 0 && !(z_when).is_null() &&
                     (unsafe { sqlite3_writable_schema(db) } == 0) as i32 != 0 {
+
+                /// Output case A
                 rename_column_parse_error(context, z_when,
                     unsafe { *argv.offset(2 as isize) },
                     unsafe { *argv.offset(3 as isize) }, &s_parse);
@@ -2183,6 +2388,26 @@ extern "C" fn rename_table_test(context: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+///* Return the number of bytes until the end of the next non-whitespace and
+///* non-comment token.  For the purpose of this function, a "(" token includes
+///* all of the bytes through and including the matching ")", or until the
+///* first illegal token, whichever comes first.
+///*
+///* Write the token type into *piToken.
+///*
+///* The value returned is the number of bytes in the token itself plus
+///* the number of bytes of leading whitespace and comments skipped plus
+///* all bytes through the next matching ")" if the token is TK_LP.
+///*
+///* Example:    (Note: '.' used in place of '*' in the example z[] text)
+///*
+///*                                    ,--------- *piToken := TK_RP
+///*                                    v
+///*    z[] = " /.comment./ --comment\n (two three four) five"
+///*          |                                        |
+///*          |<-------------------------------------->|
+///*                              |
+///*                              `--- return value
 extern "C" fn get_constraint_token(z: *const u8, pi_token_1: &mut i32)
     -> i32 {
     let mut i_off: i32 = 0;
@@ -2219,6 +2444,17 @@ extern "C" fn get_constraint_token(z: *const u8, pi_token_1: &mut i32)
     return i_off;
 }
 
+///* The implementation of internal UDF sqlite_drop_column().
+///*
+///* Arguments:
+///*
+///*  argv[0]: An integer - the index of the schema containing the table
+///*  argv[1]: CREATE TABLE statement to modify.
+///*  argv[2]: An integer - the index of the column to remove.
+///*
+///* The value returned is a string containing the CREATE TABLE statement
+///* with column argv[2] removed.
+#[allow(unused_doc_comments)]
 extern "C" fn drop_column_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2241,6 +2477,7 @@ extern "C" fn drop_column_func(context: *mut Sqlite3Context, not_used_1: i32,
                         unsafe extern "C" fn(*mut (), i32, *const i8, *const i8,
                             *const i8, *const i8) -> i32>(0 as *const ())
             };
+        /// This can happen if the sqlite_schema table is corrupt
         let mut p_end: *const RenameToken = core::ptr::null();
         let mut e_tok: i32 = 0;
         let mut __state: i32 = 0;
@@ -2451,6 +2688,33 @@ extern "C" fn rename_quotefix_expr_cb(p_walker_1: *mut Walker,
     }
 }
 
+/// SQL function: sqlite_rename_quotefix(DB,SQL)
+///*
+///* Rewrite the DDL statement "SQL" so that any string literals that use
+///* double-quotes use single quotes instead.
+///*
+///* Two arguments must be passed:
+///*
+///*   0: Database name ("main", "temp" etc.).
+///*   1: SQL statement to edit.
+///*
+///* The returned value is the modified SQL statement. For example, given
+///* the database schema:
+///*
+///*   CREATE TABLE t1(a, b, c);
+///*
+///*   SELECT sqlite_rename_quotefix('main',
+///*       'CREATE VIEW v1 AS SELECT "a", "string" FROM t1'
+///*   );
+///*
+///* returns the string:
+///*
+///*   CREATE VIEW v1 AS SELECT "a", 'string' FROM t1
+///*
+///* If there is a error in the input SQL, then raise an error, except
+///* if PRAGMA writable_schema=ON, then just return the input string
+///* unmodified following an error.
+#[allow(unused_doc_comments)]
 extern "C" fn rename_quotefix_func(context: *mut Sqlite3Context,
     not_used_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -2481,6 +2745,8 @@ extern "C" fn rename_quotefix_func(context: *mut Sqlite3Context,
             if rc == 0 {
                 let mut s_ctx: RenameCtx = unsafe { core::mem::zeroed() };
                 let mut s_walker: Walker = unsafe { core::mem::zeroed() };
+
+                /// Walker to find tokens that need to be replaced.
                 unsafe {
                     memset(&raw mut s_ctx as *mut (), 0,
                         core::mem::size_of::<RenameCtx>() as u64)
@@ -2579,6 +2845,10 @@ extern "C" fn rename_quotefix_func(context: *mut Sqlite3Context,
     }
 }
 
+///* zSql[] is a CREATE TABLE statement, supposedly.  Find the offset
+///* into zSql[] of the first character past the first "(" and write
+///* that offset into *piOff and return SQLITE_OK.  Or, if not found,
+///* set the SQLITE_CORRUPT error code and return SQLITE_ERROR.
 extern "C" fn skip_create_table(ctx: *mut Sqlite3Context, z_sql_1: *const u8,
     pi_off_1: &mut i32) -> i32 {
     let mut i_off: i32 = 0;
@@ -2604,6 +2874,7 @@ extern "C" fn skip_create_table(ctx: *mut Sqlite3Context, z_sql_1: *const u8,
     return 0;
 }
 
+///* Return the number of bytes of leading whitespace/comments in string z[].
 extern "C" fn get_whitespace(z: *const u8) -> i32 {
     let mut n_ret: i32 = 0;
     loop {
@@ -2619,6 +2890,15 @@ extern "C" fn get_whitespace(z: *const u8) -> i32 {
     return n_ret;
 }
 
+///* Compare two constraint names.
+///*
+///* Summary:   *pRes := zQuote != zCmp
+///*
+///* Details:
+///* Compare the (possibly quoted) constraint name zQuote[0..nQuote-1]
+///* against zCmp[].  Write zero into *pRes if they are the same and
+///* non-zero if they differ.  Normally return SQLITE_OK, except if there
+///* is an OOM, set the OOM error condition on ctx and return SQLITE_NOMEM.
 extern "C" fn quoted_compare(ctx: *mut Sqlite3Context, t: i32,
     z_quote_1: *const u8, n_quote_1: i32, z_cmp_1: *const u8,
     p_res_1: &mut i32) -> i32 {
@@ -2640,6 +2920,13 @@ extern "C" fn quoted_compare(ctx: *mut Sqlite3Context, t: i32,
     return 0;
 }
 
+///* Argument z points into the body of a constraint - specifically the 
+///* second token of the constraint definition.  For a named constraint,
+///* z points to the first token past the CONSTRAINT keyword.  For an
+///* unnamed NOT NULL constraint, z points to the first byte past the NOT
+///* keyword.
+///*
+///* Return the number of bytes until the end of the constraint.
 extern "C" fn get_constraint(z: *const u8) -> i32 {
     let mut i_off: i32 = 0;
     let mut t: i32 = 0;
@@ -2657,6 +2944,8 @@ extern "C" fn get_constraint(z: *const u8) -> i32 {
     return i_off;
 }
 
+///* Set the error message of the context passed as the first argument to
+///* the result of formatting zFmt using printf() style formatting.
 unsafe extern "C" fn error_m_printf(p_ctx_1: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(p_ctx_1) };
@@ -2671,6 +2960,16 @@ unsafe extern "C" fn error_m_printf(p_ctx_1: *mut Sqlite3Context,
     } else { unsafe { sqlite3_result_error_nomem(p_ctx_1) }; }
 }
 
+///* Internal SQL function sqlite3_drop_constraint():  Given an input
+///* CREATE TABLE statement, return a revised CREATE TABLE statement
+///* with a constraint removed.  Two forms, depending on the datatype
+///* of argv[2]:
+///*
+///*   sqlite_drop_constraint(SQL, INT)  -- Omit NOT NULL from the INT-th column
+///*   sqlite_drop_constraint(SQL, TEXT) -- OMIT constraint with name TEXT
+///*
+///* In the first case, the left-most column is 0.
+#[allow(unused_doc_comments)]
 extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const u8 =
@@ -2709,14 +3008,20 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
                                 &*z_sql.offset(i_off as isize)
                             }, &mut t);
                     if t == 120 && (!(z_cons).is_null() || i_not_null == ii) {
+                        /// Check if this is the constraint we are searching for.
                         let mut n_tok: i32 = 0;
                         let mut cmp: i32 = 1;
-                        i_off +=
-                            get_whitespace(unsafe { &*z_sql.offset(i_off as isize) });
-                        n_tok =
+
+                        /// Skip past any whitespace.
+                        (i_off +=
+                            get_whitespace(unsafe { &*z_sql.offset(i_off as isize) }));
+
+                        /// Compare the next token - which may be quoted - with the name of
+                        ///* the constraint being dropped.
+                        (n_tok =
                             get_constraint_token(unsafe {
                                     &*z_sql.offset(i_off as isize)
-                                }, &mut t);
+                                }, &mut t));
                         if !(z_cons).is_null() {
                             if quoted_compare(ctx, t,
                                         unsafe { &*z_sql.offset(i_off as isize) }, n_tok, z_cons,
@@ -2725,10 +3030,25 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
                             }
                         }
                         i_off += n_tok;
-                        n_tok =
+
+                        /// The next token is usually the first token of the constraint
+                        ///* definition. This is enough to tell the type of the constraint - 
+                        ///* TK_NOT means it is a NOT NULL, TK_CHECK a CHECK constraint etc.
+                        ///*
+                        ///* There is also the chance that the next token is TK_CONSTRAINT
+                        ///* (or TK_DEFAULT or TK_COLLATE), for example if a table has been
+                        ///* created as follows:
+                        ///*
+                        ///*    CREATE TABLE t1(cols, CONSTRAINT one CONSTRAINT two NOT NULL);
+                        ///*
+                        ///* In this case, allow the "CONSTRAINT one" bit to be dropped by
+                        ///* this command if that is what is requested, or to advance to
+                        ///* the next iteration of the loop with &zSql[iOff] still pointing
+                        ///* to the CONSTRAINT keyword.
+                        (n_tok =
                             get_constraint_token(unsafe {
                                     &*z_sql.offset(i_off as isize)
-                                }, &mut t);
+                                }, &mut t));
                         if t == 120 || t == 121 || t == 114 || t == 25 || t == 23 ||
                                     t == 96 || t == 24 {
                             t = 125;
@@ -2772,6 +3092,9 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
                     z_cons)
             };
         } else {
+
+            /// SQLite follows postgres in that a DROP NOT NULL on a column that is
+            ///* not NOT NULL is not an error. So just return the original SQL here.
             unsafe {
                 sqlite3_result_text(ctx, z_sql as *const i8, -1,
                     Some(unsafe {
@@ -2782,6 +3105,9 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
             };
         }
     } else {
+        /// Figure out if an extra space should be inserted after the constraint
+        ///* is removed. And if an additional comma preceding the constraint 
+        ///* should be removed.
         let mut z_space: *const i8 = c" ".as_ptr() as *mut i8 as *const i8;
         i_end += get_whitespace(unsafe { &*z_sql.offset(i_end as isize) });
         unsafe {
@@ -2815,6 +3141,9 @@ extern "C" fn drop_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+///* The implementation of SQL function sqlite_fail(MSG). This takes a single
+///* argument, and returns it as an error message with the error code set to
+///* SQLITE_CONSTRAINT.
 extern "C" fn fail_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_text: *const i8 =
@@ -2827,6 +3156,13 @@ extern "C" fn fail_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     unsafe { sqlite3_result_error_code(ctx, err) };
 }
 
+///* Internal SQL function:
+///*
+///*     sqlite_add_constraint(SQL, CONSTRAINT-TEXT, ICOL)
+///*
+///* SQL is a CREATE TABLE statement.  Return a modified version of
+///* SQL that adds CONSTRAINT-TEXT at the end of the ICOL-th column
+///* definition.  (The left-most column defintion is 0.)
 extern "C" fn add_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const u8 =
@@ -2889,6 +3225,13 @@ extern "C" fn add_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     unsafe { sqlite3_result_str(ctx, p_new, 2) };
 }
 
+///* Implementation of internal SQL function:
+///*
+///*     sqlite_find_constraint(SQL, CONSTRAINT-NAME)
+///*
+///* This function returns true if the SQL passed as the first argument is a
+///* CREATE TABLE that contains a constraint with the name CONSTRAINT-NAME,
+///* or false otherwise.
 extern "C" fn find_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_sql: *const u8 = core::ptr::null();
@@ -2932,6 +3275,7 @@ extern "C" fn find_constraint_func(ctx: *mut Sqlite3Context, not_used_1: i32,
     unsafe { sqlite3_result_int(ctx, 0) };
 }
 
+///* Register built-in functions used to help implement ALTER TABLE
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_alter_functions() -> () {
     unsafe {
@@ -2944,6 +3288,12 @@ pub extern "C" fn sqlite3_alter_functions() -> () {
     }
 }
 
+///* Parameter zName is the name of a table that is about to be altered
+///* (either with ALTER TABLE ... RENAME TO or ALTER TABLE ... ADD COLUMN).
+///* If the table is a system table, this function leaves an error message
+///* in pParse->zErr (system tables may not be altered) and returns non-zero.
+///*
+///* Or, if zName is not a system table, zero is returned.
 extern "C" fn is_alterable_table(p_parse_1: *mut Parse, p_tab_1: &Table)
     -> i32 {
     if 0 ==
@@ -2965,6 +3315,8 @@ extern "C" fn is_alterable_table(p_parse_1: *mut Parse, p_tab_1: &Table)
     return 0;
 }
 
+///* Generate code to reload the schema for database iDb. And, if iDb!=1, for
+///* the temp database as well.
 extern "C" fn rename_reload_schema(p_parse_1: *mut Parse, i_db_1: i32,
     p5: u16) -> () {
     let v: *const Vdbe = unsafe { (*p_parse_1).p_vdbe } as *const Vdbe;
@@ -2984,6 +3336,11 @@ extern "C" fn rename_reload_schema(p_parse_1: *mut Parse, i_db_1: i32,
     }
 }
 
+///* Generate code to verify that the schemas of database zDb and, if
+///* bTemp is not true, database "temp", can still be parsed. This is
+///* called at the end of the generation of an ALTER TABLE ... RENAME ...
+///* statement to ensure that the operation has not rendered any schema
+///* objects unusable.
 extern "C" fn rename_test_schema(p_parse_1: *mut Parse, z_db_1: *const i8,
     b_temp_1: i32, z_when_1: *const i8, b_no_dqs_1: i32) -> () {
     unsafe { (*p_parse_1).set_col_names_set(1 as Bft as u32) };
@@ -3002,19 +3359,33 @@ extern "C" fn rename_test_schema(p_parse_1: *mut Parse, z_db_1: *const i8,
     }
 }
 
+///* Generate code to implement the "ALTER TABLE xxx RENAME TO yyy"
+///* command.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
     p_src: *mut SrcList, p_name: *mut Token) -> () {
     unsafe {
+        /// Database that contains the table
+        /// Name of database iDb
+        /// Table being renamed
         let mut z_name: *mut i8 = core::ptr::null_mut();
+        /// NULL-terminated version of pName
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
         '__b36: loop {
             '__c36: loop {
                 let mut i_db: i32 = 0;
+                /// Database that contains the table
                 let mut z_db: *mut i8 = core::ptr::null_mut();
+                /// Name of database iDb
                 let mut p_tab: *mut Table = core::ptr::null_mut();
+                /// Table being renamed
+                /// NULL-terminated version of pName
+                /// Database connection
                 let mut n_tab_name: i32 = 0;
+                /// Number of UTF-8 characters in zTabName
                 let mut z_tab_name: *const i8 = core::ptr::null();
+                /// Original name of the table
                 let mut v: *mut Vdbe = core::ptr::null_mut();
                 let mut p_v_tab: *const VTable = core::ptr::null();
                 if unsafe { (*db).malloc_failed } != 0 { break '__b36; }
@@ -3038,10 +3409,12 @@ pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
                     unsafe {
                         (*unsafe { (*db).a_db.offset(i_db as isize) }).z_db_s_name
                     };
-                z_name =
+
+                /// Get a NULL terminated version of the new table name.
+                (z_name =
                     unsafe {
                         sqlite3_name_from_token(db, p_name as *const Token)
-                    };
+                    });
                 if (z_name).is_null() as i32 != 0 { break '__b36; }
                 if !(unsafe {
                                             sqlite3_find_table(db, z_name as *const i8,
@@ -3100,17 +3473,30 @@ pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
                         p_v_tab = core::ptr::null_mut();
                     }
                 }
-                v = unsafe { sqlite3_get_vdbe(p_parse) };
+
+                /// Begin a transaction for database iDb. Then modify the schema cookie
+                ///* (since the ALTER TABLE modifies the schema). Call sqlite3MayAbort(),
+                ///* as the scalar functions (e.g. sqlite_rename_table()) invoked by the
+                ///* nested SQL may raise an exception.
+                (v = unsafe { sqlite3_get_vdbe(p_parse) });
                 if v == core::ptr::null_mut() { break '__b36; }
                 unsafe { sqlite3_may_abort(p_parse) };
-                z_tab_name = unsafe { (*p_tab).z_name } as *const i8;
+
+                /// figure out how many UTF-8 characters are in zName
+                (z_tab_name = unsafe { (*p_tab).z_name } as *const i8);
                 n_tab_name = unsafe { sqlite3_utf8_char_len(z_tab_name, -1) };
+
+                /// Rewrite all CREATE TABLE, INDEX, TRIGGER or VIEW statements in
+                ///* the schema to use the new table name.
                 unsafe {
                     sqlite3_nested_parse(p_parse,
                         c"UPDATE \"%w\".sqlite_master SET sql = sqlite_rename_table(%Q, type, name, sql, %Q, %Q, %d) WHERE (type!=\'index\' OR tbl_name=%Q COLLATE nocase)AND   name NOT LIKE \'sqliteX_%%\' ESCAPE \'X\'".as_ptr()
                                 as *mut i8 as *const i8, z_db, z_db, z_tab_name, z_name,
                         (i_db == 1) as i32, z_tab_name)
                 };
+
+                /// Update the tbl_name and name columns of the sqlite_schema table
+                ///* as required.
                 unsafe {
                     sqlite3_nested_parse(p_parse,
                         c"UPDATE %Q.sqlite_master SET tbl_name = %Q, name = CASE WHEN type=\'table\' THEN %Q WHEN name LIKE \'sqliteX_autoindex%%\' ESCAPE \'X\'      AND type=\'index\' THEN \'sqlite_autoindex_\' || %Q || substr(name,%d+18) ELSE name END WHERE tbl_name=%Q COLLATE nocase AND (type=\'table\' OR type=\'index\' OR type=\'trigger\');".as_ptr()
@@ -3160,6 +3546,39 @@ pub extern "C" fn sqlite3_alter_rename_table(p_parse: *mut Parse,
             }
             if !(false) { break '__b36; }
         }
+
+        /// Database that contains the table
+        /// Name of database iDb
+        /// Table being renamed
+        /// NULL-terminated version of pName
+        /// Database connection
+        /// Number of UTF-8 characters in zTabName
+        /// Original name of the table
+        /// Non-zero if this is a v-tab with an xRename()
+        /// Get a NULL terminated version of the new table name.
+        /// Check that a table or index named 'zName' does not already exist
+        ///* in database iDb. If so, this is an error.
+        /// Make sure it is not a system table being altered, or a reserved name
+        ///* that the table is being renamed to.
+        /// Invoke the authorization callback.
+        /// Begin a transaction for database iDb. Then modify the schema cookie
+        ///* (since the ALTER TABLE modifies the schema). Call sqlite3MayAbort(),
+        ///* as the scalar functions (e.g. sqlite_rename_table()) invoked by the
+        ///* nested SQL may raise an exception.
+        /// figure out how many UTF-8 characters are in zName
+        /// Rewrite all CREATE TABLE, INDEX, TRIGGER or VIEW statements in
+        ///* the schema to use the new table name.
+        /// Update the tbl_name and name columns of the sqlite_schema table
+        ///* as required.
+        /// If the sqlite_sequence table exists in this database, then update
+        ///* it with the new table name.
+        /// If the table being renamed is not itself part of the temp database,
+        ///* edit view and trigger definitions within the temp database
+        ///* as required.
+        /// If this is a virtual table, invoke the xRename() function if
+        ///* one is defined. The xRename() callback will modify the names
+        ///* of any resources used by the v-table implementation (including other
+        ///* SQLite tables) that are identified by the name of the virtual table.
         unsafe { sqlite3_src_list_delete(db, p_src) };
         unsafe { sqlite3_db_free(db, z_name as *mut ()) };
     }
@@ -3190,6 +3609,11 @@ extern "C" fn is_real_table(p_parse_1: *mut Parse, p_tab_1: &Table,
     return 0;
 }
 
+///* Generate VM code to replace any double-quoted strings (but not double-quoted
+///* identifiers) within the "sql" column of the sqlite_schema table in
+///* database zDb with their single-quoted equivalents. If argument bTemp is
+///* not true, similarly update all SQL statements in the sqlite_schema table
+///* of the temp db.
 extern "C" fn rename_fix_quotes(p_parse_1: *mut Parse, z_db_1: *const i8,
     b_temp_1: i32) -> () {
     unsafe {
@@ -3206,29 +3630,47 @@ extern "C" fn rename_fix_quotes(p_parse_1: *mut Parse, z_db_1: *const i8,
     }
 }
 
+///* Handles the following parser reduction:
+///*
+///*  cmd ::= ALTER TABLE pSrc RENAME COLUMN pOld TO pNew
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
     p_src: *mut SrcList, p_old: *mut Token, p_new: *mut Token) -> () {
     unsafe {
         unsafe {
             let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+            /// Database connection
+            /// Table being updated
+            /// Index of column being renamed
             let mut z_old: *mut i8 = core::ptr::null_mut();
+            /// Old column name
             let mut z_new: *mut i8 = core::ptr::null_mut();
             '__b37: loop {
                 '__c37: loop {
+                    /// Database connection
                     let mut p_tab: *mut Table = core::ptr::null_mut();
+                    /// Table being updated
                     let mut i_col: i32 = 0;
+                    /// Index of column being renamed
+                    /// Old column name
+                    /// New column name
                     let mut z_db: *const i8 = core::ptr::null();
+                    /// Name of schema containing the table
                     let mut i_schema: i32 = 0;
+                    /// Index of the schema
                     let mut b_quote: i32 = 0;
-                    p_tab =
+
+                    /// True to quote the new name
+                    /// Locate the table to be altered
+                    (p_tab =
                         unsafe {
                             sqlite3_locate_table_item(p_parse, 0 as u32,
                                 unsafe {
                                     &mut *(unsafe { (*p_src).a.as_ptr() } as
                                                     *mut SrcItem).offset(0 as isize)
                                 })
-                        };
+                        });
                     if (p_tab).is_null() as i32 != 0 { break '__b37; }
                     if 0 != is_alterable_table(p_parse, unsafe { &*p_tab }) {
                         break '__b37;
@@ -3236,10 +3678,12 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
                     if 0 != is_real_table(p_parse, unsafe { &*p_tab }, 0) {
                         break '__b37;
                     }
-                    i_schema =
+
+                    /// Which schema holds the table to be altered
+                    (i_schema =
                         unsafe {
                             sqlite3_schema_to_index(db, unsafe { (*p_tab).p_schema })
-                        };
+                        });
                     { let _ = 0; };
                     z_db =
                         unsafe {
@@ -3253,10 +3697,13 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
                             } != 0 {
                         break '__b37;
                     }
-                    z_old =
+
+                    /// Make sure the old name really is a column name in the table to be
+                    ///* altered.  Set iCol to be the index of the column being renamed
+                    (z_old =
                         unsafe {
                             sqlite3_name_from_token(db, p_old as *const Token)
-                        };
+                        });
                     if (z_old).is_null() as i32 != 0 { break '__b37; }
                     i_col =
                         unsafe { sqlite3_column_index(p_tab, z_old as *const i8) };
@@ -3268,9 +3715,15 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
                         };
                         break '__b37;
                     }
+
+                    /// Ensure the schema contains no double-quoted strings
                     rename_test_schema(p_parse, z_db, (i_schema == 1) as i32,
                         c"".as_ptr() as *mut i8 as *const i8, 0);
                     rename_fix_quotes(p_parse, z_db, (i_schema == 1) as i32);
+
+                    /// Do the rename operation using a recursive UPDATE statement that
+                    ///* uses the sqlite_rename_column() SQL function to compute the new
+                    ///* CREATE statement text for the sqlite_schema table.
                     unsafe { sqlite3_may_abort(p_parse) };
                     z_new =
                         unsafe {
@@ -3298,6 +3751,8 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
                                     as *mut i8 as *const i8, z_db, unsafe { (*p_tab).z_name },
                             i_col, z_new, b_quote)
                     };
+
+                    /// Drop and reload the database schema.
                     rename_reload_schema(p_parse, i_schema, 1 as u16);
                     rename_test_schema(p_parse, z_db, (i_schema == 1) as i32,
                         c"after rename".as_ptr() as *mut i8 as *const i8, 1);
@@ -3305,6 +3760,26 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
                 }
                 if !(false) { break '__b37; }
             }
+
+            /// Database connection
+            /// Table being updated
+            /// Index of column being renamed
+            /// Old column name
+            /// New column name
+            /// Name of schema containing the table
+            /// Index of the schema
+            /// True to quote the new name
+            /// Locate the table to be altered
+            /// Cannot alter a system table
+            /// Which schema holds the table to be altered
+            /// Invoke the authorization callback.
+            /// Make sure the old name really is a column name in the table to be
+            ///* altered.  Set iCol to be the index of the column being renamed
+            /// Ensure the schema contains no double-quoted strings
+            /// Do the rename operation using a recursive UPDATE statement that
+            ///* uses the sqlite_rename_column() SQL function to compute the new
+            ///* CREATE statement text for the sqlite_schema table.
+            /// Drop and reload the database schema.
             unsafe { sqlite3_src_list_delete(db, p_src) };
             unsafe { sqlite3_db_free(db, z_old as *mut ()) };
             unsafe { sqlite3_db_free(db, z_new as *mut ()) };
@@ -3313,6 +3788,13 @@ pub extern "C" fn sqlite3_alter_rename_column(p_parse: *mut Parse,
     }
 }
 
+///* Find the table named by the first entry in source list pSrc. If successful,
+///* return a pointer to the Table structure and set output variable (*pzDb)
+///* to point to the name of the database containin the table (i.e. "main",
+///* "temp" or the name of an attached database). 
+///*
+///* If the table cannot be located, return NULL. The value of the two output
+///* parameters is undefined in this case.
 extern "C" fn alter_find_table(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     pi_db_1: &mut i32, pz_db_1: &mut *const i8, b_auth_1: i32) -> *mut Table {
     unsafe {
@@ -3355,6 +3837,10 @@ extern "C" fn alter_find_table(p_parse_1: *mut Parse, p_src_1: *mut SrcList,
     }
 }
 
+///* Find a column named pCol in table pTab. If successful, set output 
+///* parameter *piCol to the index of the column in the table and return
+///* SQLITE_OK. Otherwise, set *piCol to -1 and return an SQLite error
+///* code.
 extern "C" fn alter_find_col(p_parse_1: *mut Parse, mut p_tab_1: *mut Table,
     p_col_1: *const Token, pi_col_1: &mut i32) -> i32 {
     unsafe {
@@ -3403,7 +3889,14 @@ extern "C" fn alter_find_col(p_parse_1: *mut Parse, mut p_tab_1: *mut Table,
     }
 }
 
+///* Generate bytecode for one of:
+///*
+///*  (1)   ALTER TABLE pSrc DROP CONSTRAINT pCons
+///*  (2)   ALTER TABLE pSrc ALTER pCol DROP NOT NULL
+///*
+///* One of pCons and pCol must be NULL and the other non-null.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_drop_constraint(p_parse: *mut Parse,
     p_src: *mut SrcList, p_cons: *mut Token, p_col: *mut Token) -> () {
     let db: *mut Sqlite3 = unsafe { (*p_parse).db };
@@ -3438,6 +3931,8 @@ pub extern "C" fn sqlite3_alter_drop_constraint(p_parse: *mut Parse,
                     i_col)
             };
     }
+
+    /// Edit the SQL for the named table.
     unsafe {
         sqlite3_nested_parse(p_parse,
             c"UPDATE \"%w\".sqlite_master SET sql = sqlite_drop_constraint(sql, %s) WHERE type=\'table\' AND tbl_name=%Q COLLATE nocase".as_ptr()
@@ -3445,9 +3940,22 @@ pub extern "C" fn sqlite3_alter_drop_constraint(p_parse: *mut Parse,
             unsafe { (*p_tab).z_name })
     };
     unsafe { sqlite3_db_free(db, z_arg as *mut ()) };
+
+    /// Finally, reload the database schema.
     rename_reload_schema(p_parse, i_db, 4 as u16);
 }
 
+///* Buffer pCons, which is nCons bytes in size, contains the text of a 
+///* NOT NULL or CHECK constraint that will be inserted into a CREATE TABLE
+///* statement. If successful, this function returns the size of the buffer in
+///* bytes not including any trailing whitespace or "--" style comments. Or,
+///* if an OOM occurs, it returns 0 and sets db->mallocFailed to true.
+///*
+///* C-style comments at the end are preserved.  "--" style comments are
+///* removed because the comment terminator might be \000, and we are about
+///* to insert the pCons[] text into the middle of a larger string, and that
+///* will have the effect of removing the comment terminator and messing up
+///* the syntax.
 extern "C" fn alter_rtrim_constraint(db: *mut Sqlite3, p_cons_1: *const i8,
     n_cons_1: i32) -> i32 {
     let z_tmp: *mut u8 =
@@ -3479,28 +3987,46 @@ extern "C" fn alter_rtrim_constraint(db: *mut Sqlite3, p_cons_1: *const i8,
     return i_end;
 }
 
+///* Generate bytecode to implement:
+///*
+///*    ALTER TABLE pSrc ADD [CONSTRAINT pName] CHECK(pExpr)
+///*
+///* Any "ON CONFLICT" text that occurs after the "CHECK(...)", up
+///* until pParse->sLastToken, is included as part of the new constraint.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_add_constraint(p_parse: *mut Parse,
     p_src: *mut SrcList, p_first: &Token, p_name: *mut Token,
     z_expr: *const i8, n_expr: i32, p_expr: *mut Expr) -> () {
     unsafe {
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// Table identified by pSrc
         let mut i_db: i32 = 0;
+        /// Which schema does pTab live in
         let mut z_db: *const i8 = core::ptr::null();
+        /// Name of the schema in which pTab lives
         let mut p_cons: *const i8 = core::ptr::null();
+        /// Text of the constraint
         let mut n_cons: i32 = 0;
+        /// Bytes of text to use from pCons[]
         let mut rc: i32 = 0;
+
+        /// Result from error checking pExpr
+        /// Look up the table being altered.
         { let _ = 0; };
         p_tab = alter_find_table(p_parse, p_src, &mut i_db, &mut z_db, 1);
         if (p_tab).is_null() as i32 != 0 {
             unsafe { sqlite3_expr_delete(unsafe { (*p_parse).db }, p_expr) };
             return;
         }
-        rc =
+
+        /// Verify that the new CHECK constraint does not contain any
+        ///* internal-use-only function.  Forum post 2026-05-10T01:11:28Z
+        (rc =
             unsafe {
                 sqlite3_resolve_self_reference(p_parse, p_tab, 4, p_expr,
                     core::ptr::null_mut())
-            };
+            });
         unsafe { sqlite3_expr_delete(unsafe { (*p_parse).db }, p_expr) };
         if rc != 0 { return; }
         if !(p_name).is_null() {
@@ -3519,13 +4045,17 @@ pub extern "C" fn sqlite3_alter_add_constraint(p_parse: *mut Parse,
                 sqlite3_db_free(unsafe { (*p_parse).db }, z_name as *mut ())
             };
         }
+
+        /// Search for a constraint violation. Throw an exception if one is found.
         unsafe {
             sqlite3_nested_parse(p_parse,
                 c"SELECT sqlite_fail(\'constraint failed\', %d) FROM %Q.%Q WHERE (%.*s) IS NOT TRUE".as_ptr()
                         as *mut i8 as *const i8, 19, z_db,
                 unsafe { (*p_tab).z_name }, n_expr, z_expr)
         };
-        p_cons = (*p_first).z;
+
+        /// Edit the SQL for the named table.
+        (p_cons = (*p_first).z);
         n_cons =
             alter_rtrim_constraint(unsafe { (*p_parse).db }, p_cons,
                 unsafe {
@@ -3537,11 +4067,17 @@ pub extern "C" fn sqlite3_alter_add_constraint(p_parse: *mut Parse,
                         as *mut i8 as *const i8, z_db, n_cons, p_cons,
                 unsafe { (*p_tab).z_name })
         };
+
+        /// Finally, reload the database schema.
         rename_reload_schema(p_parse, i_db, 4 as u16);
     }
 }
 
+///* Prepare a statement of the form:
+///*
+///*   ALTER TABLE pSrc ALTER pCol SET NOT NULL
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
     p_src: *mut SrcList, p_col: *mut Token, p_first: &Token) -> () {
     unsafe {
@@ -3551,6 +4087,8 @@ pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
         let mut z_db: *const i8 = core::ptr::null();
         let mut p_cons: *const i8 = core::ptr::null();
         let mut n_cons: i32 = 0;
+
+        /// Look up the table being altered.
         { let _ = 0; };
         p_tab = alter_find_table(p_parse, p_src, &mut i_db, &mut z_db, 0);
         if (p_tab).is_null() as i32 != 0 { return; }
@@ -3558,12 +4096,16 @@ pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
                 != 0 {
             return;
         }
-        p_cons = (*p_first).z;
+
+        /// Find the length in bytes of the constraint definition
+        (p_cons = (*p_first).z);
         n_cons =
             alter_rtrim_constraint(unsafe { (*p_parse).db }, p_cons,
                 unsafe {
                             unsafe { (*p_parse).s_last_token.z.offset_from(p_cons) }
                         } as i64 as i32);
+
+        /// Search for a constraint violation. Throw an exception if one is found.
         unsafe {
             sqlite3_nested_parse(p_parse,
                 c"SELECT sqlite_fail(\'constraint failed\', %d) FROM %Q.%Q AS x WHERE x.%.*s IS NULL".as_ptr()
@@ -3571,16 +4113,22 @@ pub extern "C" fn sqlite3_alter_set_not_null(p_parse: *mut Parse,
                 unsafe { (*p_tab).z_name }, unsafe { (*p_col).n } as i32,
                 unsafe { (*p_col).z })
         };
+
+        /// Edit the SQL for the named table.
         unsafe {
             sqlite3_nested_parse(p_parse,
                 c"UPDATE \"%w\".sqlite_master SET sql = sqlite_add_constraint(sqlite_drop_constraint(sql, %d), %.*Q, %d) WHERE type=\'table\' AND tbl_name=%Q COLLATE nocase".as_ptr()
                         as *mut i8 as *const i8, z_db, i_col, n_cons, p_cons, i_col,
                 unsafe { (*p_tab).z_name })
         };
+
+        /// Finally, reload the database schema.
         rename_reload_schema(p_parse, i_db, 4 as u16);
     }
 }
 
+///* Write code that will raise an error if the table described by
+///* zDb and zTab is not empty.
 extern "C" fn sqlite3_error_if_not_empty(p_parse_1: *mut Parse,
     z_db_1: *const i8, z_tab_1: *const i8, z_err_1: *const i8) -> () {
     unsafe {
@@ -3590,23 +4138,42 @@ extern "C" fn sqlite3_error_if_not_empty(p_parse_1: *mut Parse,
     };
 }
 
+///* This function is called after an "ALTER TABLE ... ADD" statement
+///* has been parsed. Argument pColDef contains the text of the new
+///* column definition.
+///*
+///* The Table structure pParse->pNewTable was extended to include
+///* the new column during parsing.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
     p_col_def: &mut Token) -> () {
     unsafe {
         unsafe {
             let mut p_new: *mut Table = core::ptr::null_mut();
+            /// Copy of pParse->pNewTable
             let mut p_tab: *const Table = core::ptr::null();
+            /// Table being altered
             let mut i_db: i32 = 0;
+            /// Database number
             let mut z_db: *const i8 = core::ptr::null();
+            /// Database name
             let mut z_tab: *const i8 = core::ptr::null();
+            /// Table name
             let mut z_col: *mut i8 = core::ptr::null_mut();
+            /// Null-terminated column definition
             let mut p_col: *mut Column = core::ptr::null_mut();
+            /// The new column
             let mut p_dflt: *const Expr = core::ptr::null();
+            /// Default value for the new column
             let mut db: *mut Sqlite3 = core::ptr::null_mut();
+            /// The database connection;
             let mut v: *mut Vdbe = core::ptr::null_mut();
+            /// The prepared statement under construction
             let mut r1: i32 = 0;
-            db = unsafe { (*p_parse).db };
+
+            /// Temporary registers
+            (db = unsafe { (*p_parse).db });
             { let _ = 0; };
             if unsafe { (*p_parse).n_err } != 0 { return; }
             { let _ = 0; };
@@ -3624,13 +4191,15 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
             z_tab =
                 unsafe { unsafe { (*p_new).z_name.offset(16 as isize) } } as
                     *const i8;
-            p_col =
+
+            /// Skip the "sqlite_altertab_" prefix on the name
+            (p_col =
                 unsafe {
                     unsafe {
                         (*p_new).a_col.offset((unsafe { (*p_new).n_col } as i32 - 1)
                                 as isize)
                     }
-                };
+                });
             p_dflt = unsafe { sqlite3_column_expr(p_new, p_col) };
             p_tab = unsafe { sqlite3_find_table(db, z_tab, z_db) };
             { let _ = 0; };
@@ -3657,6 +4226,10 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
                 return;
             }
             if unsafe { (*p_col).col_flags } as i32 & 96 == 0 {
+
+                /// If the default value for the new column was specified with a
+                ///* literal NULL, then set pDflt to 0. This simplifies checking
+                ///* for an SQL NULL default below.
                 { let _ = 0; };
                 if !(p_dflt).is_null() &&
                         unsafe { (*unsafe { (*p_dflt).p_left }).op } as i32 == 122 {
@@ -3698,12 +4271,14 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
                     c"cannot add a STORED column".as_ptr() as *mut i8 as
                         *const i8);
             }
-            z_col =
+
+            /// Modify the CREATE TABLE statement.
+            (z_col =
                 unsafe {
                     sqlite3_db_str_n_dup(db,
                         (*p_col_def).z as *mut i8 as *const i8,
                         (*p_col_def).n as u64)
-                };
+                });
             if !(z_col).is_null() {
                 let mut z_end: *mut i8 =
                     unsafe {
@@ -3724,6 +4299,9 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
                                 } = '\u{0}' as i32 as i8
                     };
                 }
+
+                /// substr() operations on characters, but addColOffset is in bytes. So we
+                ///* have to use printf() to translate between these units:
                 { let _ = 0; };
                 { let _ = 0; };
                 unsafe {
@@ -3737,7 +4315,11 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
             }
             v = unsafe { sqlite3_get_vdbe(p_parse) };
             if !(v).is_null() {
-                r1 = unsafe { sqlite3_get_temp_reg(p_parse) };
+
+                /// Make sure the schema version is at least 3.  But do not upgrade
+                ///* from less than 3 to 4, as that will corrupt any preexisting DESC
+                ///* index.
+                (r1 = unsafe { sqlite3_get_temp_reg(p_parse) });
                 unsafe { sqlite3_vdbe_add_op3(v, 101, i_db, r1, 2) };
                 unsafe { sqlite3_vdbe_uses_btree(v, i_db) };
                 unsafe { sqlite3_vdbe_add_op2(v, 88, r1, -2) };
@@ -3747,6 +4329,8 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
                 };
                 unsafe { sqlite3_vdbe_add_op3(v, 102, i_db, 2, 3) };
                 unsafe { sqlite3_release_temp_reg(p_parse, r1) };
+
+                /// Reload the table definition
                 rename_reload_schema(p_parse, i_db, 3 as u16);
                 if unsafe { (*p_new).p_check } != core::ptr::null_mut() ||
                             unsafe { (*p_col).not_null() } != 0 &&
@@ -3763,7 +4347,21 @@ pub extern "C" fn sqlite3_alter_finish_add_column(p_parse: *mut Parse,
     }
 }
 
+///* This function is called by the parser after the table-name in
+///* an "ALTER TABLE <table-name> ADD" statement is parsed. Argument
+///* pSrc is the full-name of the table being altered.
+///*
+///* This routine makes a (partial) copy of the Table structure
+///* for the table being altered and sets Parse.pNewTable to point
+///* to it. Routines called by the parser as the column definition
+///* is parsed (i.e. sqlite3AddColumn()) add the new Column data to
+///* the copy. The copy of the Table structure is deleted by tokenize.c
+///* after parsing is finished.
+///*
+///* Routine sqlite3AlterFinishAddColumn() will be called to complete
+///* coding the "ALTER TABLE ... ADD" statement.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_begin_add_column(p_parse: *mut Parse,
     p_src: *mut SrcList) -> () {
     unsafe {
@@ -3773,6 +4371,14 @@ pub extern "C" fn sqlite3_alter_begin_add_column(p_parse: *mut Parse,
         let mut i: i32 = 0;
         let mut n_alloc: i32 = 0;
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Look up the table being altered.
+        /// Make sure this is not an attempt to ALTER a view.
+        /// Put a copy of the Table struct in Parse.pNewTable for the
+        ///* sqlite3AddColumn() function and friends to modify.  But modify
+        ///* the name by adding an "sqlite_altertab_" prefix.  By adding this
+        ///* prefix, we insure that the name will not collide with an existing
+        ///* table because user table are not allowed to have the "sqlite_"
+        ///* prefix on their name.
         let mut p_col: *mut Column = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -4006,22 +4612,47 @@ pub extern "C" fn sqlite3_alter_begin_add_column(p_parse: *mut Parse,
     }
 }
 
+///* This function is called by the parser upon parsing an
+///*
+///*     ALTER TABLE pSrc DROP COLUMN pName
+///*
+///* statement. Argument pSrc contains the possibly qualified name of the
+///* table being edited, and token pName the name of the column to drop.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_alter_drop_column(p_parse: *mut Parse,
     p_src: *mut SrcList, p_name: *const Token) -> () {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Database handle
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// Table to modify
         let mut i_db: i32 = 0;
+        /// Index of db containing pTab in aDb[]
         let mut z_db: *const i8 = core::ptr::null();
+        /// Database containing pTab ("main" etc.)
         let mut z_col: *mut i8 = core::ptr::null_mut();
+        /// Name of column to drop
         let mut i_col: i32 = 0;
+        /// Index of column zCol in pTab->aCol[]
+        /// Look up the table being altered.
+        /// Make sure this is not an attempt to ALTER a view, virtual table or
+        ///* system table.
+        /// Find the index of the column being dropped.
+        /// Do not allow the user to drop a PRIMARY KEY column or a column
+        ///* constrained by a UNIQUE constraint.
+        /// Do not allow the number of columns to go to zero
+        /// Edit the sqlite_schema table
+        /// Invoke the authorization callback.
+        /// Drop and reload the database schema.
+        /// Edit rows of table on disk
         let mut i: i32 = 0;
         let mut addr: i32 = 0;
         let mut reg: i32 = 0;
         let mut reg_rec: i32 = 0;
         let mut p_pk: *mut Index = core::ptr::null_mut();
         let mut n_field: i32 = 0;
+        /// Number of non-virtual columns after drop
         let mut i_cur: i32 = 0;
         let mut v: *mut Vdbe = core::ptr::null_mut();
         let mut reg_out: i32 = 0;
@@ -4458,6 +5089,16 @@ pub extern "C" fn sqlite3_alter_drop_column(p_parse: *mut Parse,
     }
 }
 
+///* Remember that the parser tree element pPtr was created using
+///* the token pToken.
+///*
+///* In other words, construct a new RenameToken object and add it
+///* to the list of RenameToken objects currently being built up
+///* in pParse->pRename.
+///*
+///* The pPtr argument is returned so that this routine can be used
+///* with tail recursion in tokenExpr() routine, for a small performance
+///* improvement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_token_map(p_parse: &mut Parse,
     p_ptr: *const (), p_token: &Token) -> *const () {
@@ -4481,6 +5122,7 @@ pub extern "C" fn sqlite3_rename_token_map(p_parse: &mut Parse,
     }
 }
 
+///* Unmap all tokens in the IdList object passed as the second argument.
 extern "C" fn unmap_column_idlist_names(p_parse_1: *mut Parse,
     p_id_list_1: &IdList) -> () {
     let mut ii: i32 = 0;
@@ -4503,6 +5145,8 @@ extern "C" fn unmap_column_idlist_names(p_parse_1: *mut Parse,
     }
 }
 
+///* Walker callback used by sqlite3RenameExprUnmap().
+#[allow(unused_doc_comments)]
 extern "C" fn rename_unmap_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     -> i32 {
     unsafe {
@@ -4541,6 +5185,7 @@ extern "C" fn rename_unmap_select_cb(p_walker_1: *mut Walker, p: *mut Select)
             }
         }
         if !(unsafe { (*p).p_src }).is_null() {
+            /// Every Select as a SrcList, even if it is empty
             let p_src: *mut SrcList = unsafe { (*p).p_src };
             {
                 i = 0;
@@ -4584,6 +5229,7 @@ extern "C" fn rename_unmap_select_cb(p_walker_1: *mut Walker, p: *mut Select)
     }
 }
 
+///* Remove all nodes that are part of expression pExpr from the rename list.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rename_expr_unmap(p_parse: *mut Parse,
     p_expr: *mut Expr) -> () {

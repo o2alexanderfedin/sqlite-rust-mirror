@@ -1,16 +1,29 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Context, Fts5ExtensionApi, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Storage, Fts5Table, Fts5Termset, Fts5Token,
+    Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///**********************************************************************
+///* Start of highlight() implementation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct HighlightContext {
@@ -49,6 +62,9 @@ struct Fts5SFinder {
     z_doc: *const i8,
 }
 
+///* Return the value in pVal interpreted as utf-8 text. Except, if pVal 
+///* contains a NULL value, return a pointer to a static string zero
+///* bytes in length instead of a NULL pointer.
 extern "C" fn fts5_value_to_text(p_val_1: *mut Sqlite3Value) -> *const i8 {
     let z_ret: *const i8 =
         unsafe { sqlite3_value_text(p_val_1) } as *const i8;
@@ -57,6 +73,9 @@ extern "C" fn fts5_value_to_text(p_val_1: *mut Sqlite3Value) -> *const i8 {
         } else { c"".as_ptr() as *mut i8 as *const i8 };
 }
 
+///* Add an entry to the Fts5SFinder.aFirst[] array. Grow the array if
+///* necessary. Return SQLITE_OK if successful, or SQLITE_NOMEM if an
+///* error occurs.
 extern "C" fn fts5_sentence_finder_add(p: &mut Fts5SFinder, i_add_1: i32)
     -> i32 {
     if (*p).n_first_alloc == (*p).n_first {
@@ -83,6 +102,9 @@ extern "C" fn fts5_sentence_finder_add(p: &mut Fts5SFinder, i_add_1: i32)
     return 0;
 }
 
+///* This function is an xTokenize() callback used by the auxiliary snippet()
+///* function. Its job is to identify tokens that are the first in a sentence.
+///* For each such token, an entry is added to the SFinder.aFirst[] array.
 extern "C" fn fts5_sentence_finder_cb(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_start_off_1: i32,
     i_end_off_1: i32) -> i32 {
@@ -183,6 +205,8 @@ extern "C" fn fts5_snippet_score(p_api_1: &Fts5ExtensionApi,
     return rc;
 }
 
+///* Advance the iterator to the next coalesced phrase instance. Return
+///* an SQLite error code if an error occurs, or SQLITE_OK otherwise.
 extern "C" fn fts5_c_inst_iter_next(p_iter_1: &mut CInstIter) -> i32 {
     let mut rc: i32 = 0;
     (*p_iter_1).i_start = -1;
@@ -225,6 +249,8 @@ extern "C" fn fts5_c_inst_iter_next(p_iter_1: &mut CInstIter) -> i32 {
     return rc;
 }
 
+///* Initialize the iterator object indicated by the final parameter to 
+///* iterate through coalesced phrase instances in column iCol.
 extern "C" fn fts5_c_inst_iter_init(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, i_col_1: i32, p_iter_1: *mut CInstIter)
     -> i32 {
@@ -246,6 +272,13 @@ extern "C" fn fts5_c_inst_iter_init(p_api_1: *const Fts5ExtensionApi,
     return rc;
 }
 
+///* Append text to the HighlightContext output string - p->zOut. Argument
+///* z points to a buffer containing n bytes of text to append. If n is 
+///* negative, everything up until the first '\0' is appended to the output.
+///*
+///* If *pRc is set to any value other than SQLITE_OK when this function is 
+///* called, it is a no-op. If an error (i.e. an OOM condition) is encountered, 
+///* *pRc is set to an error code before returning.
 extern "C" fn fts5_highlight_append(p_rc_1: &mut i32,
     p: *mut HighlightContext, z: *const i8, mut n: i32) -> () {
     if *p_rc_1 == 0 && !(z).is_null() {
@@ -261,6 +294,7 @@ extern "C" fn fts5_highlight_append(p_rc_1: &mut i32,
     }
 }
 
+///* Tokenizer callback used by implementation of highlight() function.
 extern "C" fn fts5_highlight_cb(p_context_1: *mut (), tflags: i32,
     p_token_1: *const i8, n_token_1: i32, i_start_off_1: i32,
     i_end_off_1: i32) -> i32 {
@@ -345,23 +379,38 @@ extern "C" fn fts5_highlight_cb(p_context_1: *mut (), tflags: i32,
     return rc;
 }
 
+///* Implementation of snippet() function.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut ctx: HighlightContext = unsafe { core::mem::zeroed() };
     let mut rc: i32 = 0;
+    /// Return code
     let mut i_col: i32 = 0;
+    /// 1st argument to snippet()
     let mut z_ellips: *const i8 = core::ptr::null();
+    /// 4th argument to snippet()
     let mut n_token: i64 = 0 as i64;
+    /// 5th argument to snippet()
     let mut n_inst: i32 = 0;
+    /// Number of instance matches this row
     let mut i: i32 = 0;
+    /// Used to iterate through instances
     let mut n_phrase: i32 = 0;
+    /// Number of phrases in query
     let mut a_seen: *mut u8 = core::ptr::null_mut();
+    /// Array of "seen instance" flags
     let mut i_best_col: i32 = 0;
+    /// Column containing best snippet
     let mut i_best_start: i32 = 0;
+    /// First token of best snippet
     let mut n_best_score: i32 = 0;
+    /// Score of best snippet
     let mut n_col_size: i32 = 0;
+    /// Total size of iBestCol in tokens
     let mut s_finder: Fts5SFinder = unsafe { core::mem::zeroed() };
+    /// Used to find the beginnings of sentences
     let mut n_col: i32 = 0;
     if n_val_1 != 5 {
         let z_err: *const i8 =
@@ -423,7 +472,9 @@ extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
             '__c3: loop {
                 if i_col < 0 || i_col == i {
                     let mut p_loc: *const i8 = core::ptr::null();
+                    /// Locale of column iCol
                     let mut n_loc: i32 = 0;
+                    /// Size of pLoc in bytes
                     let mut n_doc: i32 = 0;
                     let mut n_docsize: i32 = 0;
                     let mut ii: i32 = 0;
@@ -552,6 +603,7 @@ extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
     }
     if !(ctx.z_in).is_null() {
         let mut p_loc_1: *const i8 = core::ptr::null();
+        /// Locale of column iBestCol
         let mut n_loc_1: i32 = 0;
         if rc == 0 {
             rc =
@@ -608,6 +660,8 @@ extern "C" fn fts5_snippet_function(p_api_1: *const Fts5ExtensionApi,
     unsafe { sqlite3_free(s_finder.a_first as *mut ()) };
 }
 
+///* Implementation of highlight() function.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_highlight_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -648,6 +702,7 @@ extern "C" fn fts5_highlight_function(p_api_1: *const Fts5ExtensionApi,
         rc = 0;
     } else if !(ctx.z_in).is_null() {
         let mut p_loc: *const i8 = core::ptr::null();
+        /// Locale of column iCol
         let mut n_loc: i32 = 0;
         if rc == 0 {
             rc =
@@ -700,6 +755,8 @@ struct Fts5Bm25Data {
     a_freq: *mut f64,
 }
 
+///* Callback used by fts5Bm25GetData() to count the number of rows in the
+///* table matched by each individual phrase within the query.
 extern "C" fn fts5_count_cb(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_user_data_1: *mut ()) -> i32 {
     let pn: *mut Sqlite3Int64 = p_user_data_1 as *mut Sqlite3Int64;
@@ -708,20 +765,33 @@ extern "C" fn fts5_count_cb(p_api_1: *const Fts5ExtensionApi,
     return 0;
 }
 
+///* Set *ppData to point to the Fts5Bm25Data object for the current query. 
+///* If the object has not already been allocated, allocate and populate it
+///* now.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_bm25_get_data(p_api_1: &Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, pp_data_1: &mut *mut Fts5Bm25Data) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut p: *mut Fts5Bm25Data = core::ptr::null_mut();
-    p =
+
+    /// Object to return
+    (p =
         unsafe { (*p_api_1).x_get_auxdata.unwrap()(p_fts_1, 0) } as
-            *mut Fts5Bm25Data;
+            *mut Fts5Bm25Data);
     if p == core::ptr::null_mut() {
         let mut n_phrase: i32 = 0;
+        /// Number of phrases in query
         let mut n_row: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Number of rows in table
         let mut n_token: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Number of tokens in table
         let mut n_byte: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Bytes of space to allocate
         let mut i: i32 = 0;
-        n_phrase = unsafe { (*p_api_1).x_phrase_count.unwrap()(p_fts_1) };
+
+        /// Allocate the Fts5Bm25Data object
+        (n_phrase = unsafe { (*p_api_1).x_phrase_count.unwrap()(p_fts_1) });
         n_byte =
             (core::mem::size_of::<Fts5Bm25Data>() as u64 +
                     (n_phrase * 2) as u64 * core::mem::size_of::<f64>() as u64)
@@ -776,6 +846,19 @@ extern "C" fn fts5_bm25_get_data(p_api_1: &Fts5ExtensionApi,
                                 &raw mut n_hit as *mut (), fts5_count_cb)
                         };
                     if rc == 0 {
+                        /// Calculate the IDF (Inverse Document Frequency) for phrase i.
+                        ///* This is done using the standard BM25 formula as found on wikipedia:
+                        ///*
+                        ///*   IDF = log( (N - nHit + 0.5) / (nHit + 0.5) )
+                        ///*
+                        ///* where "N" is the total number of documents in the set and nHit
+                        ///* is the number that contain at least one instance of the phrase
+                        ///* under consideration.
+                        ///*
+                        ///* The problem with this is that if (N < 2*nHit), the IDF is 
+                        ///* negative. Which is undesirable. So the minimum allowable IDF is
+                        ///* (1e-6) - roughly the same as a term that appears in just over
+                        ///* half of set of 5,000,000 documents.
                         let mut idf: f64 =
                             unsafe {
                                 log(((n_row - n_hit) as f64 + 0.5) / (n_hit as f64 + 0.5))
@@ -803,19 +886,33 @@ extern "C" fn fts5_bm25_get_data(p_api_1: &Fts5ExtensionApi,
     return rc;
 }
 
+///* Implementation of bm25() function.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_bm25_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let k1: f64 = 1.2 as f64;
+    /// Constant "k1" from BM25 formula
     let b: f64 = 0.75 as f64;
+    /// Constant "b" from BM25 formula
     let mut rc: i32 = 0;
+    /// Error code
     let mut score: f64 = 0.0;
+    /// SQL function return value
     let mut p_data: *mut Fts5Bm25Data = core::ptr::null_mut();
+    /// Values allocated/calculated once only
     let mut i: i32 = 0;
+    /// Iterator variable
     let mut n_inst: i32 = 0;
+    /// Value returned by xInstCount()
     let mut d: f64 = 0.0;
+    /// Total number of tokens in row
     let mut a_freq: *mut f64 = core::ptr::null_mut();
-    rc = fts5_bm25_get_data(unsafe { &*p_api_1 }, p_fts_1, &mut p_data);
+
+    /// Array of phrase freq. for current row
+    /// Calculate the phrase frequency (symbol "f(qi,D)" in the documentation)
+    ///* for each phrase in the query for the current row.
+    (rc = fts5_bm25_get_data(unsafe { &*p_api_1 }, p_fts_1, &mut p_data));
     if rc == 0 {
         a_freq = unsafe { (*p_data).a_freq };
         unsafe {
@@ -892,6 +989,8 @@ extern "C" fn fts5_bm25_function(p_api_1: *const Fts5ExtensionApi,
     } else { unsafe { sqlite3_result_error_code(p_ctx_1, rc) }; }
 }
 
+///* Implementation of fts5_get_locale() function.
+#[allow(unused_doc_comments)]
 extern "C" fn fts5_get_locale_function(p_api_1: *const Fts5ExtensionApi,
     p_fts_1: *mut Fts5Context, p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
@@ -900,6 +999,8 @@ extern "C" fn fts5_get_locale_function(p_api_1: *const Fts5ExtensionApi,
     let mut rc: i32 = 0;
     let mut z_locale: *const i8 = core::ptr::null();
     let mut n_locale: i32 = 0;
+
+    /// xColumnLocale() must be available
     if !(unsafe { (*p_api_1).i_version } as i32 >= 4) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"fts5GetLocaleFunction".as_ptr() as *const i8,
@@ -954,7 +1055,10 @@ extern "C" fn fts5_get_locale_function(p_api_1: *const Fts5ExtensionApi,
     };
 }
 
+///***********************************************************************
+///* Interface to code in fts5_aux.c.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_aux_init(p_api: *mut Fts5Api) -> i32 {
     let a_builtin: [BuiltinN7Builtin; 4] =
         [BuiltinN7Builtin {
@@ -982,6 +1086,7 @@ pub extern "C" fn sqlite3_fts5_aux_init(p_api: *mut Fts5Api) -> i32 {
                     x_destroy: None,
                 }];
     let mut rc: i32 = 0;
+    /// Return code
     let mut i: i32 = 0;
     {
         i = 0;

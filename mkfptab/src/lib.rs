@@ -1,9 +1,30 @@
+//!* This program generates C code for the tables used to generate powers
+//!* of 10 in the powerOfTen() subroutine in util.c.
+//!*
+//!* The objective of the powerOfTen() subroutine is to provide the most
+//!* significant 96 bits of any power of 10 between -348 and +347.  Rather
+//!* than generate a massive 8K table, three much smaller tables are constructed,
+//!* which can then generate the requested power of 10 using a single
+//!* 160-bit multiple.
+//!*
+//!* This program works by internally generating a table of powers of
+//!* 10 accurate to 256 bits each.  It then that full-sized, high-accuracy
+//!* table to construct the three smaller tables needed by powerOfTen().
+//!*
+//!* LIMITATION:
+//!*
+//!* This program uses the __uint128_t datatype, available in gcc/clang.
+//!* It won't build using other compilers.
+
+/// There is no native 256-bit unsigned integer type, so synthesize one
+///* using four 64-bit unsigned integers.  Must significant first.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct U256 {
     a: [u64; 4],
 }
 
+/// Multiple *pX by 10, in-place
 extern "C" fn u256_times_10(p_x_1: &mut U256) -> () {
     let mut carry: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -23,6 +44,7 @@ extern "C" fn u256_times_10(p_x_1: &mut U256) -> () {
     }
 }
 
+/// Multiple *pX by 2, in-place.  AKA, left-shift
 extern "C" fn u256_times_2(p_x_1: &mut U256) -> () {
     let mut carry: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -41,6 +63,7 @@ extern "C" fn u256_times_2(p_x_1: &mut U256) -> () {
     }
 }
 
+/// Divide *pX by 10, in-place
 extern "C" fn u256_div_10(p_x_1: &mut U256) -> () {
     let mut rem: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -60,6 +83,7 @@ extern "C" fn u256_div_10(p_x_1: &mut U256) -> () {
     }
 }
 
+/// Divide *pX by 2, in-place,  AKA, right-shift
 extern "C" fn u256_div_2(p_x_1: &mut U256) -> () {
     let mut rem: u64 = 0 as u64;
     let mut i: i32 = 0;
@@ -78,6 +102,7 @@ extern "C" fn u256_div_2(p_x_1: &mut U256) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -130,7 +155,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
-        v.a[0 as usize] = top as u64;
+
+        /// Generate the master 256-bit power-of-10 table
+        (v.a[0 as usize] = top as u64);
         v.a[1 as usize] = 0 as u64;
         v.a[2 as usize] = 0 as u64;
         v.a[3 as usize] = 0 as u64;
@@ -175,6 +202,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             }
         }
         if b_truth != 0 {
+
+            /// With the --truth flag, also output the aTruth[] table that
+            ///* contains 128 bits of every power-of-two in the range
             unsafe {
                 printf(c"  /* Powers of ten, accurate to 128 bits each */\n".as_ptr()
                             as *mut i8 as *const i8)
@@ -206,6 +236,9 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             }
             unsafe { printf(c"  };\n".as_ptr() as *mut i8 as *const i8) };
         }
+
+        /// The aBase[] table contains powers of 10 between 0 and 26.  These
+        ///* all fit in a single 64-bit integer.
         unsafe {
             printf(c"  static const u64 aBase[] = {\n".as_ptr() as *mut i8 as
                     *const i8)
@@ -234,6 +267,16 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             }
         }
         unsafe { printf(c"  };\n".as_ptr() as *mut i8 as *const i8) };
+
+        /// For powers of 10 outside the range [0..26], we have to multiple
+        ///* on of the aBase[] entries by a scaling factor to get the true
+        ///* power of ten.  The scaling factors are all approximates accurate
+        ///* to 96 bytes, represented by a 64-bit integer in aScale[] for the
+        ///* most significant bits and a 32-bit integer in aScaleLo[] for the
+        ///* next 32 bites.
+        ///*
+        ///* The scale factors are at increments of 27.  Except, the entry for 0
+        ///* is replaced by the -1 value as a special case.
         unsafe {
             printf(c"  static const u64 aScale[] = {\n".as_ptr() as *mut i8 as
                     *const i8)

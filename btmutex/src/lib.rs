@@ -1,21 +1,56 @@
+//!* 2007 August 27
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This file contains code used to implement mutexes on Btree objects.
+//!* This code really belongs in btree.c.  But btree.c is getting too
+//!* big and we want to break it down some.  This packaged seemed like
+//!* a good breakout.
+//!* Obtain the BtShared mutex associated with B-Tree handle p. Also,
+//!* set BtShared.db to the database handle associated with p and the
+//!* p->locked boolean to true.
+//!* Release the BtShared mutex associated with B-Tree handle p and
+//!* clear the p->locked boolean.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod btree_int_h;
-pub(crate) use crate::btree_int_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::BtreePayload;
+use crate::btree_int_h::{BtCursor, BtShared, Btree};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -393,6 +428,8 @@ impl Parse {
     }
 }
 
+///* Release the BtShared mutex associated with B-Tree handle p and
+///* clear the p->locked boolean.
 extern "C" fn unlock_btree_mutex(p: &mut Btree) -> () {
     let p_bt: *const BtShared = (*p).p_bt as *const BtShared;
     { let _ = 0; };
@@ -403,6 +440,9 @@ extern "C" fn unlock_btree_mutex(p: &mut Btree) -> () {
     (*p).locked = 0 as u8;
 }
 
+///* Obtain the BtShared mutex associated with B-Tree handle p. Also,
+///* set BtShared.db to the database handle associated with p and the
+///* p->locked boolean to true.
 extern "C" fn lock_btree_mutex(p: &mut Btree) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -412,6 +452,7 @@ extern "C" fn lock_btree_mutex(p: &mut Btree) -> () {
     (*p).locked = 1 as u8;
 }
 
+/// Forward reference
 extern "C" fn btree_lock_carefully(p: *mut Btree) -> () {
     let mut p_later: *mut Btree = core::ptr::null_mut();
     if unsafe { sqlite3_mutex_try(unsafe { (*unsafe { (*p).p_bt }).mutex }) }
@@ -452,16 +493,43 @@ extern "C" fn btree_lock_carefully(p: *mut Btree) -> () {
     }
 }
 
+///* Enter a mutex on the given BTree object.
+///*
+///* If the object is not sharable, then no mutex is ever required
+///* and this routine is a no-op.  The underlying mutex is non-recursive.
+///* But we keep a reference count in Btree.wantToLock so the behavior
+///* of this interface is recursive.
+///*
+///* To avoid deadlocks, multiple Btrees are locked in the same order
+///* by all database connections.  The p->pNext is a list of other
+///* Btrees belonging to the same database connection as the p Btree
+///* which need to be locked after p.  If we cannot get a lock on
+///* p, then first unlock all of the others on p->pNext, then wait
+///* for the lock to become available on p, then relock all of the
+///* subsequent Btrees that desire a lock.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_btree_enter(p: *mut Btree) -> () {
+
+    /// Some basic sanity checking on the Btree.  The list of Btrees
+    ///* connected by pNext and pPrev should be in sorted order by
+    ///* Btree.pBt value. All elements of the list should belong to
+    ///* the same connection. Only shared Btrees are on the list.
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// Check for locking consistency
     { let _ = 0; };
     { let _ = 0; };
+
+    /// We should already hold a lock on the database connection
     { let _ = 0; };
+
+    /// Unless the database is sharable and unlocked, then BtShared.db
+    ///* should already be set correctly.
     { let _ = 0; };
     if (unsafe { (*p).sharable } == 0) as i32 != 0 { return; }
     {
@@ -474,6 +542,18 @@ pub extern "C" fn sqlite3_btree_enter(p: *mut Btree) -> () {
     unsafe { btree_lock_carefully(p) };
 }
 
+///* Enter the mutex on every Btree associated with a database
+///* connection.  This is needed (for example) prior to parsing
+///* a statement since we will be comparing table and column names
+///* against all schemas and we do not want those schemas being
+///* reset out from under us.
+///*
+///* There is a corresponding leave-all procedures.
+///*
+///* Enter the mutexes in ascending order by BtShared pointer address
+///* to avoid the possibility of deadlock when two threads with
+///* two or more btrees in common both try to lock all their btrees
+///* at the same instant.
 extern "C" fn btree_enter_all(db: &mut Sqlite3) -> () {
     let mut i: i32 = 0;
     let mut skip_ok: u8 = 1 as u8;
@@ -504,11 +584,17 @@ pub extern "C" fn sqlite3_btree_enter_all(db: *mut Sqlite3) -> () {
     }
 }
 
+///* Enter a mutex on a Btree given a cursor owned by that Btree. 
+///*
+///* These entry points are used by incremental I/O only. Enter() is required 
+///* any time OMIT_SHARED_CACHE is not defined, regardless of whether or not 
+///* the build is threadsafe. Leave() is only required by threadsafe builds.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_enter_cursor(p_cur_1: &BtCursor) -> () {
     sqlite3_btree_enter((*p_cur_1).p_btree);
 }
 
+///* Exit the recursive mutex on a Btree.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_btree_leave(p: *mut Btree) -> () {
     { let _ = 0; };

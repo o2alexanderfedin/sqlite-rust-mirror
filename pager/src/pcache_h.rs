@@ -1,5 +1,9 @@
 use super::*;
+use crate::pager_h::Pgno;
+use crate::sqlite3_h::Sqlite3PcachePage;
 
+///* Every page in the cache is controlled by an instance of the following
+///* structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct PgHdr {

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::PgHdr;
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3Pcache, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,29 @@ impl Parse {
     }
 }
 
+///* A complete page cache is an instance of this structure.  Every
+///* entry in the cache holds a single page of the database file.  The
+///* btree layer only operates on the cached copy of the database pages.
+///*
+///* A page cache entry is "clean" if it exactly matches what is currently
+///* on disk.  A page is "dirty" if it has been modified and needs to be
+///* persisted to disk.
+///*
+///* pDirty, pDirtyTail, pSynced:
+///*   All dirty pages are linked into the doubly linked list using
+///*   PgHdr.pDirtyNext and pDirtyPrev. The list is maintained in LRU order
+///*   such that p was added to the list more recently than p->pDirtyNext.
+///*   PCache.pDirty points to the first (newest) element in the list and
+///*   pDirtyTail to the last (oldest).
+///*
+///*   The PCache.pSynced variable is used to optimize searching for a dirty
+///*   page to eject from the cache mid-transaction. It is better to eject
+///*   a page that does not require a journal sync than one that does. 
+///*   Therefore, pSynced is maintained so that it *almost* always points
+///*   to either the oldest page in the pDirty/pDirtyTail list that has a
+///*   clear PGHDR_NEED_SYNC flag or to a page that is older than this one
+///*   (so that the right page to eject can be found by following pDirtyPrev
+///*   pointers).
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PCache {
@@ -411,10 +449,16 @@ struct PCache {
     p_cache: *mut Sqlite3Pcache,
 }
 
+/// Initialize and shutdown the page cache subsystem
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_initialize() -> i32 {
     unsafe {
         if !sqlite3Config.pcache2.x_init.is_some() as i32 != 0 {
+
+            /// IMPLEMENTATION-OF: R-26801-64137 If the xInit() method is NULL, then the
+            ///* built-in default page cache is used instead of the application defined
+            ///* page cache.
             unsafe { sqlite3_p_cache_set_default() };
             { let _ = 0; };
         }
@@ -425,9 +469,12 @@ pub extern "C" fn sqlite3_pcache_initialize() -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_shutdown() -> () {
     unsafe {
         if sqlite3Config.pcache2.x_shutdown.is_some() {
+
+            /// IMPLEMENTATION-OF: R-26000-56589 The xShutdown() method may be NULL.
             unsafe {
                 sqlite3Config.pcache2.x_shutdown.unwrap()(sqlite3Config.pcache2.p_arg)
             };
@@ -435,19 +482,31 @@ pub extern "C" fn sqlite3_pcache_shutdown() -> () {
     }
 }
 
+///* Compute the number of pages of cache requested.   p->szCache is the
+///* cache size requested by the "PRAGMA cache_size" statement.
+#[allow(unused_doc_comments)]
 extern "C" fn number_of_cache_pages(p: &PCache) -> i32 {
     if (*p).sz_cache >= 0 {
+
+        /// IMPLEMENTATION-OF: R-42059-47211 If the argument N is positive then the
+        ///* suggested cache size is set to N.
         return (*p).sz_cache;
     } else {
         let mut n: i64 = 0 as i64;
-        n =
+
+        /// IMPLEMENTATION-OF: R-59858-46238 If the argument N is negative, then the
+        ///* number of cache pages is adjusted to be a number of pages that would
+        ///* use approximately abs(N*1024) bytes of memory based on the current
+        ///* page size.
+        (n =
             -1024 as i64 * (*p).sz_cache as i64 /
-                ((*p).sz_page + (*p).sz_extra) as i64;
+                ((*p).sz_page + (*p).sz_extra) as i64);
         if n > 1000000000 as i64 { n = 1000000000 as i64; }
         return n as i32;
     }
 }
 
+/// Modify the page-size after the cache has been created.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_page_size(p_cache: *mut PCache,
     sz_page: i32) -> i32 {
@@ -482,7 +541,11 @@ pub extern "C" fn sqlite3_pcache_set_page_size(p_cache: *mut PCache,
     }
 }
 
+/// Create a new pager cache.
+///* Under memory stress, invoke xStress to try to make pages clean.
+///* Only clean and unpinned pages can be reclaimed.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_open(sz_page: i32, sz_extra: i32,
     b_purgeable: i32,
     x_stress: Option<unsafe extern "C" fn(*mut (), *mut PgHdr) -> i32>,
@@ -491,6 +554,8 @@ pub extern "C" fn sqlite3_pcache_open(sz_page: i32, sz_extra: i32,
     unsafe { (*p).sz_page = 1 };
     unsafe { (*p).sz_extra = sz_extra };
     { let _ = 0; };
+
+    /// First 8 bytes will be zeroed
     unsafe { (*p).b_purgeable = b_purgeable as u8 };
     unsafe { (*p).e_create = 2 as u8 };
     unsafe { (*p).x_stress = x_stress };
@@ -500,12 +565,17 @@ pub extern "C" fn sqlite3_pcache_open(sz_page: i32, sz_extra: i32,
     return sqlite3_pcache_set_page_size(p, sz_page);
 }
 
+/// Return the size in bytes of a PCache object.  Used to preallocate
+///* storage space.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_size() -> i32 {
     return core::mem::size_of::<PCache>() as i32;
 }
 
+/// One release per successful fetch.  Page is pinned until released.
+///* Reference counted.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_fetch(p_cache: &PCache, pgno: Pgno,
     create_flag: i32) -> *mut Sqlite3PcachePage {
     unsafe {
@@ -515,7 +585,14 @@ pub extern "C" fn sqlite3_pcache_fetch(p_cache: &PCache, pgno: Pgno,
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
-        e_create = create_flag & (*p_cache).e_create as i32;
+
+        /// eCreate defines what to do if the page does not exist.
+        ///*    0     Do not allocate a new page.  (createFlag==0)
+        ///*    1     Allocate a new page if doing so is inexpensive.
+        ///*          (createFlag==1 AND bPurgeable AND pDirty)
+        ///*    2     Allocate a new page even it doing so is difficult.
+        ///*          (createFlag==1 AND !(bPurgeable AND pDirty)
+        (e_create = create_flag & (*p_cache).e_create as i32);
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -528,6 +605,7 @@ pub extern "C" fn sqlite3_pcache_fetch(p_cache: &PCache, pgno: Pgno,
     }
 }
 
+/// Return the total number of pages stored in the cache
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_pagecount(p_cache: &PCache) -> i32 {
     unsafe {
@@ -538,6 +616,15 @@ pub extern "C" fn sqlite3_pcache_pagecount(p_cache: &PCache) -> i32 {
     }
 }
 
+///* If the sqlite3PcacheFetch() routine is unable to allocate a new
+///* page because no clean pages are available for reuse and the cache
+///* size limit has been reached, then this routine can be invoked to 
+///* try harder to allocate a page.  This routine might invoke the stress
+///* callback to spill dirty pages to the journal.  It will then try to
+///* allocate the new page and will only fail to allocate a new page on
+///* an OOM error.
+///*
+///* This routine should be invoked only after sqlite3PcacheFetch() fails.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_fetch_stress(p_cache: *mut PCache,
     pgno: Pgno, pp_page: &mut *mut Sqlite3PcachePage) -> i32 {
@@ -592,6 +679,13 @@ pub extern "C" fn sqlite3_pcache_fetch_stress(p_cache: *mut PCache,
     }
 }
 
+///* This is a helper routine for sqlite3PcacheFetchFinish()
+///*
+///* In the uncommon case where the page being fetched has not been
+///* initialized, this routine is invoked to do the initialization.
+///* This routine is broken out into a separate function since it
+///* requires extra stack manipulation that can be avoided in the common
+///* case.
 extern "C" fn pcache_fetch_finish_with_init(p_cache_1: *mut PCache,
     pgno: Pgno, p_page_1: *mut Sqlite3PcachePage) -> *mut PgHdr {
     let mut p_pg_hdr: *mut PgHdr = core::ptr::null_mut();
@@ -617,6 +711,10 @@ extern "C" fn pcache_fetch_finish_with_init(p_cache_1: *mut PCache,
     return sqlite3_pcache_fetch_finish(p_cache_1, pgno, p_page_1);
 }
 
+///* This routine converts the sqlite3_pcache_page object returned by
+///* sqlite3PcacheFetch() into an initialized PgHdr object.  This routine
+///* must be called after sqlite3PcacheFetch() in order to get a usable
+///* result.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_fetch_finish(p_cache: *mut PCache,
     pgno: Pgno, p_page: *mut Sqlite3PcachePage) -> *mut PgHdr {
@@ -642,6 +740,8 @@ pub extern "C" fn sqlite3_pcache_fetch_finish(p_cache: *mut PCache,
     return p_pg_hdr;
 }
 
+///* Wrapper around the pluggable caches xUnpin method. If the cache is
+///* being used for an in-memory database, this function is a no-op.
 extern "C" fn pcache_unpin(p: &PgHdr) -> () {
     unsafe {
         if unsafe { (*(*p).p_cache).b_purgeable } != 0 {
@@ -654,6 +754,11 @@ extern "C" fn pcache_unpin(p: &PgHdr) -> () {
     }
 }
 
+///* Manage pPage's participation on the dirty list.  Bits of the addRemove
+///* argument determines what operation to do.  The 0x01 bit means first
+///* remove pPage from the dirty list.  The 0x02 means add pPage back to
+///* the dirty list.  Doing both moves pPage to the front of the dirty list.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache_manage_dirty_list(p_page_1: *mut PgHdr, add_remove_1: u8)
     -> () {
     let p: *mut PCache = unsafe { (*p_page_1).p_cache };
@@ -680,10 +785,17 @@ extern "C" fn pcache_manage_dirty_list(p_page_1: *mut PgHdr, add_remove_1: u8)
                     unsafe { (*p_page_1).p_dirty_next }
             };
         } else {
+
+            /// If there are now no dirty pages in the cache, set eCreate to 2. 
+            ///* This is an optimization that allows sqlite3PcacheFetch() to skip
+            ///* searching for a dirty page to eject from the cache when it might
+            ///* otherwise have to.
             { let _ = 0; };
             unsafe { (*p).p_dirty = unsafe { (*p_page_1).p_dirty_next } };
             { let _ = 0; };
             if unsafe { (*p).p_dirty } == core::ptr::null_mut() {
+
+                ///OPTIMIZATION-IF-TRUE
                 { let _ = 0; };
                 unsafe { (*p).e_create = 2 as u8 };
             }
@@ -712,6 +824,8 @@ extern "C" fn pcache_manage_dirty_list(p_page_1: *mut PgHdr, add_remove_1: u8)
     }
 }
 
+///* Decrement the reference count on a page. If the page is clean and the
+///* reference count drops to 0, then it is made eligible for recycling.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_release(p: *mut PgHdr) -> () {
     { let _ = 0; };
@@ -728,6 +842,9 @@ pub extern "C" fn sqlite3_pcache_release(p: *mut PgHdr) -> () {
     }
 }
 
+///* Drop a page from the cache. There must be exactly one reference to the
+///* page. This function deletes that reference, so after it returns the
+///* page pointed to by p is invalid.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_drop(p: *mut PgHdr) -> () {
     unsafe {
@@ -750,11 +867,16 @@ pub extern "C" fn sqlite3_pcache_drop(p: *mut PgHdr) -> () {
     }
 }
 
+///* Make sure the page is marked as dirty. If it isn't dirty already,
+///* make it so.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_make_dirty(p: *mut PgHdr) -> () {
     { let _ = 0; };
     { let _ = 0; };
     if unsafe { (*p).flags } as i32 & (1 | 16) != 0 {
+
+        ///OPTIMIZATION-IF-FALSE
         unsafe { (*p).flags &= !16 as u16 };
         if unsafe { (*p).flags } as i32 & 1 != 0 {
             unsafe { (*p).flags ^= (2 | 1) as u16 };
@@ -766,6 +888,8 @@ pub extern "C" fn sqlite3_pcache_make_dirty(p: *mut PgHdr) -> () {
     }
 }
 
+///* Make sure the page is marked as clean. If it isn't clean already,
+///* make it so.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_make_clean(p: *mut PgHdr) -> () {
     { let _ = 0; };
@@ -778,6 +902,7 @@ pub extern "C" fn sqlite3_pcache_make_clean(p: *mut PgHdr) -> () {
     if unsafe { (*p).n_ref } == 0 as i64 { pcache_unpin(unsafe { &*p }); }
 }
 
+///* Make every page in the cache clean.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clean_all(p_cache: &PCache) -> () {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -786,6 +911,7 @@ pub extern "C" fn sqlite3_pcache_clean_all(p_cache: &PCache) -> () {
     }
 }
 
+///* Clear the PGHDR_NEED_SYNC and PGHDR_WRITEABLE flag from all dirty pages.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear_writable(p_cache: &mut PCache) -> () {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -803,6 +929,7 @@ pub extern "C" fn sqlite3_pcache_clear_writable(p_cache: &mut PCache) -> () {
     (*p_cache).p_synced = (*p_cache).p_dirty_tail;
 }
 
+/// Change a page number.  Used by incr-vacuum.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_move(p: *mut PgHdr, new_pgno: Pgno) -> () {
     unsafe {
@@ -849,7 +976,9 @@ pub extern "C" fn sqlite3_pcache_move(p: *mut PgHdr, new_pgno: Pgno) -> () {
     }
 }
 
+/// Remove all pages with pgno>x.  Reset the cache if x==0
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
     -> () {
     unsafe {
@@ -862,6 +991,10 @@ pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
                     if !(!(p).is_null()) { break '__b4; }
                     '__c4: loop {
                         p_next = unsafe { (*p).p_dirty_next };
+
+                        /// This routine never gets call with a positive pgno except right
+                        ///* after sqlite3PcacheCleanAll().  So if there are dirty pages,
+                        ///* it must be that pgno==0.
                         { let _ = 0; };
                         if unsafe { (*p).pgno } > pgno {
                             { let _ = 0; };
@@ -880,6 +1013,9 @@ pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
                             1, 0)
                     };
                 if !(p_page1).is_null() {
+
+                    /// Page 1 is always available in cache, because
+                    ///* pCache->nRefSum>0
                     unsafe {
                         memset(unsafe { (*p_page1).p_buf }, 0,
                             (*p_cache).sz_page as u64)
@@ -895,6 +1031,8 @@ pub extern "C" fn sqlite3_pcache_truncate(p_cache: &PCache, mut pgno: Pgno)
     }
 }
 
+///* Merge two lists of pages connected by pDirty and in pgno order.
+///* Do not bother fixing the pDirtyPrev pointers.
 extern "C" fn pcache_merge_dirty_list(mut p_a_1: *mut PgHdr,
     mut p_b_1: *mut PgHdr) -> *mut PgHdr {
     let mut result: PgHdr = unsafe { core::mem::zeroed() };
@@ -928,6 +1066,7 @@ extern "C" fn pcache_merge_dirty_list(mut p_a_1: *mut PgHdr,
     return result.p_dirty;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn pcache_sort_dirty_list(mut p_in_1: *mut PgHdr) -> *mut PgHdr {
     let mut a: [*mut PgHdr; 32] = [core::ptr::null_mut(); 32];
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -958,7 +1097,10 @@ extern "C" fn pcache_sort_dirty_list(mut p_in_1: *mut PgHdr) -> *mut PgHdr {
             }
         }
         if i == 32 - 1 {
-            a[i as usize] = pcache_merge_dirty_list(a[i as usize], p);
+
+            /// To get here, there need to be 2^(N_SORT_BUCKET) elements in
+            ///* the input list.  But that is impossible.
+            (a[i as usize] = pcache_merge_dirty_list(a[i as usize], p));
         }
     }
     p = a[0 as usize];
@@ -980,6 +1122,7 @@ extern "C" fn pcache_sort_dirty_list(mut p_in_1: *mut PgHdr) -> *mut PgHdr {
     return p;
 }
 
+/// Get a list of all dirty pages in the cache, sorted by page number
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_dirty_list(p_cache: &PCache) -> *mut PgHdr {
     let mut p: *mut PgHdr = core::ptr::null_mut();
@@ -997,6 +1140,7 @@ pub extern "C" fn sqlite3_pcache_dirty_list(p_cache: &PCache) -> *mut PgHdr {
     return pcache_sort_dirty_list((*p_cache).p_dirty);
 }
 
+/// Reset and close the cache object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_close(p_cache: &PCache) -> () {
     unsafe {
@@ -1007,6 +1151,7 @@ pub extern "C" fn sqlite3_pcache_close(p_cache: &PCache) -> () {
     }
 }
 
+/// Clear flags from pages of the page cache
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear_sync_flags(p_cache: &mut PCache)
     -> () {
@@ -1022,16 +1167,19 @@ pub extern "C" fn sqlite3_pcache_clear_sync_flags(p_cache: &mut PCache)
     (*p_cache).p_synced = (*p_cache).p_dirty_tail;
 }
 
+/// Discard the contents of the cache
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_clear(p_cache: *mut PCache) -> () {
     sqlite3_pcache_truncate(unsafe { &*p_cache }, 0 as Pgno);
 }
 
+/// Return the total number of outstanding page references
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_ref_count(p_cache: &PCache) -> i64 {
     return (*p_cache).n_ref_sum;
 }
 
+/// Increment the reference count of an existing page
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_ref(p: &mut PgHdr) -> () {
     { let _ = 0; };
@@ -1045,11 +1193,17 @@ pub extern "C" fn sqlite3_pcache_ref(p: &mut PgHdr) -> () {
     };
 }
 
+///* Return the number of references to the page supplied as an argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_page_refcount(p: &PgHdr) -> i64 {
     return (*p).n_ref;
 }
 
+/// Set and get the suggested cache-size for the specified pager-cache.
+///*
+///* If no global maximum is configured, then the system attempts to limit
+///* the total number of pages cached by purgeable pager-caches to the sum
+///* of the suggested cache-sizes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_cachesize(p_cache: *mut PCache,
     mx_page: i32) -> () {
@@ -1064,6 +1218,10 @@ pub extern "C" fn sqlite3_pcache_set_cachesize(p_cache: *mut PCache,
     }
 }
 
+/// Set or get the suggested spill-size for the specified pager-cache.
+///*
+///* The spill-size is the minimum number of pages in cache before the cache
+///* will attempt to spill dirty pages by calling xStress.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_set_spillsize(p: *mut PCache,
     mut mx_page: i32) -> i32 {
@@ -1083,6 +1241,7 @@ pub extern "C" fn sqlite3_pcache_set_spillsize(p: *mut PCache,
     return res;
 }
 
+/// Free up as much memory as possible from the page cache
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_shrink(p_cache: &PCache) -> () {
     unsafe {
@@ -1093,12 +1252,14 @@ pub extern "C" fn sqlite3_pcache_shrink(p_cache: &PCache) -> () {
     }
 }
 
+/// Return the header size
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_header_size_pcache() -> i32 {
     return (core::mem::size_of::<PgHdr>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
 
+/// Number of dirty pages as a percentage of the configured cache size
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_cache_percent_dirty(p_cache: *mut PCache) -> i32 {
     let mut p_dirty: *const PgHdr = core::ptr::null();
@@ -1120,6 +1281,8 @@ pub extern "C" fn sqlite3_p_cache_percent_dirty(p_cache: *mut PCache) -> i32 {
         } else { 0 };
 }
 
+/// 
+///* Return true if there are one or more dirty pages in the cache. Else false.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_cache_is_dirty(p_cache: &PCache) -> i32 {
     return ((*p_cache).p_dirty != core::ptr::null_mut()) as i32;

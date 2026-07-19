@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -479,6 +497,10 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* zSql is a zero-terminated string of UTF-8 SQL text.  Return the number of
+///* bytes in this text up to but excluding the first character in
+///* a host parameter.  If the text contains no host parameters, return
+///* the total number of bytes in the text.
 extern "C" fn find_next_host_parameter(mut z_sql_1: *const i8,
     pn_token_1: &mut i64) -> i64 {
     let mut token_type: i32 = 0;
@@ -503,20 +525,53 @@ extern "C" fn find_next_host_parameter(mut z_sql_1: *const i8,
     return n_total;
 }
 
+///* This function returns a pointer to a nul-terminated string in memory
+///* obtained from sqlite3DbMalloc(). If sqlite3.nVdbeExec is 1, then the
+///* string contains a copy of zRawSql but with host parameters expanded to 
+///* their current bindings. Or, if sqlite3.nVdbeExec is greater than 1, 
+///* then the returned string holds a copy of zRawSql with "-- " prepended
+///* to each line of text.
+///*
+///* If the SQLITE_TRACE_SIZE_LIMIT macro is defined to an integer, then
+///* then long strings and blobs are truncated to that many bytes.  This
+///* can be used to prevent unreasonably large trace strings when dealing
+///* with large (multi-megabyte) strings and blobs.
+///*
+///* The calling function is responsible for making sure the memory returned
+///* is eventually freed.
+///*
+///* ALGORITHM:  Scan the input string looking for host parameters in any of
+///* these forms:  ?, ?N, $A, @A, :A.  Take care to avoid text within
+///* string literals, quoted identifier names, and comments.  For text forms,
+///* the host parameter index is found by scanning the prepared
+///* statement for the corresponding OP_Variable opcode.  Once the host
+///* parameter index is known, locate the value in p->aVar[].  Then render
+///* the value as a literal in place of the host parameter name.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_expand_sql(p: *mut Vdbe,
     mut z_raw_sql_1: *const i8) -> *mut i8 {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut idx: i32 = 0;
+        /// Index of a host parameter
         let mut next_index: i32 = 1;
+        /// Index of next ? host parameter
         let mut n: i64 = 0 as i64;
+        /// Length of a token prefix
         let mut n_token: i64 = 0 as i64;
+        /// Length of the parameter token
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_var: *const Mem = core::ptr::null();
+        /// Value of a host parameter
         let mut out: StrAccum = unsafe { core::mem::zeroed() };
+        /// Accumulate the output here
         let mut utf8: Mem = unsafe { core::mem::zeroed() };
-        db = unsafe { (*p).db };
+
+        /// Used to convert UTF16 into UTF8 for display
+        (db = unsafe { (*p).db });
         unsafe {
             sqlite3_str_accum_init(&mut out, core::ptr::null_mut(),
                 core::ptr::null_mut(), 0,
@@ -610,6 +665,7 @@ pub extern "C" fn sqlite3_vdbe_expand_sql(p: *mut Vdbe,
                     };
                 } else if unsafe { (*p_var).flags } as i32 & 2 != 0 {
                     let mut n_out: i32 = 0;
+                    /// Number of bytes of the string text to include in output
                     let enc: u8 = unsafe { (*db).enc };
                     if enc as i32 != 1 {
                         unsafe {
@@ -646,6 +702,8 @@ pub extern "C" fn sqlite3_vdbe_expand_sql(p: *mut Vdbe,
                     };
                 } else {
                     let mut n_out_1: i32 = 0;
+
+                    /// Number of bytes of the blob to include in output
                     { let _ = 0; };
                     unsafe {
                         sqlite3_str_append(&raw mut out as *mut Sqlite3Str,

@@ -2,21 +2,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YDbMask, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, SubrtnSig, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Bool, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor,
+    VdbeFrame, VdbeSorter, VdbeTxtBlbCache,
+};
 
 type DarwinSizeT = u64;
 
@@ -482,9 +500,25 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* Resize the Vdbe.aOp array so that it is at least nOp elements larger
+///* than its current size. nOp is guaranteed to be less than or equal
+///* to 1024/sizeof(Op).
+///*
+///* If an out-of-memory error occurs while resizing the array, return
+///* SQLITE_NOMEM. In this case Vdbe.aOp and Vdbe.nOpAlloc remain
+///* unchanged (this is so that any opcodes already allocated can be
+///* correctly deallocated along with the rest of the Vdbe).
+#[allow(unused_doc_comments)]
 extern "C" fn grow_op_array(v: &mut Vdbe, n_op_1: i32) -> i32 {
     let mut p_new: *mut VdbeOp = core::ptr::null_mut();
     let p: *const Parse = (*v).p_parse as *const Parse;
+    /// The SQLITE_TEST_REALLOC_STRESS compile-time option is designed to force
+    ///* more frequent reallocs and hence provide more opportunities for
+    ///* simulated OOM faults.  SQLITE_TEST_REALLOC_STRESS is generally used
+    ///* during testing only.  With SQLITE_TEST_REALLOC_STRESS grow the op array
+    ///* by the minimum* amount required until the size reaches 512.  Normal
+    ///* operation (without SQLITE_TEST_REALLOC_STRESS) is to double the current
+    ///* size of the op array or add 1KB of space, whichever is smaller.
     let n_new: Sqlite3Int64 =
         if (*v).n_op_alloc != 0 {
             2 as Sqlite3Int64 * (*v).n_op_alloc as Sqlite3Int64
@@ -514,6 +548,9 @@ extern "C" fn grow_op_array(v: &mut Vdbe, n_op_1: i32) -> i32 {
     return if !(p_new).is_null() { 0 } else { 7 };
 }
 
+///* Slow paths for sqlite3VdbeAddOp3() and sqlite3VdbeAddOp4Int() for the
+///* unusual case when we need to increase the size of the Vdbe.aOp[] array
+///* before adding the new opcode.
 extern "C" fn grow_op3(p: *mut Vdbe, op: i32, p1: i32, p2: i32, p3: i32)
     -> i32 {
     { let _ = 0; };
@@ -523,6 +560,7 @@ extern "C" fn grow_op3(p: *mut Vdbe, op: i32, p1: i32, p2: i32, p3: i32)
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_add_op3(p: *mut Vdbe, op: i32, p1: i32,
     p2: i32, p3: i32) -> i32 {
     unsafe {
@@ -551,6 +589,11 @@ pub extern "C" fn sqlite3_vdbe_add_op3(p: *mut Vdbe, op: i32, p1: i32,
         unsafe { (*p_op).p3 = p3 };
         unsafe { (*p_op).p4.p = core::ptr::null_mut() };
         unsafe { (*p_op).p4type = 0 as i8 };
+
+        /// Replicate this logic in sqlite3VdbeAddOp4Int()
+        ///* vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ///* Replicate in sqlite3VdbeAddOp4Int()
         return i;
     }
 }
@@ -561,6 +604,8 @@ pub extern "C" fn sqlite3_vdbe_add_op2(p: *mut Vdbe, op: i32, p1: i32,
     return unsafe { sqlite3_vdbe_add_op3(p, op, p1, p2, 0) };
 }
 
+///* Prototypes for the VDBE interface.  See comments on the implementation
+///* for a description of what each of these routines does.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_create(p_parse_1: *mut Parse) -> *mut Vdbe {
     let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
@@ -596,11 +641,22 @@ pub extern "C" fn sqlite3_vdbe_create(p_parse_1: *mut Parse) -> *mut Vdbe {
     return p;
 }
 
+///* Return the Parse object that owns a Vdbe object.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_parser(p: &Vdbe) -> *mut Parse {
     return (*p).p_parse;
 }
 
+///* Add a new instruction to the list of instructions current in the
+///* VDBE.  Return the address of the new instruction.
+///*
+///* Parameters:
+///*
+///*    p               Pointer to the VDBE
+///*
+///*    op              The opcode for this instruction
+///*
+///*    p1, p2, p3, p4  Operands
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_op0(p: *mut Vdbe, op: i32) -> i32 {
     return unsafe { sqlite3_vdbe_add_op3(p, op, 0, 0, 0) };
@@ -612,11 +668,13 @@ pub extern "C" fn sqlite3_vdbe_add_op1(p: *mut Vdbe, op: i32, p1: i32)
     return unsafe { sqlite3_vdbe_add_op3(p, op, p1, 0, 0) };
 }
 
+/// Generate code for an unconditional jump to instruction iDest
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_goto(p: *mut Vdbe, i_dest_1: i32) -> i32 {
     return sqlite3_vdbe_add_op3(p, 9, 0, i_dest_1, 0);
 }
 
+/// Forward references
 extern "C" fn free_ephemeral_function(db: *mut Sqlite3, p_def_1: *mut FuncDef)
     -> () {
     { let _ = 0; };
@@ -634,6 +692,7 @@ extern "C" fn free_p4_func_ctx(db: *mut Sqlite3, p: *mut Sqlite3Context)
     }
 }
 
+///* Delete a P4 value if necessary.
 extern "C" fn free_p4_mem(db: *mut Sqlite3, p: *mut Mem) -> () {
     if unsafe { (*p).sz_malloc } != 0 {
         unsafe { sqlite3_db_free(db, unsafe { (*p).z_malloc } as *mut ()) };
@@ -1054,6 +1113,21 @@ extern "C" fn free_p4(db: *mut Sqlite3, p4type: i32, p4: *mut ()) -> () {
     }
 }
 
+///* Change the value of the P4 operand for a specific instruction.
+///* This routine is useful when a large program is loaded from a
+///* static array using sqlite3VdbeAddOpList but we want to make a
+///* few minor changes to the program.
+///*
+///* If n>=0 then the P4 operand is dynamic, meaning that a copy of
+///* the string is made into memory obtained from sqlite3_malloc().
+///* A value of n==0 means copy bytes of zP4 up to and including the
+///* first null byte.  If n>0 then copy n+1 bytes of zP4.
+///*
+///* Other values of n (P4_STATIC, P4_COLLSEQ etc.) indicate that zP4 points
+///* to a string or structure that is guaranteed to exist for the lifetime of
+///* the Vdbe. In these cases we can just copy the pointer.
+///*
+///* If addr<0 then change P4 on the most recently inserted instruction.
 extern "C" fn vdbe_change_p4_full(p: *mut Vdbe, p_op_1: *mut Op,
     z_p4_1: *const i8, mut n: i32) -> () {
     unsafe {
@@ -1082,6 +1156,7 @@ extern "C" fn vdbe_change_p4_full(p: *mut Vdbe, p_op_1: *mut Op,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_change_p4(p: *mut Vdbe, mut addr: i32,
     mut z_p4_1: *const i8, n: i32) -> () {
     unsafe {
@@ -1107,7 +1182,12 @@ pub extern "C" fn sqlite3_vdbe_change_p4(p: *mut Vdbe, mut addr: i32,
             return;
         }
         if n == -3 {
-            unsafe { (*p_op).p4.i = z_p4_1 as i64 as i32 };
+            unsafe {
+
+                /// Note: this cast is safe, because the origin data point was an int
+                ///* that was cast to a (const char *).
+                ((*p_op).p4.i = z_p4_1 as i64 as i32)
+            };
             unsafe { (*p_op).p4type = -3 as i8 };
         } else if z_p4_1 != core::ptr::null() {
             { let _ = 0; };
@@ -1120,6 +1200,7 @@ pub extern "C" fn sqlite3_vdbe_change_p4(p: *mut Vdbe, mut addr: i32,
     }
 }
 
+///* Add an opcode that includes the p4 value as a pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_op4(p: *mut Vdbe, op: i32, p1: i32,
     p2: i32, p3: i32, z_p4_1: *const i8, p4type: i32) -> i32 {
@@ -1128,6 +1209,8 @@ pub extern "C" fn sqlite3_vdbe_add_op4(p: *mut Vdbe, op: i32, p1: i32,
     return addr;
 }
 
+/// Generate code to cause the string zStr to be loaded into
+///* register iDest
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_load_string(p: *mut Vdbe, i_dest_1: i32,
     z_str_1: *const i8) -> i32 {
@@ -1136,6 +1219,15 @@ pub extern "C" fn sqlite3_vdbe_load_string(p: *mut Vdbe, i_dest_1: i32,
         };
 }
 
+///* Generate code that initializes multiple registers to string or integer
+///* constants.  The registers begin with iDest and increase consecutively.
+///* One register is initialized for each characgter in zTypes[].  For each
+///* "s" character in zTypes[], the register is a string if the argument is
+///* not NULL, or OP_Null if the value is a null pointer.  For each "i" character
+///* in zTypes[], the register is initialized to an integer.
+///*
+///* If the input string does not end with "X" then an OP_ResultRow instruction
+///* is generated for the values inserted.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_vdbe_multi_load(p: *mut Vdbe, i_dest_1: i32,
     z_types_1: *const i8, mut __va0: ...) -> () {
@@ -1219,11 +1311,14 @@ pub unsafe extern "C" fn sqlite3_vdbe_multi_load(p: *mut Vdbe, i_dest_1: i32,
     }
 }
 
+///* Return the database associated with the Vdbe.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_db(v: &Vdbe) -> *mut Sqlite3 {
     return (*v).db;
 }
 
+///* Add an opcode that includes the p4 value with a P4_INT64 or
+///* P4_REAL type.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_op4_dup8(p: *mut Vdbe, op: i32, p1: i32,
     p2: i32, p3: i32, z_p4_1: *const u8, p4type: i32) -> i32 {
@@ -1257,6 +1352,7 @@ extern "C" fn add_op4_int_slow(p: *mut Vdbe, op: i32, p1: i32, p2: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_add_op4_int(p: *mut Vdbe, op: i32, p1: i32,
     p2: i32, p3: i32, p4: i32) -> i32 {
     unsafe {
@@ -1282,10 +1378,16 @@ pub extern "C" fn sqlite3_vdbe_add_op4_int(p: *mut Vdbe, op: i32, p1: i32,
         unsafe { (*p_op).p3 = p3 };
         unsafe { (*p_op).p4.i = p4 };
         unsafe { (*p_op).p4type = -3 as i8 };
+
+        /// Replicate this logic in sqlite3VdbeAddOp3()
+        ///* vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        /// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ///* Replicate in sqlite3VdbeAddOp3()
         return i;
     }
 }
 
+///* Return the address of the next instruction to be inserted.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_current_addr(p: &Vdbe) -> i32 {
     { let _ = 0; };
@@ -1300,6 +1402,14 @@ pub extern "C" fn sqlite3_vdbe_change_p5(p: &Vdbe, p5: u16) -> () {
     }
 }
 
+///* Add an OP_Function or OP_PureFunc opcode.
+///*
+///* The eCallCtx argument is information (typically taken from Expr.op2)
+///* that describes the calling context of the function.  0 means a general
+///* function call.  NC_IsCheck means called by a check constraint,
+///* NC_IdxExpr means called as part of an index expression.  NC_PartIdx
+///* means in the WHERE clause of a partial index.  NC_GenCol means called
+///* while computing a generated column value.  0 is the usual case.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_function_call(p_parse_1: *mut Parse,
     p1: i32, p2: i32, p3: i32, n_arg_1: i32, p_func_1: *const FuncDef,
@@ -1344,14 +1454,27 @@ pub extern "C" fn sqlite3_vdbe_add_function_call(p_parse_1: *mut Parse,
     }
 }
 
+/// Insert the end of a co-routine
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_end_coroutine(v: *mut Vdbe, reg_yield_1: i32)
     -> () {
     sqlite3_vdbe_add_op1(v, 70, reg_yield_1);
+
+    /// Clear the temporary register cache, thereby ensuring that each
+    ///* co-routine has its own independent set of registers, because co-routines
+    ///* might expect their registers to be preserved across an OP_Yield, and
+    ///* that could cause problems if two or more co-routines are using the same
+    ///* temporary register.
     unsafe { (*unsafe { (*v).p_parse }).n_temp_reg = 0 as u8 };
     unsafe { (*unsafe { (*v).p_parse }).n_range_reg = 0 };
 }
 
+///* Add a whole list of operations to the operation stack.  Return a
+///* pointer to the first operation inserted.
+///*
+///* Non-zero P2 arguments to jump instructions are automatically adjusted
+///* so that the jump target is relative to the first operation inserted.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_op_list(p: *mut Vdbe, n_op_1: i32,
     mut a_op_1: *const VdbeOpList, i_lineno_1: i32) -> *mut VdbeOp {
@@ -1423,6 +1546,10 @@ pub extern "C" fn sqlite3_vdbe_add_op_list(p: *mut Vdbe, n_op_1: i32,
     }
 }
 
+///* Add a new OP_Explain opcode.
+///*
+///* If the bPush flag is true, then make this opcode the parent for
+///* subsequent Explains until sqlite3VdbeExplainPop() is called.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_vdbe_explain(p_parse_1: &mut Parse,
     b_push_1: u8, z_fmt_1: *const i8, mut __va0: ...) -> i32 {
@@ -1445,9 +1572,23 @@ pub unsafe extern "C" fn sqlite3_vdbe_explain(p_parse_1: &mut Parse,
     return addr;
 }
 
+///* Return the opcode for a given address.  The address must be non-negative.
+///* See sqlite3VdbeGetLastOp() to get the most recently added opcode.
+///*
+///* If a memory allocation error has occurred prior to the calling of this
+///* routine, then a pointer to a dummy VdbeOp will be returned.  That opcode
+///* is readable but not writable, though it is cast to a writable value.
+///* The return of a dummy opcode allows the call to continue functioning
+///* after an OOM fault without having to check to see if the return from
+///* this routine is a valid pointer.  But because the dummy.opcode is 0,
+///* dummy will never be written to.  This is verified by code inspection and
+///* by running with Valgrind.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_get_op(p: &Vdbe, addr: i32) -> *mut VdbeOp {
     unsafe {
+
+        /// Ignore the MSVC warning about no initializer
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*(*p).db).malloc_failed } != 0 {
@@ -1459,6 +1600,8 @@ pub extern "C" fn sqlite3_vdbe_get_op(p: &Vdbe, addr: i32) -> *mut VdbeOp {
     }
 }
 
+///* Return the address of the current EXPLAIN QUERY PLAN baseline.
+///* 0 means "none".
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_explain_parent(p_parse_1: &Parse) -> i32 {
     let mut p_op: *const VdbeOp = core::ptr::null();
@@ -1471,6 +1614,7 @@ pub extern "C" fn sqlite3_vdbe_explain_parent(p_parse_1: &Parse) -> i32 {
     return unsafe { (*p_op).p2 };
 }
 
+///* Pop the EXPLAIN QUERY PLAN stack one level.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_explain_pop(p_parse_1: *mut Parse) -> () {
     unsafe {
@@ -1479,6 +1623,12 @@ pub extern "C" fn sqlite3_vdbe_explain_pop(p_parse_1: *mut Parse) -> () {
     };
 }
 
+///* Declare to the Vdbe that the BTree object at db->aDb[i] is used.
+///*
+///* The prepared statements need to know in advance the complete set of
+///* attached databases that will be use.  A mask of these databases
+///* is maintained in p->btreeMask.  The p->lockMask value is the subset of
+///* p->btreeMask of databases that will require a lock.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_uses_btree(p: &mut Vdbe, i: i32) -> () {
     { let _ = 0; };
@@ -1494,6 +1644,21 @@ pub extern "C" fn sqlite3_vdbe_uses_btree(p: &mut Vdbe, i: i32) -> () {
     }
 }
 
+///* Add an OP_ParseSchema opcode.  This routine is broken out from
+///* sqlite3VdbeAddOp4() since it needs to also needs to mark all btrees
+///* as having been used.
+///*
+///* zWhere is a WHERE clause that defines which entries of the schema
+///* to reparse.  If zWhere==0, that means all entries.  p5 is a mask
+///* of INITFLAG_* values for the parse.
+///*
+///* In the current usage, the following are always true:
+///*
+///*     ALTER TABLE:     zWhere==0,  p5!=0
+///*     Otherwise:       zWhere!=0,  p5==0
+///*
+///* The zWhere string must have been obtained from sqlite3DbMalloc().
+///* This routine will take ownership of the allocated memory.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_add_parse_schema_op(p: *mut Vdbe, i_db_1: i32,
     z_where_1: *const i8, p5: u16) -> () {
@@ -1515,6 +1680,8 @@ pub extern "C" fn sqlite3_vdbe_add_parse_schema_op(p: *mut Vdbe, i_db_1: i32,
     unsafe { sqlite3_may_abort(unsafe { (*p).p_parse }) };
 }
 
+///* Change the value of the opcode, or P1, P2, P3, or P5 operands
+///* for a specific instruction.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_change_opcode(p: *mut Vdbe, addr: i32,
     i_new_opcode_1: u8) -> () {
@@ -1552,11 +1719,15 @@ pub extern "C" fn sqlite3_vdbe_change_p3(p: *mut Vdbe, addr: i32, val: i32)
     };
 }
 
+/// Return the most recently added opcode
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_get_last_op(p: *mut Vdbe) -> *mut VdbeOp {
     return sqlite3_vdbe_get_op(unsafe { &*p }, unsafe { (*p).n_op } - 1);
 }
 
+///* If the previous opcode is an OP_Column that delivers results
+///* into register iDest, then add the OPFLAG_TYPEOFARG flag to that
+///* opcode.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_typeof_column(p: *mut Vdbe, i_dest_1: i32)
     -> () {
@@ -1567,11 +1738,24 @@ pub extern "C" fn sqlite3_vdbe_typeof_column(p: *mut Vdbe, i_dest_1: i32)
     }
 }
 
+///* Change the P2 operand of instruction addr so that it points to
+///* the address of the next instruction to be coded.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_jump_here(p: *mut Vdbe, addr: i32) -> () {
     sqlite3_vdbe_change_p2(p, addr, unsafe { (*p).n_op });
 }
 
+///* Change the P2 operand of the jump instruction at addr so that
+///* the jump lands on the next opcode.  Or if the jump instruction was
+///* the previous opcode (and is thus a no-op) then simply back up
+///* the next instruction counter by one slot so that the jump is
+///* overwritten by the next inserted opcode.
+///*
+///* This routine is an optimization of sqlite3VdbeJumpHere() that
+///* strives to omit useless byte-code like this:
+///*
+///*        7   Once 0 8 0
+///*        8   ...
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_jump_here_or_pop_inst(p: *mut Vdbe, addr: i32)
     -> () {
@@ -1587,6 +1771,7 @@ pub extern "C" fn sqlite3_vdbe_jump_here_or_pop_inst(p: *mut Vdbe, addr: i32)
     } else { sqlite3_vdbe_change_p2(p, addr, unsafe { (*p).n_op }); }
 }
 
+///* Change the opcode at addr into OP_Noop
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_change_to_noop(p: &Vdbe, addr: i32) -> i32 {
     unsafe {
@@ -1603,6 +1788,8 @@ pub extern "C" fn sqlite3_vdbe_change_to_noop(p: &Vdbe, addr: i32) -> i32 {
     }
 }
 
+///* If the last opcode is "op" and it is not a jump destination,
+///* then remove it.  Return true if and only if an opcode was removed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_delete_prior_opcode(p: *mut Vdbe, op: u8)
     -> i32 {
@@ -1617,6 +1804,13 @@ pub extern "C" fn sqlite3_vdbe_delete_prior_opcode(p: *mut Vdbe, op: u8)
     } else { return 0; }
 }
 
+///* Change the P4 operand of the most recently coded instruction
+///* to the value defined by the arguments.  This is a high-speed
+///* version of sqlite3VdbeChangeP4().
+///*
+///* The P4 operand must not have been previously defined.  And the new
+///* P4 must not be P4_INT32.  Use sqlite3VdbeChangeP4() in either of
+///* those cases.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_append_p4(p: &Vdbe, p_p4_1: *mut (), n: i32)
     -> () {
@@ -1639,6 +1833,8 @@ pub extern "C" fn sqlite3_vdbe_append_p4(p: &Vdbe, p_p4_1: *mut (), n: i32)
     }
 }
 
+///* Set the P4 on the most recently added opcode to the KeyInfo for the
+///* index given.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_p4_key_info(p_parse_1: *mut Parse,
     p_idx_1: *mut Index) -> () {
@@ -1652,16 +1848,41 @@ pub extern "C" fn sqlite3_vdbe_set_p4_key_info(p_parse_1: *mut Parse,
     }
 }
 
+///* Create a new symbolic label for an instruction that has yet to be
+///* coded.  The symbolic label is really just a negative number.  The
+///* label can be used as the P2 value of an operation.  Later, when
+///* the label is resolved to a specific address, the VDBE will scan
+///* through its operation list and change all values of P2 which match
+///* the label into the resolved address.
+///*
+///* The VDBE knows that a P2 value is a label because labels are
+///* always negative and P2 values are suppose to be non-negative.
+///* Hence, a negative P2 value is a label that has yet to be resolved.
+///* (Later:) This is only true for opcodes that have the OPFLG_JUMP
+///* property.
+///*
+///* Variable usage notes:
+///*
+///*     Parse.aLabel[x]     Stores the address that the x-th label resolves
+///*                         into.  For testing (SQLITE_DEBUG), unresolved
+///*                         labels stores -1, but that is not required.
+///*     Parse.nLabelAlloc   Number of slots allocated to Parse.aLabel[]
+///*     Parse.nLabel        The *negative* of the number of labels that have
+///*                         been issued.  The negative is stored because
+///*                         that gives a performance improvement over storing
+///*                         the equivalent positive value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_make_label(p_parse_1: &mut Parse) -> i32 {
     return { let __p = &mut (*p_parse_1).n_label; *__p -= 1; *__p };
 }
 
+///* Mark the VDBE as one that can only be run one time.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_run_only_once(p: *mut Vdbe) -> () {
     sqlite3_vdbe_add_op2(p, 168, 1, 1);
 }
 
+///* Mark the VDBE as one that can be run multiple times.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_reusable(p: &Vdbe) -> () {
     let mut i: i32 = 0;
@@ -1684,6 +1905,12 @@ pub extern "C" fn sqlite3_vdbe_reusable(p: &Vdbe) -> () {
     }
 }
 
+///* Release auxiliary memory held in an array of N Mem elements.
+///*
+///* After this routine returns, all Mem elements in the array will still
+///* be valid.  Those Mem elements that were not holding auxiliary resources
+///* will be unchanged.  Mem elements which had something freed will be
+///* set to MEM_Undefined.
 extern "C" fn release_mem_array(mut p: *mut Mem, n_1: i32) -> () {
     if !(p).is_null() && n_1 != 0 {
         let p_end: *mut Mem = unsafe { &mut *p.offset(n_1 as isize) };
@@ -1737,6 +1964,9 @@ extern "C" fn release_mem_array(mut p: *mut Mem, n_1: i32) -> () {
     }
 }
 
+///* Free the space allocated for aOp and any p4 values allocated for the
+///* opcodes contained within. If aOp is not NULL it is assumed to contain
+///* nOp entries.
 extern "C" fn vdbe_free_op_array(db: *mut Sqlite3, a_op_1: *mut Op,
     n_op_1: i32) -> () {
     unsafe {
@@ -1763,6 +1993,12 @@ extern "C" fn vdbe_free_op_array(db: *mut Sqlite3, a_op_1: *mut Op,
     }
 }
 
+///* Free all memory associated with the Vdbe passed as the second argument,
+///* except for object itself, which is preserved.
+///*
+///* The difference between this function and sqlite3VdbeDelete() is that
+///* VdbeDelete() also unlinks the Vdbe from the list of VMs associated with
+///* the database connection and frees the object itself.
 extern "C" fn sqlite3_vdbe_clear_object(db: *mut Sqlite3, p: &Vdbe) -> () {
     unsafe {
         let mut p_sub: *mut SubProgram = core::ptr::null_mut();
@@ -1805,6 +2041,7 @@ extern "C" fn sqlite3_vdbe_clear_object(db: *mut Sqlite3, p: &Vdbe) -> () {
     }
 }
 
+///* Delete an entire VDBE.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_delete(p: *mut Vdbe) -> () {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -1826,6 +2063,9 @@ pub extern "C" fn sqlite3_vdbe_delete(p: *mut Vdbe) -> () {
     unsafe { sqlite3_db_nn_free_nn(db, p as *mut ()) };
 }
 
+/// An instance of this object describes bulk memory available for use
+///* by subcomponents of a prepared statement.  Space is allocated out
+///* of a ReusableSpace object by the allocSpace() routine below.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReusableSpace {
@@ -1834,12 +2074,42 @@ struct ReusableSpace {
     n_needed: Sqlite3Int64,
 }
 
+///* This routine is called after all opcodes have been inserted.  It loops
+///* through all the opcodes and fixes up some details.
+///*
+///* (1) For each jump instruction with a negative P2 value (a label)
+///*     resolve the P2 value to an actual address.
+///*
+///* (2) Compute the maximum number of arguments used by the xUpdate/xFilter
+///*     methods of any virtual table and store that value in *pMaxVtabArgs.
+///*
+///* (3) Update the Vdbe.readOnly and Vdbe.bIsReader flags to accurately
+///*     indicate what the prepared statement actually does.
+///*
+///* (4) (discontinued)
+///*
+///* (5) Reclaim the memory allocated for storing labels.
+///*
+///* This routine will only function correctly if the mkopcodeh.tcl generator
+///* script numbers the opcodes correctly.  Changes to this routine must be
+///* coordinated with changes to mkopcodeh.tcl.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_p2_values(p: &mut Vdbe, p_max_vtab_args_1: &mut i32)
     -> () {
     let mut n_max_vtab_args: i32 = 0;
     let mut p_op: *mut Op = core::ptr::null_mut();
     let mut p_parse: *mut Parse = core::ptr::null_mut();
     let mut a_label: *const i32 = core::ptr::null();
+    /// tag-20230419-1
+    /// Loop terminates when it reaches the OP_Init opcode
+    /// Only JUMP opcodes and the short list of special opcodes in the switch
+    ///* below need to be considered.  The mkopcodeh.tcl generator script groups
+    ///* all these opcodes together near the front of the opcode list.  Skip
+    ///* any opcode that does not need processing by virtual of the fact that
+    ///* it is larger than SQLITE_MX_JUMP_OPCODE, as a performance optimization.
+    /// NOTE: Be sure to update mkopcodeh.tcl when adding or removing
+    ///* cases from this switch!
+    /// no break
     let mut n: i32 = 0;
     let mut __state: i32 = 0;
     loop {
@@ -1994,6 +2264,19 @@ extern "C" fn resolve_p2_values(p: &mut Vdbe, p_max_vtab_args_1: &mut i32)
     }
 }
 
+/// Try to allocate nByte bytes of 8-byte aligned bulk memory for pBuf
+///* from the ReusableSpace object.  Return a pointer to the allocated
+///* memory on success.  If insufficient memory is available in the
+///* ReusableSpace object, increase the ReusableSpace.nNeeded
+///* value by the amount needed and return NULL.
+///*
+///* If pBuf is not initially NULL, that means that the memory has already
+///* been allocated by a prior call to this routine, so just return a copy
+///* of pBuf and leave ReusableSpace unchanged.
+///*
+///* This allocator is employed to repurpose unused slots at the end of the
+///* opcode array of prepared state for other memory needs of the prepared
+///* statement.
 extern "C" fn alloc_space(p: &mut ReusableSpace, mut p_buf_1: *mut (),
     mut n_byte_1: Sqlite3Int64) -> *mut () {
     { let _ = 0; };
@@ -2010,6 +2293,19 @@ extern "C" fn alloc_space(p: &mut ReusableSpace, mut p_buf_1: *mut (),
     return p_buf_1;
 }
 
+///* Initialize an array of N Mem element.
+///*
+///* This is a high-runner, so only those fields that really do need to
+///* be initialized are set.  The Mem structure is organized so that
+///* the fields that get initialized are nearby and hopefully on the same
+///* cache line.
+///*
+///*    Mem.flags = flags
+///*    Mem.db = db
+///*    Mem.szMalloc = 0
+///*
+///* All other fields of Mem can safely remain uninitialized for now.  They
+///* will be initialized before use.
 extern "C" fn init_mem_array(mut p: *mut Mem, mut n_1: i32, db: *mut Sqlite3,
     flags: u16) -> () {
     { let _ = 0; };
@@ -2034,10 +2330,15 @@ extern "C" fn init_mem_array(mut p: *mut Mem, mut n_1: i32, db: *mut Sqlite3,
     }
 }
 
+///* Rewind the VDBE back to the beginning in preparation for
+///* running it.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_rewind(p: &mut Vdbe) -> () {
     { let _ = 0; };
     { let _ = 0; };
+
+    /// There should be at least one opcode.
     { let _ = 0; };
     (*p).e_vdbe_state = 1 as u8;
     (*p).pc = -1;
@@ -2050,17 +2351,42 @@ pub extern "C" fn sqlite3_vdbe_rewind(p: &mut Vdbe) -> () {
     (*p).n_fk_constraint = 0 as i64;
 }
 
+///* Prepare a virtual machine for execution for the first time after
+///* creating the virtual machine.  This involves things such
+///* as allocating registers and initializing the program counter.
+///* After the VDBE has be prepped, it can be executed by one or more
+///* calls to sqlite3VdbeExec(). 
+///*
+///* This function may be called exactly once on each virtual machine.
+///* After this routine is called the VM has been "packaged" and is ready
+///* to run.  After this routine is called, further calls to
+///* sqlite3VdbeAddOp() functions are prohibited.  This routine disconnects
+///* the Vdbe from the Parse object that helped generate it so that the
+///* the Vdbe becomes an independent entity and the Parse object can be
+///* destroyed.
+///*
+///* Use the sqlite3VdbeRewind() procedure to restore a virtual machine back
+///* to its initial state after it has been run.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_make_ready(p: *mut Vdbe, p_parse_1: &mut Parse)
     -> () {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database connection
         let mut n_var: i32 = 0;
+        /// Number of parameters
         let mut n_mem: i32 = 0;
+        /// Number of VM memory registers
         let mut n_cursor: i32 = 0;
+        /// Number of cursors required
         let mut n_arg: i32 = 0;
+        /// Max number args to xFilter or xUpdate
         let mut n: i32 = 0;
+        /// Loop counter
         let mut x: ReusableSpace = unsafe { core::mem::zeroed() };
+
+        /// Reusable bulk memory
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -2075,20 +2401,36 @@ pub extern "C" fn sqlite3_vdbe_make_ready(p: *mut Vdbe, p_parse_1: &mut Parse)
         n_mem = (*p_parse_1).n_mem;
         n_cursor = (*p_parse_1).n_tab;
         n_arg = (*p_parse_1).n_max_arg;
-        n_mem += n_cursor;
+
+        /// Each cursor uses a memory cell.  The first cursor (cursor 0) can
+        ///* use aMem[0] which is not otherwise used by the VDBE program.  Allocate
+        ///* space at the end of aMem[] for cursors 1 and greater.
+        ///* See also: allocateCursor().
+        (n_mem += n_cursor);
         if n_cursor == 0 && n_mem > 0 {
             { let __p = &mut n_mem; let __t = *__p; *__p += 1; __t };
         }
-        n =
+
+        /// Space for aMem[0] even if not used
+        /// Figure out how much reusable memory is available at the end of the
+        ///* opcode array.  This extra memory will be reallocated for other elements
+        ///* of the prepared statement.
+        (n =
             (core::mem::size_of::<Op>() as u64 * unsafe { (*p).n_op } as u64)
-                as i32;
-        x.p_space =
-            unsafe { (unsafe { (*p).a_op } as *mut u8).offset(n as isize) };
+                as i32);
+
+        /// Bytes of opcode memory used
+        (x.p_space =
+            unsafe { (unsafe { (*p).a_op } as *mut u8).offset(n as isize) });
+
+        /// Unused opcode memory
         { let _ = 0; };
         x.n_free =
             ((unsafe { (*p).n_op_alloc } - unsafe { (*p).n_op }) as u64 *
                         core::mem::size_of::<Op>() as u64 & !7 as u64) as
                 Sqlite3Int64;
+
+        /// Bytes unused mem
         { let _ = 0; };
         { let _ = 0; };
         resolve_p2_values(unsafe { &mut *p }, &mut n_arg);
@@ -2105,7 +2447,17 @@ pub extern "C" fn sqlite3_vdbe_make_ready(p: *mut Vdbe, p_parse_1: &mut Parse)
             };
         }
         unsafe { (*p).set_expired(0 as Bft as u32) };
-        x.n_needed = 0 as Sqlite3Int64;
+
+        /// Memory for registers, parameters, cursor, etc, is allocated in one or two
+        ///* passes.  On the first pass, we try to reuse unused memory at the
+        ///* end of the opcode array.  If we are unable to satisfy all memory
+        ///* requirements by reusing the opcode array tail, then the second
+        ///* pass will fill in the remainder using a fresh memory allocation. 
+        ///*
+        ///* This two-pass approach that reuses as much memory as possible from
+        ///* the leftover memory at the end of the opcode array.  This can significantly
+        ///* reduce the amount of memory held by a prepared statement.
+        (x.n_needed = 0 as Sqlite3Int64);
         unsafe {
             (*p).a_mem =
                 alloc_space(&mut x, core::ptr::null_mut(),
@@ -2302,6 +2654,7 @@ pub extern "C" fn sqlite3_vdbe_free_cursor_nn(p: *mut Vdbe,
     }
 }
 
+///* Close all cursors in the current frame.
 extern "C" fn close_cursors_in_frame(p: *mut Vdbe) -> () {
     let mut i: i32 = 0;
     {
@@ -2325,6 +2678,20 @@ extern "C" fn close_cursors_in_frame(p: *mut Vdbe) -> () {
     }
 }
 
+///* If parameter iOp is less than zero, then invoke the destructor for
+///* all auxiliary data pointers currently cached by the VM passed as
+///* the first argument.
+///*
+///* Or, if iOp is greater than or equal to zero, then the destructor is
+///* only invoked for those auxiliary data pointers created by the user
+///* function invoked by the OP_Function opcode at instruction iOp of
+///* VM pVdbe, and only then if:
+///*
+///*    * the associated function parameter is the 32nd or later (counting
+///*      from left to right), or
+///*
+///*    * the corresponding bit in argument mask is clear (where the first
+///*      function parameter corresponds to bit 0 etc.).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_delete_aux_data(db: *mut Sqlite3,
     mut pp: *mut *mut AuxData, i_op_1: i32, mask: i32) -> () {
@@ -2349,6 +2716,9 @@ pub extern "C" fn sqlite3_vdbe_delete_aux_data(db: *mut Sqlite3,
     }
 }
 
+///* Copy the values stored in the VdbeFrame structure to its Vdbe. This
+///* is used, for example, when a trigger sub-program is halted to restore
+///* control to the main program.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_frame_restore(p_frame_1: &mut VdbeFrame)
     -> i32 {
@@ -2374,6 +2744,8 @@ pub extern "C" fn sqlite3_vdbe_frame_restore(p_frame_1: &mut VdbeFrame)
     }
 }
 
+///* Delete a VdbeFrame object and its contents. VdbeFrame objects are
+///* allocated by the OP_Program opcode in sqlite3VdbeExec().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_frame_delete(p: *mut VdbeFrame) -> () {
     let mut i: i32 = 0;
@@ -2414,6 +2786,12 @@ pub extern "C" fn sqlite3_vdbe_frame_delete(p: *mut VdbeFrame) -> () {
     };
 }
 
+///* Close all cursors.
+///*
+///* Also release any dynamic memory held by the VM in the Vdbe.aMem memory
+///* cell array. This is necessary as the memory cell array may contain
+///* pointers to VdbeFrame objects, which may in turn contain pointers to
+///* open cursors.
 extern "C" fn close_all_cursors(p: *mut Vdbe) -> () {
     unsafe {
         if !(unsafe { (*p).p_frame }).is_null() {
@@ -2450,14 +2828,36 @@ extern "C" fn close_all_cursors(p: *mut Vdbe) -> () {
     }
 }
 
+///* If SQLite is compiled to support shared-cache mode and to be threadsafe,
+///* this routine obtains the mutex associated with each BtShared structure
+///* that may be accessed by the VM passed as an argument. In doing so it also
+///* sets the BtShared.db member of each of the BtShared structures, ensuring
+///* that the correct busy-handler callback is invoked if required.
+///*
+///* If SQLite is not threadsafe but does support shared-cache mode, then
+///* sqlite3BtreeEnter() is invoked to set the BtShared.db variables
+///* of all of BtShared structures accessible via the database handle
+///* associated with the VM.
+///*
+///* If SQLite is not threadsafe and does not support shared-cache mode, this
+///* function is a no-op.
+///*
+///* The p->btreeMask field is a bitmask of all btrees that the prepared
+///* statement p will ever use.  Let N be the number of bits in p->btreeMask
+///* corresponding to btrees that use shared cache.  Then the runtime of
+///* this routine is N*N.  But as N is rarely more than 1, this should not
+///* be a problem.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_enter(p: &Vdbe) -> () {
     let mut i: i32 = 0;
     let mut db: *const Sqlite3 = core::ptr::null();
     let mut a_db: *const Db = core::ptr::null();
     let mut n_db: i32 = 0;
     if (*p).lock_mask == 0 as u32 { return; }
-    db = (*p).db;
+
+    /// The common case
+    (db = (*p).db);
     a_db = unsafe { (*db).a_db };
     n_db = unsafe { (*db).n_db };
     {
@@ -2482,6 +2882,7 @@ pub extern "C" fn sqlite3_vdbe_enter(p: &Vdbe) -> () {
     }
 }
 
+///* Function prototypes
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_vdbe_error(p: &mut Vdbe,
     z_format_1: *const i8, mut __va0: ...) -> () {
@@ -2519,6 +2920,7 @@ pub extern "C" fn sqlite3_vdbe_check_fk_deferred(p: *mut Vdbe) -> i32 {
     return vdbe_fk_error(p);
 }
 
+///* Unlock all of the btrees previously locked by a call to sqlite3VdbeEnter().
 extern "C" fn vdbe_leave(p: &Vdbe) -> () {
     let mut i: i32 = 0;
     let mut db: *const Sqlite3 = core::ptr::null();
@@ -2550,17 +2952,34 @@ extern "C" fn vdbe_leave(p: &Vdbe) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_leave(p: *mut Vdbe) -> () {
     if unsafe { (*p).lock_mask } == 0 as u32 { return; }
+
+    /// The common case
     vdbe_leave(unsafe { &*p });
 }
 
+///* A read or write transaction may or may not be active on database handle
+///* db. If a transaction is active, commit it. If there is a
+///* write-transaction spanning more than one database file, this routine
+///* takes care of the super-journal trickery.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
     let mut i: i32 = 0;
     let mut n_trans: i32 = 0;
+    /// Number of databases with an active write-transaction
+    ///* that are candidates for a two-phase commit using a
+    ///* super-journal
     let mut rc: i32 = 0;
     let mut need_xcommit: i32 = 0;
-    rc = unsafe { sqlite3_vtab_sync(db, p) };
+
+    /// Before doing anything else, call the xSync() callback for any
+    ///* virtual module tables written in this transaction. This has to
+    ///* be done before determining whether a super-journal file is
+    ///* required, as an xSync() callback may add an attached database
+    ///* to the transaction.
+    (rc = unsafe { sqlite3_vtab_sync(db, p) });
     {
         i = 0;
         '__b22: loop {
@@ -2569,8 +2988,16 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
                 let p_bt: *mut Btree =
                     unsafe { (*unsafe { (*db).a_db.offset(i as isize) }).p_bt };
                 if unsafe { sqlite3_btree_txn_state(p_bt) } == 2 {
+                    /// DELETE
+                    /// PERSIST
+                    /// OFF
+                    /// TRUNCATE
+                    /// MEMORY
+                    /// WAL
                     let mut p_pager: *mut Pager = core::ptr::null_mut();
-                    need_xcommit = 1;
+
+                    /// Pager associated with pBt
+                    (need_xcommit = 1);
                     unsafe { sqlite3_btree_enter(p_bt) };
                     p_pager = unsafe { sqlite3_btree_pager(p_bt) };
                     if unsafe {
@@ -2650,6 +3077,7 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
     } else {
         let p_vfs: *mut Sqlite3Vfs = unsafe { (*db).p_vfs };
         let mut z_super: *mut i8 = core::ptr::null_mut();
+        /// File-name for the super-journal
         let z_main_file: *const i8 =
             unsafe {
                 sqlite3_btree_get_filename(unsafe {
@@ -2661,7 +3089,9 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
         let mut res: i32 = 0;
         let mut retry_count: i32 = 0;
         let mut n_main_file: i32 = 0;
-        n_main_file = unsafe { sqlite3_strlen30(z_main_file) };
+
+        /// Select a super-journal file name
+        (n_main_file = unsafe { sqlite3_strlen30(z_main_file) });
         z_super =
             unsafe {
                 sqlite3_m_printf(db,
@@ -2710,6 +3140,9 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
                         c"-mj%06X9%02X".as_ptr() as *mut i8 as *const i8,
                         i_random >> 8 & 16777215 as u32, i_random & 255 as u32)
                 };
+
+                /// The antipenultimate character of the super-journal name must
+                ///* be "9" to avoid name collisions when using 8+3 filenames.
                 { let _ = 0; };
                 rc =
                     unsafe {
@@ -2720,12 +3153,14 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
             if !(rc == 0 && res != 0) { break '__b25; }
         }
         if rc == 0 {
-            rc =
+
+            /// Open the super-journal.
+            (rc =
                 unsafe {
                     sqlite3_os_open_malloc(p_vfs, z_super as *const i8,
                         &mut p_super_jrnl, 2 | 4 | 16 | 16384,
                         core::ptr::null_mut())
-                };
+                });
         }
         if rc != 0 {
             unsafe {
@@ -2809,7 +3244,11 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
             };
             return rc;
         }
-        rc = unsafe { sqlite3_os_delete(p_vfs, z_super as *const i8, 1) };
+
+        /// Delete the super-journal file. This commits the transaction. After
+        ///* doing this the directory is synced again before any individual
+        ///* transaction files are deleted.
+        (rc = unsafe { sqlite3_os_delete(p_vfs, z_super as *const i8, 1) });
         unsafe {
             sqlite3_db_free(db,
                 unsafe { z_super.offset(-(4 as isize)) } as *mut ())
@@ -2838,6 +3277,14 @@ extern "C" fn vdbe_commit(db: *mut Sqlite3, p: *mut Vdbe) -> i32 {
     return rc;
 }
 
+///* If the Vdbe passed as the first argument opened a statement-transaction,
+///* close it now. Argument eOp must be either SAVEPOINT_ROLLBACK or
+///* SAVEPOINT_RELEASE. If it is SAVEPOINT_ROLLBACK, then the statement
+///* transaction is rolled back. If eOp is SAVEPOINT_RELEASE, then the
+///* statement transaction is committed.
+///*
+///* If an IO error occurs, an SQLITE_IOERR_XXX error code is returned.
+///* Otherwise SQLITE_OK.
 extern "C" fn vdbe_close_statement(p: &mut Vdbe, e_op_1: i32) -> i32 {
     let db: *mut Sqlite3 = (*p).db;
     let mut rc: i32 = 0;
@@ -2902,6 +3349,8 @@ pub extern "C" fn sqlite3_vdbe_close_statement(p: *mut Vdbe, e_op_1: i32)
     return 0;
 }
 
+///* This routine sets the value to be returned by subsequent calls to
+///* sqlite3_changes() on the database handle 'db'.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_changes(db: &mut Sqlite3, n_change_1: i64)
     -> () {
@@ -2910,17 +3359,49 @@ pub extern "C" fn sqlite3_vdbe_set_changes(db: &mut Sqlite3, n_change_1: i64)
     (*db).n_total_change += n_change_1;
 }
 
+///* This routine is called the when a VDBE tries to halt.  If the VDBE
+///* has made changes and is in autocommit mode, then commit those
+///* changes.  If a rollback is needed, then do the rollback.
+///*
+///* This routine is the only way to move the sqlite3eOpenState of a VM from
+///* SQLITE_STATE_RUN to SQLITE_STATE_HALT.  It is harmless to
+///* call this on a VM that is in the SQLITE_STATE_HALT state.
+///*
+///* Return an error code.  If the commit could not complete because of
+///* lock contention, return SQLITE_BUSY.  If SQLITE_BUSY is returned, it
+///* means the close did not happen and needs to be repeated.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_halt(p: *mut Vdbe) -> i32 {
     let mut rc: i32 = 0;
+    /// Used to store transient return codes
     let db: *mut Sqlite3 = unsafe { (*p).db };
+
+    /// This function contains the logic that determines if a statement or
+    ///* transaction will be committed or rolled back as a result of the
+    ///* execution of this virtual machine.
+    ///*
+    ///* If any of the following errors occur:
+    ///*
+    ///*     SQLITE_NOMEM
+    ///*     SQLITE_IOERR
+    ///*     SQLITE_FULL
+    ///*     SQLITE_INTERRUPT
+    ///*
+    ///* Then the internal cache might have been left in an inconsistent
+    ///* state.  We need to rollback the statement transaction, if there is
+    ///* one, or the complete transaction if there is no statement transaction.
     { let _ = 0; };
     if unsafe { (*db).malloc_failed } != 0 { unsafe { (*p).rc = 7 }; }
     close_all_cursors(p);
     if unsafe { (*p).b_is_reader() } != 0 {
         let mut mrc: i32 = 0;
+        /// Primary error code from p->rc
         let mut e_statement_op: i32 = 0;
         let mut is_special_error: i32 = 0;
+
+        /// Set to true if a 'special' error
+        /// Lock all btrees used by the statement
         sqlite3_vdbe_enter(unsafe { &*p });
         if unsafe { (*p).rc } != 0 {
             mrc = unsafe { (*p).rc } & 255;
@@ -2933,6 +3414,9 @@ pub extern "C" fn sqlite3_vdbe_halt(p: *mut Vdbe) -> i32 {
                         unsafe { (*p).uses_stmt_journal() } != 0 {
                     e_statement_op = 2;
                 } else {
+
+                    /// We are forced to roll back the active transaction. Before doing
+                    ///* so, abort any other statements this handle currently has active.
                     unsafe { sqlite3_rollback_all(db, 4 | 2 << 8) };
                     unsafe { sqlite3_close_savepoints(db) };
                     unsafe { (*db).auto_commit = 1 as u8 };
@@ -2963,7 +3447,14 @@ pub extern "C" fn sqlite3_vdbe_halt(p: *mut Vdbe) -> i32 {
                 } else if unsafe { (*db).flags } & (2 as u64) << 32 != 0 {
                     rc = 11;
                     unsafe { (*db).flags &= !((2 as u64) << 32) };
-                } else { rc = vdbe_commit(db, p); }
+                } else {
+
+                    /// The auto-commit flag is true, the vdbe program was successful
+                    ///* or hit an 'OR FAIL' constraint and there are no deferred foreign
+                    ///* key constraints to hold up the transaction. This means a commit
+                    ///* is required.
+                    (rc = vdbe_commit(db, p));
+                }
                 if rc == 5 && unsafe { (*p).read_only() } != 0 {
                     sqlite3_vdbe_leave(p);
                     return 5;
@@ -3028,8 +3519,12 @@ pub extern "C" fn sqlite3_vdbe_halt(p: *mut Vdbe) -> i32 {
             }
             unsafe { (*p).n_change = 0 as i64 };
         }
+
+        /// Release the locks
         sqlite3_vdbe_leave(p);
     }
+
+    /// We have successfully halted and closed the VM.  Record this fact.
     {
         let __p = unsafe { &mut (*db).n_vdbe_active };
         let __t = *__p;
@@ -3062,6 +3557,12 @@ pub extern "C" fn sqlite3_vdbe_halt(p: *mut Vdbe) -> i32 {
     return if unsafe { (*p).rc } == 5 { 5 } else { 0 };
 }
 
+///* Copy the error code and error message belonging to the VDBE passed
+///* as the first argument to its database handle (so that they will be
+///* returned by calls to sqlite3_errcode() and sqlite3_errmsg()).
+///*
+///* This function does not clear the VDBE error code or message, just
+///* copies them to the database handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_transfer_error(p: &Vdbe) -> i32 {
     let db: *mut Sqlite3 = (*p).db;
@@ -3101,7 +3602,17 @@ pub extern "C" fn sqlite3_vdbe_transfer_error(p: &Vdbe) -> i32 {
     return rc;
 }
 
+///* Clean up a VDBE after execution but do not delete the VDBE just yet.
+///* Write any error messages into *pzErrMsg.  Return the result code.
+///*
+///* After this routine is run, the VDBE should be ready to be executed
+///* again.
+///*
+///* To look at it another way, this routine resets the state of the
+///* virtual machine from VDBE_RUN_STATE or VDBE_HALT_STATE back to
+///* VDBE_READY_STATE.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_reset(p: *mut Vdbe) -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
     db = unsafe { (*p).db };
@@ -3117,9 +3628,13 @@ pub extern "C" fn sqlite3_vdbe_reset(p: *mut Vdbe) -> i32 {
         unsafe { (*p).z_err_msg = core::ptr::null_mut() };
     }
     unsafe { (*p).p_result_row = core::ptr::null_mut() };
+
+    /// Save profiling information from this VDBE run.
     return unsafe { (*p).rc } & unsafe { (*db).err_mask };
 }
 
+///* Clean up and delete a VDBE after execution.  Return an integer which is
+///* the result code.  Write any error message text into *pzErrMsg.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_finalize(p: *mut Vdbe) -> i32 {
     let mut rc: i32 = 0;
@@ -3134,6 +3649,9 @@ pub extern "C" fn sqlite3_vdbe_finalize(p: *mut Vdbe) -> i32 {
     return rc;
 }
 
+///* Resolve label "x" to be the address of the next instruction to
+///* be inserted.  The parameter "x" must have been obtained from
+///* a prior call to sqlite3VdbeMakeLabel().
 extern "C" fn resize_resolve_label(p: *mut Parse, v: &Vdbe, j: i32) -> () {
     let n_new_size: i32 = 25 - unsafe { (*p).n_label };
     unsafe {
@@ -3157,6 +3675,7 @@ extern "C" fn resize_resolve_label(p: *mut Parse, v: &Vdbe, j: i32) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_resolve_label(v: *mut Vdbe, x: i32) -> () {
     let p: *mut Parse = unsafe { (*v).p_parse };
     let j: i32 = !x;
@@ -3167,17 +3686,25 @@ pub extern "C" fn sqlite3_vdbe_resolve_label(v: *mut Vdbe, x: i32) -> () {
         resize_resolve_label(p, unsafe { &*v }, j);
     } else {
         { let _ = 0; };
+
+        /// Labels may only be resolved once
         unsafe {
             *unsafe { (*p).a_label.offset(j as isize) } = unsafe { (*v).n_op }
         };
     }
 }
 
+///* Each VDBE holds the result of the most recent sqlite3_step() call
+///* in p->rc.  This routine sets that result back to SQLITE_OK.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_reset_step_result(p: &mut Vdbe) -> () {
     (*p).rc = 0;
 }
 
+///* Set the number of result columns that will be returned by this SQL
+///* statement. This is now set at compile time, rather than during
+///* execution of the vdbe program so that sqlite3_column_count() can
+///* be called on an SQL statement before sqlite3_step().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_num_cols(p: &mut Vdbe, n_res_column_1: i32)
     -> () {
@@ -3199,6 +3726,14 @@ pub extern "C" fn sqlite3_vdbe_set_num_cols(p: &mut Vdbe, n_res_column_1: i32)
     init_mem_array((*p).a_col_name, n, db, 1 as u16);
 }
 
+///* Set the name of the idx'th column to be returned by the SQL statement.
+///* zName must be a pointer to a nul terminated string.
+///*
+///* This call must be made after a call to sqlite3VdbeSetNumCols().
+///*
+///* The final parameter, xDel, must be one of SQLITE_DYNAMIC, SQLITE_STATIC
+///* or SQLITE_TRANSIENT. If it is SQLITE_DYNAMIC, then the buffer pointed
+///* to by zName will be freed by sqlite3DbFree() when the vdbe is destroyed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_col_name(p: &Vdbe, idx: i32, var: i32,
     z_name_1: *const i8, x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>)
@@ -3223,16 +3758,20 @@ pub extern "C" fn sqlite3_vdbe_set_col_name(p: &Vdbe, idx: i32, var: i32,
     return rc;
 }
 
+///* Set a flag in the vdbe to update the change counter when it is finalised
+///* or reset.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_count_changes(v: &mut Vdbe) -> () {
     (*v).set_change_cnt_on(1 as Bft as u32);
 }
 
+///* Return the SQLITE_PREPARE flags for a Vdbe.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_prepare_flags(v: &Vdbe) -> u8 {
     return (*v).prep_flags;
 }
 
+///* Remember the SQL string for a prepared statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_sql(p: *mut Vdbe, z: *const i8, n: i32,
     prep_flags_1: u8) -> () {
@@ -3246,6 +3785,14 @@ pub extern "C" fn sqlite3_vdbe_set_sql(p: *mut Vdbe, z: *const i8, n: i32,
     };
 }
 
+///* Swap byte-code between two VDBE structures.
+///*
+///* This happens after pB was previously run and returned
+///* SQLITE_SCHEMA.  The statement was then reprepared in pA.
+///* This routine transfers the new bytecode in pA over to pB
+///* so that pB can be run again.  The old pB byte code is
+///* moved back to pA so that it will be cleaned up when pA is
+///* finalized.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_swap(p_a_1: &mut Vdbe, p_b_1: &mut Vdbe)
     -> () {
@@ -3281,11 +3828,23 @@ pub extern "C" fn sqlite3_vdbe_swap(p_a_1: &mut Vdbe, p_b_1: &mut Vdbe)
     };
 }
 
+///* This function returns a pointer to the array of opcodes associated with
+///* the Vdbe passed as the first argument. It is the callers responsibility
+///* to arrange for the returned array to be eventually freed using the
+///* vdbeFreeOpArray() function.
+///*
+///* Before returning, *pnOp is set to the number of entries in the returned
+///* array. Also, *pnMaxArg is set to the larger of its current value and
+///* the number of entries in the Vdbe.apArg[] array required to execute the
+///* returned program.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_take_op_array(p: *mut Vdbe, pn_op_1: &mut i32,
     pn_max_arg_1: *mut i32) -> *mut VdbeOp {
     let a_op: *mut VdbeOp = unsafe { (*p).a_op } as *mut VdbeOp;
     { let _ = 0; };
+
+    /// Check that sqlite3VdbeUsesBtree() was not called on this VM
     { let _ = 0; };
     resolve_p2_values(unsafe { &mut *p }, unsafe { &mut *pn_max_arg_1 });
     *pn_op_1 = unsafe { (*p).n_op };
@@ -3293,6 +3852,12 @@ pub extern "C" fn sqlite3_vdbe_take_op_array(p: *mut Vdbe, pn_op_1: &mut i32,
     return a_op;
 }
 
+///* Return a pointer to an sqlite3_value structure containing the value bound
+///* parameter iVar of VM v. Except, if the value is an SQL NULL, return
+///* 0 instead. Unless it is NULL, apply affinity aff (one of the SQLITE_AFF_*
+///* constants) to the value before returning it.
+///*
+///* The returned value must be freed by the caller using sqlite3ValueFree().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_get_bound_value(v: *const Vdbe, i_var_1: i32,
     aff: u8) -> *mut Sqlite3Value {
@@ -3321,6 +3886,9 @@ pub extern "C" fn sqlite3_vdbe_get_bound_value(v: *const Vdbe, i_var_1: i32,
     return core::ptr::null_mut();
 }
 
+///* Configure SQL variable iVar so that binding a new value to it signals
+///* to sqlite3_reoptimize() that re-preparing the statement may result
+///* in a better query plan.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_set_varmask(v: &mut Vdbe, i_var_1: i32) -> () {
     { let _ = 0; };
@@ -3330,9 +3898,16 @@ pub extern "C" fn sqlite3_vdbe_set_varmask(v: &mut Vdbe, i_var_1: i32) -> () {
     } else { (*v).expmask |= (1 as u32) << i_var_1 - 1; }
 }
 
+///* Do a comparison between a 64-bit signed integer and a 64-bit floating-point
+///* number.  Return negative, zero, or positive if the first (i64) is less than,
+///* equal to, or greater than the second (double).
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_int_float_compare(i: i64, r: f64) -> i32 {
     if unsafe { sqlite3_is_na_n(r) } != 0 {
+
+        /// SQLite considers NaN to be a NULL. And all integer values are greater
+        ///* than NULL
         return 1;
     } else {
         let mut y: i64 = 0 as i64;
@@ -3345,6 +3920,10 @@ pub extern "C" fn sqlite3_int_float_compare(i: i64, r: f64) -> i32 {
     }
 }
 
+///* Both *pMem1 and *pMem2 contain string values. Compare the two values
+///* using the collation sequence pColl. As usual, return a negative , zero
+///* or positive value if *pMem1 is less than, equal to or greater than
+///* *pMem2, respectively. Similar in spirit to "rc = (*pMem1) - (*pMem2);".
 extern "C" fn vdbe_compare_mem_string_with_encoding_change(p_mem1_1:
         *const Mem, p_mem2_1: *const Mem, p_coll_1: &CollSeq,
     prc_err_1: *mut u8) -> i32 {
@@ -3390,12 +3969,16 @@ extern "C" fn vdbe_compare_mem_string_with_encoding_change(p_mem1_1:
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_compare_mem_string(p_mem1_1: *const Mem,
     p_mem2_1: *const Mem, p_coll_1: *const CollSeq, prc_err_1: *mut u8)
     -> i32 {
     unsafe {
         if unsafe { (*p_mem1_1).enc } as i32 ==
                 unsafe { (*p_coll_1).enc } as i32 {
+
+            /// The strings are already in the correct encoding.  Call the
+            ///* comparison function directly
             return unsafe {
                     (unsafe {
                             (*p_coll_1).x_cmp.unwrap()
@@ -3411,6 +3994,8 @@ extern "C" fn vdbe_compare_mem_string(p_mem1_1: *const Mem,
     }
 }
 
+///* The input pBlob is guaranteed to be a Blob that is not marked
+///* with MEM_Zero.  Return true if it could be a zero-blob.
 extern "C" fn is_all_zero(z: &[i8]) -> i32 {
     let mut i: i32 = 0;
     {
@@ -3424,12 +4009,21 @@ extern "C" fn is_all_zero(z: &[i8]) -> i32 {
     return 1;
 }
 
+///* Compare two blobs.  Return negative, zero, or positive if the first
+///* is less than, equal to, or greater than the second, respectively.
+///* If one blob is a prefix of the other, then the shorter is the lessor.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_blob_compare(p_b1_1: &Mem, p_b2_1: &Mem) -> i32 {
     unsafe {
         let mut c: i32 = 0;
         let n1: i32 = (*p_b1_1).n as i32;
         let n2: i32 = (*p_b2_1).n as i32;
+
+        /// It is possible to have a Blob value that has some non-zero content
+        ///* followed by zero content.  But that only comes up for Blobs formed
+        ///* by the OP_MakeRecord opcode, and such Blobs never get passed into
+        ///* sqlite3MemCompare().
         { let _ = 0; };
         { let _ = 0; };
         if ((*p_b1_1).flags as i32 | (*p_b2_1).flags as i32) & 1024 != 0 {
@@ -3471,7 +4065,15 @@ pub extern "C" fn sqlite3_blob_compare(p_b1_1: &Mem, p_b2_1: &Mem) -> i32 {
     }
 }
 
+///* Compare the values contained by the two memory cells, returning
+///* negative, zero or positive if pMem1 is less than, equal to, or greater
+///* than pMem2. Sorting order is NULL's first, followed by numbers (integers
+///* and reals) sorted numerically, followed by text ordered by the collating
+///* sequence pColl and finally blob's ordered by memcmp().
+///*
+///* Two NULL values are considered equal by this function.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_mem_compare(p_mem1_1: *const Mem,
     p_mem2_1: *const Mem, p_coll_1: *const CollSeq) -> i32 {
     unsafe {
@@ -3536,17 +4138,24 @@ pub extern "C" fn sqlite3_mem_compare(p_mem1_1: *const Mem,
             if f2 & 2 == 0 { return -1; }
             { let _ = 0; };
             { let _ = 0; };
+
+            /// The collation sequence must be defined at this point, even if
+            ///* the user deletes the collation sequence after the vdbe program is
+            ///* compiled (this was not always the case).
             { let _ = 0; };
             if !(p_coll_1).is_null() {
                 return vdbe_compare_mem_string(p_mem1_1, p_mem2_1, p_coll_1,
                         core::ptr::null_mut());
             }
         }
+
+        /// Both values must be blobs.  Compare using memcmp().
         return sqlite3_blob_compare(unsafe { &*p_mem1_1 },
                 unsafe { &*p_mem2_1 });
     }
 }
 
+///* Return the name of an SQL function associated with the sqlite3_context.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_func_name(p_ctx_1: &Sqlite3Context)
     -> *const i8 {
@@ -3557,6 +4166,14 @@ pub extern "C" fn sqlite3_vdbe_func_name(p_ctx_1: &Sqlite3Context)
     }
 }
 
+///* Deserialize the data blob pointed to by buf as serial type serial_type
+///* and store the result in pMem.
+///*
+///* This function is implemented as two separate routines for performance.
+///* The few cases that require local variables are broken out into a separate
+///* routine so that in most cases the overhead of moving the stack pointer
+///* is avoided.
+#[allow(unused_doc_comments)]
 extern "C" fn serial_get(buf: *const u8, serial_type: u32, p_mem_1: &mut Mem)
     -> () {
     unsafe {
@@ -3579,9 +4196,18 @@ extern "C" fn serial_get(buf: *const u8, serial_type: u32, p_mem_1: &mut Mem)
                     } as u32;
         x = (x << 32) + y as u64;
         if serial_type == 6 as u32 {
-            (*p_mem_1).u.i = unsafe { *(&raw mut x as *mut i64) };
-            (*p_mem_1).flags = 4 as u16;
+
+            /// EVIDENCE-OF: R-29851-52272 Value is a big-endian 64-bit
+            ///* twos-complement integer.
+            ((*p_mem_1).u.i = unsafe { *(&raw mut x as *mut i64) });
+
+            /// EVIDENCE-OF: R-29851-52272 Value is a big-endian 64-bit
+            ///* twos-complement integer.
+            ((*p_mem_1).flags = 4 as u16);
         } else {
+
+            /// EVIDENCE-OF: R-57343-49114 Value is a big-endian IEEE 754-2008 64-bit
+            ///* floating point number.
             { let _ = 0; };
             unsafe {
                 memcpy(&raw mut (*p_mem_1).u.r as *mut (),
@@ -3597,6 +4223,7 @@ extern "C" fn serial_get(buf: *const u8, serial_type: u32, p_mem_1: &mut Mem)
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
     p_mem_1: *mut Mem) -> () {
     unsafe {
@@ -3605,53 +4232,81 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
             match serial_type {
                 10 => {
                     {
+
+                        /// Internal use only: NULL with virtual table
+                        ///* UPDATE no-change flag set
                         unsafe { (*p_mem_1).flags = (1 | 1024) as u16 };
                         unsafe { (*p_mem_1).n = 0 };
                         unsafe { (*p_mem_1).u.n_zero = 0 };
                         return;
                     }
-                    { unsafe { (*p_mem_1).flags = 1 as u16 }; return; }
+                    {
+
+                        /// Null */
+                        ///      /* EVIDENCE-OF: R-24078-09375 Value is a NULL.
+                        unsafe { (*p_mem_1).flags = 1 as u16 };
+                        return;
+                    }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
-                                unsafe { *buf.offset(0 as isize) } as i8 as i64
+
+                            /// EVIDENCE-OF: R-44885-25196 Value is an 8-bit twos-complement
+                            ///* integer.
+                            ((*p_mem_1).u.i =
+                                unsafe { *buf.offset(0 as isize) } as i8 as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 2-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-49794-35026 Value is a big-endian 16-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                        unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -3666,17 +4321,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -3693,48 +4358,73 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                     }
                 }
                 11 => {
-                    { unsafe { (*p_mem_1).flags = 1 as u16 }; return; }
+                    {
+
+                        /// Null */
+                        ///      /* EVIDENCE-OF: R-24078-09375 Value is a NULL.
+                        unsafe { (*p_mem_1).flags = 1 as u16 };
+                        return;
+                    }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
-                                unsafe { *buf.offset(0 as isize) } as i8 as i64
+
+                            /// EVIDENCE-OF: R-44885-25196 Value is an 8-bit twos-complement
+                            ///* integer.
+                            ((*p_mem_1).u.i =
+                                unsafe { *buf.offset(0 as isize) } as i8 as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 2-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-49794-35026 Value is a big-endian 16-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                        unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -3749,17 +4439,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -3776,48 +4476,73 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                     }
                 }
                 0 => {
-                    { unsafe { (*p_mem_1).flags = 1 as u16 }; return; }
+                    {
+
+                        /// Null */
+                        ///      /* EVIDENCE-OF: R-24078-09375 Value is a NULL.
+                        unsafe { (*p_mem_1).flags = 1 as u16 };
+                        return;
+                    }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
-                                unsafe { *buf.offset(0 as isize) } as i8 as i64
+
+                            /// EVIDENCE-OF: R-44885-25196 Value is an 8-bit twos-complement
+                            ///* integer.
+                            ((*p_mem_1).u.i =
+                                unsafe { *buf.offset(0 as isize) } as i8 as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 2-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-49794-35026 Value is a big-endian 16-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                        unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -3832,17 +4557,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -3861,45 +4596,64 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 1 => {
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
-                                unsafe { *buf.offset(0 as isize) } as i8 as i64
+
+                            /// EVIDENCE-OF: R-44885-25196 Value is an 8-bit twos-complement
+                            ///* integer.
+                            ((*p_mem_1).u.i =
+                                unsafe { *buf.offset(0 as isize) } as i8 as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 2-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-49794-35026 Value is a big-endian 16-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                        unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -3914,17 +4668,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -3943,37 +4707,53 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 2 => {
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 2-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-49794-35026 Value is a big-endian 16-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                        unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -3988,17 +4768,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4017,28 +4807,40 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 3 => {
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 3-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-37839-54301 Value is a big-endian 24-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (65536 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
                                             (unsafe { *buf.offset(1 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(2 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(2 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -4053,17 +4855,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4082,18 +4894,26 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 4 => {
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 4-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-01849-26079 Value is a big-endian 32-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 (16777216 * unsafe { *buf.offset(0 as isize) } as i8 as i32
                                                 | (unsafe { *buf.offset(1 as isize) } as i32) << 16 |
                                             (unsafe { *buf.offset(2 as isize) } as i32) << 8 |
-                                        unsafe { *buf.offset(3 as isize) } as i32) as i64
+                                        unsafe { *buf.offset(3 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -4108,17 +4928,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4137,7 +4967,11 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 5 => {
                     {
                         unsafe {
-                            (*p_mem_1).u.i =
+
+                            /// 6-byte signed integer */
+                            ///      /* EVIDENCE-OF: R-50385-09674 Value is a big-endian 48-bit
+                            ///* twos-complement integer.
+                            ((*p_mem_1).u.i =
                                 ((unsafe {
                                                                     *unsafe { buf.offset(2 as isize).offset(0 as isize) }
                                                                 } as u32) << 24 |
@@ -4152,17 +4986,27 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                                                 } as u32) as i64 +
                                     ((1 as i64) << 32) *
                                         (256 * unsafe { *buf.offset(0 as isize) } as i8 as i32 |
-                                                unsafe { *buf.offset(1 as isize) } as i32) as i64
+                                                unsafe { *buf.offset(1 as isize) } as i32) as i64)
                         };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4180,11 +5024,21 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 }
                 6 => {
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4202,11 +5056,21 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 }
                 7 => {
                     {
+
+                        /// IEEE floating point */
+                        ///      /* These use local variables, so do them in a separate routine
+                        ///* to avoid having to move the frame pointer in the common case
                         serial_get(buf, serial_type, unsafe { &mut *p_mem_1 });
                         return;
                     }
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4224,7 +5088,13 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 }
                 8 => {
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4242,7 +5112,13 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
                 }
                 9 => {
                     {
-                        unsafe { (*p_mem_1).u.i = (serial_type - 8 as u32) as i64 };
+                        unsafe {
+
+                            /// Integer 1 */
+                            ///      /* EVIDENCE-OF: R-12976-22893 Value is the integer 0. */
+                            ///      /* EVIDENCE-OF: R-18143-12121 Value is the integer 1.
+                            ((*p_mem_1).u.i = (serial_type - 8 as u32) as i64)
+                        };
                         unsafe { (*p_mem_1).flags = 4 as u16 };
                         return;
                     }
@@ -4277,6 +5153,32 @@ pub extern "C" fn sqlite3_vdbe_serial_get(buf: *const u8, serial_type: u32,
     }
 }
 
+///* The sizes for serial types less than 128
+#[unsafe(no_mangle)]
+pub static sqlite3_small_type_sizes: [u8; 128] =
+    [0 as u8, 1 as u8, 2 as u8, 3 as u8, 4 as u8, 6 as u8, 8 as u8, 8 as u8,
+            0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 0 as u8, 1 as u8,
+            1 as u8, 2 as u8, 2 as u8, 3 as u8, 3 as u8, 4 as u8, 4 as u8,
+            5 as u8, 5 as u8, 6 as u8, 6 as u8, 7 as u8, 7 as u8, 8 as u8,
+            8 as u8, 9 as u8, 9 as u8, 10 as u8, 10 as u8, 11 as u8, 11 as u8,
+            12 as u8, 12 as u8, 13 as u8, 13 as u8, 14 as u8, 14 as u8,
+            15 as u8, 15 as u8, 16 as u8, 16 as u8, 17 as u8, 17 as u8,
+            18 as u8, 18 as u8, 19 as u8, 19 as u8, 20 as u8, 20 as u8,
+            21 as u8, 21 as u8, 22 as u8, 22 as u8, 23 as u8, 23 as u8,
+            24 as u8, 24 as u8, 25 as u8, 25 as u8, 26 as u8, 26 as u8,
+            27 as u8, 27 as u8, 28 as u8, 28 as u8, 29 as u8, 29 as u8,
+            30 as u8, 30 as u8, 31 as u8, 31 as u8, 32 as u8, 32 as u8,
+            33 as u8, 33 as u8, 34 as u8, 34 as u8, 35 as u8, 35 as u8,
+            36 as u8, 36 as u8, 37 as u8, 37 as u8, 38 as u8, 38 as u8,
+            39 as u8, 39 as u8, 40 as u8, 40 as u8, 41 as u8, 41 as u8,
+            42 as u8, 42 as u8, 43 as u8, 43 as u8, 44 as u8, 44 as u8,
+            45 as u8, 45 as u8, 46 as u8, 46 as u8, 47 as u8, 47 as u8,
+            48 as u8, 48 as u8, 49 as u8, 49 as u8, 50 as u8, 50 as u8,
+            51 as u8, 51 as u8, 52 as u8, 52 as u8, 53 as u8, 53 as u8,
+            54 as u8, 54 as u8, 55 as u8, 55 as u8, 56 as u8, 56 as u8,
+            57 as u8, 57 as u8];
+
+///* Return the length of the data corresponding to the supplied serial-type.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_serial_type_len(serial_type: u32) -> u32 {
     if serial_type >= 128 as u32 {
@@ -4287,14 +5189,20 @@ pub extern "C" fn sqlite3_vdbe_serial_type_len(serial_type: u32) -> u32 {
     }
 }
 
+///* Given the nKey-byte encoding of a record in pKey[], populate the
+///* UnpackedRecord structure indicated by the fourth argument with the
+///* contents of the decoded record.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_record_unpack(n_key_1: i32, p_key_1: *const (),
     p: &mut UnpackedRecord) -> () {
     unsafe {
         let a_key: *const u8 = p_key_1 as *const u8;
         let mut d: u32 = 0 as u32;
         let mut idx: u32 = 0 as u32;
+        /// Offset in aKey[] to read from
         let mut u: u16 = 0 as u16;
+        /// Unsigned loop counter
         let mut sz_hdr: u32 = 0 as u32;
         let mut p_mem: *mut Mem = (*p).a_mem;
         let p_key_info: *const KeyInfo = (*p).p_key_info as *const KeyInfo;
@@ -4334,6 +5242,8 @@ pub extern "C" fn sqlite3_vdbe_record_unpack(n_key_1: i32, p_key_1: *const (),
                         } as u8 as u32;
             unsafe { (*p_mem).enc = unsafe { (*p_key_info).enc } };
             unsafe { (*p_mem).db = unsafe { (*p_key_info).db } };
+
+            /// pMem->flags = 0; // sqlite3VdbeSerialGet() will set this for us
             unsafe { (*p_mem).sz_malloc = 0 };
             unsafe { (*p_mem).z = core::ptr::null_mut() };
             sqlite3_vdbe_serial_get(unsafe { &*a_key.add(d as usize) },
@@ -4352,6 +5262,10 @@ pub extern "C" fn sqlite3_vdbe_record_unpack(n_key_1: i32, p_key_1: *const (),
         }
         if d > n_key_1 as u32 && u != 0 {
             { let _ = 0; };
+
+            /// In a corrupt record entry, the last pMem might have been set up using
+            ///* uninitialized memory. Overwrite its value with NULL, to prevent
+            ///* warnings from MSAN.
             unsafe {
                 sqlite3_vdbe_mem_set_null(unsafe {
                         p_mem.offset(-(((u as i32) < (*p).n_field as i32) as isize))
@@ -4398,6 +5312,11 @@ extern "C" fn serial_get7(buf: *const u8, p_mem_1: &mut Mem) -> i32 {
     }
 }
 
+///* The first argument passed to this function is a serial-type that
+///* corresponds to an integer - all values between 1 and 9 inclusive
+///* except 7. The second points to a buffer containing an integer value
+///* serialized according to serial_type. This function deserializes
+///* and returns the value.
 extern "C" fn vdbe_record_decode_int(serial_type: u32, a_key_1: *const u8)
     -> i64 {
     let mut y: u32 = 0 as u32;
@@ -4760,17 +5679,43 @@ extern "C" fn vdbe_record_decode_int(serial_type: u32, a_key_1: *const u8)
     return (serial_type - 8 as u32) as i64;
 }
 
+///* This function compares the two table rows or index records
+///* specified by {nKey1, pKey1} and pPKey2.  It returns a negative, zero
+///* or positive integer if key1 is less than, equal to or
+///* greater than key2.  The {nKey1, pKey1} key must be a blob
+///* created by the OP_MakeRecord opcode of the VDBE.  The pPKey2
+///* key must be a parsed key such as obtained from
+///* sqlite3VdbeParseRecord.
+///*
+///* If argument bSkip is non-zero, it is assumed that the caller has already
+///* determined that the first fields of the keys are equal.
+///*
+///* Key1 and Key2 do not have to contain the same number of fields. If all
+///* fields that appear in both keys are equal, then pPKey2->default_rc is
+///* returned.
+///*
+///* If database corruption is discovered, set pPKey2->errCode to
+///* SQLITE_CORRUPT and return 0. If an OOM error is encountered,
+///* pPKey2->errCode is set to SQLITE_NOMEM and, if it is not NULL, the
+///* malloc-failed flag set on database handle (pPKey2->pKeyInfo->db).
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_record_compare_with_skip(n_key1_1: i32,
     p_key1_1: *const (), p_p_key2_1: &mut UnpackedRecord, b_skip_1: i32)
     -> i32 {
     unsafe {
         let mut d1: u32 = 0 as u32;
+        /// Offset into aKey[] of next data element
         let mut i: i32 = 0;
+        /// Index of next field to compare
         let mut sz_hdr1: u32 = 0 as u32;
+        /// Size of record header in bytes
         let mut idx1: u32 = 0 as u32;
+        /// Offset of first type in header
         let mut rc: i32 = 0;
+        /// Return value
         let mut p_rhs: *const Mem = (*p_p_key2_1).a_mem as *const Mem;
+        /// Next field of pPKey2 to compare
         let mut p_key_info: *const KeyInfo = core::ptr::null();
         let a_key1: *const u8 = p_key1_1 as *const u8;
         let mut mem1: Mem = unsafe { core::mem::zeroed() };
@@ -4814,6 +5759,8 @@ pub extern "C" fn sqlite3_vdbe_record_compare_with_skip(n_key1_1: i32,
                 unsafe { sqlite3_corrupt_error(4779) } as u8;
             return 0;
         }
+
+        /// Only needed by assert() statements
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -4842,7 +5789,12 @@ pub extern "C" fn sqlite3_vdbe_record_compare_with_skip(n_key1_1: i32,
             } else if unsafe { (*p_rhs).flags } as i32 & 8 != 0 {
                 serial_type = unsafe { *a_key1.add(idx1 as usize) } as u32;
                 if serial_type >= 10 as u32 {
-                    rc = if serial_type == 10 as u32 { -1 } else { 1 };
+
+                    /// Serial types 12 or greater are strings and blobs (greater than
+                    ///* numbers). Types 10 and 11 are currently "reserved for future
+                    ///* use", so it doesn't really matter what the results of comparing
+                    ///* them to numeric values are.
+                    (rc = if serial_type == 10 as u32 { -1 } else { 1 });
                 } else if serial_type == 0 as u32 {
                     rc = -1;
                 } else {
@@ -4988,6 +5940,8 @@ pub extern "C" fn sqlite3_vdbe_record_compare_with_skip(n_key1_1: i32,
                 }
                 { let _ = 0; };
                 { let _ = 0; };
+
+                /// See comment below
                 return rc;
             }
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
@@ -5007,7 +5961,15 @@ pub extern "C" fn sqlite3_vdbe_record_compare_with_skip(n_key1_1: i32,
                 return 0;
             }
         }
+
+        /// No memory allocation is ever used on mem1.  Prove this using
+        ///* the following assert().  If the assert() fails, it indicates a
+        ///* memory leak and a need to call sqlite3VdbeMemRelease(&mem1).
         { let _ = 0; };
+
+        /// rc==0 here means that one or both of the keys ran out of fields and
+        ///* all the fields up to that point were equal. Return the default_rc
+        ///* value.
         { let _ = 0; };
         (*p_p_key2_1).eq_seen = 1 as u8;
         return (*p_p_key2_1).default_rc as i32;
@@ -5021,12 +5983,21 @@ pub extern "C" fn sqlite3_vdbe_record_compare(n_key1_1: i32,
             unsafe { &mut *p_p_key2_1 }, 0);
 }
 
+///* Allocate sufficient space for an UnpackedRecord structure large enough
+///* to hold a decoded index record for pKeyInfo.
+///*
+///* The space is allocated using sqlite3DbMallocRaw().  If an OOM error
+///* occurs, NULL is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_alloc_unpacked_record(p_key_info_1:
         *mut KeyInfo) -> *mut UnpackedRecord {
     unsafe {
         let mut p: *mut UnpackedRecord = core::ptr::null_mut();
+        /// Unpacked record to return
         let mut n_byte: u64 = 0 as u64;
+
+        /// Number of bytes required for *p
         { let _ = 0; };
         n_byte =
             (core::mem::size_of::<UnpackedRecord>() as u64 +
@@ -5055,6 +6026,14 @@ pub extern "C" fn sqlite3_vdbe_alloc_unpacked_record(p_key_info_1:
     }
 }
 
+///* This function is an optimized version of sqlite3VdbeRecordCompare()
+///* that (a) the first field of pPKey2 is an integer, and (b) the
+///* size-of-header varint at the start of (pKey1/nKey1) fits in a single
+///* byte (i.e. is less than 128).
+///*
+///* To avoid concerns about buffer overreads, this routine is only used
+///* on schemas where the maximum valid header size is 63 bytes or less.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
     p_p_key2_1: *mut UnpackedRecord) -> i32 {
     unsafe {
@@ -5077,34 +6056,44 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
             match serial_type {
                 1 => {
                     {
-                        lhs = unsafe { *a_key.offset(0 as isize) } as i8 as i64;
+
+                        /// 1-byte signed integer
+                        (lhs = unsafe { *a_key.offset(0 as isize) } as i8 as i64);
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 2-byte signed integer
+                        (lhs =
                             (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                    unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                    unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 3-byte signed integer
+                        (lhs =
                             (65536 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
                                         (unsafe { *a_key.offset(1 as isize) } as i32) << 8 |
-                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64;
+                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        y =
+
+                        /// 4-byte signed integer
+                        (y =
                             (unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                         ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                     |
                                     ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                | unsafe { *a_key.offset(3 as isize) } as u32;
+                                | unsafe { *a_key.offset(3 as isize) } as u32);
                         lhs = unsafe { *(&raw mut y as *mut i32) } as i64;
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 6-byte signed integer
+                        (lhs =
                             ((unsafe {
                                                                 *unsafe { a_key.offset(2 as isize).offset(0 as isize) }
                                                             } as u32) << 24 |
@@ -5119,16 +6108,18 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                                             } as u32) as i64 +
                                 ((1 as i64) << 32) *
                                     (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5150,30 +6141,38 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                 }
                 2 => {
                     {
-                        lhs =
+
+                        /// 2-byte signed integer
+                        (lhs =
                             (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                    unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                    unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 3-byte signed integer
+                        (lhs =
                             (65536 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
                                         (unsafe { *a_key.offset(1 as isize) } as i32) << 8 |
-                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64;
+                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        y =
+
+                        /// 4-byte signed integer
+                        (y =
                             (unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                         ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                     |
                                     ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                | unsafe { *a_key.offset(3 as isize) } as u32;
+                                | unsafe { *a_key.offset(3 as isize) } as u32);
                         lhs = unsafe { *(&raw mut y as *mut i32) } as i64;
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 6-byte signed integer
+                        (lhs =
                             ((unsafe {
                                                                 *unsafe { a_key.offset(2 as isize).offset(0 as isize) }
                                                             } as u32) << 24 |
@@ -5188,16 +6187,18 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                                             } as u32) as i64 +
                                 ((1 as i64) << 32) *
                                     (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5219,24 +6220,30 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                 }
                 3 => {
                     {
-                        lhs =
+
+                        /// 3-byte signed integer
+                        (lhs =
                             (65536 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
                                         (unsafe { *a_key.offset(1 as isize) } as i32) << 8 |
-                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64;
+                                    unsafe { *a_key.offset(2 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        y =
+
+                        /// 4-byte signed integer
+                        (y =
                             (unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                         ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                     |
                                     ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                | unsafe { *a_key.offset(3 as isize) } as u32;
+                                | unsafe { *a_key.offset(3 as isize) } as u32);
                         lhs = unsafe { *(&raw mut y as *mut i32) } as i64;
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 6-byte signed integer
+                        (lhs =
                             ((unsafe {
                                                                 *unsafe { a_key.offset(2 as isize).offset(0 as isize) }
                                                             } as u32) << 24 |
@@ -5251,16 +6258,18 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                                             } as u32) as i64 +
                                 ((1 as i64) << 32) *
                                     (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5282,17 +6291,21 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                 }
                 4 => {
                     {
-                        y =
+
+                        /// 4-byte signed integer
+                        (y =
                             (unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                         ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                     |
                                     ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                | unsafe { *a_key.offset(3 as isize) } as u32;
+                                | unsafe { *a_key.offset(3 as isize) } as u32);
                         lhs = unsafe { *(&raw mut y as *mut i32) } as i64;
                         break '__s35;
                     }
                     {
-                        lhs =
+
+                        /// 6-byte signed integer
+                        (lhs =
                             ((unsafe {
                                                                 *unsafe { a_key.offset(2 as isize).offset(0 as isize) }
                                                             } as u32) << 24 |
@@ -5307,16 +6320,18 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                                             } as u32) as i64 +
                                 ((1 as i64) << 32) *
                                     (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5338,7 +6353,9 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                 }
                 5 => {
                     {
-                        lhs =
+
+                        /// 6-byte signed integer
+                        (lhs =
                             ((unsafe {
                                                                 *unsafe { a_key.offset(2 as isize).offset(0 as isize) }
                                                             } as u32) << 24 |
@@ -5353,16 +6370,18 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                                             } as u32) as i64 +
                                 ((1 as i64) << 32) *
                                     (256 * unsafe { *a_key.offset(0 as isize) } as i8 as i32 |
-                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64;
+                                            unsafe { *a_key.offset(1 as isize) } as i32) as i64);
                         break '__s35;
                     }
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5384,12 +6403,14 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
                 }
                 6 => {
                     {
-                        x =
+
+                        /// 8-byte signed integer
+                        (x =
                             ((unsafe { *a_key.offset(0 as isize) } as u32) << 24 |
                                             ((unsafe { *a_key.offset(1 as isize) } as i32) << 16) as u32
                                         |
                                         ((unsafe { *a_key.offset(2 as isize) } as i32) << 8) as u32
-                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64;
+                                    | unsafe { *a_key.offset(3 as isize) } as u32) as u64);
                         x =
                             x << 32 |
                                 ((unsafe {
@@ -5436,11 +6457,17 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
         } else if v < lhs {
             res = unsafe { (*p_p_key2_1).r2 } as i32;
         } else if unsafe { (*p_p_key2_1).n_field } as i32 > 1 {
-            res =
+
+            /// The first fields of the two keys are equal. Compare the trailing
+            ///* fields.
+            (res =
                 sqlite3_vdbe_record_compare_with_skip(n_key1_1, p_key1_1,
-                    unsafe { &mut *p_p_key2_1 }, 1);
+                    unsafe { &mut *p_p_key2_1 }, 1));
         } else {
-            res = unsafe { (*p_p_key2_1).default_rc } as i32;
+
+            /// The first fields of the two keys are equal and there are no trailing
+            ///* fields. Return pPKey2->default_rc in this case.
+            (res = unsafe { (*p_p_key2_1).default_rc } as i32);
             unsafe { (*p_p_key2_1).eq_seen = 1 as u8 };
         }
         { let _ = 0; };
@@ -5448,6 +6475,11 @@ extern "C" fn vdbe_record_compare_int(n_key1_1: i32, p_key1_1: *const (),
     }
 }
 
+///* This function is an optimized version of sqlite3VdbeRecordCompare()
+///* that (a) the first field of pPKey2 is a string, that (b) the first field
+///* uses the collation sequence BINARY and (c) that the size-of-header varint
+///* at the start of (pKey1/nKey1) fits in a single byte.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_record_compare_string(n_key1_1: i32, p_key1_1: *const (),
     p_p_key2_1: *mut UnpackedRecord) -> i32 {
     unsafe {
@@ -5516,15 +6548,37 @@ extern "C" fn vdbe_record_compare_string(n_key1_1: i32, p_key1_1: *const (),
             }
             break;
         }
+
+        /// (pKey1/nKey1) is a number or a null
+        /// (pKey1/nKey1) is a blob
+        /// Corruption
         { let _ = 0; };
         return res;
     }
 }
 
+///* Return a pointer to an sqlite3VdbeRecordCompare() compatible function
+///* suitable for comparing serialized records to the unpacked record passed
+///* as the only argument.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_find_compare(p: &mut UnpackedRecord)
     -> unsafe extern "C" fn(i32, *const (), *mut UnpackedRecord) -> i32 {
     unsafe {
+
+        /// varintRecordCompareInt() and varintRecordCompareString() both assume
+        ///* that the size-of-header varint that occurs at the start of each record
+        ///* fits in a single byte (i.e. is 127 or less). varintRecordCompareInt()
+        ///* also assumes that it is safe to overread a buffer by at least the
+        ///* maximum possible legal header size plus 8 bytes. Because there is
+        ///* guaranteed to be at least 74 (but not 136) bytes of padding following each
+        ///* buffer passed to varintRecordCompareInt() this makes it convenient to
+        ///* limit the size of the header to 64 bytes in cases where the first field
+        ///* is an integer.
+        ///*
+        ///* The easiest way to enforce this limit is to consider only records with
+        ///* 13 fields or less. If the first field is an integer, the maximum legal
+        ///* header size is (12*5 + 1 + 1) bytes.
         { let _ = 0; };
         if unsafe { (*(*p).p_key_info).n_all_field } as i32 <= 13 {
             let flags: i32 =
@@ -5563,6 +6617,9 @@ pub extern "C" fn sqlite3_vdbe_find_compare(p: &mut UnpackedRecord)
     }
 }
 
+///* Link the SubProgram object passed as the second argument into the linked
+///* list at Vdbe.pSubProgram. This list is used to delete all sub-program
+///* objects when the VM is no longer required.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_link_sub_program(p_vdbe_1: &mut Vdbe,
     p: *mut SubProgram) -> () {
@@ -5572,11 +6629,19 @@ pub extern "C" fn sqlite3_vdbe_link_sub_program(p_vdbe_1: &mut Vdbe,
     }
 }
 
+///* Return true if the given Vdbe has any SubPrograms.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_has_sub_program(p_vdbe_1: &Vdbe) -> i32 {
     unsafe { return ((*p_vdbe_1).p_program != core::ptr::null_mut()) as i32; }
 }
 
+///* Cause a function to throw an error if it was call from OP_PureFunc
+///* rather than OP_Function.
+///*
+///* OP_PureFunc means that the function must be deterministic, and should
+///* throw an error if it is given inputs that would make it non-deterministic.
+///* This routine is invoked by date/time functions that use non-deterministic
+///* features such as 'now'.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_not_pure_func(p_ctx_1: *mut Sqlite3Context) -> i32 {
     unsafe {
@@ -5616,6 +6681,22 @@ pub extern "C" fn sqlite3_not_pure_func(p_ctx_1: *mut Sqlite3Context) -> i32 {
     }
 }
 
+///* Mark every prepared statement associated with a database connection
+///* as expired.
+///*
+///* An expired statement means that recompilation of the statement is
+///* recommend.  Statements expire when things happen that make their
+///* programs obsolete.  Removing user-defined functions or collating
+///* sequences, or changing an authorization function are the types of
+///* things that make prepared statements obsolete.
+///*
+///* If iCode is 1, then expiration is advisory.  The statement should
+///* be reprepared before being restarted, but if it is already running
+///* it is allowed to run to completion.
+///*
+///* Internally, this function just sets the Vdbe.expired flag on all
+///* prepared statements.  The flag is set to 1 for an immediate expiration
+///* and set to 2 for an advisory expiration.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expire_prepared_statements(db: &Sqlite3,
     i_code_1: i32) -> () {
@@ -5633,6 +6714,9 @@ pub extern "C" fn sqlite3_expire_prepared_statements(db: &Sqlite3,
     }
 }
 
+///* Transfer error message text from an sqlite3_vtab.zErrMsg (text stored
+///* in memory obtained from sqlite3_malloc) into a Vdbe.zErrMsg (text stored
+///* in memory obtained from sqlite3DbMalloc).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_import_errmsg(p: &mut Vdbe,
     p_vtab_1: &mut Sqlite3Vtab) -> () {
@@ -5648,6 +6732,8 @@ pub extern "C" fn sqlite3_vtab_import_errmsg(p: &mut Vdbe,
     }
 }
 
+///* Close a VDBE cursor and release all the resources that cursor
+///* happens to hold.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_free_cursor(p: *mut Vdbe,
     p_cx_1: *mut VdbeCursor) -> () {
@@ -5656,6 +6742,11 @@ pub extern "C" fn sqlite3_vdbe_free_cursor(p: *mut Vdbe,
     }
 }
 
+///* Something has moved cursor "p" out of place.  Maybe the row it was
+///* pointed to was deleted out from under it.  Or maybe the btree was
+///* rebalanced.  Whatever the cause, try to restore "p" to the place it
+///* is supposed to be pointing.  If the row was deleted out from under the
+///* cursor, set the cursor to point to a NULL row.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_handle_moved_cursor(p: &mut VdbeCursor)
     -> i32 {
@@ -5676,6 +6767,9 @@ pub extern "C" fn sqlite3_vdbe_handle_moved_cursor(p: &mut VdbeCursor)
     }
 }
 
+///* The cursor "p" has a pending seek operation that has not yet been
+///* carried out.  Seek the cursor now.  If an error occurs, return
+///* the appropriate error code.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_finish_moveto(p: &mut VdbeCursor) -> i32 {
     unsafe {
@@ -5697,6 +6791,8 @@ pub extern "C" fn sqlite3_vdbe_finish_moveto(p: &mut VdbeCursor) -> i32 {
     }
 }
 
+///* Check to ensure that the cursor is valid.  Restore the cursor
+///* if need be.  Return any I/O error from the restore operation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_cursor_restore(p: *mut VdbeCursor) -> i32 {
     unsafe {
@@ -5717,6 +6813,15 @@ pub extern "C" fn sqlite3_vdbe_one_byte_serial_type_len(serial_type: u8)
     return sqlite3_small_type_sizes[serial_type as usize] as u8;
 }
 
+///* Compare the key of the index entry that cursor pC is pointing to against
+///* the key string in pUnpacked.  Write into *pRes a number
+///* that is negative, zero, or positive if pC is less than, equal to,
+///* or greater than pUnpacked.  Return SQLITE_OK on success.
+///*
+///* pUnpacked is either created without a rowid or is truncated so that it
+///* omits the rowid at the end.  The rowid at the end of the index entry
+///* is ignored as well.  Hence, this routine only compares the prefixes
+///* of the keys prior to the final rowid, not the entire key.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_idx_key_compare(db: *mut Sqlite3,
     p_c_1: &VdbeCursor, p_unpacked_1: *mut UnpackedRecord, res: &mut i32)
@@ -5749,10 +6854,20 @@ pub extern "C" fn sqlite3_vdbe_idx_key_compare(db: *mut Sqlite3,
     }
 }
 
+///* pCur points at an index entry created using the OP_MakeRecord opcode.
+///* Read the rowid (the last field in the record) and store it in *rowid.
+///* Return SQLITE_OK if everything works, or an error code otherwise.
+///*
+///* pCur might be pointing to text obtained from a corrupt database file.
+///* So the content cannot be trusted.  Do appropriate checks on the content.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
     p_cur_1: *mut BtCursor, rowid: &mut i64) -> i32 {
     unsafe {
+        /// Size of the header
+        /// Serial type of the rowid
+        /// Size of the rowid
         let mut m: Mem = unsafe { core::mem::zeroed() };
         let mut v: Mem = unsafe { core::mem::zeroed() };
         '__b38: loop {
@@ -5760,12 +6875,22 @@ pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
                 let mut n_cell_key: i64 = 0 as i64;
                 let mut rc: i32 = 0;
                 let mut sz_hdr: u32 = 0 as u32;
+                /// Size of the header
                 let mut type_rowid: u32 = 0 as u32;
+                /// Serial type of the rowid
                 let mut len_rowid: u32 = 0 as u32;
+
+                /// Size of the rowid
+                /// Get the size of the index entry.  Only indices entries of less
+                ///* than 2GiB are support - anything large must be database corruption.
+                ///* Any corruption is detected in sqlite3BtreeParseCellPtr(), though, so
+                ///* this code can safely assume that nCellKey is 32-bits
                 { let _ = 0; };
                 n_cell_key =
                     unsafe { sqlite3_btree_payload_size(p_cur_1) } as i64;
                 { let _ = 0; };
+
+                /// Read in the complete content of the index entry
                 unsafe { sqlite3_vdbe_mem_init(&mut m, db, 0 as u16) };
                 rc =
                     unsafe {
@@ -5773,7 +6898,9 @@ pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
                             n_cell_key as u32, &mut m)
                     };
                 if rc != 0 { return rc; }
-                sz_hdr = unsafe { *(m.z as *mut u8) } as u32;
+
+                /// The index entry must begin with a header size
+                (sz_hdr = unsafe { *(m.z as *mut u8) } as u32);
                 if sz_hdr >= 128 as u32 {
                     unsafe {
                         sqlite3_get_varint32(m.z as *mut u8 as *const u8,
@@ -5782,11 +6909,14 @@ pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
                 }
                 { let _ = 0; };
                 if sz_hdr < 3 as u32 || sz_hdr > m.n as u32 { break '__b38; }
-                type_rowid =
+
+                /// The last field of the index should be an integer - the ROWID.
+                ///* Verify that the last entry really is an integer.
+                (type_rowid =
                     unsafe {
                             *(unsafe { &raw mut *m.z.add((sz_hdr - 1 as u32) as usize) }
                                     as *mut u8)
-                        } as u32;
+                        } as u32);
                 if type_rowid >= 128 as u32 {
                     unsafe {
                         sqlite3_get_varint32(unsafe {
@@ -5801,6 +6931,8 @@ pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
                 len_rowid =
                     sqlite3_small_type_sizes[type_rowid as usize] as u32;
                 if (m.n as u32) < sz_hdr + len_rowid { break '__b38; }
+
+                /// Fetch the integer off the end of the index record
                 sqlite3_vdbe_serial_get(unsafe {
                                 &raw mut *m.z.add((m.n as u32 - len_rowid) as usize)
                             } as *mut u8 as *const u8, type_rowid, &mut v);
@@ -5816,24 +6948,47 @@ pub extern "C" fn sqlite3_vdbe_idx_rowid(db: *mut Sqlite3,
     }
 }
 
+///* Locate the next opcode to be displayed in EXPLAIN or EXPLAIN
+///* QUERY PLAN output.
+///*
+///* Return SQLITE_ROW on success.  Return SQLITE_DONE if there are no
+///* more opcodes to be displayed.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_next_opcode(p: &mut Vdbe, p_sub_1: *mut Mem,
     e_mode_1: i32, pi_pc_1: &mut i32, pi_addr_1: &mut i32,
     pa_op_1: &mut *mut Op) -> i32 {
     unsafe {
         let mut n_row: i32 = 0;
+        /// Stop when row count reaches this
         let mut n_sub: i32 = 0;
+        /// Number of sub-vdbes seen so far
         let mut ap_sub: *mut *mut SubProgram = core::ptr::null_mut();
+        /// Array of sub-vdbes
         let mut i: i32 = 0;
+        /// Next instruction address
         let mut rc: i32 = 0;
+        /// Result code
         let mut a_op: *mut Op = core::ptr::null_mut();
+        /// Opcode array
         let mut i_pc: i32 = 0;
-        n_row = (*p).n_op;
+
+        /// Rowid.  Copy of value in *piPc
+        /// When the number of output rows reaches nRow, that means the
+        ///* listing has finished and sqlite3_step() should return SQLITE_DONE.
+        ///* nRow is the sum of the number of rows in the main program, plus
+        ///* the sum of the number of rows in all trigger subprograms encountered
+        ///* so far.  The nRow value will increase as new trigger subprograms are
+        ///* encountered, but p->pc will eventually catch up to nRow.
+        (n_row = (*p).n_op);
         if p_sub_1 != core::ptr::null_mut() {
             if unsafe { (*p_sub_1).flags } as i32 & 16 != 0 {
-                n_sub =
+
+                /// pSub is initiallly NULL.  It is initialized to a BLOB by
+                ///* the P4_SUBPROGRAM processing logic below
+                (n_sub =
                     (unsafe { (*p_sub_1).n } as u64 /
-                            core::mem::size_of::<*mut Vdbe>() as u64) as i32;
+                            core::mem::size_of::<*mut Vdbe>() as u64) as i32);
                 ap_sub = unsafe { (*p_sub_1).z } as *mut *mut SubProgram;
             }
             {
@@ -5851,11 +7006,18 @@ pub extern "C" fn sqlite3_vdbe_next_opcode(p: &mut Vdbe, p_sub_1: *mut Mem,
         }
         i_pc = *pi_pc_1;
         loop {
-            i = { let __p = &mut i_pc; let __t = *__p; *__p += 1; __t };
+
+            /// Loop exits via break
+            (i = { let __p = &mut i_pc; let __t = *__p; *__p += 1; __t });
             if i >= n_row { (*p).rc = 0; rc = 101; break; }
             if i < (*p).n_op {
-                a_op = (*p).a_op;
+
+                /// The rowid is small enough that we are still in the
+                ///* main program.
+                (a_op = (*p).a_op);
             } else {
+                /// We are currently listing subprograms.  Figure out which one and
+                ///* pick up the appropriate opcode.
                 let mut j: i32 = 0;
                 i -= (*p).n_op;
                 { let _ = 0; };
@@ -5952,6 +7114,7 @@ pub extern "C" fn sqlite3_vdbe_next_opcode(p: &mut Vdbe, p_sub_1: *mut Mem,
     }
 }
 
+///* Compute a string that describes the P4 parameter for an opcode.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_display_p4(db: *mut Sqlite3, p_op_1: &Op)
     -> *mut i8 {
@@ -7104,37 +8267,76 @@ pub extern "C" fn sqlite3_vdbe_display_p4(db: *mut Sqlite3, p_op_1: &Op)
     }
 }
 
+///* Give a listing of the program in the virtual machine.
+///*
+///* The interface is the same as sqlite3VdbeExec().  But instead of
+///* running the code, it invokes the callback once for each instruction.
+///* This feature is used to implement "EXPLAIN".
+///*
+///* When p->explain==1, each instruction is listed.  When
+///* p->explain==2, only OP_Explain instructions are listed and these
+///* are shown in a different format.  p->explain==2 is used to implement
+///* EXPLAIN QUERY PLAN.
+///* 2018-04-24:  In p->explain==2 mode, the OP_Init opcodes of triggers
+///* are also shown, so that the boundaries between the main program and
+///* each trigger are clear.
+///*
+///* When p->explain==1, first the main program is listed, then each of
+///* the trigger subprograms are listed one by one.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_list(p: *mut Vdbe) -> i32 {
     unsafe {
         let mut p_sub: *mut Mem = core::ptr::null_mut();
+        /// Memory cell hold array of subprogs
         let db: *mut Sqlite3 = unsafe { (*p).db };
+        /// The database connection
         let mut i: i32 = 0;
+        /// Loop counter
         let mut rc: i32 = 0;
+        /// Return code
         let p_mem: *mut Mem =
             unsafe { &mut *unsafe { (*p).a_mem.offset(1 as isize) } };
+        /// First Mem of result set
         let b_list_subprogs: i32 =
             (unsafe { (*p).explain() } as i32 == 1 ||
                     unsafe { (*db).flags } & 16777216 as u64 != 0 as u64) as
                 i32;
         let mut a_op: *mut Op = core::ptr::null_mut();
+        /// Array of opcodes
         let mut p_op: *mut Op = core::ptr::null_mut();
+
+        /// Current opcode
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
+
+        /// Even though this opcode does not use dynamic strings for
+        ///* the result, result columns may become dynamic if the user calls
+        ///* sqlite3_column_text16(), causing a translation to UTF-16 encoding.
         release_mem_array(p_mem, 8);
         if unsafe { (*p).rc } == 7 {
+
+            /// This happens if a malloc() inside a call to sqlite3_column_text() or
+            ///* sqlite3_column_text16() failed.
             unsafe { sqlite3_oom_fault(db) };
             return 1;
         }
         if b_list_subprogs != 0 {
+
+            /// The first 8 memory cells are used for the result set.  So we will
+            ///* commandeer the 9th cell to use as storage for an array of pointers
+            ///* to trigger subprograms.  The VDBE is guaranteed to have at least 9
+            ///* cells.
             { let _ = 0; };
             p_sub = unsafe { unsafe { (*p).a_mem.offset(9 as isize) } };
         } else { p_sub = core::ptr::null_mut(); }
-        rc =
+
+        /// Figure out which opcode is next to display
+        (rc =
             sqlite3_vdbe_next_opcode(unsafe { &mut *p }, p_sub,
                 (unsafe { (*p).explain() } as i32 == 2) as i32,
-                unsafe { &mut (*p).pc }, &mut i, &mut a_op);
+                unsafe { &mut (*p).pc }, &mut i, &mut a_op));
         if rc == 0 {
             p_op = unsafe { a_op.offset(i as isize) };
             if unsafe {
@@ -7202,6 +8404,8 @@ pub extern "C" fn sqlite3_vdbe_list(p: *mut Vdbe) -> i32 {
                                 p_mem.offset(4 as isize)
                             }, unsafe { (*p_op).p3 } as i64)
                     };
+
+                    /// pMem+5 for p4 is done last
                     unsafe {
                         sqlite3_vdbe_mem_set_int64(unsafe {
                                 p_mem.offset(6 as isize)
@@ -7231,6 +8435,11 @@ pub extern "C" fn sqlite3_vdbe_list(p: *mut Vdbe) -> i32 {
     }
 }
 
+///* This is a destructor on a Mem object (which is really an sqlite3_value)
+///* that deletes the Frame object that is attached to it as a blob.
+///*
+///* This routine does not delete the Frame right away.  It merely adds the
+///* frame to a list of frames to be deleted when the Vdbe halts.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_frame_mem_del(p_arg: *mut ()) -> () {
     let p_frame: *mut VdbeFrame = p_arg as *mut VdbeFrame;
@@ -7242,6 +8451,15 @@ pub extern "C" fn sqlite3_vdbe_frame_mem_del(p_arg: *mut ()) -> () {
     unsafe { (*unsafe { (*p_frame).v }).p_del_frame = p_frame };
 }
 
+///* Helper function for vdbeIsMatchingIndexKey(). Return true if column
+///* iCol should be ignored when comparing a record with a record from 
+///* an index on disk. The field should be ignored if:
+///*
+///*   * the corresponding bit in mask is set, and
+///*   * either:
+///*       - bIntegrity is false, or
+///*       - the two Mem values are both real values that differ by 
+///*         BTREE_ULPDISTORTION or fewer ULPs.
 extern "C" fn vdbe_skip_field(mask: Bitmask, i_col_1: i32, p_mem1_1: &mut Mem,
     p_mem2_1: &mut Mem, b_integrity_1: i32) -> i32 {
     unsafe {
@@ -7271,6 +8489,17 @@ extern "C" fn vdbe_skip_field(mask: Bitmask, i_col_1: i32, p_mem1_1: &mut Mem,
     }
 }
 
+///* This function compares the unpacked record with the current key that
+///* cursor pCur points to. If bInt is false, all fields for which the 
+///* corresponding bit in parameter "mask" is set are ignored. Or, if
+///* bInt is true, then a difference of BTREE_ULPDISTORTION or fewer ULPs
+///* in real values is overlooked for fields with the corresponding bit
+///* set in mask.  
+///*
+///* Return the usual less than zero, zero, or greater than zero if the 
+///* remaining fields of the cursor cursor key are less than, equal to or 
+///* greater than those in (*p).
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_is_matching_index_key(p_cur_1: *mut BtCursor, b_int_1: i32,
     mask: Bitmask, p: &UnpackedRecord, pi_res_1: &mut i32) -> i32 {
     unsafe {
@@ -7288,9 +8517,13 @@ extern "C" fn vdbe_is_matching_index_key(p_cur_1: *mut BtCursor, b_int_1: i32,
         if n_rec > 2147483647 as u32 {
             return unsafe { sqlite3_corrupt_error(5468) };
         }
-        a_rec =
+
+        /// Allocate 5 extra bytes at the end of the buffer. This allows the
+        ///* getVarint32() call below to read slightly past the end of the buffer 
+        ///* if the record is corrupt.
+        (a_rec =
             unsafe { sqlite3_malloc_zero((n_rec + 5 as u32) as u64) } as
-                *mut u8;
+                *mut u8);
         if a_rec == core::ptr::null_mut() {
             rc = 7;
         } else {
@@ -7302,8 +8535,11 @@ extern "C" fn vdbe_is_matching_index_key(p_cur_1: *mut BtCursor, b_int_1: i32,
         }
         if rc == 0 {
             let mut sz_hdr: u32 = 0 as u32;
+            /// Size of record header in bytes
             let mut idx_hdr: u32 = 0 as u32;
-            idx_hdr =
+
+            /// Current index in header
+            (idx_hdr =
                 if (unsafe { *a_rec } as i32) < 128 as u8 as i32 {
                             {
                                 ({ sz_hdr = unsafe { *a_rec } as u32; sz_hdr }) as i32;
@@ -7314,13 +8550,16 @@ extern "C" fn vdbe_is_matching_index_key(p_cur_1: *mut BtCursor, b_int_1: i32,
                                     sqlite3_get_varint32(a_rec as *const u8,
                                         &raw mut sz_hdr as *mut u32)
                                 }) as i32
-                        } as u8 as u32;
+                        } as u8 as u32);
             if sz_hdr > 98307 as u32 {
                 rc = 11;
             } else {
                 let mut res: i32 = 0;
+                /// Result of this function call
                 let mut idx_rec: u32 = sz_hdr;
+                /// Index of next field in record body
                 let mut ii: i32 = 0;
+                /// Iterator variable
                 let n_col: i32 =
                     unsafe { (*(*p).p_key_info).n_all_field } as i32;
                 {
@@ -7388,7 +8627,31 @@ extern "C" fn vdbe_is_matching_index_key(p_cur_1: *mut BtCursor, b_int_1: i32,
     }
 }
 
+///* This is called when the record in (*p) should be found in the index 
+///* opened by cursor pCur, but was not. This may happen as part of a DELETE
+///* operation or an integrity check.
+///*
+///* One reason that an exact match was not found may be the EIIB bug - that
+///* a text-to-float conversion may have caused a real value in record (*p)
+///* to be slightly different from its counterpart on disk. This function
+///* attempts to find the right index record. If it does find the right
+///* record, it leaves *pCur pointing to it and sets (*pRes) to 0 before
+///* returning. Otherwise, (*pRes) is set to non-zero and an SQLite error
+///* code returned.
+///*
+///* The algorithm used to find the correct record is:
+///*
+///*   * Scan up to BTREE_FDK_RANGE entries either side of the current entry.
+///*     If parameter bIntegrity is false, then all fields that are indexed
+///*     expressions or virtual table columns are omitted from the comparison.
+///*     If bIntegrity is true, then small differences in real values in
+///*     such fields are overlooked, but they are not omitted from the comparison
+///*     altogether.
+///*
+///*   * If the above fails to find an entry and bIntegrity is false, search 
+///*     the entire index.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_find_index_key(p_cur_1: *mut BtCursor,
     p_idx_1: &Index, p: *mut UnpackedRecord, p_res_1: &mut i32,
     b_integrity_1: i32) -> i32 {
@@ -7396,6 +8659,9 @@ pub extern "C" fn sqlite3_vdbe_find_index_key(p_cur_1: *mut BtCursor,
     let mut res: i32 = 1;
     let mut rc: i32 = 0;
     let mut ii: i32 = 0;
+    /// Calculate a mask based on the first 64 columns of the index. The mask
+    ///* bit is set if the corresponding index field is either an expression
+    ///* or a virtual column of the table.
     let mut mask: Bitmask = 0 as Bitmask;
     {
         ii = 0;
@@ -7466,7 +8732,11 @@ pub extern "C" fn sqlite3_vdbe_find_index_key(p_cur_1: *mut BtCursor,
             if n_step < 0 || rc != 0 || res == 0 || b_integrity_1 != 0 {
                 break;
             }
-            n_step = -1;
+
+            /// The first, non-exhaustive, search failed to find an entry with 
+            ///* matching PK fields. So restart for an exhaustive search of the 
+            ///* entire index.
+            (n_step = -1);
             rc = unsafe { sqlite3_btree_first(p_cur_1, &mut res) };
         }
     }

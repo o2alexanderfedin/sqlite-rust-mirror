@@ -76,12 +76,16 @@ struct Stat {
     st_qspare: [i64; 2],
 }
 
+/// Size of a database page
 static mut pagesize: i32 = 1024;
 
+/// File descriptor for reading the WAL file
 static mut fd: i32 = -1;
 
+/// Last frame
 static mut mx_frame: i32 = 0;
 
+/// HEX elements to print per line
 static mut per_line: i32 = 16;
 
 #[repr(C)]
@@ -92,6 +96,7 @@ struct Cksum {
     s1: u32,
 }
 
+///* extract a 32-bit big-endian integer
 extern "C" fn get_int32(a: *const u8) -> u32 {
     let x: u32 =
         (((unsafe { *a.offset(0 as isize) } as i32) << 24) +
@@ -101,11 +106,14 @@ extern "C" fn get_int32(a: *const u8) -> u32 {
     return x;
 }
 
+///* Swap bytes on a 32-bit unsigned integer
 extern "C" fn swab32(x: u32) -> u32 {
     return ((x & 255 as u32) << 24) + ((x & 65280 as u32) << 8) +
                 ((x & 16711680 as u32) >> 8) + ((x & 4278190080u32) >> 24);
 }
 
+/// Extend the checksum.  Reinitialize the checksum if bInit is true.
+#[allow(unused_doc_comments)]
 extern "C" fn extend_cksum(p_cksum_1: &mut Cksum, a_data_1: *mut u8,
     mut n_byte_1: u32, b_init_1: i32) -> () {
     let mut a32: *const u32 = core::ptr::null();
@@ -113,11 +121,17 @@ extern "C" fn extend_cksum(p_cksum_1: &mut Cksum, a_data_1: *mut u8,
         let mut a: i32 = 0;
         unsafe { *(&raw mut a as *mut i8) = 1 as i8 };
         if a == 1 {
-            (*p_cksum_1).b_swap =
-                (get_int32(a_data_1 as *const u8) != 931071618 as u32) as i32;
+
+            /// Host is little-endian
+            ((*p_cksum_1).b_swap =
+                (get_int32(a_data_1 as *const u8) != 931071618 as u32) as
+                    i32);
         } else {
-            (*p_cksum_1).b_swap =
-                (get_int32(a_data_1 as *const u8) != 931071619 as u32) as i32;
+
+            /// Host is big-endian
+            ((*p_cksum_1).b_swap =
+                (get_int32(a_data_1 as *const u8) != 931071619 as u32) as
+                    i32);
         }
         (*p_cksum_1).s0 = 0 as u32;
         (*p_cksum_1).s1 = 0 as u32;
@@ -138,6 +152,8 @@ extern "C" fn extend_cksum(p_cksum_1: &mut Cksum, a_data_1: *mut u8,
     }
 }
 
+///* Convert the var-int format into i64.  Return the number of bytes
+///* in the var-int.  Write the var-int value into *pVal.
 extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     let mut v: i64 = 0 as i64;
     let mut i: i32 = 0;
@@ -163,11 +179,16 @@ extern "C" fn decode_varint(z: *const u8, p_val_1: &mut i64) -> i32 {
     return 9;
 }
 
+/// Report an out-of-memory error and die.
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
 
+///* Read content from the file.
+///*
+///* Space to hold the content is obtained from malloc() and needs to be
+///* freed by the caller.
 extern "C" fn get_content(ofst: i64, n_byte_1: i32) -> *mut u8 {
     unsafe {
         let mut a_data: *mut u8 = core::ptr::null_mut();
@@ -179,6 +200,7 @@ extern "C" fn get_content(ofst: i64, n_byte_1: i32) -> *mut u8 {
     }
 }
 
+///* Print a range of bytes as hex and as ascii.
 extern "C" fn print_byte_range(ofst: i32, a_data_1: &[u8], print_ofst_1: i32)
     -> () {
     unsafe {
@@ -256,6 +278,7 @@ extern "C" fn print_byte_range(ofst: i32, a_data_1: &[u8], print_ofst_1: i32)
     }
 }
 
+/// Print a line of decode output showing a 4-byte integer.
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     as_hex_1: i32, z_msg_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -315,6 +338,7 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     };
 }
 
+///* Print an entire page of content as hex
 extern "C" fn print_frame(i_frame_1: i32) -> () {
     unsafe {
         let mut i_start: i64 = 0 as i64;
@@ -350,6 +374,8 @@ extern "C" fn print_frame(i_frame_1: i32) -> () {
     }
 }
 
+///* Summarize a single frame on a single line.
+#[allow(unused_doc_comments)]
 extern "C" fn print_oneline_frame(i_frame_1: i32, p_cksum_1: *mut Cksum)
     -> () {
     unsafe {
@@ -387,12 +413,16 @@ extern "C" fn print_oneline_frame(i_frame_1: i32, p_cksum_1: *mut Cksum)
                     unsafe { (*p_cksum_1).s1 })
             };
         }
+
+        /// Reset the checksum so that a single frame checksum failure will not
+        ///* cause all subsequent frames to also show a failure.
         unsafe { (*p_cksum_1).s0 = s0 };
         unsafe { (*p_cksum_1).s1 = s1 };
         unsafe { free(a_data as *mut ()) };
     }
 }
 
+///* Decode the WAL header.
 extern "C" fn print_wal_header(p_cksum_1: *mut Cksum) -> () {
     let mut a_data: *mut u8 = core::ptr::null_mut();
     a_data = get_content(0 as i64, 32);
@@ -445,6 +475,7 @@ extern "C" fn print_wal_header(p_cksum_1: *mut Cksum) -> () {
     unsafe { free(a_data as *mut ()) };
 }
 
+///* Describe cell content.
 extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     mut z_desc_1: *mut i8) -> i64 {
     let mut n_desc: i32 = 0;
@@ -672,6 +703,9 @@ extern "C" fn describe_content(mut a: *mut u8, mut n_local_1: i64,
     return n_desc as i64;
 }
 
+///* Compute the local payload size given the total payload size and
+///* the page size.
+#[allow(unused_doc_comments)]
 extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     unsafe {
         let mut max_local: i64 = 0 as i64;
@@ -679,7 +713,9 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
         let mut surplus: i64 = 0 as i64;
         let mut n_local: i64 = 0 as i64;
         if c_type_1 as i32 == 13 {
-            max_local = (pagesize - 35) as i64;
+
+            /// Table leaf
+            (max_local = (pagesize - 35) as i64);
             min_local = ((pagesize - 12) * 32 / 255 - 23) as i64;
         } else {
             max_local = ((pagesize - 12) * 64 / 255 - 23) as i64;
@@ -696,6 +732,9 @@ extern "C" fn local_payload(n_payload_1: i64, c_type_1: i8) -> i64 {
     }
 }
 
+///* Create a description for a single cell.
+///*
+///* The return value is the local cell size.
 extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     show_cell_content_1: i32, pz_desc_1: &mut *mut i8) -> i64 {
     unsafe {
@@ -793,6 +832,7 @@ extern "C" fn describe_cell(c_type_1: u8, mut a: *mut u8,
     }
 }
 
+///* Decode a btree page
 extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     mut z_args_1: *const i8) -> () {
     unsafe {
@@ -958,6 +998,8 @@ extern "C" fn decode_btree_page(a: *mut u8, pgno: i32, hdr_size_1: i32,
     }
 }
 
+///* Check the range validity for a page number.  Print an error and
+///* exit if the page is out of range.
 extern "C" fn check_page_validity(i_page_1: i32, mx_page_1: i32) -> () {
     if i_page_1 < 1 || i_page_1 > mx_page_1 {
         eprintln!("Invalid page number {}:  valid range is 1..{}", i_page_1 as i32, mx_page_1 as i32);
@@ -965,6 +1007,7 @@ extern "C" fn check_page_validity(i_page_1: i32, mx_page_1: i32) -> () {
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
@@ -1138,6 +1181,8 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                                         strcmp(z_left as *const i8,
                                             c"truncate".as_ptr() as *mut i8 as *const i8)
                                     } == 0 {
+                            /// Frame number followed by "truncate" truncates the WAL file
+                            ///* after that frame
                             let new_size: OffT =
                                 (32 + i_start * (pagesize + 24)) as OffT;
                             unsafe {

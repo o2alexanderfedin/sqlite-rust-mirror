@@ -1,19 +1,54 @@
+//!* 2001 September 15
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* An tokenizer for SQL
+//!*
+//!* This file contains C code that implements the sqlite3_complete() API.
+//!* This code used to be part of the tokenizer.c source file.  But by
+//!* separating it out, the code will be automatically omitted from
+//!* static links that do not use it.
+//!* This is defined in tokenize.c.  We just have to import the definition.
+//! SQLITE_AMALGAMATION
+//!* Token types used by the sqlite3_complete() routine.  See the header
+//!* comments on that procedure for additional information.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,14 +426,124 @@ impl Parse {
     }
 }
 
+///* Return zero if the given SQL string is complete - if all comments,
+///* string and blob literals, and quoted identifiers have been closed and
+///* if the entire string ends with ";" and possible with ";END;" if the
+///* string is a CREATE TRIGGER statement.  A non-zero return indicates
+///* that the string is incomplete.  Bits of the return value indicate
+///* what is missing and is needed to close out the statement.
+///*
+///* Special handling is require for CREATE TRIGGER statements.
+///* Whenever the CREATE TRIGGER keywords are seen, the statement
+///* must end with ";END;".
+///*
+///* Let the return code be a value R.  R is split up into various
+///* subfields, at byte boundaries:
+///*
+///*    R = 0xwwwwwwww00xxyyzz
+///*
+///* In other words, zz is the least significant byte, yy is the next
+///* most significant byte, xx is the third byte, wwwwwwww is a 32-bit
+///* value from the middle.
+///*
+///*   zz == SQLITE_OK       Input is complete
+///*   zz == SQLITE_ERROR    Input is incomplete
+///*   zz == SQLITE_MISUSE   Input is a NULL pointer
+///*   zz != 0               New values for zz may be added in the future
+///*
+///*   yy == 0x01            Need a semicolon at the end
+///*   yy == 0x02            Need "END" and a semicolon
+///*   yy == 0x03            Need semicolon, "END", and semicolon
+///*   yy != 0               New values for yy may be added in the future
+///*
+///*   xx == '\''            Incomplete string or blob literal
+///*   xx == '"'             Incomplete quoted identifier
+///*   xx == '`'             Incompelte MySQL-style quoted identifier
+///*   xx == ']'             Incomplete SQLServer-style quoted identifer
+///*   xx == '-'             Incomplete SQL-style comment
+///*   xx == '/'             Incomplete C-style comment
+///*   xx != 0               New values of xx may be added in the future
+///*
+///*   wwwwwwww              Interpret as a signed integer, the number
+///*                         of unmatched "(".  Negative means there are
+///*                         more ")" and "(".
+///*
+///*   ((R>>24)&0xff)!=0     New uses for the 4th byte may be added
+///*                         in the future
+///*
+///* This implementation uses a state machine with 8 states:
+///*
+///*   (0) INVALID   We have not yet seen a non-whitespace character.
+///*
+///*   (1) START     At the beginning or end of an SQL statement.  This routine
+///*                 returns 1 if it ends in the START state and 0 if it ends
+///*                 in any other state.
+///*
+///*   (2) NORMAL    We are in the middle of statement which ends with a single
+///*                 semicolon.
+///*
+///*   (3) EXPLAIN   The keyword EXPLAIN has been seen at the beginning of 
+///*                 a statement.
+///*
+///*   (4) CREATE    The keyword CREATE has been seen at the beginning of a
+///*                 statement, possibly preceded by EXPLAIN and/or followed by
+///*                 TEMP or TEMPORARY
+///*
+///*   (5) TRIGGER   We are in the middle of a trigger definition that must be
+///*                 ended by a semicolon, the keyword END, and another semicolon.
+///*
+///*   (6) SEMI      We've seen the first semicolon in the ";END;" that occurs at
+///*                 the end of a trigger definition.
+///*
+///*   (7) END       We've seen the ";END" of the ";END;" that occurs at the end
+///*                 of a trigger definition.
+///*
+///* Transitions between states above are determined by tokens extracted
+///* from the input.  The following tokens are significant:
+///*
+///*   (0) tkSEMI      A semicolon.
+///*   (1) tkWS        Whitespace.
+///*   (2) tkOTHER     Any other SQL token.
+///*   (3) tkEXPLAIN   The "explain" keyword.
+///*   (4) tkCREATE    The "create" keyword.
+///*   (5) tkTEMP      The "temp" or "temporary" keyword.
+///*   (6) tkTRIGGER   The "trigger" keyword.
+///*   (7) tkEND       The "end" keyword.
+///*
+///* Whitespace never causes a state transition and is always ignored.
+///* This means that a SQL string of all whitespace is invalid.
+///*
+///* If we compile with SQLITE_OMIT_TRIGGER, all of the computation needed
+///* to recognize the end of a trigger can be omitted.  All we have to do
+///* is look for a semicolon that is not part of an string or comment.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_incomplete(mut z_sql: *const i8) -> Sqlite3Int64 {
     unsafe {
         let mut state: u8 = 0 as u8;
+        /// Current state, using numbers defined in header comment
         let mut token: u8 = 0 as u8;
+        /// Value of the next token
         let mut pending: u8 = 0 as u8;
+        /// unmatched structure character
         let mut n_paren: i32 = 0;
+        /// 0 INVALID
+        /// 1 START
+        /// 2 NORMAL
+        /// 3 EXPLAIN
+        /// 4 CREATE
+        /// 5 TRIGGER
+        /// 6 SEMI
+        /// 7 END
+        /// A semicolon
+        /// White space is ignored
+        /// C-style comments
+        /// SQL-style comments from "--" to end of line
+        /// Microsoft-style identifiers in [...]
+        /// Grave-accent quoted symbols used by MySQL
+        /// single- and double-quoted strings
         let mut c: i32 = 0;
+        /// Keywords and unquoted identifiers
         let mut n_id: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -781,15 +926,97 @@ pub extern "C" fn sqlite3_incomplete(mut z_sql: *const i8) -> Sqlite3Int64 {
                 }
             }
         }
+
+        /// Current state, using numbers defined in header comment
+        /// Value of the next token
+        /// unmatched structure character
+        /// Nested parentheses
+        /// A complex statement machine used to detect the end of a CREATE TRIGGER
+        ///* statement.  This is the normal case.
+        /// Token:                                                */
+        ///     /* State:       **  SEMI  WS  OTHER  EXPLAIN  CREATE  TEMP  TRIGGER  END */
+        ///     /* 0 INVALID:
+        /// 1   START:
+        /// 2  NORMAL:
+        /// 3 EXPLAIN:
+        /// 4  CREATE:
+        /// 5 TRIGGER:
+        /// 6    SEMI:
+        /// 7     END:
+        /// SQLITE_OMIT_TRIGGER */
+        ///  /* Mapping state number to yy value for the return
+        /// 0 INVALID
+        /// 1 START
+        /// 2 NORMAL
+        /// 3 EXPLAIN
+        /// 4 CREATE
+        /// 5 TRIGGER
+        /// 6 SEMI
+        /// 7 END
+        /// A semicolon
+        /// White space is ignored
+        /// C-style comments
+        /// SQL-style comments from "--" to end of line
+        /// Microsoft-style identifiers in [...]
+        /// Grave-accent quoted symbols used by MySQL
+        /// single- and double-quoted strings
+        /// Keywords and unquoted identifiers
+        /// SQLITE_OMIT_TRIGGER
+        /// Operators and special symbols
         unreachable!();
     }
 }
 
+///* CAPI3REF: Determine If An SQL Statement Is Complete
+///*
+///* These routines are useful during command-line input to determine if the
+///* currently entered text seems to form a complete SQL statement or
+///* if additional input is needed before sending the text into
+///* SQLite for parsing.  ^The sqlite3_complete(X) and sqlite3_complete16(X)
+///* routines return 1 if the input string X appears to be a complete SQL
+///* statement.  ^A statement is judged to be
+///* complete if it ends with a semicolon token and is not a prefix of a
+///* well-formed CREATE TRIGGER statement.  ^Semicolons that are embedded within
+///* string literals or quoted identifier names or comments are not
+///* independent tokens (they are part of the token in which they are
+///* embedded) and thus do not count as a statement terminator.  ^Whitespace
+///* and comments that follow the final semicolon are ignored.
+///*
+///* ^The sqlite3_complete(X) and sqlite3_complete16(X) routines return 0
+///* if the statement is incomplete.  ^If a memory allocation fails, then
+///* SQLITE_NOMEM is returned.
+///*
+///* The [sqlite3_incomplete(X)] routine is similar to [sqlite3_complete(X)]
+///* except that sqlite3_incomplete(X) returns 0 if the input X is complete
+///* and non-zero if X is incomplete.  The non-zero return from
+///* sqlite3_incomplete(X) contains additional information about what is
+///* needed to complete the input X.  The sqlite3_incomplete(X) interface
+///* is only available for UTF-8 text.
+///*
+///* ^None of these routines do a full parse the SQL statements and thus
+///* will not detect syntactically incorrect SQL.  They only determine if
+///* input text has properly terminated comments, string literals, and
+///* quoted identifiers, and if the statement ends with a semicolon.
+///*
+///* ^(If SQLite has not been initialized using [sqlite3_initialize()] prior
+///* to invoking sqlite3_complete16() then sqlite3_initialize() is invoked
+///* automatically by sqlite3_complete16().  If that initialization fails,
+///* then the return value from sqlite3_complete16() will be non-zero
+///* regardless of whether or not the input SQL is complete.)^
+///*
+///* The X input to [sqlite3_complete(X)] and [sqlite3_incomplete(X)]
+///* must be a zero-terminated UTF-8 string.
+///*
+///* The input to [sqlite3_complete16()] must be a zero-terminated
+///* UTF-16 string in native byte order.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_complete(z_sql: *const i8) -> i32 {
     return (sqlite3_incomplete(z_sql) == 0 as i64) as i32;
 }
 
+///* This routine is the same as the sqlite3_complete() routine described
+///* above, except that the parameter is required to be UTF-16 encoded, not
+///* UTF-8.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_complete16(z_sql: *const ()) -> i32 {
     let mut p_val: *mut Sqlite3Value = core::ptr::null_mut();

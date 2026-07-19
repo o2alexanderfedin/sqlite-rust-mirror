@@ -1,19 +1,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3Pcache, Sqlite3PcacheMethods2,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, Uptr, VList, VTable, Walker,
+    WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +409,7 @@ impl Parse {
     }
 }
 
+///* Global data used by this cache.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PCacheGlobal {
@@ -411,6 +428,27 @@ struct PCacheGlobal {
     b_under_pressure: i32,
 }
 
+/// Each page cache (or PCache) belongs to a PGroup.  A PGroup is a set
+///* of one or more PCaches that are able to recycle each other's unpinned
+///* pages when they are under memory pressure.  A PGroup is an instance of
+///* the following object.
+///*
+///* This page cache implementation works in one of two modes:
+///*
+///*   (1)  Every PCache is the sole member of its own PGroup.  There is
+///*        one PGroup per PCache.
+///*
+///*   (2)  There is a single global PGroup that all PCaches are a member
+///*        of.
+///*
+///* Mode 1 uses more memory (since PCache instances are not able to rob
+///* unused pages from other PCaches) but it also operates without a mutex,
+///* and is therefore often faster.  Mode 2 requires a mutex in order to be
+///* threadsafe, but recycles pages more efficiently.
+///*
+///* For mode (1), PGroup.mutex is NULL.  For mode (2) there is only a single
+///* PGroup which is the pcache1.grp global variable and its mutex is
+///* SQLITE_MUTEX_STATIC_LRU.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PGroup {
@@ -422,6 +460,30 @@ struct PGroup {
     lru: PgHdr1,
 }
 
+///* Each cache entry is represented by an instance of the following
+///* structure. A buffer of PgHdr1.pCache->szPage bytes is allocated
+///* directly before this structure and is used to cache the page content.
+///*
+///* When reading a corrupt database file, it is possible that SQLite might
+///* read a few bytes (no more than 16 bytes) past the end of the page buffer.
+///* It will only read past the end of the page buffer, never write.  This
+///* object is positioned immediately after the page buffer to serve as an
+///* overrun area, so that overreads are harmless.
+///*
+///* Variables isBulkLocal and isAnchor were once type "u8". That works,
+///* but causes a 2-byte gap in the structure for most architectures (since
+///* pointers must be either 4 or 8-byte aligned). As this structure is located
+///* in memory directly after the associated page data, if the database is
+///* corrupt, code at the b-tree layer may overread the page buffer and
+///* read part of this structure before the corruption is detected. This
+///* can cause a valgrind error if the uninitialized gap is accessed. Using u16
+///* ensures there is no such gap, and therefore no bytes of uninitialized
+///* memory in the structure.
+///*
+///* The pLruNext and pLruPrev pointers form a double-linked circular list
+///* of all pages that are unpinned.  The PGroup.lru element (which should be
+///* the only element on the list with PgHdr1.isAnchor set to 1) forms the
+///* beginning and the end of the list.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PgHdr1 {
@@ -435,6 +497,13 @@ struct PgHdr1 {
     p_lru_prev: *mut PgHdr1,
 }
 
+/// Each page cache is an instance of the following object.  Every
+///* open database file (including each in-memory database and each
+///* temporary or transient database) has a single page cache which
+///* is an instance of this object.
+///*
+///* Pointers to structures of this type are cast and returned as
+///* opaque sqlite3_pcache* handles.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PCache1 {
@@ -457,6 +526,8 @@ struct PCache1 {
     p_bulk: *mut (),
 }
 
+///* Free slots in the allocator used to divide up the global page cache
+///* buffer provided using the SQLITE_CONFIG_PAGECACHE mechanism.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct PgFreeslot {
@@ -465,6 +536,8 @@ struct PgFreeslot {
 
 static mut pcache1_g: PCacheGlobal = unsafe { core::mem::zeroed() };
 
+/// Page cache buffer management:
+///* These routines implement SQLITE_CONFIG_PAGECACHE.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_p_cache_buffer_setup(mut p_buf: *mut (),
     mut sz: i32, mut n: i32) -> () {
@@ -499,6 +572,8 @@ pub extern "C" fn sqlite3_p_cache_buffer_setup(mut p_buf: *mut (),
     }
 }
 
+///* Implementation of the sqlite3_pcache.xInit method.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_init(not_used_1: *mut ()) -> i32 {
     unsafe {
         { let _ = not_used_1; };
@@ -507,9 +582,22 @@ extern "C" fn pcache1_init(not_used_1: *mut ()) -> i32 {
             memset(&raw mut pcache1_g as *mut (), 0,
                 core::mem::size_of::<PCacheGlobal>() as u64)
         };
-        pcache1_g.separate_cache =
+
+        ///* The pcache1.separateCache variable is true if each PCache has its own
+        ///* private PGroup (mode-1).  pcache1.separateCache is false if the single
+        ///* PGroup in pcache1.grp is used for all page caches (mode-2).
+        ///*
+        ///*   *  Always use a unified cache (mode-2) if ENABLE_MEMORY_MANAGEMENT
+        ///*
+        ///*   *  Use a unified cache in single-threaded applications that have
+        ///*      configured a start-time buffer for use as page-cache memory using
+        ///*      sqlite3_config(SQLITE_CONFIG_PAGECACHE, pBuf, sz, N) with non-NULL
+        ///*      pBuf argument.
+        ///*
+        ///*   *  Otherwise use separate caches (mode-1)
+        (pcache1_g.separate_cache =
             (sqlite3Config.p_page == core::ptr::null_mut() ||
-                    sqlite3Config.b_core_mutex as i32 > 0) as i32;
+                    sqlite3Config.b_core_mutex as i32 > 0) as i32);
         if sqlite3Config.b_core_mutex != 0 {
             pcache1_g.grp.mutex = unsafe { sqlite3MutexAlloc(6) };
             pcache1_g.mutex = unsafe { sqlite3MutexAlloc(7) };
@@ -524,6 +612,9 @@ extern "C" fn pcache1_init(not_used_1: *mut ()) -> i32 {
     }
 }
 
+///* Implementation of the sqlite3_pcache.xShutdown method.
+///* Note that the static mutex allocated in xInit does
+///* not need to be freed.
 extern "C" fn pcache1_shutdown(not_used_1: *mut ()) -> () {
     unsafe {
         { let _ = not_used_1; };
@@ -535,6 +626,10 @@ extern "C" fn pcache1_shutdown(not_used_1: *mut ()) -> () {
     }
 }
 
+///* This function is used to resize the hash table used by the cache passed
+///* as the first argument.
+///*
+///* The PCache mutex must be held when this function is called.
 extern "C" fn pcache1_resize_hash(p: &mut PCache1) -> () {
     let mut ap_new: *mut *mut PgHdr1 = core::ptr::null_mut();
     let mut n_new: u64 = 0 as u64;
@@ -580,6 +675,12 @@ extern "C" fn pcache1_resize_hash(p: &mut PCache1) -> () {
     }
 }
 
+///* This function is used internally to remove the page pPage from the
+///* PGroup LRU list, if is part of it. If pPage is not part of the PGroup
+///* LRU list, then this function is a no-op.
+///*
+///* The PGroup mutex must be held when this function is called.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_pin_page(p_page_1: *mut PgHdr1) -> *mut PgHdr1 {
     { let _ = 0; };
     { let _ = 0; };
@@ -595,6 +696,9 @@ extern "C" fn pcache1_pin_page(p_page_1: *mut PgHdr1) -> *mut PgHdr1 {
             unsafe { (*p_page_1).p_lru_prev }
     };
     unsafe { (*p_page_1).p_lru_next = core::ptr::null_mut() };
+
+    /// pPage->pLruPrev = 0;
+    ///* No need to clear pLruPrev as it is never accessed if pLruNext is 0
     { let _ = 0; };
     { let _ = 0; };
     {
@@ -607,6 +711,7 @@ extern "C" fn pcache1_pin_page(p_page_1: *mut PgHdr1) -> *mut PgHdr1 {
     return p_page_1;
 }
 
+///* Free an allocated buffer obtained from pcache1Alloc().
 extern "C" fn pcache1_free(p: *mut ()) -> () {
     unsafe {
         if p == core::ptr::null_mut() { return; }
@@ -647,6 +752,7 @@ extern "C" fn pcache1_free(p: *mut ()) -> () {
     }
 }
 
+///* Free a page object allocated by pcache1AllocPage().
 extern "C" fn pcache1_free_page(p: *mut PgHdr1) -> () {
     let mut p_cache: *mut PCache1 = core::ptr::null_mut();
     { let _ = 0; };
@@ -664,17 +770,35 @@ extern "C" fn pcache1_free_page(p: *mut PgHdr1) -> () {
     };
 }
 
+///* Discard all pages from cache pCache with a page number (key value)
+///* greater than or equal to iLimit. Any pinned pages that meet this
+///* criteria are unpinned before they are discarded.
+///*
+///* The PCache mutex must be held when this function is called.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_truncate_unsafe(p_cache_1: &mut PCache1, i_limit_1: u32)
     -> () {
+    /// To assert pCache->nPage is correct
     let mut h: u32 = 0 as u32;
     let mut i_stop: u32 = 0 as u32;
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
     if (*p_cache_1).i_max_key - i_limit_1 < (*p_cache_1).n_hash {
-        h = i_limit_1 % (*p_cache_1).n_hash;
+
+        /// If we are just shaving the last few pages off the end of the
+        ///* cache, then there is no point in scanning the entire hash table.
+        ///* Only scan those hash slots that might contain pages that need to
+        ///* be removed.
+        (h = i_limit_1 % (*p_cache_1).n_hash);
         i_stop = (*p_cache_1).i_max_key % (*p_cache_1).n_hash;
-    } else { h = (*p_cache_1).n_hash / 2 as u32; i_stop = h - 1 as u32; }
+    } else {
+
+        /// This is the general case where many pages are being removed.
+        ///* It is necessary to scan the entire hash table
+        (h = (*p_cache_1).n_hash / 2 as u32);
+        i_stop = h - 1 as u32;
+    }
     {
         '__b3: loop {
             '__c3: loop {
@@ -708,6 +832,11 @@ extern "C" fn pcache1_truncate_unsafe(p_cache_1: &mut PCache1, i_limit_1: u32)
     { let _ = 0; };
 }
 
+///* Remove the page supplied as an argument from the hash table
+///* (PCache1.apHash structure) that it is currently stored in.
+///* Also free the page if freePage is true.
+///*
+///* The PGroup mutex must be held when this function is called.
 extern "C" fn pcache1_remove_from_hash(p_page_1: *mut PgHdr1,
     free_flag_1: i32) -> () {
     let mut h: u32 = 0 as u32;
@@ -733,6 +862,8 @@ extern "C" fn pcache1_remove_from_hash(p_page_1: *mut PgHdr1,
     if free_flag_1 != 0 { pcache1_free_page(p_page_1); }
 }
 
+///* If there are currently more than nMaxPage pages allocated, try
+///* to recycle pages to reduce the number allocated to nMaxPage.
 extern "C" fn pcache1_enforce_max_page(p_cache_1: &mut PCache1) -> () {
     let p_group: *const PGroup = (*p_cache_1).p_group as *const PGroup;
     let mut p: *mut PgHdr1 = core::ptr::null_mut();
@@ -757,6 +888,7 @@ extern "C" fn pcache1_enforce_max_page(p_cache_1: &mut PCache1) -> () {
     }
 }
 
+/// forward declaration
 extern "C" fn pcache1_destroy(p: *mut Sqlite3Pcache) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
     let p_group: *mut PGroup = unsafe { (*p_cache).p_group };
@@ -781,12 +913,20 @@ extern "C" fn pcache1_destroy(p: *mut Sqlite3Pcache) -> () {
     unsafe { sqlite3_free(p_cache as *mut ()) };
 }
 
+///* Implementation of the sqlite3_pcache.xCreate method.
+///*
+///* Allocate a new cache.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_create(sz_page_1: i32, sz_extra_1: i32,
     b_purgeable_1: i32) -> *mut Sqlite3Pcache {
     unsafe {
         let mut p_cache: *mut PCache1 = core::ptr::null_mut();
+        /// The newly created page cache
         let mut p_group: *mut PGroup = core::ptr::null_mut();
+        /// The group the new page cache will belong to
         let mut sz: i64 = 0 as i64;
+
+        /// Bytes of memory required to allocate the new cache
         { let _ = 0; };
         { let _ = 0; };
         sz =
@@ -858,6 +998,9 @@ extern "C" fn pcache1_create(sz_page_1: i32, sz_extra_1: i32,
     }
 }
 
+///* Implementation of the sqlite3_pcache.xCachesize method.
+///*
+///* Configure the cache_size limit for a cache.
 extern "C" fn pcache1_cachesize(p: *mut Sqlite3Pcache, n_max_1: i32) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
     let mut n: u32 = 0 as u32;
@@ -889,6 +1032,7 @@ extern "C" fn pcache1_cachesize(p: *mut Sqlite3Pcache, n_max_1: i32) -> () {
     }
 }
 
+///* Implementation of the sqlite3_pcache.xPagecount method.
 extern "C" fn pcache1_pagecount(p: *mut Sqlite3Pcache) -> i32 {
     let mut n: i32 = 0;
     let p_cache: *const PCache1 = p as *mut PCache1 as *const PCache1;
@@ -898,6 +1042,20 @@ extern "C" fn pcache1_pagecount(p: *mut Sqlite3Pcache) -> i32 {
     return n;
 }
 
+///* Return true if it desirable to avoid allocating a new page cache
+///* entry.
+///*
+///* If memory was allocated specifically to the page cache using
+///* SQLITE_CONFIG_PAGECACHE but that memory has all been used, then
+///* it is desirable to avoid allocating a new page cache entry because
+///* presumably SQLITE_CONFIG_PAGECACHE was suppose to be sufficient
+///* for all page cache needs and we should not need to spill the
+///* allocation onto the heap.
+///*
+///* Or, the heap is used for all page cache memory but the heap is
+///* under memory pressure, then again it is desirable to avoid
+///* allocating a new page cache entry in order to avoid stressing
+///* the heap even further.
 extern "C" fn pcache1_under_memory_pressure(p_cache_1: &PCache1) -> i32 {
     unsafe {
         if pcache1_g.n_slot != 0 &&
@@ -911,6 +1069,9 @@ extern "C" fn pcache1_under_memory_pressure(p_cache_1: &PCache1) -> i32 {
     }
 }
 
+///* Try to initialize the pCache->pFree and pCache->pBulk fields.  Return
+///* true if pCache->pFree ends up containing one or more free pages.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_init_bulk(p_cache_1: &mut PCache1) -> i32 {
     unsafe {
         let mut sz_bulk: i64 = 0 as i64;
@@ -959,7 +1120,9 @@ extern "C" fn pcache1_init_bulk(p_cache_1: &mut PCache1) -> i32 {
                         unsafe { (*p_x).is_anchor = 0 as u16 };
                         unsafe { (*p_x).p_next = (*p_cache_1).p_free };
                         unsafe { (*p_x).p_lru_prev = core::ptr::null_mut() };
-                        (*p_cache_1).p_free = p_x;
+
+                        /// Initializing this saves a valgrind error
+                        ((*p_cache_1).p_free = p_x);
                         {
                             let __n = (*p_cache_1).sz_alloc;
                             let __p = &mut z_bulk;
@@ -977,6 +1140,14 @@ extern "C" fn pcache1_init_bulk(p_cache_1: &mut PCache1) -> i32 {
     }
 }
 
+///* Malloc function used within this file to allocate space from the buffer
+///* configured using sqlite3_config(SQLITE_CONFIG_PAGECACHE) option. If no
+///* such buffer exists or there is no space left in it, this function falls
+///* back to sqlite3Malloc().
+///*
+///* Multiple threads can run this routine at the same time.  Global variables
+///* in pcache1 need to be protected via mutex.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_alloc(n_byte_1: i32) -> *mut () {
     unsafe {
         let mut p: *mut () = core::ptr::null_mut();
@@ -1006,7 +1177,10 @@ extern "C" fn pcache1_alloc(n_byte_1: i32) -> *mut () {
             unsafe { sqlite3_mutex_leave(pcache1_g.mutex) };
         }
         if p == core::ptr::null_mut() {
-            p = unsafe { sqlite3Malloc(n_byte_1 as u64) };
+
+            /// Memory is not available in the SQLITE_CONFIG_PAGECACHE pool.  Get
+            ///* it from sqlite3Malloc instead.
+            (p = unsafe { sqlite3Malloc(n_byte_1 as u64) });
             if !(p).is_null() {
                 let sz: i32 = unsafe { sqlite3_malloc_size(p as *const ()) };
                 unsafe { sqlite3_mutex_enter(pcache1_g.mutex) };
@@ -1019,6 +1193,7 @@ extern "C" fn pcache1_alloc(n_byte_1: i32) -> *mut () {
     }
 }
 
+///* Allocate a new page object initially associated with cache pCache.
 extern "C" fn pcache1_alloc_page(p_cache_1: *mut PCache1,
     benign_malloc_1: i32) -> *mut PgHdr1 {
     let mut p: *mut PgHdr1 = core::ptr::null_mut();
@@ -1064,11 +1239,20 @@ extern "C" fn pcache1_alloc_page(p_cache_1: *mut PCache1,
     return p;
 }
 
+///* Implement steps 3, 4, and 5 of the pcache1Fetch() algorithm described
+///* in the header of the pcache1Fetch() procedure.
+///*
+///* This steps are broken out into a separate procedure because they are
+///* usually not needed, and by avoiding the stack initialization required
+///* for these steps, the main pcache1Fetch() procedure can run faster.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_fetch_stage2(p_cache_1: *mut PCache1, i_key_1: u32,
     create_flag_1: i32) -> *mut PgHdr1 {
     let mut n_pinned: u32 = 0 as u32;
     let p_group: *mut PGroup = unsafe { (*p_cache_1).p_group };
     let mut p_page: *mut PgHdr1 = core::ptr::null_mut();
+
+    /// Step 3: Abort if createFlag is 1 but the cache is nearly full
     { let _ = 0; };
     n_pinned =
         unsafe { (*p_cache_1).n_page } - unsafe { (*p_cache_1).n_recyclable };
@@ -1127,6 +1311,9 @@ extern "C" fn pcache1_fetch_stage2(p_cache_1: *mut PCache1, i_key_1: u32,
         };
         unsafe { (*p_page).p_cache = p_cache_1 };
         unsafe { (*p_page).p_lru_next = core::ptr::null_mut() };
+
+        /// pPage->pLruPrev = 0;
+        ///* No need to clear pLruPrev since it is not accessed when pLruNext==0
         unsafe {
             *(unsafe { (*p_page).page.p_extra } as *mut *mut ()) =
                 core::ptr::null_mut()
@@ -1139,17 +1326,77 @@ extern "C" fn pcache1_fetch_stage2(p_cache_1: *mut PCache1, i_key_1: u32,
     return p_page;
 }
 
+///* Implementation of the sqlite3_pcache.xFetch method.
+///*
+///* Fetch a page by key value.
+///*
+///* Whether or not a new page may be allocated by this function depends on
+///* the value of the createFlag argument.  0 means do not allocate a new
+///* page.  1 means allocate a new page if space is easily available.  2
+///* means to try really hard to allocate a new page.
+///*
+///* For a non-purgeable cache (a cache used as the storage for an in-memory
+///* database) there is really no difference between createFlag 1 and 2.  So
+///* the calling function (pcache.c) will never have a createFlag of 1 on
+///* a non-purgeable cache.
+///*
+///* There are three different approaches to obtaining space for a page,
+///* depending on the value of parameter createFlag (which may be 0, 1 or 2).
+///*
+///*   1. Regardless of the value of createFlag, the cache is searched for a
+///*      copy of the requested page. If one is found, it is returned.
+///*
+///*   2. If createFlag==0 and the page is not already in the cache, NULL is
+///*      returned.
+///*
+///*   3. If createFlag is 1, and the page is not already in the cache, then
+///*      return NULL (do not allocate a new page) if any of the following
+///*      conditions are true:
+///*
+///*       (a) the number of pages pinned by the cache is greater than
+///*           PCache1.nMax, or
+///*
+///*       (b) the number of pages pinned by the cache is greater than
+///*           the sum of nMax for all purgeable caches, less the sum of
+///*           nMin for all other purgeable caches, or
+///*
+///*   4. If none of the first three conditions apply and the cache is marked
+///*      as purgeable, and if one of the following is true:
+///*
+///*       (a) The number of pages allocated for the cache is already
+///*           PCache1.nMax, or
+///*
+///*       (b) The number of pages allocated for all purgeable caches is
+///*           already equal to or greater than the sum of nMax for all
+///*           purgeable caches,
+///*
+///*       (c) The system is under memory pressure and wants to avoid
+///*           unnecessary pages cache entry allocations
+///*
+///*      then attempt to recycle a page from the LRU list. If it is the right
+///*      size, return the recycled buffer. Otherwise, free the buffer and
+///*      proceed to step 5.
+///*
+///*   5. Otherwise, allocate and return a new page buffer.
+///*
+///* There are two versions of this routine.  pcache1FetchWithMutex() is
+///* the general case.  pcache1FetchNoMutex() is a faster implementation for
+///* the common case where pGroup->mutex is NULL.  The pcache1Fetch() wrapper
+///* invokes the appropriate routine.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_fetch_no_mutex(p: *mut Sqlite3Pcache, i_key_1: u32,
     create_flag_1: i32) -> *mut PgHdr1 {
     let p_cache: *mut PCache1 = p as *mut PCache1;
     let mut p_page: *mut PgHdr1 = core::ptr::null_mut();
-    p_page =
+
+    /// Step 1: Search the hash table for an existing entry.
+    (p_page =
         unsafe {
             *unsafe {
                     (*p_cache).ap_hash.add((i_key_1 %
                                 unsafe { (*p_cache).n_hash }) as usize)
                 }
-        };
+        });
     while !(p_page).is_null() && unsafe { (*p_page).i_key } != i_key_1 {
         p_page = unsafe { (*p_page).p_next };
     }
@@ -1158,6 +1405,8 @@ extern "C" fn pcache1_fetch_no_mutex(p: *mut Sqlite3Pcache, i_key_1: u32,
             return pcache1_pin_page(p_page);
         } else { return p_page; }
     } else if create_flag_1 != 0 {
+
+        /// Steps 3, 4, and 5 implemented by this subroutine
         return pcache1_fetch_stage2(p_cache, i_key_1, create_flag_1);
     } else { return core::ptr::null_mut(); }
 }
@@ -1176,6 +1425,10 @@ extern "C" fn pcache1_fetch(p: *mut Sqlite3Pcache, i_key_1: u32,
     }
 }
 
+///* Implementation of the sqlite3_pcache.xUnpin method.
+///*
+///* Mark a page as unpinned (eligible for asynchronous recycling).
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_unpin(p: *mut Sqlite3Pcache,
     p_pg_1: *mut Sqlite3PcachePage, reuse_unlikely_1: i32) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
@@ -1183,6 +1436,9 @@ extern "C" fn pcache1_unpin(p: *mut Sqlite3Pcache,
     let p_group: *mut PGroup = unsafe { (*p_cache).p_group };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// It is an error to call this function if the page is already
+    ///* part of the PGroup LRU list.
     { let _ = 0; };
     { let _ = 0; };
     if reuse_unlikely_1 != 0 ||
@@ -1190,6 +1446,7 @@ extern "C" fn pcache1_unpin(p: *mut Sqlite3Pcache,
                 unsafe { (*p_group).n_max_page } {
         pcache1_remove_from_hash(p_page, 1);
     } else {
+        /// Add the page to the PGroup LRU list.
         let pp_first: *mut *mut PgHdr1 =
             unsafe { &mut (*p_group).lru.p_lru_next };
         unsafe { (*p_page).p_lru_prev = unsafe { &mut (*p_group).lru } };
@@ -1211,6 +1468,8 @@ extern "C" fn pcache1_unpin(p: *mut Sqlite3Pcache,
     { let _ = 0; };
 }
 
+///* Implementation of the sqlite3_pcache.xRekey method.
+#[allow(unused_doc_comments)]
 extern "C" fn pcache1_rekey(p: *mut Sqlite3Pcache,
     p_pg_1: *mut Sqlite3PcachePage, i_old_1: u32, i_new_1: u32) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
@@ -1221,16 +1480,22 @@ extern "C" fn pcache1_rekey(p: *mut Sqlite3Pcache,
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
+
+    /// The page number really is changing
     { let _ = 0; };
     { let _ = 0; };
-    h_old = i_old_1 % unsafe { (*p_cache).n_hash };
+
+    /// pPg really is iOld
+    (h_old = i_old_1 % unsafe { (*p_cache).n_hash });
     pp = unsafe { unsafe { (*p_cache).ap_hash.add(h_old as usize) } };
     while unsafe { *pp } != p_page {
         pp = unsafe { &mut (*unsafe { *pp }).p_next };
     }
     unsafe { *pp = unsafe { (*p_page).p_next } };
     { let _ = 0; };
-    h_new = i_new_1 % unsafe { (*p_cache).n_hash };
+
+    /// iNew not in cache
+    (h_new = i_new_1 % unsafe { (*p_cache).n_hash });
     unsafe { (*p_page).i_key = i_new_1 };
     unsafe {
         (*p_page).p_next =
@@ -1243,6 +1508,11 @@ extern "C" fn pcache1_rekey(p: *mut Sqlite3Pcache,
     { let _ = 0; };
 }
 
+///* Implementation of the sqlite3_pcache.xTruncate method.
+///*
+///* Discard all unpinned pages in the cache with a page number equal to
+///* or greater than parameter iLimit. Any pinned pages with a page number
+///* equal to or greater than iLimit are implicitly unpinned.
 extern "C" fn pcache1_truncate(p: *mut Sqlite3Pcache, i_limit_1: u32) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
     { let _ = 0; };
@@ -1253,6 +1523,9 @@ extern "C" fn pcache1_truncate(p: *mut Sqlite3Pcache, i_limit_1: u32) -> () {
     { let _ = 0; };
 }
 
+///* Implementation of the sqlite3_pcache.xShrink method.
+///*
+///* Free up as much memory as possible.
 extern "C" fn pcache1_shrink(p: *mut Sqlite3Pcache) -> () {
     let p_cache: *mut PCache1 = p as *mut PCache1;
     if unsafe { (*p_cache).b_purgeable } != 0 {
@@ -1267,9 +1540,27 @@ extern "C" fn pcache1_shrink(p: *mut Sqlite3Pcache) -> () {
     }
 }
 
+///* This function is called during initialization (sqlite3_initialize()) to
+///* install the default pluggable cache module, assuming the user has not
+///* already provided an alternative.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_p_cache_set_default() -> () {
     unsafe {
+
+        /// iVersion
+        /// pArg
+        /// xInit
+        /// xShutdown
+        /// xCreate
+        /// xCachesize
+        /// xPagecount
+        /// xFetch
+        /// xUnpin
+        /// xRekey
+        /// xTruncate
+        /// xDestroy
+        /// xShrink
         unsafe {
             sqlite3_config(18,
                 &raw const default_methods as *const Sqlite3PcacheMethods2)
@@ -1277,21 +1568,30 @@ pub extern "C" fn sqlite3_p_cache_set_default() -> () {
     }
 }
 
+///* Return the size of the header on each page of this PCACHE implementation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_header_size_pcache1() -> i32 {
     return (core::mem::size_of::<PgHdr1>() as u64 + 7 as u64 & !7 as u64) as
             i32;
 }
 
+///* Malloc function used by SQLite to obtain space from the buffer configured
+///* using sqlite3_config(SQLITE_CONFIG_PAGECACHE) option. If no such buffer
+///* exists, this function falls back to sqlite3Malloc().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_page_malloc(sz: i32) -> *mut () {
     { let _ = 0; };
+
+    /// These allocations are never very large
     return pcache1_alloc(sz);
 }
 
+///* Free an allocated buffer obtained from sqlite3PageMalloc().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_page_free(p: *mut ()) -> () { pcache1_free(p); }
 
+/// Access to mutexes used by sqlite3_status()
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache1_mutex() -> *mut Sqlite3Mutex {
     unsafe { return pcache1_g.mutex; }

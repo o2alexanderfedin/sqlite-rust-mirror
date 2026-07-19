@@ -1,5 +1,6 @@
 type DarwinSizeT = u64;
 
+///* state information
 static mut page_size: i32 = 1024;
 
 static mut sector_size: i32 = 512;
@@ -10,11 +11,14 @@ static mut file_size: i32 = 0;
 
 static mut cksum_nonce: u32 = 0 as u32;
 
+/// Report a memory allocation error
 extern "C" fn out_of_memory() -> () {
     eprintln!("Out of memory...");
     unsafe { exit(1) };
 }
 
+///* Read N bytes of memory starting at iOfst into space obtained
+///* from malloc().
 extern "C" fn read_content(n_1: i32, i_ofst_1: i32) -> *mut u8 {
     unsafe {
         let mut got: i32 = 0;
@@ -38,6 +42,7 @@ extern "C" fn read_content(n_1: i32, i_ofst_1: i32) -> *mut u8 {
     }
 }
 
+/// Print a line of decode output showing a 4-byte integer.
 extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     z_msg_1: *const i8) -> u32 {
     let mut i: i32 = 0;
@@ -91,6 +96,8 @@ extern "C" fn print_decode_line(a_data_1: *const u8, ofst: i32, n_byte_1: i32,
     return val;
 }
 
+///* Read and print a journal header.  Store key information (page size, etc)
+///* in global variables.
 extern "C" fn decode_journal_header(i_ofst_1: i32) -> u32 {
     unsafe {
         let p_hdr: *mut u8 = read_content(64, i_ofst_1);

@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -120,6 +126,8 @@ static mut a_val: [*const i8; 100] =
             c"-3.73984516683044072".as_ptr() as *const i8,
             c"+4.89840420089159599".as_ptr() as *const i8];
 
+/// Return the current wall-clock time in microseconds since the
+///* Unix epoch (1970-01-01T00:00:00Z)
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     let mut s_now: Timeval = unsafe { core::mem::zeroed() };
     { let _ = unsafe { gettimeofday(&mut s_now, core::ptr::null_mut()) }; };
@@ -127,6 +135,7 @@ extern "C" fn time_of_day() -> Sqlite3Int64 {
             s_now.tv_usec as Sqlite3Int64;
 }
 
+///* Generate text of the i-th test floating-point literal.
 extern "C" fn fp_literal(i: i32, z: *mut i8) -> i32 {
     unsafe {
         let mut e: i32 = 0;

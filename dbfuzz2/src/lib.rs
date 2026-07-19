@@ -1,7 +1,13 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3MemMethods,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -16,6 +22,7 @@ struct Rlimit {
     rlim_max: u64,
 }
 
+///* This is the is the SQL that is run against the database.
 static mut az_sql: [*const i8; 10] =
     [c"PRAGMA integrity_check;".as_ptr() as *const i8,
             c"SELECT * FROM sqlite_schema;".as_ptr() as *const i8,
@@ -29,21 +36,29 @@ static mut az_sql: [*const i8; 10] =
             c"DROP TABLE t3;".as_ptr() as *const i8,
             c"VACUUM;".as_ptr() as *const i8];
 
+/// Output verbosity level.  0 means complete silence
 #[unsafe(no_mangle)]
 pub static mut e_verbosity: i32 = 0;
 
+/// True to activate PRAGMA vdbe_debug=on
 static mut b_vdbe_debug: i32 = 0;
 
+/// Maximum size of the in-memory database file
 static mut sz_max: Sqlite3Int64 = 104857600 as Sqlite3Int64;
 
+/// Number of callbacks seen so far
 static mut n_cb: i32 = 0;
 
+/// Maximum allowed callbacks
 static mut mx_cb: i32 = 250000;
 
+///** Copy/paste from ext/misc/memtrace.c ***************************/
+////* The original memory allocation routines
 static mut memtrace_base: Sqlite3MemMethods = unsafe { core::mem::zeroed() };
 
 static mut memtrace_out: *mut FILE = unsafe { core::mem::zeroed() };
 
+/// Methods that trace memory allocations
 extern "C" fn memtrace_malloc(n: i32) -> *mut () {
     unsafe {
         if !(memtrace_out).is_null() {
@@ -103,6 +118,7 @@ extern "C" fn memtrace_shutdown(p: *mut ()) -> () {
     unsafe { unsafe { memtrace_base.x_shutdown.unwrap()(p) }; }
 }
 
+/// The substitute memory allocator
 static mut ersazt_methods: Sqlite3MemMethods =
     Sqlite3MemMethods {
         x_malloc: Some(memtrace_malloc),
@@ -115,6 +131,7 @@ static mut ersazt_methods: Sqlite3MemMethods =
         p_app_data: core::ptr::null_mut(),
     };
 
+/// Begin tracing memory allocations to out.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
     unsafe {
@@ -138,6 +155,7 @@ pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
     }
 }
 
+/// Deactivate memory tracing
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
     unsafe {
@@ -160,6 +178,10 @@ pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
     }
 }
 
+///* Progress handler callback
+///*
+///* Count the number of callbacks and cause an abort once the limit is
+///* reached.
 extern "C" fn progress_handler(p_not_used_1: *mut ()) -> i32 {
     unsafe {
         { let __p = &mut n_cb; let __t = *__p; *__p += 1; __t };
@@ -174,6 +196,9 @@ extern "C" fn progress_handler(p_not_used_1: *mut ()) -> i32 {
     }
 }
 
+/// libFuzzer invokes this routine with fuzzed database files (in aData).
+///* This routine run SQLite against the malformed database to see if it
+///* can provoke a failure or malfunction.
 #[unsafe(no_mangle)]
 pub extern "C" fn llvm_fuzzer_test_one_input(a_data_1: *const u8,
     n_byte_1: u64) -> i32 {
@@ -280,6 +305,8 @@ pub extern "C" fn llvm_fuzzer_test_one_input(a_data_1: *const u8,
     }
 }
 
+///* Return the number of "v" characters in a string.  Return 0 if there
+///* are any characters in the string other than "v".
 extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     let mut n: i32 = 0;
     while unsafe { *z.offset(0 as isize) } != 0 &&
@@ -295,6 +322,8 @@ extern "C" fn number_of_v_char(mut z: *const i8) -> i32 {
     return if unsafe { *z.offset(0 as isize) } as i32 == 0 { n } else { 0 };
 }
 
+/// libFuzzer invokes this routine once when the executable starts, to
+///* process the command-line arguments.
 #[unsafe(no_mangle)]
 pub extern "C" fn llvm_fuzzer_initialize(p_argc_1: &mut i32,
     p_argv_1: &*mut *mut i8) -> i32 {

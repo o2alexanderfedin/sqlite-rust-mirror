@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo,
+    LogEst, Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread,
+    Schema, Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo,
+    Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token,
+    Trigger, TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker,
+    WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,8 @@ impl Parse {
     }
 }
 
+///* Return true if zName points to a name that may be used to refer to
+///* database iDb attached to handle db.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_is_named(db: &Sqlite3, i_db: i32,
     z_name: *const i8) -> i32 {
@@ -408,6 +425,20 @@ pub extern "C" fn sqlite3_db_is_named(db: &Sqlite3, i_db: i32,
                         } == 0) as i32;
 }
 
+///* An SQL user-function registered to do the work of an ATTACH statement. The
+///* three arguments to the function come directly from an attach statement:
+///*
+///*     ATTACH DATABASE x AS y KEY z
+///*
+///*     SELECT sqlite_attach(x, y, z)
+///*
+///* If the optional "KEY z" syntax is omitted, an SQL NULL is passed as the
+///* third argument.
+///*
+///* If the db->init.reopenMemdb flags is set, then instead of attaching a
+///* new database, close the database on db->init.iDb and reopen it as an
+///* empty MemDB.
+#[allow(unused_doc_comments)]
 extern "C" fn attach_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -420,12 +451,36 @@ extern "C" fn attach_func(context: *mut Sqlite3Context, not_used_1: i32,
         let mut z_err: *mut i8 = core::ptr::null_mut();
         let mut flags: u32 = 0 as u32;
         let mut a_new: *mut Db = core::ptr::null_mut();
+        /// New array of Db pointers
         let mut p_new: *mut Db = core::ptr::null_mut();
+        /// Db object for the newly attached database
         let mut z_err_dyn: *mut i8 = core::ptr::null_mut();
         let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+        /// This is not a real ATTACH.  Instead, this routine is being called
+        ///* from sqlite3_deserialize() to close database db->init.iDb and
+        ///* reopen it as a MemDB
         let mut p_new_bt: *mut Btree = core::ptr::null_mut();
         let mut p_new_schema: *mut Schema = core::ptr::null_mut();
+        /// Both the Btree and the new Schema were allocated successfully.
+        ///* Close the old db and update the aDb[] slot with the new memdb
+        ///* values.
+        /// This is a real ATTACH
+        ///*
+        ///* Check for the following errors:
+        ///*
+        ///*     * Too many attached databases,
+        ///*     * Transaction currently open
+        ///*     * Specified database name already being used.
+        /// Allocate the new entry in the db->aDb[] array and initialize the schema
+        ///* hash tables.
+        /// Open the database file. If the btree is successfully opened, use
+        ///* it to obtain the database schema. At this point the schema may
+        ///* or may not be initialized.
         let mut p_pager: *mut Pager = core::ptr::null_mut();
+        /// If the file was opened successfully, read the schema for the new database.
+        ///* If this fails, or if opening the file failed, then close the file and 
+        ///* remove the entry from the db->aDb[] array. i.e. put everything back the
+        ///* way we found it.
         let mut i_db: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -970,6 +1025,22 @@ extern "C" fn attach_func(context: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+///* Resolve an expression that was part of an ATTACH or DETACH statement. This
+///* is slightly different from resolving a normal SQL expression, because simple
+///* identifiers are treated as strings, not possible column names or aliases.
+///*
+///* i.e. if the parser sees:
+///*
+///*     ATTACH DATABASE abc AS def
+///*
+///* it treats the two expressions as literal strings 'abc' and 'def' instead of
+///* looking for columns of the same name.
+///*
+///* This only applies to the root node of pExpr, so the statement:
+///*
+///*     ATTACH DATABASE abc||def AS 'db2'
+///*
+///* will fail because neither abc or def can be resolved.
 extern "C" fn resolve_attach_expr(p_name_1: *mut NameContext,
     p_expr_1: *mut Expr) -> i32 {
     let mut rc: i32 = 0;
@@ -981,6 +1052,9 @@ extern "C" fn resolve_attach_expr(p_name_1: *mut NameContext,
     return rc;
 }
 
+///* This procedure generates VDBE code for a single invocation of either the
+///* sqlite_detach() or sqlite_attach() SQL user functions.
+#[allow(unused_doc_comments)]
 extern "C" fn code_attach(p_parse_1: *mut Parse, type__1: i32,
     p_func_1: *const FuncDef, p_auth_arg_1: *const Expr,
     p_filename_1: *mut Expr, p_dbname_1: *mut Expr, p_key_1: *mut Expr)
@@ -1021,7 +1095,9 @@ extern "C" fn code_attach(p_parse_1: *mut Parse, type__1: i32,
                         };
                     if rc != 0 { break '__b2; }
                 }
-                v = unsafe { sqlite3_get_vdbe(p_parse_1) };
+
+                /// SQLITE_OMIT_AUTHORIZATION
+                (v = unsafe { sqlite3_get_vdbe(p_parse_1) });
                 reg_args = unsafe { sqlite3_get_temp_range(p_parse_1, 4) };
                 unsafe {
                     sqlite3_expr_code(p_parse_1, p_filename_1, reg_args)
@@ -1040,6 +1116,10 @@ extern "C" fn code_attach(p_parse_1: *mut Parse, type__1: i32,
                             reg_args + 3, unsafe { (*p_func_1).n_arg } as i32, p_func_1,
                             0)
                     };
+
+                    /// Code an OP_Expire. For an ATTACH statement, set P1 to true (expire this
+                    ///* statement only). For DETACH, set it to false (expire all existing
+                    ///* statements).
                     unsafe {
                         sqlite3_vdbe_add_op1(v, 168, (type__1 == 24) as i32)
                     };
@@ -1048,21 +1128,46 @@ extern "C" fn code_attach(p_parse_1: *mut Parse, type__1: i32,
             }
             if !(false) { break '__b2; }
         }
+
+        /// SQLITE_OMIT_AUTHORIZATION
+        /// Code an OP_Expire. For an ATTACH statement, set P1 to true (expire this
+        ///* statement only). For DETACH, set it to false (expire all existing
+        ///* statements).
         unsafe { sqlite3_expr_delete(db, p_filename_1) };
         unsafe { sqlite3_expr_delete(db, p_dbname_1) };
         unsafe { sqlite3_expr_delete(db, p_key_1) };
     }
 }
 
+///* Called by the parser to compile an ATTACH statement.
+///*
+///*     ATTACH p AS pDbname KEY pKey
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_attach(p_parse: *mut Parse, p: *mut Expr,
     p_dbname: *mut Expr, p_key: *mut Expr) -> () {
     unsafe {
+
+        /// nArg
+        /// funcFlags
+        /// pUserData
+        /// pNext
+        /// xSFunc
+        /// xFinalize
+        /// xValue, xInverse
+        /// zName
         code_attach(p_parse, 24, &attach_func_1, p as *const Expr, p,
             p_dbname, p_key);
     }
 }
 
+///* An SQL user-function registered to do the work of an DETACH statement. The
+///* three arguments to the function come directly from a detach statement:
+///*
+///*     DETACH DATABASE x
+///*
+///*     SELECT sqlite_detach(x)
+#[allow(unused_doc_comments)]
 extern "C" fn detach_func(context: *mut Sqlite3Context, not_used_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1072,6 +1177,8 @@ extern "C" fn detach_func(context: *mut Sqlite3Context, not_used_1: i32,
         let mut p_db: *mut Db = core::ptr::null_mut();
         let mut p_entry: *mut HashElem = core::ptr::null_mut();
         let mut z_err: [i8; 128] = [0; 128];
+        /// If any TEMP triggers reference the schema being detached, move those
+        ///* triggers to reference the TEMP schema itself.
         let mut p_trig: *mut Trigger = core::ptr::null_mut();
         let mut __state: i32 = 0;
         loop {
@@ -1245,15 +1352,29 @@ extern "C" fn detach_func(context: *mut Sqlite3Context, not_used_1: i32,
     }
 }
 
+///* Called by the parser to compile a DETACH statement.
+///*
+///*     DETACH pDbname
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_detach(p_parse: *mut Parse, p_dbname: *mut Expr)
     -> () {
     unsafe {
+
+        /// nArg
+        /// funcFlags
+        /// pUserData
+        /// pNext
+        /// xSFunc
+        /// xFinalize
+        /// xValue, xInverse
+        /// zName
         code_attach(p_parse, 25, &detach_func_1, p_dbname as *const Expr,
             core::ptr::null_mut(), core::ptr::null_mut(), p_dbname);
     }
 }
 
+///* Expression callback used by sqlite3FixAAAA() routines.
 extern "C" fn fix_expr_cb(p: *mut Walker, p_expr_1: *mut Expr) -> i32 {
     unsafe {
         let p_fix: *const DbFixer = unsafe { (*p).u.p_fix } as *const DbFixer;
@@ -1278,6 +1399,7 @@ extern "C" fn fix_expr_cb(p: *mut Walker, p_expr_1: *mut Expr) -> i32 {
     }
 }
 
+///* Select callback used by sqlite3FixAAAA() routines.
 extern "C" fn fix_select_cb(p: *mut Walker, p_select_1: *mut Select) -> i32 {
     unsafe {
         let p_fix: *mut DbFixer = unsafe { (*p).u.p_fix };
@@ -1382,6 +1504,8 @@ extern "C" fn fix_select_cb(p: *mut Walker, p_select_1: *mut Select) -> i32 {
     }
 }
 
+///* Initialize a DbFixer structure.  This routine must be called prior
+///* to passing the structure to one of the sqliteFixAAAA() routines below.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fix_init(p_fix: *mut DbFixer, p_parse: *mut Parse,
     i_db: i32, z_type: *const i8, p_name: *const Token) -> () {
@@ -1417,6 +1541,18 @@ pub extern "C" fn sqlite3_fix_init(p_fix: *mut DbFixer, p_parse: *mut Parse,
     }
 }
 
+///* The following set of routines walk through the parse tree and assign
+///* a specific database to all table references where the database name
+///* was left unspecified in the original SQL statement.  The pFix structure
+///* must have been initialized by a prior call to sqlite3FixInit().
+///*
+///* These routines are used to make sure that an index, trigger, or
+///* view in one database does not refer to objects in a different database.
+///* (Exception: indices, triggers, and views in the TEMP database are
+///* allowed to refer to anything.)  If a reference is explicitly made
+///* to an object in a different database, an error message is added to
+///* pParse->zErrMsg and these routines return non-zero.  If everything
+///* checks out, these routines return 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fix_src_list(p_fix: &mut DbFixer,
     p_list: *mut SrcList) -> i32 {

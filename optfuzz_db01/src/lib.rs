@@ -1,3 +1,4 @@
+/// content of file testdb01.db
 #[unsafe(no_mangle)]
 pub static mut data001: [u8; 17920] =
     [83 as u8, 81 as u8, 76 as u8, 105 as u8, 116 as u8, 101 as u8, 32 as u8,

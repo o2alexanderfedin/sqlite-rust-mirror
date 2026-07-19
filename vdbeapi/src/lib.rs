@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, MemValue, Op, Sqlite3Context, Sqlite3Value, ValueList, Vdbe,
+    VdbeCursor, VdbeFrame, VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -479,6 +497,45 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* CAPI3REF: Retrieving Statement SQL
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_sql(P) interface returns a pointer to a copy of the UTF-8
+///* SQL text used to create [prepared statement] P if P was
+///* created by [sqlite3_prepare_v2()], [sqlite3_prepare_v3()],
+///* [sqlite3_prepare16_v2()], or [sqlite3_prepare16_v3()].
+///* ^The sqlite3_expanded_sql(P) interface returns a pointer to a UTF-8
+///* string containing the SQL text of prepared statement P with
+///* [bound parameters] expanded.
+///* ^The sqlite3_normalized_sql(P) interface returns a pointer to a UTF-8
+///* string containing the normalized SQL text of prepared statement P.  The
+///* semantics used to normalize a SQL statement are unspecified and subject
+///* to change.  At a minimum, literal values will be replaced with suitable
+///* placeholders.
+///*
+///* ^(For example, if a prepared statement is created using the SQL
+///* text "SELECT $abc,:xyz" and if parameter $abc is bound to integer 2345
+///* and parameter :xyz is unbound, then sqlite3_sql() will return
+///* the original string, "SELECT $abc,:xyz" but sqlite3_expanded_sql()
+///* will return "SELECT 2345,NULL".)^
+///*
+///* ^The sqlite3_expanded_sql() interface returns NULL if insufficient memory
+///* is available to hold the result, or if the result would exceed the
+///* maximum string length determined by the [SQLITE_LIMIT_LENGTH].
+///*
+///* ^The [SQLITE_TRACE_SIZE_LIMIT] compile-time option limits the size of
+///* bound parameter expansions.  ^The [SQLITE_OMIT_TRACE] compile-time
+///* option causes sqlite3_expanded_sql() to always return NULL.
+///*
+///* ^The strings returned by sqlite3_sql(P) and sqlite3_normalized_sql(P)
+///* are managed by SQLite and are automatically freed when the prepared
+///* statement is finalized.
+///* ^The string returned by sqlite3_expanded_sql(P), on the other hand,
+///* is obtained from [sqlite3_malloc()] and must be freed by the application
+///* by passing it to [sqlite3_free()].
+///*
+///* ^The sqlite3_normalized_sql() interface is only available if
+///* the [SQLITE_ENABLE_NORMALIZE] compile-time option is defined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_sql(p_stmt: *mut Sqlite3Stmt) -> *const i8 {
     let p: *const Vdbe = p_stmt as *mut Vdbe as *const Vdbe;
@@ -487,6 +544,13 @@ pub extern "C" fn sqlite3_sql(p_stmt: *mut Sqlite3Stmt) -> *const i8 {
             } else { core::ptr::null_mut() } as *const i8;
 }
 
+///* Return the SQL associated with a prepared statement with
+///* bound parameters expanded.  Space to hold the returned string is
+///* obtained from sqlite3_malloc().  The caller is responsible for
+///* freeing the returned string by passing it to sqlite3_free().
+///*
+///* The SQLITE_TRACE_SIZE_LIMIT puts an upper bound on the size of
+///* expanded bound parameters.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expanded_sql(p_stmt: *mut Sqlite3Stmt) -> *mut i8 {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -504,6 +568,51 @@ pub extern "C" fn sqlite3_expanded_sql(p_stmt: *mut Sqlite3Stmt) -> *mut i8 {
     return z;
 }
 
+///* CAPI3REF: Determine If An SQL Statement Writes The Database
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_stmt_readonly(X) interface returns true (non-zero) if
+///* and only if the [prepared statement] X makes no direct changes to
+///* the content of the database file.
+///*
+///* Note that [application-defined SQL functions] or
+///* [virtual tables] might change the database indirectly as a side effect.
+///* ^(For example, if an application defines a function "eval()" that
+///* calls [sqlite3_exec()], then the following SQL statement would
+///* change the database file through side-effects:
+///*
+///* <blockquote><pre>
+///*    SELECT eval('DELETE FROM t1') FROM t2;
+///* </pre></blockquote>
+///*
+///* But because the [SELECT] statement does not change the database file
+///* directly, sqlite3_stmt_readonly() would still return true.)^
+///*
+///* ^Transaction control statements such as [BEGIN], [COMMIT], [ROLLBACK],
+///* [SAVEPOINT], and [RELEASE] cause sqlite3_stmt_readonly() to return true,
+///* since the statements themselves do not actually modify the database but
+///* rather they control the timing of when other statements modify the
+///* database.  ^The [ATTACH] and [DETACH] statements also cause
+///* sqlite3_stmt_readonly() to return true since, while those statements
+///* change the configuration of a database connection, they do not make
+///* changes to the content of the database files on disk.
+///* ^The sqlite3_stmt_readonly() interface returns true for [BEGIN] since
+///* [BEGIN] merely sets internal flags, but the [BEGIN|BEGIN IMMEDIATE] and
+///* [BEGIN|BEGIN EXCLUSIVE] commands do touch the database and so
+///* sqlite3_stmt_readonly() returns false for those commands.
+///*
+///* ^This routine returns false if there is any possibility that the
+///* statement might change the database file.  ^A false return does
+///* not guarantee that the statement will change the database file.
+///* ^For example, an UPDATE statement might have a WHERE clause that
+///* makes it a no-op, but the sqlite3_stmt_readonly() result would still
+///* be false.  ^Similarly, a CREATE TABLE IF NOT EXISTS statement is a
+///* read-only no-op if the table already exists, but
+///* sqlite3_stmt_readonly() still returns false for such a statement.
+///*
+///* ^If prepared statement X is an [EXPLAIN] or [EXPLAIN QUERY PLAN]
+///* statement, then sqlite3_stmt_readonly(X) returns the same value as
+///* if the EXPLAIN or EXPLAIN QUERY PLAN prefix were omitted.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmt_readonly(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return if !(p_stmt).is_null() {
@@ -511,6 +620,14 @@ pub extern "C" fn sqlite3_stmt_readonly(p_stmt: *mut Sqlite3Stmt) -> i32 {
         } else { 1 };
 }
 
+///* CAPI3REF: Query The EXPLAIN Setting For A Prepared Statement
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_stmt_isexplain(S) interface returns 1 if the
+///* prepared statement S is an EXPLAIN statement, or 2 if the
+///* statement S is an EXPLAIN QUERY PLAN.
+///* ^The sqlite3_stmt_isexplain(S) interface returns 0 if S is
+///* an ordinary statement or a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmt_isexplain(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return if !(p_stmt).is_null() {
@@ -518,7 +635,39 @@ pub extern "C" fn sqlite3_stmt_isexplain(p_stmt: *mut Sqlite3Stmt) -> i32 {
         } else { 0 };
 }
 
+///* CAPI3REF: Change The EXPLAIN Setting For A Prepared Statement
+///* METHOD: sqlite3_stmt
+///*
+///* The sqlite3_stmt_explain(S,E) interface changes the EXPLAIN
+///* setting for [prepared statement] S.  If E is zero, then S becomes
+///* a normal prepared statement.  If E is 1, then S behaves as if
+///* its SQL text began with "[EXPLAIN]".  If E is 2, then S behaves as if
+///* its SQL text began with "[EXPLAIN QUERY PLAN]".
+///*
+///* Calling sqlite3_stmt_explain(S,E) might cause S to be reprepared.
+///* SQLite tries to avoid a reprepare, but a reprepare might be necessary
+///* on the first transition into EXPLAIN or EXPLAIN QUERY PLAN mode.
+///*
+///* Because of the potential need to reprepare, a call to
+///* sqlite3_stmt_explain(S,E) will fail with SQLITE_ERROR if S cannot be
+///* reprepared because it was created using [sqlite3_prepare()] instead of
+///* the newer [sqlite3_prepare_v2()] or [sqlite3_prepare_v3()] interfaces and
+///* hence has no saved SQL text with which to reprepare.
+///*
+///* Changing the explain setting for a prepared statement does not change
+///* the original SQL text for the statement.  Hence, if the SQL text originally
+///* began with EXPLAIN or EXPLAIN QUERY PLAN, but sqlite3_stmt_explain(S,0)
+///* is called to convert the statement into an ordinary statement, the EXPLAIN
+///* or EXPLAIN QUERY PLAN keywords will still appear in the sqlite3_sql(S)
+///* output, even though the statement now acts like a normal SQL statement.
+///*
+///* This routine returns SQLITE_OK if the explain mode is successfully
+///* changed, or an error code if the explain mode could not be changed.
+///* The explain mode cannot be changed while a statement is active.
+///* Hence, it is good practice to call [sqlite3_reset(S)]
+///* immediately prior to calling sqlite3_stmt_explain(S,E).
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_stmt_explain(p_stmt: *mut Sqlite3Stmt, e_mode: i32)
     -> i32 {
     let v: *mut Vdbe = p_stmt as *mut Vdbe;
@@ -534,6 +683,8 @@ pub extern "C" fn sqlite3_stmt_explain(p_stmt: *mut Sqlite3Stmt, e_mode: i32)
         rc = 5;
     } else if unsafe { (*v).n_mem } >= 10 &&
             (e_mode != 2 || unsafe { (*v).have_eqp_ops() } != 0) {
+
+        /// No reprepare necessary
         unsafe { (*v).set_explain(e_mode as Bft as u32) };
         rc = 0;
     } else {
@@ -551,6 +702,23 @@ pub extern "C" fn sqlite3_stmt_explain(p_stmt: *mut Sqlite3Stmt, e_mode: i32)
     return rc;
 }
 
+///* CAPI3REF: Determine If A Prepared Statement Has Been Reset
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_stmt_busy(S) interface returns true (non-zero) if the
+///* [prepared statement] S has been stepped at least once using
+///* [sqlite3_step(S)] but has neither run to completion (returned
+///* [SQLITE_DONE] from [sqlite3_step(S)]) nor
+///* been reset using [sqlite3_reset(S)].  ^The sqlite3_stmt_busy(S)
+///* interface returns false if S is a NULL pointer.  If S is not a
+///* NULL pointer and is not a pointer to a valid [prepared statement]
+///* object, then the behavior is undefined and probably undesirable.
+///*
+///* This interface can be used in combination [sqlite3_next_stmt()]
+///* to locate all prepared statements associated with a database
+///* connection that are in need of being reset.  This can be used,
+///* for example, in diagnostic routines to search for prepared
+///* statements that are holding a transaction open.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmt_busy(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let v: *const Vdbe = p_stmt as *mut Vdbe as *const Vdbe;
@@ -558,6 +726,9 @@ pub extern "C" fn sqlite3_stmt_busy(p_stmt: *mut Sqlite3Stmt) -> i32 {
                 unsafe { (*v).e_vdbe_state } as i32 == 2) as i32;
 }
 
+///* Check on a Vdbe to make sure it has not been finalized.  Log
+///* an error and return true if it has been finalized (or is otherwise
+///* invalid).  Return false if it is ok.
 extern "C" fn vdbe_safety(p: &Vdbe) -> i32 {
     if (*p).db == core::ptr::null_mut() {
         unsafe {
@@ -580,6 +751,32 @@ extern "C" fn vdbe_safety_not_null(p: *mut Vdbe) -> i32 {
     } else { return vdbe_safety(unsafe { &*p }); }
 }
 
+///**************************** sqlite3_bind_  ***************************
+///*
+///* Routines used to attach values to wildcards in a compiled SQL statement.
+////
+////*
+///* Unbind the value bound to variable i in virtual machine p. This is the
+///* the same as binding a NULL value to the column. If the "i" parameter is
+///* out of range, then SQLITE_RANGE is returned. Otherwise SQLITE_OK.
+///*
+///* A successful evaluation of this routine acquires the mutex on p.
+///* the mutex is released if any kind of error occurs.
+///*
+///* The error code stored in database p->db is overwritten with the return
+///* value in any case.
+///*
+///* (tag-20240917-01) If  vdbeUnbind(p,(u32)(i-1))  returns SQLITE_OK,
+///* that means all of the the following will be true:
+///*
+///*     p!=0
+///*     p->pVar!=0
+///*     i>0
+///*     i<=p->nVar
+///*
+///* An assert() is normally added after vdbeUnbind() to help static analyzers
+///* realize this.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_unbind(p: *mut Vdbe, i: u32) -> i32 {
     let mut p_var: *mut Mem = core::ptr::null_mut();
     if vdbe_safety_not_null(p) != 0 {
@@ -612,6 +809,15 @@ extern "C" fn vdbe_unbind(p: *mut Vdbe, i: u32) -> i32 {
     unsafe { sqlite3_vdbe_mem_release(p_var) };
     unsafe { (*p_var).flags = 1 as u16 };
     unsafe { (*unsafe { (*p).db }).err_code = 0 };
+
+    /// If the bit corresponding to this variable in Vdbe.expmask is set, then
+    ///* binding a new value to this variable invalidates the current query plan.
+    ///*
+    ///* IMPLEMENTATION-OF: R-57496-20354 If the specific value bound to a host
+    ///* parameter in the WHERE clause might influence the choice of query plan
+    ///* for a statement, then the statement will be automatically recompiled,
+    ///* as if there had been a schema change, on the first sqlite3_step() call
+    ///* following any change to the bindings of that parameter.
     { let _ = 0; };
     if unsafe { (*p).expmask } != 0 as u32 &&
             unsafe { (*p).expmask } &
@@ -622,6 +828,8 @@ extern "C" fn vdbe_unbind(p: *mut Vdbe, i: u32) -> i32 {
     return 0;
 }
 
+///* Bind a text or BLOB value.
+#[allow(unused_doc_comments)]
 extern "C" fn bind_text(p_stmt_1: *mut Sqlite3Stmt, i: i32,
     z_data_1: *const (), n_data_1: i64,
     x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>, encoding: u8)
@@ -641,6 +849,10 @@ extern "C" fn bind_text(p_stmt_1: *mut Sqlite3Stmt, i: i32,
                             n_data_1, x_del_1)
                     };
             } else if encoding as i32 == 16 {
+
+                /// It is usually consider improper to assert() on an input.
+                ///* However, the following assert() is checking for inputs
+                ///* that are documented to result in undefined behavior.
                 { let _ = 0; };
                 rc =
                     unsafe {
@@ -687,6 +899,151 @@ extern "C" fn bind_text(p_stmt_1: *mut Sqlite3Stmt, i: i32,
     return rc;
 }
 
+///* CAPI3REF: Binding Values To Prepared Statements
+///* KEYWORDS: {host parameter} {host parameters} {host parameter name}
+///* KEYWORDS: {SQL parameter} {SQL parameters} {parameter binding}
+///* METHOD: sqlite3_stmt
+///*
+///* ^(In the SQL statement text input to [sqlite3_prepare_v2()] and its variants,
+///* literals may be replaced by a [parameter] that matches one of the following
+///* templates:
+///*
+///* <ul>
+///* <li>  ?
+///* <li>  ?NNN
+///* <li>  :VVV
+///* <li>  @VVV
+///* <li>  $VVV
+///* </ul>
+///*
+///* In the templates above, NNN represents an integer literal,
+///* and VVV represents an alphanumeric identifier.)^  ^The values of these
+///* parameters (also called "host parameter names" or "SQL parameters")
+///* can be set using the sqlite3_bind_*() routines defined here.
+///*
+///* ^The first argument to the sqlite3_bind_*() routines is always
+///* a pointer to the [sqlite3_stmt] object returned from
+///* [sqlite3_prepare_v2()] or its variants.
+///*
+///* ^The second argument is the index of the SQL parameter to be set.
+///* ^The leftmost SQL parameter has an index of 1.  ^When the same named
+///* SQL parameter is used more than once, second and subsequent
+///* occurrences have the same index as the first occurrence.
+///* ^The index for named parameters can be looked up using the
+///* [sqlite3_bind_parameter_index()] API if desired.  ^The index
+///* for "?NNN" parameters is the value of NNN.
+///* ^The NNN value must be between 1 and the [sqlite3_limit()]
+///* parameter [SQLITE_LIMIT_VARIABLE_NUMBER] (default value: 32766).
+///*
+///* ^The third argument is the value to bind to the parameter.
+///* ^If the third parameter to sqlite3_bind_text() or sqlite3_bind_text16()
+///* or sqlite3_bind_blob() is a NULL pointer then the fourth parameter
+///* is ignored and the end result is the same as sqlite3_bind_null().
+///* ^If the third parameter to sqlite3_bind_text() is not NULL, then
+///* it should be a pointer to well-formed UTF8 text.
+///* ^If the third parameter to sqlite3_bind_text16() is not NULL, then
+///* it should be a pointer to well-formed UTF16 text.
+///* ^If the third parameter to sqlite3_bind_text64() is not NULL, then
+///* it should be a pointer to a well-formed unicode string that is
+///* either UTF8 if the sixth parameter is SQLITE_UTF8 or SQLITE_UTF8_ZT,
+///* or UTF16 otherwise.
+///*
+///* [[byte-order determination rules]] ^The byte-order of
+///* UTF16 input text is determined by the byte-order mark (BOM, U+FEFF)
+///* found in the first character, which is removed, or in the absence of a BOM
+///* the byte order is the native byte order of the host
+///* machine for sqlite3_bind_text16() or the byte order specified in
+///* the 6th parameter for sqlite3_bind_text64().)^
+///* ^If UTF16 input text contains invalid unicode
+///* characters, then SQLite might change those invalid characters
+///* into the unicode replacement character: U+FFFD.
+///*
+///* ^(In those routines that have a fourth argument, its value is the
+///* number of bytes in the parameter.  To be clear: the value is the
+///* number of <u>bytes</u> in the value, not the number of characters.)^
+///* ^If the fourth parameter to sqlite3_bind_text() or sqlite3_bind_text16()
+///* is negative, then the length of the string is
+///* the number of bytes up to the first zero terminator.
+///* If the fourth parameter to sqlite3_bind_blob() is negative, then
+///* the behavior is undefined.
+///* If a non-negative fourth parameter is provided to sqlite3_bind_text()
+///* or sqlite3_bind_text16() or sqlite3_bind_text64() then
+///* that parameter must be the byte offset
+///* where the NUL terminator would occur assuming the string were NUL
+///* terminated.  If any NUL characters occur at byte offsets less than
+///* the value of the fourth parameter then the resulting string value will
+///* contain embedded NULs.  The result of expressions involving strings
+///* with embedded NULs is undefined.
+///*
+///* ^The fifth argument to the BLOB and string binding interfaces controls
+///* or indicates the lifetime of the object referenced by the third parameter.
+///* These three options exist:
+///* ^ (1) A destructor to dispose of the BLOB or string after SQLite has finished
+///* with it may be passed. ^It is called to dispose of the BLOB or string even
+///* if the call to the bind API fails, except the destructor is not called if
+///* the third parameter is a NULL pointer or the fourth parameter is negative.
+///* ^ (2) The special constant, [SQLITE_STATIC], may be passed to indicate that
+///* the application remains responsible for disposing of the object. ^In this
+///* case, the object and the provided pointer to it must remain valid until
+///* either the prepared statement is finalized or the same SQL parameter is
+///* bound to something else, whichever occurs sooner.
+///* ^ (3) The constant, [SQLITE_TRANSIENT], may be passed to indicate that the
+///* object is to be copied prior to the return from sqlite3_bind_*(). ^The
+///* object and pointer to it must remain valid until then. ^SQLite will then
+///* manage the lifetime of its private copy.
+///*
+///* ^The sixth argument (the E argument)
+///* to sqlite3_bind_text64(S,K,Z,N,D,E) must be one of
+///* [SQLITE_UTF8], [SQLITE_UTF8_ZT], [SQLITE_UTF16], [SQLITE_UTF16BE],
+///* or [SQLITE_UTF16LE] to specify the encoding of the text in the
+///* third parameter, Z.  The special value [SQLITE_UTF8_ZT] means that the
+///* string argument is both UTF-8 encoded and is zero-terminated.  In other
+///* words, SQLITE_UTF8_ZT means that the Z array is allocated to hold at
+///* least N+1 bytes and that the Z&#91;N&#93; byte is zero.  If
+///* the E argument to sqlite3_bind_text64(S,K,Z,N,D,E) is not one of the
+///* allowed values shown above, or if the text encoding is different
+///* from the encoding specified by the sixth parameter, then the behavior
+///* is undefined.
+///*
+///* ^The sqlite3_bind_zeroblob() routine binds a BLOB of length N that
+///* is filled with zeroes.  ^A zeroblob uses a fixed amount of memory
+///* (just an integer to hold its size) while it is being processed.
+///* Zeroblobs are intended to serve as placeholders for BLOBs whose
+///* content is later written using
+///* [sqlite3_blob_open | incremental BLOB I/O] routines.
+///* ^A negative value for the zeroblob results in a zero-length BLOB.
+///*
+///* ^The sqlite3_bind_pointer(S,I,P,T,D) routine causes the I-th parameter in
+///* [prepared statement] S to have an SQL value of NULL, but to also be
+///* associated with the pointer P of type T.  ^D is either a NULL pointer or
+///* a pointer to a destructor function for P. ^SQLite will invoke the
+///* destructor D with a single argument of P when it is finished using
+///* P, even if the call to sqlite3_bind_pointer() fails.  Due to a
+///* historical design quirk, results are undefined if D is
+///* SQLITE_TRANSIENT. The T parameter should be a static string,
+///* preferably a string literal. The sqlite3_bind_pointer() routine is
+///* part of the [pointer passing interface] added for SQLite 3.20.0.
+///*
+///* ^If any of the sqlite3_bind_*() routines are called with a NULL pointer
+///* for the [prepared statement] or with a prepared statement for which
+///* [sqlite3_step()] has been called more recently than [sqlite3_reset()],
+///* then the call will return [SQLITE_MISUSE].  If any sqlite3_bind_()
+///* routine is passed a [prepared statement] that has been finalized, the
+///* result is undefined and probably harmful.
+///*
+///* ^Bindings are not cleared by the [sqlite3_reset()] routine.
+///* ^Unbound parameters are interpreted as NULL.
+///*
+///* ^The sqlite3_bind_* routines return [SQLITE_OK] on success or an
+///* [error code] if anything goes wrong.
+///* ^[SQLITE_TOOBIG] might be returned if the size of a string or BLOB
+///* exceeds limits imposed by [sqlite3_limit]([SQLITE_LIMIT_LENGTH]) or
+///* [SQLITE_MAX_LENGTH].
+///* ^[SQLITE_RANGE] is returned if the parameter
+///* index is out of range.  ^[SQLITE_NOMEM] is returned if malloc() fails.
+///*
+///* See also: [sqlite3_bind_parameter_count()],
+///* [sqlite3_bind_parameter_name()], and [sqlite3_bind_parameter_index()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bind_blob(p_stmt: *mut Sqlite3Stmt, i: i32,
     z_data: *const (), n_data: i32,
@@ -703,6 +1060,7 @@ pub extern "C" fn sqlite3_bind_blob64(p_stmt: *mut Sqlite3Stmt, i: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bind_double(p_stmt: *mut Sqlite3Stmt, i: i32,
     r_value: f64) -> i32 {
     let mut rc: i32 = 0;
@@ -710,6 +1068,8 @@ pub extern "C" fn sqlite3_bind_double(p_stmt: *mut Sqlite3Stmt, i: i32,
     rc = vdbe_unbind(p, (i - 1) as u32);
     if rc == 0 {
         { let _ = 0; };
+
+        /// tag-20240917-01
         unsafe {
             sqlite3_vdbe_mem_set_double(unsafe {
                     &mut *unsafe { (*p).a_var.offset((i - 1) as isize) }
@@ -723,6 +1083,7 @@ pub extern "C" fn sqlite3_bind_double(p_stmt: *mut Sqlite3Stmt, i: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bind_int64(p_stmt: *mut Sqlite3Stmt, i: i32,
     i_value: Sqlite3Int64) -> i32 {
     let mut rc: i32 = 0;
@@ -730,6 +1091,8 @@ pub extern "C" fn sqlite3_bind_int64(p_stmt: *mut Sqlite3Stmt, i: i32,
     rc = vdbe_unbind(p, (i - 1) as u32);
     if rc == 0 {
         { let _ = 0; };
+
+        /// tag-20240917-01
         unsafe {
             sqlite3_vdbe_mem_set_int64(unsafe {
                     &mut *unsafe { (*p).a_var.offset((i - 1) as isize) }
@@ -749,12 +1112,15 @@ pub extern "C" fn sqlite3_bind_int(p: *mut Sqlite3Stmt, i: i32, i_value: i32)
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bind_null(p_stmt: *mut Sqlite3Stmt, i: i32) -> i32 {
     let mut rc: i32 = 0;
     let p: *mut Vdbe = p_stmt as *mut Vdbe;
     rc = vdbe_unbind(p, (i - 1) as u32);
     if rc == 0 {
         { let _ = 0; };
+
+        /// tag-20240917-01
         unsafe {
             sqlite3_mutex_leave(unsafe { (*unsafe { (*p).db }).mutex })
         };
@@ -791,12 +1157,82 @@ pub extern "C" fn sqlite3_bind_text64(p_stmt: *mut Sqlite3Stmt, i: i32,
             enc);
 }
 
+/// EVIDENCE-OF: R-12793-43283 Every value in SQLite has one of five
+///* fundamental datatypes: 64-bit signed integer 64-bit IEEE floating
+///* point number string BLOB NULL
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_value_type(p_val_1: &Sqlite3Value) -> i32 {
+
+    /// 0x00 (not possible)
+    /// 0x01 NULL
+    /// 0x02 TEXT
+    /// 0x03 (not possible)
+    /// 0x04 INTEGER
+    /// 0x05 (not possible)
+    /// 0x06 INTEGER + TEXT
+    /// 0x07 (not possible)
+    /// 0x08 FLOAT
+    /// 0x09 (not possible)
+    /// 0x0a FLOAT + TEXT
+    /// 0x0b (not possible)
+    /// 0x0c (not possible)
+    /// 0x0d (not possible)
+    /// 0x0e (not possible)
+    /// 0x0f (not possible)
+    /// 0x10 BLOB
+    /// 0x11 (not possible)
+    /// 0x12 (not possible)
+    /// 0x13 (not possible)
+    /// 0x14 INTEGER + BLOB
+    /// 0x15 (not possible)
+    /// 0x16 (not possible)
+    /// 0x17 (not possible)
+    /// 0x18 FLOAT + BLOB
+    /// 0x19 (not possible)
+    /// 0x1a (not possible)
+    /// 0x1b (not possible)
+    /// 0x1c (not possible)
+    /// 0x1d (not possible)
+    /// 0x1e (not possible)
+    /// 0x1f (not possible)
+    /// 0x20 INTREAL
+    /// 0x21 (not possible)
+    /// 0x22 INTREAL + TEXT
+    /// 0x23 (not possible)
+    /// 0x24 (not possible)
+    /// 0x25 (not possible)
+    /// 0x26 (not possible)
+    /// 0x27 (not possible)
+    /// 0x28 (not possible)
+    /// 0x29 (not possible)
+    /// 0x2a (not possible)
+    /// 0x2b (not possible)
+    /// 0x2c (not possible)
+    /// 0x2d (not possible)
+    /// 0x2e (not possible)
+    /// 0x2f (not possible)
+    /// 0x30 (not possible)
+    /// 0x31 (not possible)
+    /// 0x32 (not possible)
+    /// 0x33 (not possible)
+    /// 0x34 (not possible)
+    /// 0x35 (not possible)
+    /// 0x36 (not possible)
+    /// 0x37 (not possible)
+    /// 0x38 (not possible)
+    /// 0x39 (not possible)
+    /// 0x3a (not possible)
+    /// 0x3b (not possible)
+    /// 0x3c (not possible)
+    /// 0x3d (not possible)
+    /// 0x3e (not possible)
+    /// 0x3f (not possible)
     return a_type[((*p_val_1).flags as i32 & 63) as usize] as i32;
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bind_zeroblob(p_stmt: *mut Sqlite3Stmt, i: i32,
     n: i32) -> i32 {
     let mut rc: i32 = 0;
@@ -804,6 +1240,8 @@ pub extern "C" fn sqlite3_bind_zeroblob(p_stmt: *mut Sqlite3Stmt, i: i32,
     rc = vdbe_unbind(p, (i - 1) as u32);
     if rc == 0 {
         { let _ = 0; };
+
+        /// tag-20240917-01
         unsafe {
             sqlite3_vdbe_mem_set_zero_blob(unsafe {
                     &mut *unsafe { (*p).a_var.offset((i - 1) as isize) }
@@ -972,6 +1410,7 @@ pub extern "C" fn sqlite3_bind_value(p_stmt_1: *mut Sqlite3Stmt, i: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_bind_pointer(p_stmt: *mut Sqlite3Stmt, i: i32,
     p_ptr: *mut (), z_p_ttype: *const i8,
     x_destructor: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> i32 {
@@ -980,6 +1419,8 @@ pub extern "C" fn sqlite3_bind_pointer(p_stmt: *mut Sqlite3Stmt, i: i32,
     rc = vdbe_unbind(p, (i - 1) as u32);
     if rc == 0 {
         { let _ = 0; };
+
+        /// tag-20240917-01
         unsafe {
             sqlite3_vdbe_mem_set_pointer(unsafe {
                     &mut *unsafe { (*p).a_var.offset((i - 1) as isize) }
@@ -1011,6 +1452,23 @@ pub extern "C" fn sqlite3_bind_zeroblob64(p_stmt: *mut Sqlite3Stmt, i: i32,
     return rc;
 }
 
+///* CAPI3REF: Number Of SQL Parameters
+///* METHOD: sqlite3_stmt
+///*
+///* ^This routine can be used to find the number of [SQL parameters]
+///* in a [prepared statement].  SQL parameters are tokens of the
+///* form "?", "?NNN", ":AAA", "$AAA", or "@AAA" that serve as
+///* placeholders for values that are [sqlite3_bind_blob | bound]
+///* to the parameters at a later time.
+///*
+///* ^(This routine actually returns the index of the largest (rightmost)
+///* parameter. For all forms except ?NNN, this will correspond to the
+///* number of unique parameters.  If parameters of the ?NNN form are used,
+///* there may be gaps in the list.)^
+///*
+///* See also: [sqlite3_bind_blob|sqlite3_bind()],
+///* [sqlite3_bind_parameter_name()], and
+///* [sqlite3_bind_parameter_index()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bind_parameter_count(p_stmt: *mut Sqlite3Stmt)
     -> i32 {
@@ -1018,6 +1476,30 @@ pub extern "C" fn sqlite3_bind_parameter_count(p_stmt: *mut Sqlite3Stmt)
     return if !(p).is_null() { (unsafe { (*p).n_var }) as i32 } else { 0 };
 }
 
+///* CAPI3REF: Name Of A Host Parameter
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_bind_parameter_name(P,N) interface returns
+///* the name of the N-th [SQL parameter] in the [prepared statement] P.
+///* ^(SQL parameters of the form "?NNN" or ":AAA" or "@AAA" or "$AAA"
+///* have a name which is the string "?NNN" or ":AAA" or "@AAA" or "$AAA"
+///* respectively.
+///* In other words, the initial ":" or "$" or "@" or "?"
+///* is included as part of the name.)^
+///* ^Parameters of the form "?" without a following integer have no name
+///* and are referred to as "nameless" or "anonymous parameters".
+///*
+///* ^The first host parameter has an index of 1, not 0.
+///*
+///* ^If the value N is out of range or if the N-th parameter is
+///* nameless, then NULL is returned.  ^The returned string is
+///* always in UTF-8 encoding even if the named parameter was
+///* originally specified as UTF-16 in [sqlite3_prepare16()],
+///* [sqlite3_prepare16_v2()], or [sqlite3_prepare16_v3()].
+///*
+///* See also: [sqlite3_bind_blob|sqlite3_bind()],
+///* [sqlite3_bind_parameter_count()], and
+///* [sqlite3_bind_parameter_index()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bind_parameter_name(p_stmt: *mut Sqlite3Stmt,
     i: i32) -> *const i8 {
@@ -1026,6 +1508,9 @@ pub extern "C" fn sqlite3_bind_parameter_name(p_stmt: *mut Sqlite3Stmt,
     return unsafe { sqlite3_v_list_num_to_name(unsafe { (*p).p_v_list }, i) };
 }
 
+///* Given a wildcard parameter name, return the index of the variable
+///* with that name.  If there is no variable with the given name,
+///* return 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_parameter_index(p: *const Vdbe,
     z_name_1: *const i8, n_name_1: i32) -> i32 {
@@ -1038,6 +1523,20 @@ pub extern "C" fn sqlite3_vdbe_parameter_index(p: *const Vdbe,
         };
 }
 
+///* CAPI3REF: Index Of A Parameter With A Given Name
+///* METHOD: sqlite3_stmt
+///*
+///* ^Return the index of an SQL parameter given its name.  ^The
+///* index value returned is suitable for use as the second
+///* parameter to [sqlite3_bind_blob|sqlite3_bind()].  ^A zero
+///* is returned if no matching parameter is found.  ^The parameter
+///* name must be given in UTF-8 even if the original statement
+///* was prepared from UTF-16 text using [sqlite3_prepare16_v2()] or
+///* [sqlite3_prepare16_v3()].
+///*
+///* See also: [sqlite3_bind_blob|sqlite3_bind()],
+///* [sqlite3_bind_parameter_count()], and
+///* [sqlite3_bind_parameter_name()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_bind_parameter_index(p_stmt: *mut Sqlite3Stmt,
     z_name: *const i8) -> i32 {
@@ -1045,6 +1544,12 @@ pub extern "C" fn sqlite3_bind_parameter_index(p_stmt: *mut Sqlite3Stmt,
             z_name, unsafe { sqlite3_strlen30(z_name) });
 }
 
+///* CAPI3REF: Reset All Bindings On A Prepared Statement
+///* METHOD: sqlite3_stmt
+///*
+///* ^Contrary to the intuition of many, [sqlite3_reset()] does not reset
+///* the [sqlite3_bind_blob | bindings] on a [prepared statement].
+///* ^Use this routine to reset all host parameters to NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_clear_bindings(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let mut i: i32 = 0;
@@ -1079,6 +1584,18 @@ pub extern "C" fn sqlite3_clear_bindings(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return rc;
 }
 
+///* CAPI3REF: Number Of Columns In A Result Set
+///* METHOD: sqlite3_stmt
+///*
+///* ^Return the number of columns in the result set returned by the
+///* [prepared statement]. ^If this routine returns 0, that means the
+///* [prepared statement] returns no data (for example an [UPDATE]).
+///* ^However, just because this routine returns a positive number does not
+///* mean that one or more rows of data will be returned.  ^A SELECT statement
+///* will always have a positive sqlite3_column_count() but depending on the
+///* WHERE clause constraints and the table content, it might return no rows.
+///*
+///* See also: [sqlite3_data_count()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_count(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let p_vm: *const Vdbe = p_stmt as *mut Vdbe as *const Vdbe;
@@ -1109,6 +1626,7 @@ static az_explain_col_names16data: [u16; 60] =
             't' as i32 as u16, 'a' as i32 as u16, 'i' as i32 as u16,
             'l' as i32 as u16, 0 as u16];
 
+///* Column names appropriate for EXPLAIN or EXPLAIN QUERY PLAN.
 static mut az_explain_col_names8: [*const i8; 12] =
     [c"addr".as_ptr() as *const i8, c"opcode".as_ptr() as *const i8,
             c"p1".as_ptr() as *const i8, c"p2".as_ptr() as *const i8,
@@ -1130,6 +1648,21 @@ pub extern "C" fn sqlite3_value_text(p_val_1: *mut Sqlite3Value)
     return unsafe { sqlite3ValueText(p_val_1, 1 as u8) } as *const u8;
 }
 
+///* Convert the N-th element of pStmt->pColName[] into a string using
+///* xFunc() then return that string.  If N is out of range, return 0.
+///*
+///* There are up to 5 names for each column.  useType determines which
+///* name is returned.  Here are the names:
+///*
+///*    0      The column name as it should be displayed for output
+///*    1      The datatype name for the column
+///*    2      The name of the database that the column derives from
+///*    3      The name of the table that the column derives from
+///*    4      The name of the table column that the result column derives from
+///*
+///* If the result is not a simple column reference (if it is an expression
+///* or a constant) then useTypes 2, 3, and 4 return NULL.
+#[allow(unused_doc_comments)]
 extern "C" fn column_name(p_stmt_1: *mut Sqlite3Stmt, mut n_1: i32,
     use_utf16_1: i32, use_type_1: i32) -> *const () {
     unsafe {
@@ -1181,6 +1714,9 @@ extern "C" fn column_name(p_stmt_1: *mut Sqlite3Stmt, mut n_1: i32,
                                             &raw mut *unsafe { (*p).a_col_name.offset(n_1 as isize) }
                                         } as *mut Sqlite3Value) as *const ();
                     }
+
+                    /// A malloc may have failed inside of the _text() call. If this
+                    ///* is the case, clear the mallocFailed flag and return NULL.
                     { let _ = 0; };
                     if unsafe { (*db).malloc_failed } as i32 >
                             prior_malloc_failed as i32 {
@@ -1192,11 +1728,39 @@ extern "C" fn column_name(p_stmt_1: *mut Sqlite3Stmt, mut n_1: i32,
             }
             if !(false) { break '__b2; }
         }
+
+        /// A malloc may have failed inside of the _text() call. If this
+        ///* is the case, clear the mallocFailed flag and return NULL.
         unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
         return ret;
     }
 }
 
+///* CAPI3REF: Column Names In A Result Set
+///* METHOD: sqlite3_stmt
+///*
+///* ^These routines return the name assigned to a particular column
+///* in the result set of a [SELECT] statement.  ^The sqlite3_column_name()
+///* interface returns a pointer to a zero-terminated UTF-8 string
+///* and sqlite3_column_name16() returns a pointer to a zero-terminated
+///* UTF-16 string.  ^The first parameter is the [prepared statement]
+///* that implements the [SELECT] statement. ^The second parameter is the
+///* column number.  ^The leftmost column is number 0.
+///*
+///* ^The returned string pointer is valid until either the [prepared statement]
+///* is destroyed by [sqlite3_finalize()] or until the statement is automatically
+///* reprepared by the first call to [sqlite3_step()] for a particular run
+///* or until the next call to
+///* sqlite3_column_name() or sqlite3_column_name16() on the same column.
+///*
+///* ^If sqlite3_malloc() fails during the processing of either routine
+///* (for example during a conversion from UTF-8 to UTF-16) then a
+///* NULL pointer is returned.
+///*
+///* ^The name of a result column is the value of the "AS" clause for
+///* that column, if there is an AS clause.  If there is no AS clause
+///* then the name of the column is unspecified and may change from
+///* one release of SQLite to the next.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_name(p_stmt: *mut Sqlite3Stmt, n: i32)
     -> *const i8 {
@@ -1209,6 +1773,34 @@ pub extern "C" fn sqlite3_column_name16(p_stmt: *mut Sqlite3Stmt, n: i32)
     return column_name(p_stmt, n, 1, 0);
 }
 
+///* CAPI3REF: Declared Datatype Of A Query Result
+///* METHOD: sqlite3_stmt
+///*
+///* ^(The first parameter is a [prepared statement].
+///* If this statement is a [SELECT] statement and the Nth column of the
+///* returned result set of that [SELECT] is a table column (not an
+///* expression or subquery) then the declared type of the table
+///* column is returned.)^  ^If the Nth column of the result set is an
+///* expression or subquery, then a NULL pointer is returned.
+///* ^The returned string is always UTF-8 encoded.
+///*
+///* ^(For example, given the database schema:
+///*
+///* CREATE TABLE t1(c1 VARIANT);
+///*
+///* and the following statement to be compiled:
+///*
+///* SELECT c1 + 1, c1 FROM t1;
+///*
+///* this routine would return the string "VARIANT" for the second result
+///* column (i==1), and a NULL pointer for the first result column (i==0).)^
+///*
+///* ^SQLite uses dynamic run-time typing.  ^So just because a column
+///* is declared to contain a particular type does not mean that the
+///* data stored in that column is of the declared type.  SQLite is
+///* strongly typed, but the typing is dynamic not static.  ^Type
+///* is associated with individual values, not with the containers
+///* used to hold those values.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_decltype(p_stmt: *mut Sqlite3Stmt, n: i32)
     -> *const i8 {
@@ -1221,6 +1813,8 @@ pub extern "C" fn sqlite3_column_decltype16(p_stmt: *mut Sqlite3Stmt, n: i32)
     return column_name(p_stmt, n, 1, 1);
 }
 
+///* Invoke the profile callback.  This routine is only called if we already
+///* know that the profile callback is defined and needs to be invoked.
 extern "C" fn invoke_profile_callback(db: &Sqlite3, p: *mut Vdbe) -> () {
     unsafe {
         let mut i_now: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -1247,6 +1841,41 @@ extern "C" fn invoke_profile_callback(db: &Sqlite3, p: *mut Vdbe) -> () {
     }
 }
 
+///* CAPI3REF: Reset A Prepared Statement Object
+///* METHOD: sqlite3_stmt
+///*
+///* The sqlite3_reset() function is called to reset a [prepared statement]
+///* object back to its initial state, ready to be re-executed.
+///* ^Any SQL statement variables that had values bound to them using
+///* the [sqlite3_bind_blob | sqlite3_bind_*() API] retain their values.
+///* Use [sqlite3_clear_bindings()] to reset the bindings.
+///*
+///* ^The [sqlite3_reset(S)] interface resets the [prepared statement] S
+///* back to the beginning of its program.
+///*
+///* ^The return code from [sqlite3_reset(S)] indicates whether or not
+///* the previous evaluation of prepared statement S completed successfully.
+///* ^If [sqlite3_step(S)] has never before been called on S or if
+///* [sqlite3_step(S)] has not been called since the previous call
+///* to [sqlite3_reset(S)], then [sqlite3_reset(S)] will return
+///* [SQLITE_OK].
+///*
+///* ^If the most recent call to [sqlite3_step(S)] for the
+///* [prepared statement] S indicated an error, then
+///* [sqlite3_reset(S)] returns an appropriate [error code].
+///* ^The [sqlite3_reset(S)] interface might also return an [error code]
+///* if there were no prior errors but the process of resetting
+///* the prepared statement caused a new error. ^For example, if an
+///* [INSERT] statement with a [RETURNING] clause is only stepped one time,
+///* that one call to [sqlite3_step(S)] might return SQLITE_ROW but
+///* the overall statement might still fail and the [sqlite3_reset(S)] call
+///* might return SQLITE_BUSY if locking constraints prevent the
+///* database change from committing.  Therefore, it is important that
+///* applications check the return code from [sqlite3_reset(S)] even if
+///* no prior call to [sqlite3_step(S)] indicated a problem.
+///*
+///* ^The [sqlite3_reset(S)] interface does not change the values
+///* of any [sqlite3_bind_blob|bindings] on the [prepared statement] S.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_reset(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let mut rc: i32 = 0;
@@ -1268,6 +1897,8 @@ pub extern "C" fn sqlite3_reset(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return rc;
 }
 
+///* This function is called after a transaction has been committed. It
+///* invokes callbacks registered with sqlite3_wal_hook() as required.
 extern "C" fn do_wal_callbacks(db: *mut Sqlite3) -> i32 {
     let mut rc: i32 = 0;
     let mut i: i32 = 0;
@@ -1309,6 +1940,14 @@ extern "C" fn do_wal_callbacks(db: *mut Sqlite3) -> i32 {
     return rc;
 }
 
+///* Execute the statement pStmt, either until a row of data is ready, the
+///* statement is completely executed or an error occurs.
+///*
+///* This routine implements the bulk of the logic behind the sqlite_step()
+///* API.  The only thing omitted is the automatic recompile if a
+///* schema change has occurred.  That detail is handled by the
+///* outer sqlite3_step() wrapper procedure.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_step_2(p: *mut Vdbe) -> i32 {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -1536,15 +2175,129 @@ extern "C" fn sqlite3_step_2(p: *mut Vdbe) -> i32 {
                 }
             }
         }
+
+        /// If this statement was prepared using saved SQL and an
+        ///* error has occurred, then return the error code in p->rc to the
+        ///* caller. Set the error code in the database handle to the same
+        ///* value.
+        /// If there are no other statements currently running, then
+        ///* reset the interrupt flag.  This prevents a call to sqlite3_interrupt
+        ///* from interrupting a statement that has not yet started.
+        /// We used to require that sqlite3_reset() be called before retrying
+        ///* sqlite3_step() after any error or after SQLITE_DONE.  But beginning
+        ///* with version 3.7.0, we changed this so that sqlite3_reset() would
+        ///* be called automatically instead of throwing the SQLITE_MISUSE error.
+        ///* This "automatic-reset" change is not technically an incompatibility,
+        ///* since any application that receives an SQLITE_MISUSE is broken by
+        ///* definition.
+        ///*
+        ///* Nevertheless, some published applications that were originally written
+        ///* for version 3.6.23 or earlier do in fact depend on SQLITE_MISUSE
+        ///* returns, and those were broken by the automatic-reset change.  As a
+        ///* a work-around, the SQLITE_OMIT_AUTORESET compile-time restores the
+        ///* legacy behavior of returning SQLITE_MISUSE for cases where the
+        ///* previous sqlite3_step() returned something other than a SQLITE_LOCKED
+        ///* or SQLITE_BUSY error.
+        /// SQLITE_OMIT_EXPLAIN
+        /// If the statement completed successfully, invoke the profile callback
+        /// If this statement was prepared using saved SQL and an
+        ///* error has occurred, then return the error code in p->rc to the
+        ///* caller. Set the error code in the database handle to the same value.
+        /// There are only a limited number of result codes allowed from the
+        ///* statements prepared using the legacy sqlite3_prepare() interface
         unreachable!();
     }
 }
 
+///* CAPI3REF: Evaluate An SQL Statement
+///* METHOD: sqlite3_stmt
+///*
+///* After a [prepared statement] has been prepared using any of
+///* [sqlite3_prepare_v2()], [sqlite3_prepare_v3()], [sqlite3_prepare16_v2()],
+///* or [sqlite3_prepare16_v3()] or one of the legacy
+///* interfaces [sqlite3_prepare()] or [sqlite3_prepare16()], this function
+///* must be called one or more times to evaluate the statement.
+///*
+///* The details of the behavior of the sqlite3_step() interface depend
+///* on whether the statement was prepared using the newer "vX" interfaces
+///* [sqlite3_prepare_v3()], [sqlite3_prepare_v2()], [sqlite3_prepare16_v3()],
+///* [sqlite3_prepare16_v2()] or the older legacy
+///* interfaces [sqlite3_prepare()] and [sqlite3_prepare16()].  The use of the
+///* new "vX" interface is recommended for new applications but the legacy
+///* interface will continue to be supported.
+///*
+///* ^In the legacy interface, the return value will be either [SQLITE_BUSY],
+///* [SQLITE_DONE], [SQLITE_ROW], [SQLITE_ERROR], or [SQLITE_MISUSE].
+///* ^With the "v2" interface, any of the other [result codes] or
+///* [extended result codes] might be returned as well.
+///*
+///* ^[SQLITE_BUSY] means that the database engine was unable to acquire the
+///* database locks it needs to do its job.  ^If the statement is a [COMMIT]
+///* or occurs outside of an explicit transaction, then you can retry the
+///* statement.  If the statement is not a [COMMIT] and occurs within an
+///* explicit transaction then you should rollback the transaction before
+///* continuing.
+///*
+///* ^[SQLITE_DONE] means that the statement has finished executing
+///* successfully.  sqlite3_step() should not be called again on this virtual
+///* machine without first calling [sqlite3_reset()] to reset the virtual
+///* machine back to its initial state.
+///*
+///* ^If the SQL statement being executed returns any data, then [SQLITE_ROW]
+///* is returned each time a new row of data is ready for processing by the
+///* caller. The values may be accessed using the [column access functions].
+///* sqlite3_step() is called again to retrieve the next row of data.
+///*
+///* ^[SQLITE_ERROR] means that a run-time error (such as a constraint
+///* violation) has occurred.  sqlite3_step() should not be called again on
+///* the VM. More information may be found by calling [sqlite3_errmsg()].
+///* ^With the legacy interface, a more specific error code (for example,
+///* [SQLITE_INTERRUPT], [SQLITE_SCHEMA], [SQLITE_CORRUPT], and so forth)
+///* can be obtained by calling [sqlite3_reset()] on the
+///* [prepared statement].  ^In the "v2" interface,
+///* the more specific error code is returned directly by sqlite3_step().
+///*
+///* [SQLITE_MISUSE] means that this routine was called inappropriately.
+///* Perhaps it was called on a [prepared statement] that has
+///* already been [sqlite3_finalize | finalized] or on one that had
+///* previously returned [SQLITE_ERROR] or [SQLITE_DONE].  Or it could
+///* be the case that the same database connection is being used by two or
+///* more threads at the same moment in time.
+///*
+///* For all versions of SQLite up to and including 3.6.23.1, a call to
+///* [sqlite3_reset()] was required after sqlite3_step() returned anything
+///* other than [SQLITE_ROW] before any subsequent invocation of
+///* sqlite3_step().  Failure to reset the prepared statement using
+///* [sqlite3_reset()] would result in an [SQLITE_MISUSE] return from
+///* sqlite3_step().  But after [version 3.6.23.1] ([dateof:3.6.23.1]),
+///* sqlite3_step() began
+///* calling [sqlite3_reset()] automatically in this circumstance rather
+///* than returning [SQLITE_MISUSE].  This is not considered a compatibility
+///* break because any application that ever receives an SQLITE_MISUSE error
+///* is broken by definition.  The [SQLITE_OMIT_AUTORESET] compile-time option
+///* can be used to restore the legacy behavior.
+///*
+///* <b>Goofy Interface Alert:</b> In the legacy interface, the sqlite3_step()
+///* API always returns a generic error code, [SQLITE_ERROR], following any
+///* error other than [SQLITE_BUSY] and [SQLITE_MISUSE].  You must call
+///* [sqlite3_reset()] or [sqlite3_finalize()] in order to find one of the
+///* specific [error codes] that better describes the error.
+///* We admit that this is a goofy design.  The problem has been fixed
+///* with the "v2" interface.  If you prepare all of your SQL statements
+///* using [sqlite3_prepare_v3()] or [sqlite3_prepare_v2()]
+///* or [sqlite3_prepare16_v2()] or [sqlite3_prepare16_v3()] instead
+///* of the legacy [sqlite3_prepare()] and [sqlite3_prepare16()] interfaces,
+///* then the more specific [error codes] are returned directly
+///* by sqlite3_step().  The use of the "vX" interfaces is recommended.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_step(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let mut rc: i32 = 0;
+    /// Result from sqlite3Step()
     let v: *mut Vdbe = p_stmt as *mut Vdbe;
+    /// the prepared statement
     let mut cnt: i32 = 0;
+    /// Counter to prevent infinite loop of reprepares
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
     if vdbe_safety_not_null(v) != 0 {
         return unsafe { sqlite3_misuse_error(991) };
@@ -1556,6 +2309,13 @@ pub extern "C" fn sqlite3_step(p_stmt: *mut Sqlite3Stmt) -> i32 {
         let saved_pc: i32 = unsafe { (*v).pc };
         rc = unsafe { sqlite3_reprepare(v) };
         if rc != 0 {
+            /// This case occurs after failing to recompile an sql statement.
+            ///* The error message from the SQL compiler has already been loaded
+            ///* into the database handle. This block copies the error message
+            ///* from the database handle into the statement and sets the statement
+            ///* program counter to 0 to ensure that when the statement is
+            ///* finalized or reset the parser error message is available via
+            ///* sqlite3_errmsg() and sqlite3_errcode().
             let z_err: *const i8 =
                 sqlite3_value_text(unsafe { (*db).p_err }) as *const i8;
             unsafe {
@@ -1576,6 +2336,11 @@ pub extern "C" fn sqlite3_step(p_stmt: *mut Sqlite3Stmt) -> i32 {
         }
         sqlite3_reset(p_stmt);
         if saved_pc >= 0 {
+
+            /// Setting minWriteFileFormat to 254 is a signal to the OP_Init and
+            ///* OP_Trace opcodes to *not* perform SQLITE_TRACE_STMT because it has
+            ///* already been done once on a prior invocation that failed due to
+            ///* SQLITE_SCHEMA.   tag-20220401a
             unsafe { (*v).min_write_file_format = 254 as u8 };
         }
         { let _ = 0; };
@@ -1584,6 +2349,23 @@ pub extern "C" fn sqlite3_step(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return rc;
 }
 
+///* CAPI3REF: Number of columns in a result set
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_data_count(P) interface returns the number of columns in the
+///* current row of the result set of [prepared statement] P.
+///* ^If prepared statement P does not have results ready to return
+///* (via calls to the [sqlite3_column_int | sqlite3_column()] family of
+///* interfaces) then sqlite3_data_count(P) returns 0.
+///* ^The sqlite3_data_count(P) routine also returns 0 if P is a NULL pointer.
+///* ^The sqlite3_data_count(P) routine returns 0 if the previous call to
+///* [sqlite3_step](P) returned [SQLITE_DONE].  ^The sqlite3_data_count(P)
+///* will return non-zero if previous call to [sqlite3_step](P) returned
+///* [SQLITE_ROW], except in the case of the [PRAGMA incremental_vacuum]
+///* where it always returns zero since each step of that multi-step
+///* pragma returns 0 columns of data.
+///*
+///* See also: [sqlite3_column_count()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_data_count(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let p_vm: *const Vdbe = p_stmt as *mut Vdbe as *const Vdbe;
@@ -1594,6 +2376,128 @@ pub extern "C" fn sqlite3_data_count(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return unsafe { (*p_vm).n_res_column } as i32;
 }
 
+///* CAPI3REF: Obtaining SQL Values
+///* METHOD: sqlite3_value
+///*
+///* <b>Summary:</b>
+///* <blockquote><table border=0 cellpadding=0 cellspacing=0>
+///* <tr><td><b>sqlite3_value_blob</b><td>&rarr;<td>BLOB value
+///* <tr><td><b>sqlite3_value_double</b><td>&rarr;<td>REAL value
+///* <tr><td><b>sqlite3_value_int</b><td>&rarr;<td>32-bit INTEGER value
+///* <tr><td><b>sqlite3_value_int64</b><td>&rarr;<td>64-bit INTEGER value
+///* <tr><td><b>sqlite3_value_pointer</b><td>&rarr;<td>Pointer value
+///* <tr><td><b>sqlite3_value_text</b><td>&rarr;<td>UTF-8 TEXT value
+///* <tr><td><b>sqlite3_value_text16</b><td>&rarr;<td>UTF-16 TEXT value in
+///* the native byteorder
+///* <tr><td><b>sqlite3_value_text16be</b><td>&rarr;<td>UTF-16be TEXT value
+///* <tr><td><b>sqlite3_value_text16le</b><td>&rarr;<td>UTF-16le TEXT value
+///* <tr><td>&nbsp;<td>&nbsp;<td>&nbsp;
+///* <tr><td><b>sqlite3_value_bytes</b><td>&rarr;<td>Size of a BLOB
+///* or a UTF-8 TEXT in bytes
+///* <tr><td><b>sqlite3_value_bytes16&nbsp;&nbsp;</b>
+///* <td>&rarr;&nbsp;&nbsp;<td>Size of UTF-16
+///* TEXT in bytes
+///* <tr><td><b>sqlite3_value_type</b><td>&rarr;<td>Default
+///* datatype of the value
+///* <tr><td><b>sqlite3_value_numeric_type&nbsp;&nbsp;</b>
+///* <td>&rarr;&nbsp;&nbsp;<td>Best numeric datatype of the value
+///* <tr><td><b>sqlite3_value_nochange&nbsp;&nbsp;</b>
+///* <td>&rarr;&nbsp;&nbsp;<td>True if the column is unchanged in an UPDATE
+///* against a virtual table.
+///* <tr><td><b>sqlite3_value_frombind&nbsp;&nbsp;</b>
+///* <td>&rarr;&nbsp;&nbsp;<td>True if value originated from a [bound parameter]
+///* </table></blockquote>
+///*
+///* <b>Details:</b>
+///*
+///* These routines extract type, size, and content information from
+///* [protected sqlite3_value] objects.  Protected sqlite3_value objects
+///* are used to pass parameter information into the functions that
+///* implement [application-defined SQL functions] and [virtual tables].
+///*
+///* These routines work only with [protected sqlite3_value] objects.
+///* Any attempt to use these routines on an [unprotected sqlite3_value]
+///* is not threadsafe.
+///*
+///* ^These routines work just like the corresponding [column access functions]
+///* except that these routines take a single [protected sqlite3_value] object
+///* pointer instead of a [sqlite3_stmt*] pointer and an integer column number.
+///*
+///* ^The sqlite3_value_text16() interface extracts a UTF-16 string
+///* in the native byte-order of the host machine.  ^The
+///* sqlite3_value_text16be() and sqlite3_value_text16le() interfaces
+///* extract UTF-16 strings as big-endian and little-endian respectively.
+///*
+///* ^If [sqlite3_value] object V was initialized
+///* using [sqlite3_bind_pointer(S,I,P,X,D)] or [sqlite3_result_pointer(C,P,X,D)]
+///* and if X and Y are strings that compare equal according to strcmp(X,Y),
+///* then sqlite3_value_pointer(V,Y) will return the pointer P.  ^Otherwise,
+///* sqlite3_value_pointer(V,Y) returns a NULL. The sqlite3_bind_pointer()
+///* routine is part of the [pointer passing interface] added for SQLite 3.20.0.
+///*
+///* ^(The sqlite3_value_type(V) interface returns the
+///* [SQLITE_INTEGER | datatype code] for the initial datatype of the
+///* [sqlite3_value] object V. The returned value is one of [SQLITE_INTEGER],
+///* [SQLITE_FLOAT], [SQLITE_TEXT], [SQLITE_BLOB], or [SQLITE_NULL].)^
+///* Other interfaces might change the datatype for an sqlite3_value object.
+///* For example, if the datatype is initially SQLITE_INTEGER and
+///* sqlite3_value_text(V) is called to extract a text value for that
+///* integer, then subsequent calls to sqlite3_value_type(V) might return
+///* SQLITE_TEXT.  Whether or not a persistent internal datatype conversion
+///* occurs is undefined and may change from one release of SQLite to the next.
+///*
+///* ^(The sqlite3_value_numeric_type() interface attempts to apply
+///* numeric affinity to the value.  This means that an attempt is
+///* made to convert the value to an integer or floating point.  If
+///* such a conversion is possible without loss of information (in other
+///* words, if the value is a string that looks like a number)
+///* then the conversion is performed.  Otherwise no conversion occurs.
+///* The [SQLITE_INTEGER | datatype] after conversion is returned.)^
+///*
+///* ^Within the [xUpdate] method of a [virtual table], the
+///* sqlite3_value_nochange(X) interface returns true if and only if
+///* the column corresponding to X is unchanged by the UPDATE operation
+///* that the xUpdate method call was invoked to implement and if
+///* the prior [xColumn] method call that was invoked to extract
+///* the value for that column returned without setting a result (probably
+///* because it queried [sqlite3_vtab_nochange()] and found that the column
+///* was unchanging).  ^Within an [xUpdate] method, any value for which
+///* sqlite3_value_nochange(X) is true will in all other respects appear
+///* to be a NULL value.  If sqlite3_value_nochange(X) is invoked anywhere other
+///* than within an [xUpdate] method call for an UPDATE statement, then
+///* the return value is arbitrary and meaningless.
+///*
+///* ^The sqlite3_value_frombind(X) interface returns non-zero if the
+///* value X originated from one of the [sqlite3_bind_int|sqlite3_bind()]
+///* interfaces.  ^If X comes from an SQL literal value, or a table column,
+///* or an expression, then sqlite3_value_frombind(X) returns zero.
+///*
+///* Please pay particular attention to the fact that the pointer returned
+///* from [sqlite3_value_blob()], [sqlite3_value_text()], or
+///* [sqlite3_value_text16()] can be invalidated by a subsequent call to
+///* [sqlite3_value_bytes()], [sqlite3_value_bytes16()], [sqlite3_value_text()],
+///* or [sqlite3_value_text16()].
+///*
+///* These routines must be called from the same thread as
+///* the SQL function that supplied the [sqlite3_value*] parameters.
+///*
+///* As long as the input parameter is correct, these routines can only
+///* fail if an out-of-memory error occurs while trying to do a
+///* UTF8&rarr;UTF16 or UTF16&rarr;UTF8 conversion.
+///* If an out-of-memory error occurs, then the return value from these
+///* routines is the same as if the column had contained an SQL NULL value.
+///* If the input sqlite3_value was not obtained from [sqlite3_value_dup()],
+///* then valid SQL NULL returns can also be distinguished from
+///* out-of-memory errors after extracting the value
+///* by invoking the [sqlite3_errcode()] immediately after the suspicious
+///* return value is obtained and before any
+///* other SQLite interface is called on the same [database connection].
+///* If the input sqlite3_value was obtained from sqlite3_value_dup() then
+///* it is disconnected from the database connection and so sqlite3_errcode()
+///* will not work.
+///* In that case, the only way to distinguish an out-of-memory
+///* condition from a true SQL NULL is to invoke sqlite3_value_type() on the
+///* input to see if it is NULL prior to trying to extract the value.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_blob(p_val_1: *mut Sqlite3Value)
     -> *const () {
@@ -1614,10 +2518,30 @@ pub extern "C" fn sqlite3_value_blob(p_val_1: *mut Sqlite3Value)
     }
 }
 
+///* Return a pointer to static memory containing an SQL NULL value.
+#[allow(unused_doc_comments)]
 extern "C" fn column_null_value() -> *const Mem {
-    unsafe { return &null_mem; }
+    unsafe {
+
+        /// .u          =
+        /// .z          =
+        /// .n          =
+        /// .flags      =
+        /// .enc        =
+        /// .eSubtype   =
+        /// .db         =
+        /// .szMalloc   =
+        /// .uTemp      =
+        /// .zMalloc    =
+        /// .xDel       =
+        return &null_mem;
+    }
 }
 
+///* Check to see if column iCol of the given statement is valid.  If
+///* it is, return a pointer to the Mem for the value of that column.
+///* If iCol is not valid, return a pointer to a Mem which has a value
+///* of NULL.
 extern "C" fn column_mem(p_stmt_1: *mut Sqlite3Stmt, i: i32) -> *mut Mem {
     let mut p_vm: *const Vdbe = core::ptr::null();
     let mut p_out: *mut Mem = core::ptr::null_mut();
@@ -1637,7 +2561,28 @@ extern "C" fn column_mem(p_stmt_1: *mut Sqlite3Stmt, i: i32) -> *mut Mem {
     return p_out;
 }
 
+///* This function is called after invoking an sqlite3_value_XXX function on a
+///* column value (i.e. a value returned by evaluating an SQL expression in the
+///* select list of a SELECT statement) that may cause a malloc() failure. If
+///* malloc() has failed, the threads mallocFailed flag is cleared and the result
+///* code of statement pStmt set to SQLITE_NOMEM.
+///*
+///* Specifically, this is called from within:
+///*
+///*     sqlite3_column_int()
+///*     sqlite3_column_int64()
+///*     sqlite3_column_text()
+///*     sqlite3_column_text16()
+///*     sqlite3_column_double()
+///*     sqlite3_column_bytes()
+///*     sqlite3_column_bytes16()
+///*     sqlite3_column_blob()
+#[allow(unused_doc_comments)]
 extern "C" fn column_malloc_failure(p_stmt_1: *mut Sqlite3Stmt) -> () {
+    /// If malloc() failed during an encoding conversion within an
+    ///* sqlite3_column_XXX API, then set the return code of the statement to
+    ///* SQLITE_NOMEM. The next call to _step() (if any) will return SQLITE_ERROR
+    ///* and _finalize() will return NOMEM.
     let p: *mut Vdbe = p_stmt_1 as *mut Vdbe;
     if !(p).is_null() {
         { let _ = 0; };
@@ -1654,11 +2599,227 @@ extern "C" fn column_malloc_failure(p_stmt_1: *mut Sqlite3Stmt) -> () {
     }
 }
 
+///* CAPI3REF: Result Values From A Query
+///* KEYWORDS: {column access functions}
+///* METHOD: sqlite3_stmt
+///*
+///* <b>Summary:</b>
+///* <blockquote><table border=0 cellpadding=0 cellspacing=0>
+///* <tr><td><b>sqlite3_column_blob</b><td>&rarr;<td>BLOB result
+///* <tr><td><b>sqlite3_column_double</b><td>&rarr;<td>REAL result
+///* <tr><td><b>sqlite3_column_int</b><td>&rarr;<td>32-bit INTEGER result
+///* <tr><td><b>sqlite3_column_int64</b><td>&rarr;<td>64-bit INTEGER result
+///* <tr><td><b>sqlite3_column_text</b><td>&rarr;<td>UTF-8 TEXT result
+///* <tr><td><b>sqlite3_column_text16</b><td>&rarr;<td>UTF-16 TEXT result
+///* <tr><td><b>sqlite3_column_value</b><td>&rarr;<td>The result as an
+///* [sqlite3_value|unprotected sqlite3_value] object.
+///* <tr><td>&nbsp;<td>&nbsp;<td>&nbsp;
+///* <tr><td><b>sqlite3_column_bytes</b><td>&rarr;<td>Size of a BLOB
+///* or a UTF-8 TEXT result in bytes
+///* <tr><td><b>sqlite3_column_bytes16&nbsp;&nbsp;</b>
+///* <td>&rarr;&nbsp;&nbsp;<td>Size of UTF-16
+///* TEXT in bytes
+///* <tr><td><b>sqlite3_column_type</b><td>&rarr;<td>Default
+///* datatype of the result
+///* </table></blockquote>
+///*
+///* <b>Details:</b>
+///*
+///* ^These routines return information about a single column of the current
+///* result row of a query.  ^In every case the first argument is a pointer
+///* to the [prepared statement] that is being evaluated (the [sqlite3_stmt*]
+///* that was returned from [sqlite3_prepare_v2()] or one of its variants)
+///* and the second argument is the index of the column for which information
+///* should be returned. ^The leftmost column of the result set has the index 0.
+///* ^The number of columns in the result can be determined using
+///* [sqlite3_column_count()].
+///*
+///* If the SQL statement does not currently point to a valid row, or if the
+///* column index is out of range, the result is undefined.
+///* These routines may only be called when the most recent call to
+///* [sqlite3_step()] has returned [SQLITE_ROW] and neither
+///* [sqlite3_reset()] nor [sqlite3_finalize()] have been called subsequently.
+///* If any of these routines are called after [sqlite3_reset()] or
+///* [sqlite3_finalize()] or after [sqlite3_step()] has returned
+///* something other than [SQLITE_ROW], the results are undefined.
+///* If [sqlite3_step()] or [sqlite3_reset()] or [sqlite3_finalize()]
+///* are called from a different thread while any of these routines
+///* are pending, then the results are undefined.
+///*
+///* The first six interfaces (_blob, _double, _int, _int64, _text, and _text16)
+///* each return the value of a result column in a specific data format.  If
+///* the result column is not initially in the requested format (for example,
+///* if the query returns an integer but the sqlite3_column_text() interface
+///* is used to extract the value) then an automatic type conversion is performed.
+///*
+///* ^The sqlite3_column_type() routine returns the
+///* [SQLITE_INTEGER | datatype code] for the initial data type
+///* of the result column.  ^The returned value is one of [SQLITE_INTEGER],
+///* [SQLITE_FLOAT], [SQLITE_TEXT], [SQLITE_BLOB], or [SQLITE_NULL].
+///* The return value of sqlite3_column_type() can be used to decide which
+///* of the first six interface should be used to extract the column value.
+///* The value returned by sqlite3_column_type() is only meaningful if no
+///* automatic type conversions have occurred for the value in question.
+///* After a type conversion, the result of calling sqlite3_column_type()
+///* is undefined, though harmless.  Future
+///* versions of SQLite may change the behavior of sqlite3_column_type()
+///* following a type conversion.
+///*
+///* If the result is a BLOB or a TEXT string, then the sqlite3_column_bytes()
+///* or sqlite3_column_bytes16() interfaces can be used to determine the size
+///* of that BLOB or string.
+///*
+///* ^If the result is a BLOB or UTF-8 string then the sqlite3_column_bytes()
+///* routine returns the number of bytes in that BLOB or string.
+///* ^If the result is a UTF-16 string, then sqlite3_column_bytes() converts
+///* the string to UTF-8 and then returns the number of bytes.
+///* ^If the result is a numeric value then sqlite3_column_bytes() uses
+///* [sqlite3_snprintf()] to convert that value to a UTF-8 string and returns
+///* the number of bytes in that string.
+///* ^If the result is NULL, then sqlite3_column_bytes() returns zero.
+///*
+///* ^If the result is a BLOB or UTF-16 string then the sqlite3_column_bytes16()
+///* routine returns the number of bytes in that BLOB or string.
+///* ^If the result is a UTF-8 string, then sqlite3_column_bytes16() converts
+///* the string to UTF-16 and then returns the number of bytes.
+///* ^If the result is a numeric value then sqlite3_column_bytes16() uses
+///* [sqlite3_snprintf()] to convert that value to a UTF-16 string and returns
+///* the number of bytes in that string.
+///* ^If the result is NULL, then sqlite3_column_bytes16() returns zero.
+///*
+///* ^The values returned by [sqlite3_column_bytes()] and
+///* [sqlite3_column_bytes16()] do not include the zero terminators at the end
+///* of the string.  ^For clarity: the values returned by
+///* [sqlite3_column_bytes()] and [sqlite3_column_bytes16()] are the number of
+///* bytes in the string, not the number of characters.
+///*
+///* ^Strings returned by sqlite3_column_text() and sqlite3_column_text16(),
+///* even empty strings, are always zero-terminated.  ^The return
+///* value from sqlite3_column_blob() for a zero-length BLOB is a NULL pointer.
+///*
+///* ^Strings returned by sqlite3_column_text16() always have the endianness
+///* which is native to the platform, regardless of the text encoding set
+///* for the database.
+///*
+///* <b>Warning:</b> ^The object returned by [sqlite3_column_value()] is an
+///* [unprotected sqlite3_value] object.  In a multithreaded environment,
+///* an unprotected sqlite3_value object may only be used safely with
+///* [sqlite3_bind_value()] and [sqlite3_result_value()].
+///* If the [unprotected sqlite3_value] object returned by
+///* [sqlite3_column_value()] is used in any other way, including calls
+///* to routines like [sqlite3_value_int()], [sqlite3_value_text()],
+///* or [sqlite3_value_bytes()], the behavior is not threadsafe.
+///* Hence, the sqlite3_column_value() interface
+///* is normally only useful within the implementation of
+///* [application-defined SQL functions] or [virtual tables], not within
+///* top-level application code.
+///*
+///* These routines may attempt to convert the datatype of the result.
+///* ^For example, if the internal representation is FLOAT and a text result
+///* is requested, [sqlite3_snprintf()] is used internally to perform the
+///* conversion automatically.  ^(The following table details the conversions
+///* that are applied:
+///*
+///* <blockquote>
+///* <table border="1">
+///* <tr><th> Internal<br>Type <th> Requested<br>Type <th>  Conversion
+///*
+///* <tr><td>  NULL    <td> INTEGER   <td> Result is 0
+///* <tr><td>  NULL    <td>  FLOAT    <td> Result is 0.0
+///* <tr><td>  NULL    <td>   TEXT    <td> Result is a NULL pointer
+///* <tr><td>  NULL    <td>   BLOB    <td> Result is a NULL pointer
+///* <tr><td> INTEGER  <td>  FLOAT    <td> Convert from integer to float
+///* <tr><td> INTEGER  <td>   TEXT    <td> ASCII rendering of the integer
+///* <tr><td> INTEGER  <td>   BLOB    <td> Same as INTEGER->TEXT
+///* <tr><td>  FLOAT   <td> INTEGER   <td> [CAST] to INTEGER
+///* <tr><td>  FLOAT   <td>   TEXT    <td> ASCII rendering of the float
+///* <tr><td>  FLOAT   <td>   BLOB    <td> [CAST] to BLOB
+///* <tr><td>  TEXT    <td> INTEGER   <td> [CAST] to INTEGER
+///* <tr><td>  TEXT    <td>  FLOAT    <td> [CAST] to REAL
+///* <tr><td>  TEXT    <td>   BLOB    <td> No change
+///* <tr><td>  BLOB    <td> INTEGER   <td> [CAST] to INTEGER
+///* <tr><td>  BLOB    <td>  FLOAT    <td> [CAST] to REAL
+///* <tr><td>  BLOB    <td>   TEXT    <td> [CAST] to TEXT, ensure zero terminator
+///* </table>
+///* </blockquote>)^
+///*
+///* Note that when type conversions occur, pointers returned by prior
+///* calls to sqlite3_column_blob(), sqlite3_column_text(), and/or
+///* sqlite3_column_text16() may be invalidated.
+///* Type conversions and pointer invalidations might occur
+///* in the following cases:
+///*
+///* <ul>
+///* <li> The initial content is a BLOB and sqlite3_column_text() or
+///*      sqlite3_column_text16() is called.  A zero-terminator might
+///*      need to be added to the string.</li>
+///* <li> The initial content is UTF-8 text and sqlite3_column_bytes16() or
+///*      sqlite3_column_text16() is called.  The content must be converted
+///*      to UTF-16.</li>
+///* <li> The initial content is UTF-16 text and sqlite3_column_bytes() or
+///*      sqlite3_column_text() is called.  The content must be converted
+///*      to UTF-8.</li>
+///* </ul>
+///*
+///* ^Conversions between UTF-16be and UTF-16le are always done in place and do
+///* not invalidate a prior pointer, though of course the content of the buffer
+///* that the prior pointer references will have been modified.  Other kinds
+///* of conversion are done in place when it is possible, but sometimes they
+///* are not possible and in those cases prior pointers are invalidated.
+///*
+///* The safest policy is to invoke these routines
+///* in one of the following ways:
+///*
+///* <ul>
+///*  <li>sqlite3_column_text() followed by sqlite3_column_bytes()</li>
+///*  <li>sqlite3_column_blob() followed by sqlite3_column_bytes()</li>
+///*  <li>sqlite3_column_text16() followed by sqlite3_column_bytes16()</li>
+///* </ul>
+///*
+///* In other words, you should call sqlite3_column_text(),
+///* sqlite3_column_blob(), or sqlite3_column_text16() first to force the result
+///* into the desired format, then invoke sqlite3_column_bytes() or
+///* sqlite3_column_bytes16() to find the size of the result.  Do not mix calls
+///* to sqlite3_column_text() or sqlite3_column_blob() with calls to
+///* sqlite3_column_bytes16(), and do not mix calls to sqlite3_column_text16()
+///* with calls to sqlite3_column_bytes().
+///*
+///* ^The pointers returned are valid until a type conversion occurs as
+///* described above, or until [sqlite3_step()] or [sqlite3_reset()] or
+///* [sqlite3_finalize()] is called.  ^The memory space used to hold strings
+///* and BLOBs is freed automatically.  Do not pass the pointers returned
+///* from [sqlite3_column_blob()], [sqlite3_column_text()], etc. into
+///* [sqlite3_free()].
+///*
+///* As long as the input parameters are correct, these routines will only
+///* fail if an out-of-memory error occurs during a format conversion.
+///* Only the following subset of interfaces are subject to out-of-memory
+///* errors:
+///*
+///* <ul>
+///* <li> sqlite3_column_blob()
+///* <li> sqlite3_column_text()
+///* <li> sqlite3_column_text16()
+///* <li> sqlite3_column_bytes()
+///* <li> sqlite3_column_bytes16()
+///* </ul>
+///*
+///* If an out-of-memory error occurs, then the return value from these
+///* routines is the same as if the column had contained an SQL NULL value.
+///* Valid SQL NULL returns can be distinguished from out-of-memory errors
+///* by invoking the [sqlite3_errcode()] immediately after the suspect
+///* return value is obtained and before any
+///* other SQLite interface is called on the same [database connection].
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_column_blob(p_stmt: *mut Sqlite3Stmt, i: i32)
     -> *const () {
     let mut val: *const () = core::ptr::null();
     val = sqlite3_value_blob(column_mem(p_stmt, i) as *mut Sqlite3Value);
+
+    /// Even though there is no encoding conversion, value_blob() might
+    ///* need to call malloc() to expand the result of a zeroblob()
+    ///* expression.
     column_malloc_failure(p_stmt);
     return val;
 }
@@ -1776,11 +2937,39 @@ pub extern "C" fn sqlite3_column_type(p_stmt: *mut Sqlite3Stmt, i: i32)
     return i_type;
 }
 
+///* CAPI3REF: Destroy A Prepared Statement Object
+///* DESTRUCTOR: sqlite3_stmt
+///*
+///* ^The sqlite3_finalize() function is called to delete a [prepared statement].
+///* ^If the most recent evaluation of the statement encountered no errors
+///* or if the statement has never been evaluated, then sqlite3_finalize() returns
+///* SQLITE_OK.  ^If the most recent evaluation of statement S failed, then
+///* sqlite3_finalize(S) returns the appropriate [error code] or
+///* [extended error code].
+///*
+///* ^The sqlite3_finalize(S) routine can be called at any point during
+///* the life cycle of [prepared statement] S:
+///* before statement S is ever evaluated, after
+///* one or more calls to [sqlite3_reset()], or after any call
+///* to [sqlite3_step()] regardless of whether or not the statement has
+///* completed execution.
+///*
+///* ^Invoking sqlite3_finalize() on a NULL pointer is a harmless no-op.
+///*
+///* The application must finalize every [prepared statement] in order to avoid
+///* resource leaks.  It is a grievous error for the application to try to use
+///* a prepared statement after it has been finalized.  Any use of a prepared
+///* statement after it has been finalized can result in undefined and
+///* undesirable behavior such as segfaults and heap corruption.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_finalize(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let mut rc: i32 = 0;
     if p_stmt == core::ptr::null_mut() {
-        rc = 0;
+
+        /// IMPLEMENTATION-OF: R-57228-12904 Invoking sqlite3_finalize() on a NULL
+        ///* pointer is a harmless no-op.
+        (rc = 0);
     } else {
         let v: *mut Vdbe = p_stmt as *mut Vdbe;
         let db: *mut Sqlite3 = unsafe { (*v).db };
@@ -1800,11 +2989,24 @@ pub extern "C" fn sqlite3_finalize(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return rc;
 }
 
+///* Return the number of times the Step function of an aggregate has been
+///* called.
+///*
+///* This function is deprecated.  Do not use it for new code.  It is
+///* provide only to avoid breaking legacy code.  New aggregate function
+///* implementations should keep their own counts within their aggregate
+///* context.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_aggregate_count(p: &Sqlite3Context) -> i32 {
     unsafe { { let _ = 0; }; return unsafe { (*(*p).p_mem).n }; }
 }
 
+///* Return TRUE (non-zero) of the statement supplied as an argument needs
+///* to be recompiled.  A statement needs to be recompiled whenever the
+///* execution environment changes in a way that would alter the program
+///* that sqlite3_prepare() generates.  For example, if new functions or
+///* collating sequences are registered or if an authorizer function is
+///* added or changed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expired(p_stmt: *mut Sqlite3Stmt) -> i32 {
     let mut i_ret: i32 = 1;
@@ -1821,6 +3023,7 @@ pub extern "C" fn sqlite3_expired(p_stmt: *mut Sqlite3Stmt) -> i32 {
     return i_ret;
 }
 
+///* Transfer all bindings from the first statement over to the second.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3TransferBindings(p_from_stmt: *mut Sqlite3Stmt,
     p_to_stmt: *mut Sqlite3Stmt) -> i32 {
@@ -1852,6 +3055,16 @@ pub extern "C" fn sqlite3TransferBindings(p_from_stmt: *mut Sqlite3Stmt,
     return 0;
 }
 
+///* Deprecated external interface.  Internal/core SQLite code
+///* should call sqlite3TransferBindings.
+///*
+///* It is misuse to call this routine with statements from different
+///* database connections.  But as this is a deprecated interface, we
+///* will not bother to check for that condition.
+///*
+///* If the two statements contain a different number of bindings, then
+///* an SQLITE_ERROR is returned.  Nothing else can go wrong, so otherwise
+///* SQLITE_OK is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_transfer_bindings(p_from_stmt: *mut Sqlite3Stmt,
     p_to_stmt: *mut Sqlite3Stmt) -> i32 {
@@ -1898,21 +3111,56 @@ pub extern "C" fn sqlite3_value_text16be(p_val_1: *mut Sqlite3Value)
     return unsafe { sqlite3ValueText(p_val_1, 3 as u8) };
 }
 
+/// Return true if a parameter to xUpdate represents an unchanged column
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_nochange(p_val_1: &Sqlite3Value) -> i32 {
     return ((*p_val_1).flags as i32 & (1 | 1024) == 1 | 1024) as i32;
 }
 
+/// Return true if a parameter value originated from an sqlite3_bind()
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_frombind(p_val_1: &Sqlite3Value) -> i32 {
     return ((*p_val_1).flags as i32 & 64 != 0) as i32;
 }
 
+///* CAPI3REF: Report the internal text encoding state of an sqlite3_value object
+///* METHOD: sqlite3_value
+///*
+///* ^(The sqlite3_value_encoding(X) interface returns one of [SQLITE_UTF8],
+///* [SQLITE_UTF16BE], or [SQLITE_UTF16LE] according to the current text encoding
+///* of the value X, assuming that X has type TEXT.)^  If sqlite3_value_type(X)
+///* returns something other than SQLITE_TEXT, then the return value from
+///* sqlite3_value_encoding(X) is meaningless.  ^Calls to
+///* [sqlite3_value_text(X)], [sqlite3_value_text16(X)],
+///* [sqlite3_value_text16be(X)],
+///* [sqlite3_value_text16le(X)], [sqlite3_value_bytes(X)], or
+///* [sqlite3_value_bytes16(X)] might change the encoding of the value X and
+///* thus change the return from subsequent calls to sqlite3_value_encoding(X).
+///*
+///* This routine is intended for used by applications that test and validate
+///* the SQLite implementation.  This routine is inquiring about the opaque
+///* internal state of an [sqlite3_value] object.  Ordinary applications should
+///* not need to know what the internal state of an sqlite3_value object is and
+///* hence should not need to use this interface.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_encoding(p_val_1: &Sqlite3Value) -> i32 {
     return (*p_val_1).enc as i32;
 }
 
+///* CAPI3REF: Finding The Subtype Of SQL Values
+///* METHOD: sqlite3_value
+///*
+///* The sqlite3_value_subtype(V) function returns the subtype for
+///* an [application-defined SQL function] argument V.  The subtype
+///* information can be used to pass a limited amount of context from
+///* one SQL function to another.  Use the [sqlite3_result_subtype()]
+///* routine to set the subtype for the return value of an SQL function.
+///*
+///* Every [application-defined SQL function] that invokes this interface
+///* should include the [SQLITE_SUBTYPE] property in the text
+///* encoding argument when the function is [sqlite3_create_function|registered].
+///* If the [SQLITE_SUBTYPE] property is omitted, then sqlite3_value_subtype()
+///* might return zero instead of the upstream subtype in some corner cases.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_subtype(p_val_1: *mut Sqlite3Value) -> u32 {
     let p_mem: *const Mem = p_val_1 as *mut Mem as *const Mem;
@@ -1921,7 +3169,21 @@ pub extern "C" fn sqlite3_value_subtype(p_val_1: *mut Sqlite3Value) -> u32 {
             } else { 0 } as u32;
 }
 
+///* CAPI3REF: Copy And Free SQL Values
+///* METHOD: sqlite3_value
+///*
+///* ^The sqlite3_value_dup(V) interface makes a copy of the [sqlite3_value]
+///* object V and returns a pointer to that copy.  ^The [sqlite3_value] returned
+///* is a [protected sqlite3_value] object even if the input is not.
+///* ^The sqlite3_value_dup(V) interface returns NULL if V is NULL or if a
+///* memory allocation fails. ^If V is a [pointer value], then the result
+///* of sqlite3_value_dup(V) is a NULL value.
+///*
+///* ^The sqlite3_value_free(V) interface frees an [sqlite3_value] object
+///* previously obtained from [sqlite3_value_dup()].  ^If V is a NULL pointer
+///* then sqlite3_value_free(V) is a harmless no-op.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_value_dup(p_orig_1: *const Sqlite3Value)
     -> *mut Sqlite3Value {
     let mut p_new: *mut Sqlite3Value = core::ptr::null_mut();
@@ -1949,16 +3211,22 @@ pub extern "C" fn sqlite3_value_dup(p_orig_1: *const Sqlite3Value)
             p_new = core::ptr::null_mut();
         }
     } else if unsafe { (*p_new).flags } as i32 & 1 != 0 {
+
+        /// Do not duplicate pointer values
         unsafe { (*p_new).flags &= !(512 | 2048) as u16 };
     }
     return p_new;
 }
 
+/// Destroy an sqlite3_value object previously obtained from
+///* sqlite3_value_dup().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_free(p_old_1: *mut Sqlite3Value) -> () {
     unsafe { sqlite3ValueFree(p_old_1) };
 }
 
+///* Create a new aggregate context for p and return a pointer to
+///* its pMem->z element.
 extern "C" fn create_agg_context(p: &Sqlite3Context, n_byte_1: i32)
     -> *mut () {
     unsafe {
@@ -1981,6 +3249,47 @@ extern "C" fn create_agg_context(p: &Sqlite3Context, n_byte_1: i32)
     }
 }
 
+///* CAPI3REF: Obtain Aggregate Function Context
+///* METHOD: sqlite3_context
+///*
+///* Implementations of aggregate SQL functions use this
+///* routine to allocate memory for storing their state.
+///*
+///* ^The first time the sqlite3_aggregate_context(C,N) routine is called
+///* for a particular aggregate function, SQLite allocates
+///* N bytes of memory, zeroes out that memory, and returns a pointer
+///* to the new memory. ^On second and subsequent calls to
+///* sqlite3_aggregate_context() for the same aggregate function instance,
+///* the same buffer is returned.  Sqlite3_aggregate_context() is normally
+///* called once for each invocation of the xStep callback and then one
+///* last time when the xFinal callback is invoked.  ^(When no rows match
+///* an aggregate query, the xStep() callback of the aggregate function
+///* implementation is never called and xFinal() is called exactly once.
+///* In those cases, sqlite3_aggregate_context() might be called for the
+///* first time from within xFinal().)^
+///*
+///* ^The sqlite3_aggregate_context(C,N) routine returns a NULL pointer
+///* when first called if N is less than or equal to zero or if a memory
+///* allocation error occurs.
+///*
+///* ^(The amount of space allocated by sqlite3_aggregate_context(C,N) is
+///* determined by the N parameter on the first successful call.  Changing the
+///* value of N in any subsequent call to sqlite3_aggregate_context() within
+///* the same aggregate function instance will not resize the memory
+///* allocation.)^  Within the xFinal callback, it is customary to set
+///* N=0 in calls to sqlite3_aggregate_context(C,N) so that no
+///* pointless memory allocations occur.
+///*
+///* ^SQLite automatically frees the memory allocated by
+///* sqlite3_aggregate_context() when the aggregate query concludes.
+///*
+///* The first parameter must be a copy of the
+///* [sqlite3_context | SQL function context] that is the first parameter
+///* to the xStep or xFinal callback routine that implements the aggregate
+///* function.
+///*
+///* This routine must be called from the same thread in which
+///* the aggregate SQL function is running.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_aggregate_context(p: *mut Sqlite3Context,
     n_byte_1: i32) -> *mut () {
@@ -1993,11 +3302,30 @@ pub extern "C" fn sqlite3_aggregate_context(p: *mut Sqlite3Context,
     }
 }
 
+///* CAPI3REF: User Data For Functions
+///* METHOD: sqlite3_context
+///*
+///* ^The sqlite3_user_data() interface returns a copy of
+///* the pointer that was the pUserData parameter (the 5th parameter)
+///* of the [sqlite3_create_function()]
+///* and [sqlite3_create_function16()] routines that originally
+///* registered the application defined function.
+///*
+///* This routine must be called from the same thread in which
+///* the application-defined function is running.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_user_data(p: &Sqlite3Context) -> *mut () {
     unsafe { { let _ = 0; }; return unsafe { (*(*p).p_func).p_user_data }; }
 }
 
+///* CAPI3REF: Database Connection For Functions
+///* METHOD: sqlite3_context
+///*
+///* ^The sqlite3_context_db_handle() interface returns a copy of
+///* the pointer to the [database connection] (the 1st parameter)
+///* of the [sqlite3_create_function()]
+///* and [sqlite3_create_function16()] routines that originally
+///* registered the application defined function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_context_db_handle(p: &Sqlite3Context)
     -> *mut Sqlite3 {
@@ -2005,6 +3333,71 @@ pub extern "C" fn sqlite3_context_db_handle(p: &Sqlite3Context)
     return unsafe { (*(*p).p_out).db };
 }
 
+///* CAPI3REF: Function Auxiliary Data
+///* METHOD: sqlite3_context
+///*
+///* These functions may be used by (non-aggregate) SQL functions to
+///* associate auxiliary data with argument values. If the same argument
+///* value is passed to multiple invocations of the same SQL function during
+///* query execution, under some circumstances the associated auxiliary data
+///* might be preserved.  An example of where this might be useful is in a
+///* regular-expression matching function. The compiled version of the regular
+///* expression can be stored as auxiliary data associated with the pattern
+///* string. Then as long as the pattern string remains the same,
+///* the compiled regular expression can be reused on multiple
+///* invocations of the same function.
+///*
+///* ^The sqlite3_get_auxdata(C,N) interface returns a pointer to the auxiliary
+///* data associated by the sqlite3_set_auxdata(C,N,P,X) function with the
+///* Nth argument value to the application-defined function.  ^N is zero
+///* for the left-most function argument.  ^If there is no auxiliary data
+///* associated with the function argument, the sqlite3_get_auxdata(C,N)
+///* interface returns a NULL pointer.
+///*
+///* ^The sqlite3_set_auxdata(C,N,P,X) interface saves P as auxiliary data for the
+///* N-th argument of the application-defined function.  ^Subsequent
+///* calls to sqlite3_get_auxdata(C,N) return P from the most recent
+///* sqlite3_set_auxdata(C,N,P,X) call if the auxiliary data is still valid or
+///* NULL if the auxiliary data has been discarded.
+///* ^After each call to sqlite3_set_auxdata(C,N,P,X) where X is not NULL,
+///* SQLite will invoke the destructor function X with parameter P exactly
+///* once, when the auxiliary data is discarded.
+///* SQLite is free to discard the auxiliary data at any time, including: <ul>
+///* <li> ^(when the corresponding function parameter changes)^, or
+///* <li> ^(when [sqlite3_reset()] or [sqlite3_finalize()] is called for the
+///*      SQL statement)^, or
+///* <li> ^(when sqlite3_set_auxdata() is invoked again on the same
+///*       parameter)^, or
+///* <li> ^(during the original sqlite3_set_auxdata() call when a memory
+///*      allocation error occurs.)^
+///* <li> ^(during the original sqlite3_set_auxdata() call if the function
+///*      is evaluated during query planning instead of during query execution,
+///*      as sometimes happens with [SQLITE_ENABLE_STAT4].)^ </ul>
+///*
+///* Note the last two bullets in particular.  The destructor X in
+///* sqlite3_set_auxdata(C,N,P,X) might be called immediately, before the
+///* sqlite3_set_auxdata() interface even returns.  Hence sqlite3_set_auxdata()
+///* should be called near the end of the function implementation and the
+///* function implementation should not make any use of P after
+///* sqlite3_set_auxdata() has been called.  Furthermore, a call to
+///* sqlite3_get_auxdata() that occurs immediately after a corresponding call
+///* to sqlite3_set_auxdata() might still return NULL if an out-of-memory
+///* condition occurred during the sqlite3_set_auxdata() call or if the
+///* function is being evaluated during query planning rather than during
+///* query execution.
+///*
+///* ^(In practice, auxiliary data is preserved between function calls for
+///* function parameters that are compile-time constants, including literal
+///* values and [parameters] and expressions composed from the same.)^
+///*
+///* The value of the N parameter to these interfaces should be non-negative.
+///* Future enhancements may make use of negative N values to define new
+///* kinds of function caching behavior.
+///*
+///* These routines must be called from the same thread in which
+///* the SQL function is running.
+///*
+///* See also: [sqlite3_get_clientdata()] and [sqlite3_set_clientdata()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_auxdata(p_ctx_1: &Sqlite3Context, i_arg_1: i32)
     -> *mut () {
@@ -2029,6 +3422,15 @@ pub extern "C" fn sqlite3_get_auxdata(p_ctx_1: &Sqlite3Context, i_arg_1: i32)
     return core::ptr::null_mut();
 }
 
+///* Set the auxiliary data pointer and delete function, for the iArg'th
+///* argument to the user-function defined by pCtx. Any previous value is
+///* deleted by calling the delete function specified when it was set.
+///*
+///* The left-most argument is 0.
+///*
+///* Undocumented behavior:  If iArg is negative then make the data available
+///* to all functions within the current prepared statement using iArg as an
+///* access code.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_auxdata(p_ctx_1: &mut Sqlite3Context,
     i_arg_1: i32, p_aux_1: *mut (),
@@ -2148,6 +3550,7 @@ pub extern "C" fn sqlite3_set_auxdata(p_ctx_1: &mut Sqlite3Context,
     }
 }
 
+/// Cause the SQL function to raise an SQLITE_TOOBIG error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_result_error_toobig(p_ctx_1: &mut Sqlite3Context)
     -> () {
@@ -2160,6 +3563,7 @@ pub extern "C" fn sqlite3_result_error_toobig(p_ctx_1: &mut Sqlite3Context)
     };
 }
 
+/// Cause the SQL function to raise an SQLITE_NOMEM error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_result_error_nomem(p_ctx_1: &mut Sqlite3Context)
     -> () {
@@ -2169,6 +3573,20 @@ pub extern "C" fn sqlite3_result_error_nomem(p_ctx_1: &mut Sqlite3Context)
     unsafe { sqlite3_oom_fault(unsafe { (*(*p_ctx_1).p_out).db }) };
 }
 
+///************************* sqlite3_result_  *******************************
+///* The following routines are used by application-defined SQL functions to
+///* specify the function return value.  There are many variations on
+///* sqlite3_result_xxxx() for different types of return values.
+///*
+///* The setStrOrError() function is a helper function that invokes
+///* sqlite3VdbeMemSetStr() to store the result as a string or blob.
+///* Appropriate errors are set if the string/blob is too big or if
+///* an OOM occurs.
+///*
+///* The invokeValueDestructor(P,X) helper function invokes the destructor
+///* function X() on value P if P is not going to be used and need to
+///* be destroyed.
+#[allow(unused_doc_comments)]
 extern "C" fn set_result_str_or_error(p_ctx_1: *mut Sqlite3Context,
     z: *const i8, n: i32, enc: u8,
     x_del_1: Option<unsafe extern "C" fn(*mut ()) -> ()>) -> () {
@@ -2178,6 +3596,10 @@ extern "C" fn set_result_str_or_error(p_ctx_1: *mut Sqlite3Context,
         rc =
             unsafe { sqlite3_vdbe_mem_set_text(p_out, z, n as i64, x_del_1) };
     } else if enc as i32 == 16 {
+
+        /// It is usually considered improper to assert() on an input. However,
+        ///* the following assert() is checking for inputs that are documented
+        ///* to result in undefined behavior.
         { let _ = 0; };
         rc =
             unsafe { sqlite3_vdbe_mem_set_text(p_out, z, n as i64, x_del_1) };
@@ -2192,6 +3614,9 @@ extern "C" fn set_result_str_or_error(p_ctx_1: *mut Sqlite3Context,
         if rc == 18 {
             unsafe { sqlite3_result_error_toobig(unsafe { &mut *p_ctx_1 }) };
         } else {
+
+            /// The only errors possible from sqlite3VdbeMemSetStr are
+            ///* SQLITE_TOOBIG and SQLITE_NOMEM
             { let _ = 0; };
             unsafe { sqlite3_result_error_nomem(unsafe { &mut *p_ctx_1 }) };
         }
@@ -2205,6 +3630,155 @@ extern "C" fn set_result_str_or_error(p_ctx_1: *mut Sqlite3Context,
     }
 }
 
+///* CAPI3REF: Setting The Result Of An SQL Function
+///* METHOD: sqlite3_context
+///*
+///* These routines are used by the xFunc or xFinal callbacks that
+///* implement SQL functions and aggregates.  See
+///* [sqlite3_create_function()] and [sqlite3_create_function16()]
+///* for additional information.
+///*
+///* These functions work very much like the [parameter binding] family of
+///* functions used to bind values to host parameters in prepared statements.
+///* Refer to the [SQL parameter] documentation for additional information.
+///*
+///* ^The sqlite3_result_blob() interface sets the result from
+///* an application-defined function to be the BLOB whose content is pointed
+///* to by the second parameter and which is N bytes long where N is the
+///* third parameter.
+///*
+///* ^The sqlite3_result_zeroblob(C,N) and sqlite3_result_zeroblob64(C,N)
+///* interfaces set the result of the application-defined function to be
+///* a BLOB containing all zero bytes and N bytes in size.
+///*
+///* ^The sqlite3_result_double() interface sets the result from
+///* an application-defined function to be a floating point value specified
+///* by its 2nd argument.
+///*
+///* ^The sqlite3_result_error() and sqlite3_result_error16() functions
+///* cause the implemented SQL function to throw an exception.
+///* ^SQLite uses the string pointed to by the
+///* 2nd parameter of sqlite3_result_error() or sqlite3_result_error16()
+///* as the text of an error message.  ^SQLite interprets the error
+///* message string from sqlite3_result_error() as UTF-8. ^SQLite
+///* interprets the string from sqlite3_result_error16() as UTF-16 using
+///* the same [byte-order determination rules] as [sqlite3_bind_text16()].
+///* ^If the third parameter to sqlite3_result_error()
+///* or sqlite3_result_error16() is negative then SQLite takes as the error
+///* message all text up through the first zero character.
+///* ^If the third parameter to sqlite3_result_error() or
+///* sqlite3_result_error16() is non-negative then SQLite takes that many
+///* bytes (not characters) from the 2nd parameter as the error message.
+///* ^The sqlite3_result_error() and sqlite3_result_error16()
+///* routines make a private copy of the error message text before
+///* they return.  Hence, the calling function can deallocate or
+///* modify the text after they return without harm.
+///* ^The sqlite3_result_error_code() function changes the error code
+///* returned by SQLite as a result of an error in a function.  ^By default,
+///* the error code is SQLITE_ERROR.  ^A subsequent call to sqlite3_result_error()
+///* or sqlite3_result_error16() resets the error code to SQLITE_ERROR.
+///*
+///* ^The sqlite3_result_error_toobig() interface causes SQLite to throw an
+///* error indicating that a string or BLOB is too long to represent.
+///*
+///* ^The sqlite3_result_error_nomem() interface causes SQLite to throw an
+///* error indicating that a memory allocation failed.
+///*
+///* ^The sqlite3_result_int() interface sets the return value
+///* of the application-defined function to be the 32-bit signed integer
+///* value given in the 2nd argument.
+///* ^The sqlite3_result_int64() interface sets the return value
+///* of the application-defined function to be the 64-bit signed integer
+///* value given in the 2nd argument.
+///*
+///* ^The sqlite3_result_null() interface sets the return value
+///* of the application-defined function to be NULL.
+///*
+///* ^The sqlite3_result_text(), sqlite3_result_text16(),
+///* sqlite3_result_text16le(), and sqlite3_result_text16be() interfaces
+///* set the return value of the application-defined function to be
+///* a text string which is represented as UTF-8, UTF-16 native byte order,
+///* UTF-16 little endian, or UTF-16 big endian, respectively.
+///* ^The sqlite3_result_text64(C,Z,N,D,E) interface sets the return value of an
+///* application-defined function to be a text string in an encoding
+///* specified the E parameter, which must be one
+///* of [SQLITE_UTF8], [SQLITE_UTF8_ZT], [SQLITE_UTF16], [SQLITE_UTF16BE],
+///* or [SQLITE_UTF16LE].  ^The special value [SQLITE_UTF8_ZT] means that
+///* the result text is both UTF-8 and zero-terminated.  In other words,
+///* SQLITE_UTF8_ZT means that the Z array holds at least N+1 bytes and that
+///* the Z&#91;N&#93; is zero.
+///* ^SQLite takes the text result from the application from
+///* the 2nd parameter of the sqlite3_result_text* interfaces.
+///* ^If the 3rd parameter to any of the sqlite3_result_text* interfaces
+///* other than sqlite3_result_text64() is negative, then SQLite computes
+///* the string length itself by searching the 2nd parameter for the first
+///* zero character.
+///* ^If the 3rd parameter to the sqlite3_result_text* interfaces
+///* is non-negative, then as many bytes (not characters) of the text
+///* pointed to by the 2nd parameter are taken as the application-defined
+///* function result.  If the 3rd parameter is non-negative, then it
+///* must be the byte offset into the string where the NUL terminator would
+///* appear if the string were NUL terminated.  If any NUL characters occur
+///* in the string at a byte offset that is less than the value of the 3rd
+///* parameter, then the resulting string will contain embedded NULs and the
+///* result of expressions operating on strings with embedded NULs is undefined.
+///* ^If the 4th parameter to the sqlite3_result_text* interfaces
+///* or sqlite3_result_blob is a non-NULL pointer, then SQLite calls that
+///* function as the destructor on the text or BLOB result when it has
+///* finished using that result.
+///* ^If the 4th parameter to the sqlite3_result_text* interfaces or to
+///* sqlite3_result_blob is the special constant SQLITE_STATIC, then SQLite
+///* assumes that the text or BLOB result is in constant space and does not
+///* copy the content of the parameter nor call a destructor on the content
+///* when it has finished using that result.
+///* ^If the 4th parameter to the sqlite3_result_text* interfaces
+///* or sqlite3_result_blob is the special constant SQLITE_TRANSIENT
+///* then SQLite makes a copy of the result into space obtained
+///* from [sqlite3_malloc()] before it returns.
+///*
+///* ^For the sqlite3_result_text16(), sqlite3_result_text16le(), and
+///* sqlite3_result_text16be() routines, and for sqlite3_result_text64()
+///* when the encoding is not UTF8, if the input UTF16 begins with a
+///* byte-order mark (BOM, U+FEFF) then the BOM is removed from the
+///* string and the rest of the string is interpreted according to the
+///* byte-order specified by the BOM.  ^The byte-order specified by
+///* the BOM at the beginning of the text overrides the byte-order
+///* specified by the interface procedure.  ^So, for example, if
+///* sqlite3_result_text16le() is invoked with text that begins
+///* with bytes 0xfe, 0xff (a big-endian byte-order mark) then the
+///* first two bytes of input are skipped and the remaining input
+///* is interpreted as UTF16BE text.
+///*
+///* ^For UTF16 input text to the sqlite3_result_text16(),
+///* sqlite3_result_text16be(), sqlite3_result_text16le(), and
+///* sqlite3_result_text64() routines, if the text contains invalid
+///* UTF16 characters, the invalid characters might be converted
+///* into the unicode replacement character, U+FFFD.
+///*
+///* ^The sqlite3_result_value() interface sets the result of
+///* the application-defined function to be a copy of the
+///* [unprotected sqlite3_value] object specified by the 2nd parameter.  ^The
+///* sqlite3_result_value() interface makes a copy of the [sqlite3_value]
+///* so that the [sqlite3_value] specified in the parameter may change or
+///* be deallocated after sqlite3_result_value() returns without harm.
+///* ^A [protected sqlite3_value] object may always be used where an
+///* [unprotected sqlite3_value] object is required, so either
+///* kind of [sqlite3_value] object can be used with this interface.
+///*
+///* ^The sqlite3_result_pointer(C,P,T,D) interface sets the result to an
+///* SQL NULL value, just like [sqlite3_result_null(C)], except that it
+///* also associates the host-language pointer P or type T with that
+///* NULL value such that the pointer can be retrieved within an
+///* [application-defined SQL function] using [sqlite3_value_pointer()].
+///* ^If the D parameter is not NULL, then it is a pointer to a destructor
+///* for the P parameter.  ^SQLite invokes D with P as its only argument
+///* when SQLite is finished with P.  The T parameter should be a static
+///* string and preferably a string literal. The sqlite3_result_pointer()
+///* routine is part of the [pointer passing interface] added for SQLite 3.20.0.
+///*
+///* If these routines are called from within a different thread
+///* than the one containing the application-defined function that received
+///* the [sqlite3_context] pointer, the results are undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_result_blob(p_ctx_1: *mut Sqlite3Context,
     z: *const (), n: i32,
@@ -2428,16 +4002,52 @@ pub extern "C" fn sqlite3_result_zeroblob(p_ctx_1: *mut Sqlite3Context,
     };
 }
 
+///* CAPI3REF: Setting The Subtype Of An SQL Function
+///* METHOD: sqlite3_context
+///*
+///* The sqlite3_result_subtype(C,T) function causes the subtype of
+///* the result from the [application-defined SQL function] with
+///* [sqlite3_context] C to be the value T.  Only the lower 8 bits
+///* of the subtype T are preserved in current versions of SQLite;
+///* higher order bits are discarded.
+///* The number of subtype bytes preserved by SQLite might increase
+///* in future releases of SQLite.
+///*
+///* Every [application-defined SQL function] that invokes this interface
+///* should include the [SQLITE_RESULT_SUBTYPE] property in its
+///* text encoding argument when the SQL function is
+///* [sqlite3_create_function|registered].  If the [SQLITE_RESULT_SUBTYPE]
+///* property is omitted from the function that invokes sqlite3_result_subtype(),
+///* then in some cases the sqlite3_result_subtype() might fail to set
+///* the result subtype.
+///*
+///* If SQLite is compiled with -DSQLITE_STRICT_SUBTYPE=1, then any
+///* SQL function that invokes the sqlite3_result_subtype() interface
+///* and that does not have the SQLITE_RESULT_SUBTYPE property will raise
+///* an error.  Future versions of SQLite might enable -DSQLITE_STRICT_SUBTYPE=1
+///* by default.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_result_subtype(p_ctx_1: &Sqlite3Context,
     e_subtype_1: u32) -> () {
     let mut p_out: *mut Mem = core::ptr::null_mut();
-    p_out = (*p_ctx_1).p_out;
+
+    /// SQLITE_STRICT_SUBTYPE
+    (p_out = (*p_ctx_1).p_out);
     { let _ = 0; };
     unsafe { (*p_out).e_subtype = (e_subtype_1 & 255 as u32) as u8 };
     unsafe { (*p_out).flags |= 2048 as u16 };
 }
 
+///* CAPI3REF: Find The Database Handle Of A Prepared Statement
+///* METHOD: sqlite3_stmt
+///*
+///* ^The sqlite3_db_handle interface returns the [database connection] handle
+///* to which a [prepared statement] belongs.  ^The [database connection]
+///* returned by sqlite3_db_handle is the same [database connection]
+///* that was the first argument
+///* to the [sqlite3_prepare_v2()] call (or its variants) that was used to
+///* create the statement in the first place.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_handle(p_stmt_1: *mut Sqlite3Stmt)
     -> *mut Sqlite3 {
@@ -2446,6 +4056,18 @@ pub extern "C" fn sqlite3_db_handle(p_stmt_1: *mut Sqlite3Stmt)
         } else { core::ptr::null_mut() };
 }
 
+///* CAPI3REF: Find the next prepared statement
+///* METHOD: sqlite3
+///*
+///* ^This interface returns a pointer to the next [prepared statement] after
+///* pStmt associated with the [database connection] pDb.  ^If pStmt is NULL
+///* then this interface returns a pointer to the first prepared statement
+///* associated with the database connection pDb.  ^If no prepared statement
+///* satisfies the conditions of this routine, it returns NULL.
+///*
+///* The [database connection] pointer D in a call to
+///* [sqlite3_next_stmt(D,S)] must refer to an open database
+///* connection and in particular must not be a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_next_stmt(p_db_1: &mut Sqlite3,
     p_stmt_1: *mut Sqlite3Stmt) -> *mut Sqlite3Stmt {
@@ -2462,7 +4084,28 @@ pub extern "C" fn sqlite3_next_stmt(p_db_1: &mut Sqlite3,
     return p_next;
 }
 
+///* CAPI3REF: Return A Dynamic String From an SQL Function
+///*
+///* The [sqlite3_result_str(C,S,F)] interface causes the
+///* [sqlite3_str|dynamic string] S to become the return value for the
+///* application-defined function or virtual table that uses
+///* [sqlite3_context] C.  The F flag can be one of [SQLITE_COPY]
+///* or [SQLITE_XFER] or [SQLITE_FINISH].
+///*
+///* If the dynamic string is invalid or incomplete due to an out-of-memory
+///* or string-too-large error, then this routine transfers that error
+///* over to the SQL function.
+///*
+///* If the F argument is SQLITE_COPY, then a copy of the dynamic string
+///* content is made and the dynamic string object is unchanged.
+///* If the F argument is SQLITE_XFER, then ownership of the content
+///* in the dynamic is transferred to the SQL function (via a pointer copy
+///* rather than a string copy) and the dynamic string is reset to an
+///* empty string.  The SQLITE_FINISH value for F works like SQLITE_RESET
+///* except that it also invokes the [sqlite3_str_free(S)] destructor
+///* on the dynamic string object.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_result_str(p_ctx_1: *mut Sqlite3Context,
     p_str_1: *mut Sqlite3Str, e_own_1: i32) -> () {
     if unsafe { (*p_str_1).acc_error } as i32 == 0 {
@@ -2473,6 +4116,12 @@ pub extern "C" fn sqlite3_result_str(p_ctx_1: *mut Sqlite3Context,
         } else {
             let z_text: *const i8 =
                 unsafe { sqlite3_str_value(p_str_1) } as *const i8;
+
+            /// Only internal code has the ability to capture a pointer to
+            ///* an sqlite3_str object that uses static buffer.  And none of
+            ///* those internal use cases every invoke the sqlite3_result_str()
+            ///* interface on a static-buffer sqlite3_str.  Should this change
+            ///* in the future, the following assert() will let us know.
             { let _ = 0; };
             if e_own_1 == 0 {
                 set_result_str_or_error(p_ctx_1, z_text,
@@ -2510,6 +4159,28 @@ pub extern "C" fn sqlite3_result_str(p_ctx_1: *mut Sqlite3Context,
     }
 }
 
+///* CAPI3REF: Prepared Statement Status
+///* METHOD: sqlite3_stmt
+///*
+///* ^(Each prepared statement maintains various
+///* [SQLITE_STMTSTATUS counters] that measure the number
+///* of times it has performed specific operations.)^  These counters can
+///* be used to monitor the performance characteristics of the prepared
+///* statements.  For example, if the number of table steps greatly exceeds
+///* the number of table searches or result rows, that would tend to indicate
+///* that the prepared statement is using a full table scan rather than
+///* an index.
+///*
+///* ^(This interface is used to retrieve and reset counter values from
+///* a [prepared statement].  The first argument is the prepared statement
+///* object to be interrogated.  The second argument
+///* is an integer code for a specific [SQLITE_STMTSTATUS counter]
+///* to be interrogated.)^
+///* ^The current value of the requested counter is returned.
+///* ^If the resetFlg is true, then the counter is reset to zero after this
+///* interface call returns.
+///*
+///* See also: [sqlite3_status()] and [sqlite3_db_status()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmt_status(p_stmt: *mut Sqlite3Stmt, op: i32,
     reset_flag: i32) -> i32 {
@@ -2537,17 +4208,47 @@ pub extern "C" fn sqlite3_stmt_status(p_stmt: *mut Sqlite3Stmt, op: i32,
     return v as i32;
 }
 
+///* CAPI3REF: Determine If Virtual Table Column Access Is For UPDATE
+///*
+///* If the sqlite3_vtab_nochange(X) routine is called within the [xColumn]
+///* method of a [virtual table], then it might return true if the
+///* column is being fetched as part of an UPDATE operation during which the
+///* column value will not change.  The virtual table implementation can use
+///* this hint as permission to substitute a return value that is less
+///* expensive to compute and that the corresponding
+///* [xUpdate] method understands as a "no-change" value.
+///*
+///* If the [xColumn] method calls sqlite3_vtab_nochange() and finds that
+///* the column is not changed by the UPDATE statement, then the xColumn
+///* method can optionally return without setting a result, without calling
+///* any of the [sqlite3_result_int|sqlite3_result_xxxxx() interfaces].
+///* In that case, [sqlite3_value_nochange(X)] will return true for the
+///* same column in the [xUpdate] method.
+///*
+///* The sqlite3_vtab_nochange() routine is an optimization.  Virtual table
+///* implementations should continue to give a correct answer even if the
+///* sqlite3_vtab_nochange() interface were to always return false.  In the
+///* current implementation, the sqlite3_vtab_nochange() interface does always
+///* returns false for the enhanced [UPDATE FROM] statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_nochange(p: &Sqlite3Context) -> i32 {
     { let _ = 0; };
     return sqlite3_value_nochange(unsafe { &*(*p).p_out });
 }
 
+///* The destructor function for a ValueList object.  This needs to be
+///* a separate function, unknowable to the application, to ensure that
+///* calls to sqlite3_vtab_in_first()/sqlite3_vtab_in_next() that are not
+///* preceded by activation of IN processing via sqlite3_vtab_int() do not
+///* try to access a fake ValueList object inserted by a hostile extension.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vdbe_value_list_free(p_to_delete: *mut ()) -> () {
     unsafe { sqlite3_free(p_to_delete) };
 }
 
+///* Implementation of sqlite3_vtab_in_first() (if bNext==0) and
+///* sqlite3_vtab_in_next() (if bNext!=0).
+#[allow(unused_doc_comments)]
 extern "C" fn value_from_value_list(p_val_1: *mut Sqlite3Value,
     pp_out_1: &mut *mut Sqlite3Value, b_next_1: i32) -> i32 {
     unsafe {
@@ -2582,7 +4283,10 @@ extern "C" fn value_from_value_list(p_val_1: *mut Sqlite3Value,
         }
         if rc == 0 {
             let mut sz: u32 = 0 as u32;
+            /// Size of current row in bytes
             let mut s_mem: Mem = unsafe { core::mem::zeroed() };
+
+            /// Raw content of current row
             unsafe {
                 memset(&raw mut s_mem as *mut (), 0,
                     core::mem::size_of::<Mem>() as u64)
@@ -2642,18 +4346,66 @@ extern "C" fn value_from_value_list(p_val_1: *mut Sqlite3Value,
     }
 }
 
+///* CAPI3REF: Find all elements on the right-hand side of an IN constraint.
+///*
+///* These interfaces are only useful from within the
+///* [xFilter|xFilter() method] of a [virtual table] implementation.
+///* The result of invoking these interfaces from any other context
+///* is undefined and probably harmful.
+///*
+///* The X parameter in a call to sqlite3_vtab_in_first(X,P) or
+///* sqlite3_vtab_in_next(X,P) should be one of the parameters to the
+///* xFilter method which invokes these routines, and specifically
+///* a parameter that was previously selected for all-at-once IN constraint
+///* processing using the [sqlite3_vtab_in()] interface in the
+///* [xBestIndex|xBestIndex method].  ^(If the X parameter is not
+///* an xFilter argument that was selected for all-at-once IN constraint
+///* processing, then these routines return [SQLITE_ERROR].)^
+///*
+///* ^(Use these routines to access all values on the right-hand side
+///* of the IN constraint using code like the following:
+///*
+///* <blockquote><pre>
+///* &nbsp;  for(rc=sqlite3_vtab_in_first(pList, &pVal);
+///* &nbsp;      rc==SQLITE_OK && pVal;
+///* &nbsp;      rc=sqlite3_vtab_in_next(pList, &pVal)
+///* &nbsp;  ){
+///* &nbsp;    // do something with pVal
+///* &nbsp;  }
+///* &nbsp;  if( rc!=SQLITE_DONE ){
+///* &nbsp;    // an error has occurred
+///* &nbsp;  }
+///* </pre></blockquote>)^
+///*
+///* ^On success, the sqlite3_vtab_in_first(X,P) and sqlite3_vtab_in_next(X,P)
+///* routines return SQLITE_OK and set *P to point to the first or next value
+///* on the RHS of the IN constraint.  ^If there are no more values on the
+///* right hand side of the IN constraint, then *P is set to NULL and these
+///* routines return [SQLITE_DONE].  ^The return value might be
+///* some other value, such as SQLITE_NOMEM, in the event of a malfunction.
+///*
+///* The *ppOut values returned by these routines are only valid until the
+///* next call to either of these routines or until the end of the xFilter
+///* method from which these routines were called.  If the virtual table
+///* implementation needs to retain the *ppOut values for longer, it must make
+///* copies.  The *ppOut values are [protected sqlite3_value|protected].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_in_first(p_val_1: *mut Sqlite3Value,
     pp_out_1: *mut *mut Sqlite3Value) -> i32 {
     return value_from_value_list(p_val_1, unsafe { &mut *pp_out_1 }, 0);
 }
 
+///* Set the iterator value pVal to point to the next value in the set.
+///* Set (*ppOut) to point to this value before returning.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_in_next(p_val_1: *mut Sqlite3Value,
     pp_out_1: *mut *mut Sqlite3Value) -> i32 {
     return value_from_value_list(p_val_1, unsafe { &mut *pp_out_1 }, 1);
 }
 
+/// Force the INT64 value currently stored as the result to be
+///* a MEM_IntReal value.  See the SQLITE_TESTCTRL_RESULT_INTREAL
+///* test-control.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_result_int_real(p_ctx_1: &Sqlite3Context) -> () {
     { let _ = 0; };
@@ -2663,6 +4415,11 @@ pub extern "C" fn sqlite3_result_int_real(p_ctx_1: &Sqlite3Context) -> () {
     }
 }
 
+///* Return the current time for a statement.  If the current time
+///* is requested more than once within the same run of a single prepared
+///* statement, the exact same time is returned for each invocation regardless
+///* of the amount of time that elapses between invocations.  In other words,
+///* the time returned is always the time of the first call.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_stmt_current_time(p: &Sqlite3Context)
     -> Sqlite3Int64 {

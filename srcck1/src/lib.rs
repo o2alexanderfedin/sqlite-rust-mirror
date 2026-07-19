@@ -1,5 +1,7 @@
 type DarwinSizeT = u64;
 
+/// Read the complete text of a file into memory.  Return a pointer to
+///* the result.  Panic if unable to read the file or allocate memory.
 extern "C" fn read_file(z_filename_1: *const i8) -> *mut i8 {
     unsafe {
         let mut in_: *mut FILE = core::ptr::null_mut();
@@ -45,6 +47,24 @@ extern "C" fn read_file(z_filename_1: *const i8) -> *mut i8 {
     }
 }
 
+/// Check the C code in the argument to see if it might have
+///* side effects.  The only accurate way to know this is to do a full
+///* parse of the C code, which this routine does not do.  This routine
+///* uses a simple heuristic of looking for:
+///*
+///*    *  '=' not immediately after '>', '<', '!', or '='.
+///*    *  '++'
+///*    *  '--'
+///*
+///* If the code contains the phrase "side-effects-ok" is inside a 
+///* comment, then always return false.  This is used to disable checking
+///* for assert()s with deliberate side-effects, such as used by
+///* SQLITE_TESTCTRL_ASSERT - a facility that allows applications to
+///* determine at runtime whether or not assert()s are enabled.  
+///* Obviously, that determination cannot be made unless the assert()
+///* has some side-effect.
+///*
+///* Return true if a side effect is seen.  Return false if not.
 extern "C" fn has_side_effect(z: &[i8]) -> i32 {
     let mut i: u32 = 0 as u32;
     {
@@ -84,6 +104,8 @@ extern "C" fn has_side_effect(z: &[i8]) -> i32 {
     return 0;
 }
 
+/// Return the number of bytes in string z[] prior to the first unmatched ')'
+///* character.
 extern "C" fn find_close_paren(z: *const i8) -> u32 {
     let mut n_open: u32 = 0 as u32;
     let mut i: u32 = 0 as u32;
@@ -107,9 +129,16 @@ extern "C" fn find_close_paren(z: *const i8) -> u32 {
     return i;
 }
 
+/// Search for instances of assert(...), ALWAYS(...), NEVER(...), and/or
+///* testcase(...) where the argument contains side effects.
+///*
+///* Print error messages whenever a side effect is found.  Return the number
+///* of problems seen.
+#[allow(unused_doc_comments)]
 extern "C" fn find_all_side_effects(z: *const i8) -> u32 {
     unsafe {
         let mut lineno: u32 = 1 as u32;
+        /// Line number
         let mut i: u32 = 0 as u32;
         let mut n_err: u32 = 0 as u32;
         let mut c: i8 = 0 as i8;

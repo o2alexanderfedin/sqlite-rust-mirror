@@ -1,7 +1,14 @@
 use super::*;
+use crate::sqlite_int_h::{
+    CollSeq, FuncDef, Index, KeyInfo, Table, UnpackedRecord, VTable,
+};
+use crate::vdbe_int_h::{Sqlite3Context, Sqlite3Value};
 
+///* The names of the following types declared in vdbeInt.h are required
+///* for the VdbeOp definition.
 pub(crate) type Mem = Sqlite3Value;
 
+///* A sub-routine used to implement a trigger program.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubProgram {
@@ -14,6 +21,9 @@ pub(crate) struct SubProgram {
     pub(crate) p_next: *mut SubProgram,
 }
 
+///* A single instruction of the virtual machine has an opcode
+///* and as many as three operands.  The instruction is recorded
+///* as an instance of the following structure:
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOp {
@@ -47,6 +57,8 @@ pub(crate) union P4union {
     pub(crate) p_idx: *mut Index,
 }
 
+///* A signature for a reusable subroutine that materializes the RHS of
+///* an IN operator.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct SubrtnSig {
@@ -58,6 +70,8 @@ pub(crate) struct SubrtnSig {
     pub(crate) reg_return: i32,
 }
 
+///* A smaller version of VdbeOp used for the VdbeAddOpList() function because
+///* it takes up less space.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub(crate) struct VdbeOpList {

@@ -1,10 +1,68 @@
+//!* 2022-11-18
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!*
+//!* This is a SQLite extension for converting in either direction
+//!* between a (binary) blob and base64 text. Base64 can transit a
+//!* sane USASCII channel unmolested. It also plays nicely in CSV or
+//!* written as TCL brace-enclosed literals or SQL string literals,
+//!* and can be used unmodified in XML-like documents.
+//!*
+//!* This is an independent implementation of conversions specified in
+//!* RFC 4648, done on the above date by the author (Larry Brasfield)
+//!* who thereby has the right to put this into the public domain.
+//!*
+//!* The conversions meet RFC 4648 requirements, provided that this
+//!* C source specifies that line-feeds are included in the encoded
+//!* data to limit visible line lengths to 72 characters and to
+//!* terminate any encoded blob having non-zero length.
+//!*
+//!* Length limitations are not imposed except that the runtime
+//!* SQLite string or blob length limits are respected. Otherwise,
+//!* any length binary sequence can be represented and recovered.
+//!* Generated base64 sequences, with their line-feeds included,
+//!* can be concatenated; the result converted back to binary will
+//!* be the concatenation of the represented binary sequences.
+//!*
+//!* This SQLite3 extension creates a function, base64(x), which
+//!* either: converts text x containing base64 to a returned blob;
+//!* or converts a blob x to returned text containing base64. An
+//!* error will be thrown for other input argument types.
+//!*
+//!* This code relies on UTF-8 encoding only with respect to the
+//!* meaning of the first 128 (7-bit) codes matching that of USASCII.
+//!* It will fail miserably if somehow made to try to convert EBCDIC.
+//!* Because it is table-driven, it could be enhanced to handle that,
+//!* but the world and SQLite have moved on from that anachronism.
+//!*
+//!* To build the extension:
+//!* Set shell variable SQDIR=<your favorite SQLite checkout directory>
+//!* *Nix: gcc -O2 -shared -I$SQDIR -fPIC -o base64.so base64.c
+//!* OSX: gcc -O2 -dynamiclib -fPIC -I$SQDIR -o base64.dylib base64.c
+//!* Win32: gcc -O2 -shared -I%SQDIR% -o base64.dll base64.c
+//!* Win32: cl /Os -I%SQDIR% base64.c -link -dll -out:base64.dll
+//! Quiet some compilers about some of our intentional code.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
+/// Decoding table, ASCII (7-bit) value to base 64 digit value or other
 static b64_digit_values: [u8; 128] =
     [130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8,
             130 as u8, 130 as u8, 130 as u8, 129 as u8, 129 as u8, 129 as u8,
@@ -42,10 +100,15 @@ static b64_numerals: [i8; 65] =
             51 as i8, 52 as i8, 53 as i8, 54 as i8, 55 as i8, 56 as i8,
             57 as i8, 43 as i8, 47 as i8, 0 as i8];
 
+/// Encode a byte buffer into base64 text with linefeeds appended to limit
+///* encoded group lengths to B64_DARK_MAX or to terminate the last group.
+#[allow(unused_doc_comments)]
 extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
     while nb_in_1 >= 3 {
+
+        /// Do the bit-shuffle, exploiting unsigned input to avoid masking.
         unsafe {
             *p_out_1.offset(0 as isize) =
                 b64_numerals[(unsafe { *p_in_1.offset(0 as isize) } as i32 >>
@@ -160,6 +223,7 @@ extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Skip over text which is not base64 numeral(s).
 extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut nc; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -172,6 +236,7 @@ extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     return s;
 }
 
+/// Decode base64 text into a byte buffer.
 extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -281,6 +346,7 @@ extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// This function does the work for the SQLite base64(x) UDF.
 extern "C" fn base64(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;

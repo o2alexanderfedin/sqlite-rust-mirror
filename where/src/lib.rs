@@ -1,21 +1,40 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod where_int_h;
-pub(crate) use crate::where_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexConstraintUsage, Sqlite3IndexInfo,
+    Sqlite3IndexOrderby, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, IndexedExpr, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
+use crate::where_int_h::{
+    InLoop, WhereClause, WhereInfo, WhereLevel, WhereLoop, WhereLoopBuilder,
+    WhereLoopU0S1, WhereMaskSet, WhereMemBlock, WhereOrCost, WhereOrSet,
+    WherePath, WhereRightJoin, WhereScan, WhereTerm,
+};
 
 type DarwinSizeT = u64;
 
@@ -475,6 +494,9 @@ impl WhereLoopU0S1 {
     }
 }
 
+///* Return term iTerm of the WhereClause passed as the first argument. Terms
+///* are numbered from 0 upwards, starting with the terms in pWC->a[], then
+///* those in pWC->pOuter->a[] (if any), and so on.
 extern "C" fn term_from_where_clause(p_wc_1: *mut WhereClause,
     mut i_term_1: i32) -> *mut WhereTerm {
     let mut p: *const WhereClause = core::ptr::null();
@@ -497,6 +519,37 @@ extern "C" fn term_from_where_clause(p_wc_1: *mut WhereClause,
     return core::ptr::null_mut();
 }
 
+///* CAPI3REF: Determine The Collation For a Virtual Table Constraint
+///* METHOD: sqlite3_index_info
+///*
+///* This function may only be called from within a call to the [xBestIndex]
+///* method of a [virtual table].  This function returns a pointer to a string
+///* that is the name of the appropriate collation sequence to use for text
+///* comparisons on the constraint identified by its arguments.
+///*
+///* The first argument must be the pointer to the [sqlite3_index_info] object
+///* that is the first parameter to the xBestIndex() method. The second argument
+///* must be an index into the aConstraint[] array belonging to the
+///* sqlite3_index_info structure passed to xBestIndex.
+///*
+///* Important:
+///* The first parameter must be the same pointer that is passed into the
+///* xBestMethod() method.  The first parameter may not be a pointer to a
+///* different [sqlite3_index_info] object, even an exact copy.
+///*
+///* The return value is computed as follows:
+///*
+///* <ol>
+///* <li><p> If the constraint comes from a WHERE clause expression that contains
+///*         a [COLLATE operator], then the name of the collation specified by
+///*         that COLLATE operator is returned.
+///* <li><p> If there is no COLLATE operator, but the column that is the subject
+///*         of the constraint specifies an alternative collating sequence via
+///*         a [COLLATE clause] on the column definition within the CREATE TABLE
+///*         statement that was passed into [sqlite3_declare_vtab()], then the
+///*         name of that alternative collating sequence is returned.
+///* <li><p> Otherwise, "BINARY" is returned.
+///* </ol>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_collation(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32) -> *const i8 {
@@ -535,6 +588,97 @@ pub extern "C" fn sqlite3_vtab_collation(p_idx_info: *mut Sqlite3IndexInfo,
     }
 }
 
+///* CAPI3REF: Determine if a virtual table query is DISTINCT
+///* METHOD: sqlite3_index_info
+///*
+///* This API may only be used from within an [xBestIndex|xBestIndex method]
+///* of a [virtual table] implementation. The result of calling this
+///* interface from outside of xBestIndex() is undefined and probably harmful.
+///*
+///* ^The sqlite3_vtab_distinct() interface returns an integer between 0 and
+///* 3.  The integer returned by sqlite3_vtab_distinct()
+///* gives the virtual table additional information about how the query
+///* planner wants the output to be ordered. As long as the virtual table
+///* can meet the ordering requirements of the query planner, it may set
+///* the "orderByConsumed" flag.
+///*
+///* <ol><li value="0"><p>
+///* ^If the sqlite3_vtab_distinct() interface returns 0, that means
+///* that the query planner needs the virtual table to return all rows in the
+///* sort order defined by the "nOrderBy" and "aOrderBy" fields of the
+///* [sqlite3_index_info] object.  This is the default expectation.  If the
+///* virtual table outputs all rows in sorted order, then it is always safe for
+///* the xBestIndex method to set the "orderByConsumed" flag, regardless of
+///* the return value from sqlite3_vtab_distinct().
+///* <li value="1"><p>
+///* ^(If the sqlite3_vtab_distinct() interface returns 1, that means
+///* that the query planner does not need the rows to be returned in sorted order
+///* as long as all rows with the same values in all columns identified by the
+///* "aOrderBy" field are adjacent.)^  This mode is used when the query planner
+///* is doing a GROUP BY.
+///* <li value="2"><p>
+///* ^(If the sqlite3_vtab_distinct() interface returns 2, that means
+///* that the query planner does not need the rows returned in any particular
+///* order, as long as rows with the same values in all columns identified
+///* by "aOrderBy" are adjacent.)^  ^(Furthermore, when two or more rows
+///* contain the same values for all columns identified by "colUsed", all but
+///* one such row may optionally be omitted from the result.)^
+///* The virtual table is not required to omit rows that are duplicates
+///* over the "colUsed" columns, but if the virtual table can do that without
+///* too much extra effort, it could potentially help the query to run faster.
+///* This mode is used for a DISTINCT query.
+///* <li value="3"><p>
+///* ^(If the sqlite3_vtab_distinct() interface returns 3, that means the
+///* virtual table must return rows in the order defined by "aOrderBy" as
+///* if the sqlite3_vtab_distinct() interface had returned 0.  However if
+///* two or more rows in the result have the same values for all columns
+///* identified by "colUsed", then all but one such row may optionally be
+///* omitted.)^  Like when the return value is 2, the virtual table
+///* is not required to omit rows that are duplicates over the "colUsed"
+///* columns, but if the virtual table can do that without
+///* too much extra effort, it could potentially help the query to run faster.
+///* This mode is used for queries
+///* that have both DISTINCT and ORDER BY clauses.
+///* </ol>
+///*
+///* <p>The following table summarizes the conditions under which the
+///* virtual table is allowed to set the "orderByConsumed" flag based on
+///* the value returned by sqlite3_vtab_distinct().  This table is a
+///* restatement of the previous four paragraphs:
+///*
+///* <table border=1 cellspacing=0 cellpadding=10 width="90%">
+///* <tr>
+///* <td valign="top">sqlite3_vtab_distinct() return value
+///* <td valign="top">Rows are returned in aOrderBy order
+///* <td valign="top">Rows with the same value in all aOrderBy columns are
+///*                  adjacent
+///* <td valign="top">Duplicates over all colUsed columns may be omitted
+///* <tr><td>0<td>yes<td>yes<td>no
+///* <tr><td>1<td>no<td>yes<td>no
+///* <tr><td>2<td>no<td>yes<td>yes
+///* <tr><td>3<td>yes<td>yes<td>yes
+///* </table>
+///*
+///* ^For the purposes of comparing virtual table output values to see if the
+///* values are the same value for sorting purposes, two NULL values are
+///* considered to be the same.  In other words, the comparison operator is "IS"
+///* (or "IS NOT DISTINCT FROM") and not "==".
+///*
+///* If a virtual table implementation is unable to meet the requirements
+///* specified above, then it must not set the "orderByConsumed" flag in the
+///* [sqlite3_index_info] object or an incorrect answer may result.
+///*
+///* ^A virtual table implementation is always free to return rows in any order
+///* it wants, as long as the "orderByConsumed" flag is not set.  ^When the
+///* "orderByConsumed" flag is unset, the query planner will add extra
+///* [bytecode] to ensure that the final results returned by the SQL query are
+///* ordered correctly.  The use of the "orderByConsumed" flag and the
+///* sqlite3_vtab_distinct() interface is merely an optimization.  ^Careful
+///* use of the sqlite3_vtab_distinct() interface and the "orderByConsumed"
+///* flag might help queries against a virtual table to run faster.  Being
+///* overly aggressive and setting the "orderByConsumed" flag when it is not
+///* valid to do so, on the other hand, might cause SQLite to return incorrect
+///* results.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_distinct(p_idx_info: *mut Sqlite3IndexInfo)
     -> i32 {
@@ -545,6 +689,75 @@ pub extern "C" fn sqlite3_vtab_distinct(p_idx_info: *mut Sqlite3IndexInfo)
     return unsafe { (*p_hidden).e_distinct };
 }
 
+///* CAPI3REF: Identify and handle IN constraints in xBestIndex
+///*
+///* This interface may only be used from within an
+///* [xBestIndex|xBestIndex() method] of a [virtual table] implementation.
+///* The result of invoking this interface from any other context is
+///* undefined and probably harmful.
+///*
+///* ^(A constraint on a virtual table of the form
+///* "[IN operator|column IN (...)]" is
+///* communicated to the xBestIndex method as a
+///* [SQLITE_INDEX_CONSTRAINT_EQ] constraint.)^  If xBestIndex wants to use
+///* this constraint, it must set the corresponding
+///* aConstraintUsage[].argvIndex to a positive integer.  ^(Then, under
+///* the usual mode of handling IN operators, SQLite generates [bytecode]
+///* that invokes the [xFilter|xFilter() method] once for each value
+///* on the right-hand side of the IN operator.)^  Thus the virtual table
+///* only sees a single value from the right-hand side of the IN operator
+///* at a time.
+///*
+///* In some cases, however, it would be advantageous for the virtual
+///* table to see all values on the right-hand of the IN operator all at
+///* once.  The sqlite3_vtab_in() interfaces facilitates this in two ways:
+///*
+///* <ol>
+///* <li><p>
+///*   ^A call to sqlite3_vtab_in(P,N,-1) will return true (non-zero)
+///*   if and only if the [sqlite3_index_info|P->aConstraint][N] constraint
+///*   is an [IN operator] that can be processed all at once.  ^In other words,
+///*   sqlite3_vtab_in() with -1 in the third argument is a mechanism
+///*   by which the virtual table can ask SQLite if all-at-once processing
+///*   of the IN operator is even possible.
+///*
+///* <li><p>
+///*   ^A call to sqlite3_vtab_in(P,N,F) with F==1 or F==0 indicates
+///*   to SQLite that the virtual table does or does not want to process
+///*   the IN operator all-at-once, respectively.  ^Thus when the third
+///*   parameter (F) is non-negative, this interface is the mechanism by
+///*   which the virtual table tells SQLite how it wants to process the
+///*   IN operator.
+///* </ol>
+///*
+///* ^The sqlite3_vtab_in(P,N,F) interface can be invoked multiple times
+///* within the same xBestIndex method call.  ^For any given P,N pair,
+///* the return value from sqlite3_vtab_in(P,N,F) will always be the same
+///* within the same xBestIndex call.  ^If the interface returns true
+///* (non-zero), that means that the constraint is an IN operator
+///* that can be processed all-at-once.  ^If the constraint is not an IN
+///* operator or cannot be processed all-at-once, then the interface returns
+///* false.
+///*
+///* ^(All-at-once processing of the IN operator is selected if both of the
+///* following conditions are met:
+///*
+///* <ol>
+///* <li><p> The P->aConstraintUsage[N].argvIndex value is set to a positive
+///* integer.  This is how the virtual table tells SQLite that it wants to
+///* use the N-th constraint.
+///*
+///* <li><p> The last call to sqlite3_vtab_in(P,N,F) for which F was
+///* non-negative had F>=1.
+///* </ol>)^
+///*
+///* ^If either or both of the conditions above are false, then SQLite uses
+///* the traditional one-at-a-time processing strategy for the IN constraint.
+///* ^If both conditions are true, then the argvIndex-th parameter to the
+///* xFilter method will be an [sqlite3_value] that appears to be NULL,
+///* but which can be passed to [sqlite3_vtab_in_first()] and
+///* [sqlite3_vtab_in_next()] to find all values on the right-hand side
+///* of the IN constraint.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_in(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32, b_handle: i32) -> i32 {
@@ -561,7 +774,46 @@ pub extern "C" fn sqlite3_vtab_in(p_idx_info: *mut Sqlite3IndexInfo,
     return 0;
 }
 
+///* CAPI3REF: Constraint values in xBestIndex()
+///* METHOD: sqlite3_index_info
+///*
+///* This API may only be used from within the [xBestIndex|xBestIndex method]
+///* of a [virtual table] implementation. The result of calling this interface
+///* from outside of an xBestIndex method are undefined and probably harmful.
+///*
+///* ^When the sqlite3_vtab_rhs_value(P,J,V) interface is invoked from within
+///* the [xBestIndex] method of a [virtual table] implementation, with P being
+///* a copy of the [sqlite3_index_info] object pointer passed into xBestIndex and
+///* J being a 0-based index into P->aConstraint[], then this routine
+///* attempts to set *V to the value of the right-hand operand of
+///* that constraint if the right-hand operand is known.  ^If the
+///* right-hand operand is not known, then *V is set to a NULL pointer.
+///* ^The sqlite3_vtab_rhs_value(P,J,V) interface returns SQLITE_OK if
+///* and only if *V is set to a value.  ^The sqlite3_vtab_rhs_value(P,J,V)
+///* inteface returns SQLITE_NOTFOUND if the right-hand side of the J-th
+///* constraint is not available.  ^The sqlite3_vtab_rhs_value() interface
+///* can return a result code other than SQLITE_OK or SQLITE_NOTFOUND if
+///* something goes wrong.
+///*
+///* The sqlite3_vtab_rhs_value() interface is usually only successful if
+///* the right-hand operand of a constraint is a literal value in the original
+///* SQL statement.  If the right-hand operand is an expression or a reference
+///* to some other column or a [host parameter], then sqlite3_vtab_rhs_value()
+///* will probably return [SQLITE_NOTFOUND].
+///*
+///* ^(Some constraints, such as [SQLITE_INDEX_CONSTRAINT_ISNULL] and
+///* [SQLITE_INDEX_CONSTRAINT_ISNOTNULL], have no right-hand operand.  For such
+///* constraints, sqlite3_vtab_rhs_value() always returns SQLITE_NOTFOUND.)^
+///*
+///* ^The [sqlite3_value] object returned in *V is a protected sqlite3_value
+///* and remains valid for the duration of the xBestIndex method call.
+///* ^When xBestIndex returns, the sqlite3_value object returned by
+///* sqlite3_vtab_rhs_value() is automatically deallocated.
+///*
+///* The "_rhs_" in the name of this routine is an abbreviation for
+///* "Right-Hand Side".
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vtab_rhs_value(p_idx_info: *mut Sqlite3IndexInfo,
     i_cons: i32, pp_val: &mut *mut Sqlite3Value) -> i32 {
     let p_h: *mut HiddenIndexInfo =
@@ -606,7 +858,11 @@ pub extern "C" fn sqlite3_vtab_rhs_value(p_idx_info: *mut Sqlite3IndexInfo,
             };
     }
     *pp_val = p_val;
-    if rc == 0 && p_val == core::ptr::null_mut() { rc = 12; }
+    if rc == 0 && p_val == core::ptr::null_mut() {
+
+        /// IMP: R-19933-32160
+        (rc = 12);
+    }
     return rc;
 }
 
@@ -619,6 +875,7 @@ struct CoveringIndexCheck {
     b_unidx: u8,
 }
 
+///* Clear the WhereLoop.u union.  Leave WhereLoop.pLTerm intact.
 extern "C" fn where_loop_clear_union(db: *mut Sqlite3, p: &mut WhereLoop)
     -> () {
     unsafe {
@@ -643,6 +900,8 @@ extern "C" fn where_loop_clear_union(db: *mut Sqlite3, p: &mut WhereLoop)
     }
 }
 
+///* Deallocate internal memory used by a WhereLoop object.  Leave the
+///* object in an initialized state, as if it had been newly allocated.
 extern "C" fn where_loop_clear(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     if unsafe { (*p).a_l_term } !=
             unsafe { &raw mut (*p).a_l_term_space[0 as usize] } as
@@ -666,12 +925,14 @@ extern "C" fn where_loop_clear(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     unsafe { (*p).ws_flags = 0 as u32 };
 }
 
+///* Delete a WhereLoop object
 extern "C" fn where_loop_delete(db: *mut Sqlite3, p: *mut WhereLoop) -> () {
     { let _ = 0; };
     where_loop_clear(db, p);
     unsafe { sqlite3_db_nn_free_nn(db, p as *mut ()) };
 }
 
+///* Free a WhereInfo structure
 extern "C" fn where_info_free(db: *mut Sqlite3, p_w_info_1: *mut WhereInfo)
     -> () {
     { let _ = 0; };
@@ -694,6 +955,8 @@ extern "C" fn where_info_free(db: *mut Sqlite3, p_w_info_1: *mut WhereInfo)
     unsafe { sqlite3_db_nn_free_nn(db, p_w_info_1 as *mut ()) };
 }
 
+///* Convert bulk memory into a valid WhereLoop that can be passed
+///* to whereLoopClear harmlessly.
 extern "C" fn where_loop_init(p: &mut WhereLoop) -> () {
     (*p).a_l_term =
         &raw mut (*p).a_l_term_space[0 as usize] as *mut *mut WhereTerm;
@@ -705,6 +968,12 @@ extern "C" fn where_loop_init(p: &mut WhereLoop) -> () {
     (*p).ws_flags = 0 as u32;
 }
 
+///* Create a new mask for cursor iCursor.
+///*
+///* There is one cursor per table in the FROM clause.  The number of
+///* tables in the FROM clause is limited by a test early in the
+///* sqlite3WhereBegin() routine.  So we know that the pMaskSet->ix[]
+///* array will never overflow.
 extern "C" fn create_mask(p_mask_set_1: &mut WhereMaskSet, i_cursor_1: i32)
     -> () {
     unsafe {
@@ -718,6 +987,7 @@ extern "C" fn create_mask(p_mask_set_1: &mut WhereMaskSet, i_cursor_1: i32)
     }
 }
 
+///* Helper function for exprIsDeterministic().
 extern "C" fn expr_node_is_deterministic(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     if unsafe { (*p_expr_1).op } as i32 == 172 &&
@@ -729,6 +999,9 @@ extern "C" fn expr_node_is_deterministic(p_walker_1: *mut Walker,
     return 0;
 }
 
+///* Return true if the expression contains no non-deterministic SQL
+///* functions. Do not consider non-deterministic SQL functions that are
+///* part of sub-select statements.
 extern "C" fn expr_is_deterministic(p: *mut Expr) -> i32 {
     let mut w: Walker = unsafe { core::mem::zeroed() };
     unsafe {
@@ -742,6 +1015,8 @@ extern "C" fn expr_is_deterministic(p: *mut Expr) -> i32 {
     return w.e_code as i32;
 }
 
+///* If the right-hand branch of the expression is a TK_COLUMN, then return
+///* a pointer to the right-hand branch.  Otherwise, return NULL.
 extern "C" fn where_right_subexpr_is_column(mut p: *mut Expr) -> *mut Expr {
     p =
         unsafe {
@@ -754,6 +1029,13 @@ extern "C" fn where_right_subexpr_is_column(mut p: *mut Expr) -> *mut Expr {
     return core::ptr::null_mut();
 }
 
+///* Term pTerm is guaranteed to be a WO_IN term. It may be a component term
+///* of a vector IN expression of the form "(x, y, ...) IN (SELECT ...)".
+///* This function checks to see if the term is compatible with an index
+///* column with affinity idxaff (one of the SQLITE_AFF_XYZ values). If so,
+///* it returns a pointer to the name of the collation sequence (e.g. "BINARY"
+///* or "NOCASE") used by the comparison in pTerm. If it is not compatible
+///* with affinity idxaff, NULL is returned.
 extern "C" fn index_in_affinity_ok(p_parse_1: *mut Parse,
     p_term_1: &WhereTerm, idxaff: u8) -> *const i8 {
     unsafe {
@@ -803,15 +1085,26 @@ extern "C" fn index_in_affinity_ok(p_parse_1: *mut Parse,
     }
 }
 
+///* Advance to the next WhereTerm that matches according to the criteria
+///* established when the pScan object was initialized by whereScanInit().
+///* Return NULL if there are no more matching WhereTerms.
+#[allow(unused_doc_comments)]
 extern "C" fn where_scan_next(p_scan_1: &mut WhereScan) -> *mut WhereTerm {
     unsafe {
         unsafe {
             let mut i_cur: i32 = 0;
+            /// The cursor on the LHS of the term
             let mut i_column: i16 = 0 as i16;
+            /// The column on the LHS of the term.  -1 for IPK
             let mut p_x: *const Expr = core::ptr::null();
+            /// An expression being tested
             let mut p_wc: *mut WhereClause = core::ptr::null_mut();
+            /// Shorthand for pScan->pWC
             let mut p_term: *mut WhereTerm = core::ptr::null_mut();
+            /// The term being tested
             let mut k: i32 = (*p_scan_1).k;
+
+            /// Where to start scanning
             { let _ = 0; };
             p_wc = (*p_scan_1).p_wc;
             loop {
@@ -970,6 +1263,10 @@ extern "C" fn where_scan_next(p_scan_1: &mut WhereScan) -> *mut WhereTerm {
     }
 }
 
+///* This is whereScanInit() for the case of an index on an expression.
+///* It is factored out into a separate tail-recursion subroutine so that
+///* the normal whereScanInit() routine, which is a high-runner, does not
+///* need to push registers onto the stack as part of its prologue.
 extern "C" fn where_scan_init_index_expr(p_scan_1: *mut WhereScan)
     -> *mut WhereTerm {
     unsafe {
@@ -982,6 +1279,23 @@ extern "C" fn where_scan_init_index_expr(p_scan_1: *mut WhereScan)
     return where_scan_next(unsafe { &mut *p_scan_1 });
 }
 
+///* Initialize a WHERE clause scanner object.  Return a pointer to the
+///* first match.  Return NULL if there are no matches.
+///*
+///* The scanner will be searching the WHERE clause pWC.  It will look
+///* for terms of the form "X <op> <expr>" where X is column iColumn of table
+///* iCur.   Or if pIdx!=0 then X is column iColumn of index pIdx.  pIdx
+///* must be one of the indexes of table iCur.
+///*
+///* The <op> must be one of the operators described by opMask.
+///*
+///* If the search is for X and the WHERE clause contains terms of the
+///* form X=Y then this routine might also return terms of the form
+///* "Y <op> <expr>".  The number of levels of transitivity is limited,
+///* but is enough to handle most commonly occurring SQL statements.
+///*
+///* If X is not the INTEGER PRIMARY KEY then X must be compatible with
+///* index pIdx.
 extern "C" fn where_scan_init(p_scan_1: *mut WhereScan,
     p_wc_1: *mut WhereClause, i_cur_1: i32, mut i_column_1: i32,
     op_mask_1: u32, p_idx_1: *const Index) -> *mut WhereTerm {
@@ -1038,6 +1352,29 @@ extern "C" fn where_scan_init(p_scan_1: *mut WhereScan,
     return where_scan_next(unsafe { &mut *p_scan_1 });
 }
 
+///* Search for a term in the WHERE clause that is of the form "X <op> <expr>"
+///* where X is a reference to the iColumn of table iCur or of index pIdx
+///* if pIdx!=0 and <op> is one of the WO_xx operator codes specified by
+///* the op parameter.  Return a pointer to the term.  Return 0 if not found.
+///*
+///* If pIdx!=0 then it must be one of the indexes of table iCur. 
+///* Search for terms matching the iColumn-th column of pIdx
+///* rather than the iColumn-th column of table iCur.
+///*
+///* The term returned might by Y=<expr> if there is another constraint in
+///* the WHERE clause that specifies that X=Y.  Any such constraints will be
+///* identified by the WO_EQUIV bit in the pTerm->eOperator field.  The
+///* aiCur[]/iaColumn[] arrays hold X and all its equivalents. There are 11
+///* slots in aiCur[]/aiColumn[] so that means we can look for X plus up to 10
+///* other equivalent values.  Hence a search for X will return <expr> if X=A1
+///* and A1=A2 and A2=A3 and ... and A9=A10 and A10=<expr>.
+///*
+///* If there are multiple terms in the WHERE clause of the form "X <op> <expr>"
+///* then try for the one with no dependencies on <expr> - in other words where
+///* <expr> is a constant expression of some kind.  Only return entries of
+///* the form "X <op> Y" where Y is a column in another table if no terms of
+///* the form "X <op> <const-expr>" exist.   If no terms with a constant RHS
+///* exist, try to return a term that does not use WO_EQUIV.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_find_term(p_wc_1: *mut WhereClause,
     i_cur_1: i32, i_column_1: i32, not_ready_1: Bitmask, mut op: u32,
@@ -1062,6 +1399,11 @@ pub extern "C" fn sqlite3_where_find_term(p_wc_1: *mut WhereClause,
     return p_result;
 }
 
+///* This function searches pList for an entry that matches the iCol-th column
+///* of index pIdx.
+///*
+///* If such an expression is found, its index in pList->a[] is returned. If
+///* no expression is found, -1 is returned.
 extern "C" fn find_index_col(p_parse_1: *mut Parse, p_list_1: &ExprList,
     i_base_1: i32, p_idx_1: &Index, i_col_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -1109,6 +1451,7 @@ extern "C" fn find_index_col(p_parse_1: *mut Parse, p_list_1: &ExprList,
     return -1;
 }
 
+///* Return TRUE if the iCol-th column of index pIdx is NOT NULL
 extern "C" fn index_column_not_null(p_idx_1: &Index, i_col_1: i32) -> i32 {
     let mut j: i32 = 0;
     { let _ = 0; };
@@ -1123,6 +1466,12 @@ extern "C" fn index_column_not_null(p_idx_1: &Index, i_col_1: i32) -> i32 {
     } else if j == -1 { return 1; } else { { let _ = 0; }; return 0; }
 }
 
+///* Return true if the DISTINCT expression-list passed as the third argument
+///* is redundant.
+///*
+///* A DISTINCT list is redundant if any subset of the columns in the
+///* DISTINCT list are collectively unique and individually non-null.
+#[allow(unused_doc_comments)]
 extern "C" fn is_distinct_redundant(p_parse_1: *mut Parse,
     p_tab_list_1: &SrcList, p_wc_1: *mut WhereClause,
     p_distinct_1: *mut ExprList) -> i32 {
@@ -1201,7 +1550,11 @@ extern "C" fn is_distinct_redundant(p_parse_1: *mut Parse,
                         { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                     }
                 }
-                if i == unsafe { (*p_idx).n_key_col } as i32 { return 1; }
+                if i == unsafe { (*p_idx).n_key_col } as i32 {
+
+                    /// This index implies that the DISTINCT qualifier is redundant.
+                    return 1;
+                }
                 break '__c10;
             }
             p_idx = unsafe { (*p_idx).p_next };
@@ -1210,6 +1563,16 @@ extern "C" fn is_distinct_redundant(p_parse_1: *mut Parse,
     return 0;
 }
 
+///* Most queries use only a single table (they are not joins) and have
+///* simple == constraints against indexed fields.  This routine attempts
+///* to plan those simple cases using much less ceremony than the
+///* general-purpose query planner, and thereby yield faster sqlite3_prepare()
+///* times for the common case.
+///*
+///* Return non-zero on success, if this query can be handled by this
+///* no-frills query planner.  Return zero if this query needs the
+///* general-purpose query planner.
+#[allow(unused_doc_comments)]
 extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
     unsafe {
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
@@ -1252,6 +1615,8 @@ extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
             };
             unsafe { (*p_loop).n_l_term = 1 as u16 };
             unsafe { (*p_loop).u.btree.n_eq = 1 as u16 };
+
+            /// TUNING: Cost of a rowid lookup is 10
             unsafe { (*p_loop).r_run = 33 as LogEst };
         } else {
             {
@@ -1309,7 +1674,11 @@ extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
                         unsafe { (*p_loop).n_l_term = j as u16 };
                         unsafe { (*p_loop).u.btree.n_eq = j as u16 };
                         unsafe { (*p_loop).u.btree.p_index = p_idx };
+
+                        /// TUNING: Cost of a unique index lookup is 15
                         unsafe { (*p_loop).r_run = 39 as LogEst };
+
+                        /// 39==sqlite3LogEst(15)
                         break '__b13;
                         break '__c13;
                     }
@@ -1326,8 +1695,10 @@ extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
             { let _ = 0; };
             unsafe { (*p_loop).mask_self = 1 as Bitmask };
             unsafe {
-                (*(unsafe { (*p_w_info).a.as_ptr() } as
-                                    *mut WhereLevel).offset(0 as isize)).i_tab_cur = i_cur
+
+                /// sqlite3WhereGetMask(&pWInfo->sMaskSet, iCur);
+                ((*(unsafe { (*p_w_info).a.as_ptr() } as
+                                    *mut WhereLevel).offset(0 as isize)).i_tab_cur = i_cur)
             };
             unsafe { (*p_w_info).n_row_out = 1 as LogEst };
             if !(unsafe { (*p_w_info).p_order_by }).is_null() {
@@ -1348,6 +1719,9 @@ extern "C" fn where_short_cut(p_builder_1: &WhereLoopBuilder) -> i32 {
     }
 }
 
+///* Private interfaces - callable only by other where.c routines.
+///*
+///* where.c:
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_get_mask(p_mask_set: &WhereMaskSet,
     i_cursor: i32) -> Bitmask {
@@ -1374,6 +1748,17 @@ pub extern "C" fn sqlite3_where_get_mask(p_mask_set: &WhereMaskSet,
     }
 }
 
+///* We know that pSrc is an operand of an outer join.  Return true if
+///* pTerm is a constraint that is compatible with that join.
+///*
+///* pTerm must be EP_OuterON if pSrc is the right operand of an
+///* outer join.  pTerm can be either EP_OuterON or EP_InnerON if pSrc
+///* is the left operand of a RIGHT join.
+///*
+///* See https://sqlite.org/forum/forumpost/206d99a16dd9212f
+///* for an example of a WHERE clause constraints that may not be used on
+///* the right table of a RIGHT JOIN because the constraint implies a
+///* not-NULL condition on the left table of the RIGHT JOIN.
 extern "C" fn constraint_compatible_with_outer_join(p_term_1: &WhereTerm,
     p_src_1: &SrcItem) -> i32 {
     unsafe {
@@ -1393,6 +1778,10 @@ extern "C" fn constraint_compatible_with_outer_join(p_term_1: &WhereTerm,
     }
 }
 
+///* Allocate and populate an sqlite3_index_info structure. It is the
+///* responsibility of the caller to eventually release the structure
+///* by passing the pointer returned by this function to freeIndexInfo().
+#[allow(unused_doc_comments)]
 extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
     p_wc_1: *mut WhereClause, m_unusable_1: Bitmask, p_src_1: *const SrcItem,
     pm_no_omit_1: &mut u16) -> *mut Sqlite3IndexInfo {
@@ -1476,7 +1865,11 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                     p = unsafe { (*p).p_outer };
                 }
             }
-            n_order_by = 0;
+
+            /// If the ORDER BY clause contains only columns in the current
+            ///* virtual table then allocate space for the aOrderBy part of
+            ///* the sqlite3_index_info structure.
+            (n_order_by = 0);
             if !(p_order_by).is_null() {
                 let n: i32 = unsafe { (*p_order_by).n_expr };
                 {
@@ -1514,6 +1907,8 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                                     unsafe { (*p_e2).i_table } == unsafe { (*p_src_1).i_cursor }
                                 {
                                 let mut z_coll: *const i8 = core::ptr::null();
+
+                                /// The collating sequence name
                                 { let _ = 0; };
                                 { let _ = 0; };
                                 { let _ = 0; };
@@ -1521,14 +1916,16 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                                 if (unsafe { (*p_e2).i_column } as i32) < 0 {
                                     break '__c19;
                                 }
-                                z_coll =
+
+                                /// Collseq does not matter for rowid
+                                (z_coll =
                                     unsafe {
                                         sqlite3_column_coll(unsafe {
                                                 &mut *unsafe {
                                                             (*p_tab).a_col.offset(unsafe { (*p_e2).i_column } as isize)
                                                         }
                                             })
-                                    };
+                                    });
                                 if z_coll == core::ptr::null() {
                                     z_coll = sqlite3_str_binary.as_ptr() as *const i8;
                                 }
@@ -1539,6 +1936,8 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                                     break '__c19;
                                 }
                             }
+
+                            /// No matches cause a break out of the loop
                             break '__b19;
                             break '__c19;
                         }
@@ -1559,7 +1958,9 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                     }
                 }
             }
-            p_idx_info =
+
+            /// Allocate the sqlite3_index_info structure
+            (p_idx_info =
                 unsafe {
                         sqlite3_db_malloc_zero(unsafe { (*p_parse).db },
                             core::mem::size_of::<Sqlite3IndexInfo>() as u64 +
@@ -1571,7 +1972,7 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                                 (core::mem::offset_of!(HiddenIndexInfo, a_rhs) as u64 +
                                     n_term as u64 *
                                         core::mem::size_of::<*mut Sqlite3Value>() as u64))
-                    } as *mut Sqlite3IndexInfo;
+                    } as *mut Sqlite3IndexInfo);
             if p_idx_info == core::ptr::null_mut() {
                 unsafe {
                     sqlite3_error_msg(p_parse,
@@ -1604,6 +2005,8 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
             };
             if (unsafe { (*p_tab).tab_flags } & 128 as u32 == 0 as u32) as i32
                     == 0 {
+                /// Ensure that all bits associated with PK columns are set. This is to
+                ///* ensure they are available for cases like RIGHT joins or OR loops.
                 let p_pk: *const Index =
                     unsafe { sqlite3_primary_key_index(p_tab as *mut Table) } as
                         *const Index;
@@ -1685,6 +2088,10 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
                                         }
                                     } else {
                                         unsafe { (*p_idx_cons.offset(j as isize)).op = op as u8 };
+
+                                        /// The direct assignment in the previous line is possible only because
+                                        ///* the WO_ and SQLITE_INDEX_CONSTRAINT_ codes are identical.  The
+                                        ///* following asserts verify this fact.
                                         { let _ = 0; };
                                         { let _ = 0; };
                                         { let _ = 0; };
@@ -1773,6 +2180,7 @@ extern "C" fn allocate_index_info(p_w_info_1: &WhereInfo,
     }
 }
 
+/// Forward declaration of methods
 extern "C" fn where_loop_resize(db: *mut Sqlite3, p: &mut WhereLoop,
     mut n: i32) -> i32 {
     let mut pa_new: *mut *mut WhereTerm = core::ptr::null_mut();
@@ -1798,6 +2206,7 @@ extern "C" fn where_loop_resize(db: *mut Sqlite3, p: &mut WhereLoop,
     return 0;
 }
 
+///* Free and zero the sqlite3_index_info.idxStr value if needed.
 extern "C" fn free_idx_str(p_idx_info_1: &mut Sqlite3IndexInfo) -> () {
     if (*p_idx_info_1).need_to_free_idx_str != 0 {
         unsafe { sqlite3_free((*p_idx_info_1).idx_str as *mut ()) };
@@ -1806,6 +2215,9 @@ extern "C" fn free_idx_str(p_idx_info_1: &mut Sqlite3IndexInfo) -> () {
     }
 }
 
+///* Free an sqlite3_index_info structure allocated by allocateIndexInfo()
+///* and possibly modified by xBestIndex methods.
+#[allow(unused_doc_comments)]
 extern "C" fn free_index_info(db: *mut Sqlite3,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> () {
     let mut p_hidden: *mut HiddenIndexInfo = core::ptr::null_mut();
@@ -1829,6 +2241,8 @@ extern "C" fn free_index_info(db: *mut Sqlite3,
                                         *mut *mut Sqlite3Value).offset(i as isize)
                         })
                 };
+
+                /// IMP: R-14553-25174
                 unsafe {
                     *(unsafe { (*p_hidden).a_rhs.as_ptr() } as
                                     *mut *mut Sqlite3Value).offset(i as isize) =
@@ -1843,12 +2257,20 @@ extern "C" fn free_index_info(db: *mut Sqlite3,
     unsafe { sqlite3_db_free(db, p_idx_info_1 as *mut ()) };
 }
 
+///* Return true if pTerm is a virtual table LIMIT or OFFSET term.
 extern "C" fn is_limit_term(p_term_1: &WhereTerm) -> i32 {
     { let _ = 0; };
     return ((*p_term_1).e_match_op as i32 >= 73 &&
                 (*p_term_1).e_match_op as i32 <= 74) as i32;
 }
 
+///* Cause the prepared statement that is associated with a call to
+///* xBestIndex to potentially use all schemas.  If the statement being
+///* prepared is read-only, then just start read transactions on all
+///* schemas.  But if this is a write operation, start writes on all
+///* schemas.
+///*
+///* This is used by the (built-in) sqlite_dbpage virtual table.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_vtab_uses_all_schemas(p_parse: *mut Parse) -> () {
     let n_db: i32 = unsafe { (*unsafe { (*p_parse).db }).n_db };
@@ -1879,6 +2301,20 @@ pub extern "C" fn sqlite3_vtab_uses_all_schemas(p_parse: *mut Parse) -> () {
     }
 }
 
+///* The table object reference passed as the second argument to this function
+///* must represent a virtual table. This function invokes the xBestIndex()
+///* method of the virtual table with the sqlite3_index_info object that
+///* comes in as the 3rd argument to this function.
+///*
+///* If an error occurs, pParse is populated with an error message and an
+///* appropriate error code is returned.  A return of SQLITE_CONSTRAINT from
+///* xBestIndex is not considered an error.  SQLITE_CONSTRAINT indicates that
+///* the current configuration of "unusable" flags in sqlite3_index_info can
+///* not result in a valid plan.
+///*
+///* Whether or not an error is returned, it is the responsibility of the
+///* caller to eventually free p->idxStr if p->needToFreeIdxStr indicates
+///* that this is required.
 extern "C" fn vtab_best_index(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     p: *mut Sqlite3IndexInfo) -> i32 {
     unsafe {
@@ -1937,6 +2373,8 @@ extern "C" fn vtab_best_index(p_parse_1: *mut Parse, p_tab_1: *mut Table,
     }
 }
 
+///* Return true if the first nCons constraints in the pUsage array are
+///* marked as in-use (have argvIndex>0). False otherwise.
 extern "C" fn all_constraints_used(a_usage_1: &[Sqlite3IndexConstraintUsage])
     -> i32 {
     let mut ii: i32 = 0;
@@ -1954,6 +2392,30 @@ extern "C" fn all_constraints_used(a_usage_1: &[Sqlite3IndexConstraintUsage])
     return 1;
 }
 
+///* Return TRUE if X is a proper subset of Y but is of equal or less cost.
+///* In other words, return true if all constraints of X are also part of Y
+///* and Y has additional constraints that might speed the search that X lacks
+///* but the cost of running X is not more than the cost of running Y.
+///*
+///* In other words, return true if the cost relationship between X and Y
+///* is inverted and needs to be adjusted.
+///*
+///* Case 1:
+///*
+///*   (1a)  X and Y use the same index.
+///*   (1b)  X has fewer == terms than Y
+///*   (1c)  Neither X nor Y use skip-scan
+///*   (1d)  X does not have a a greater cost than Y
+///*
+///* Case 2:
+///*
+///*   (2a)  X has the same or lower cost, or returns the same or fewer rows,
+///*         than Y.
+///*   (2b)  X uses fewer WHERE clause terms than Y
+///*   (2c)  Every WHERE clause term used by X is also used by Y
+///*   (2d)  X skips at least as many columns as Y
+///*   (2e)  If X is a covering index, than Y is too
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_cheaper_proper_subset(p_x_1: &WhereLoop,
     p_y_1: &WhereLoop) -> i32 {
     unsafe {
@@ -1963,6 +2425,8 @@ extern "C" fn where_loop_cheaper_proper_subset(p_x_1: &WhereLoop,
                 (*p_x_1).n_out as i32 > (*p_y_1).n_out as i32 {
             return 0;
         }
+
+        /// (1d) and (2a)
         { let _ = 0; };
         { let _ = 0; };
         if ((*p_x_1).u.btree.n_eq as i32) < (*p_y_1).u.btree.n_eq as i32 &&
@@ -2012,6 +2476,18 @@ extern "C" fn where_loop_cheaper_proper_subset(p_x_1: &WhereLoop,
     }
 }
 
+///* Try to adjust the cost and number of output rows of WhereLoop pTemplate
+///* upwards or downwards so that:
+///*
+///*   (1) pTemplate costs less than any other WhereLoops that are a proper
+///*       subset of pTemplate
+///*
+///*   (2) pTemplate costs more than any other WhereLoops for which pTemplate
+///*       is a proper subset.
+///*
+///* To say "WhereLoop X is a proper subset of Y" means that X uses fewer
+///* WHERE clause terms than Y and that every WHERE clause term used by X is
+///* also used by Y.
 extern "C" fn where_loop_adjust_cost(mut p: *const WhereLoop,
     p_template_1: *mut WhereLoop) -> () {
     if unsafe { (*p_template_1).ws_flags } & 512 as u32 == 0 as u32 {
@@ -2073,6 +2549,11 @@ extern "C" fn where_loop_adjust_cost(mut p: *const WhereLoop,
     }
 }
 
+///* Try to insert a new prerequisite/cost entry into the WhereOrSet pSet.
+///*
+///* The new entry might overwrite an existing entry, or it might be
+///* appended, or it might be discarded.  Do whatever is the right thing
+///* so that pSet keeps the N_OR_COST best entries seen so far.
 extern "C" fn where_or_insert(p_set_1: &mut WhereOrSet, prereq: Bitmask,
     r_run_1: LogEst, n_out_1: LogEst) -> i32 {
     unsafe {
@@ -2190,6 +2671,19 @@ extern "C" fn where_or_insert(p_set_1: &mut WhereOrSet, prereq: Bitmask,
     }
 }
 
+///* Search the list of WhereLoops in *ppPrev looking for one that can be
+///* replaced by pTemplate.
+///*
+///* Return NULL if pTemplate does not belong on the WhereLoop list.
+///* In other words if pTemplate ought to be dropped from further consideration.
+///*
+///* If pX is a WhereLoop that pTemplate can replace, then return the
+///* link that points to pX.
+///*
+///* If pTemplate cannot replace any existing element of the list but needs
+///* to be added to the list as a new entry, then return a pointer to the
+///* tail of the list.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
     p_template_1: &WhereLoop) -> *mut *mut WhereLoop {
     let mut p: *mut WhereLoop = core::ptr::null_mut();
@@ -2202,9 +2696,21 @@ extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
                             (*p_template_1).i_tab as i32 ||
                         unsafe { (*p).i_sort_idx } as i32 !=
                             (*p_template_1).i_sort_idx as i32 {
+
+                    /// If either the iTab or iSortIdx values for two WhereLoop are different
+                    ///* then those WhereLoops need to be considered separately.  Neither is
+                    ///* a candidate to replace the other.
                     break '__c33;
                 }
+
+                /// In the current implementation, the rSetup value is either zero
+                ///* or the cost of building an automatic index (NlogN) and the NlogN
+                ///* is the same for compatible WhereLoops.
                 { let _ = 0; };
+
+                /// whereLoopAddBtree() always generates and inserts the automatic index
+                ///* case first.  Hence compatible candidate WhereLoops never have a larger
+                ///* rSetup. Call this SETUP-INVARIANT
                 { let _ = 0; };
                 if unsafe { (*p).ws_flags } & 16384 as u32 != 0 as u32 &&
                                     (*p_template_1).n_skip as i32 == 0 &&
@@ -2231,6 +2737,8 @@ extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
                         unsafe { (*p).n_out } as i32 >= (*p_template_1).n_out as i32
                     {
                     { let _ = 0; };
+
+                    /// SETUP-INVARIANT above
                     break '__b33;
                 }
                 break '__c33;
@@ -2244,6 +2752,7 @@ extern "C" fn where_loop_find_lesser(mut pp_prev_1: *mut *mut WhereLoop,
     return pp_prev_1;
 }
 
+///* Transfer content from the second pLoop into the first.
 extern "C" fn where_loop_xfer(db: *mut Sqlite3, p_to_1: *mut WhereLoop,
     p_from_1: *mut WhereLoop) -> i32 {
     unsafe {
@@ -2277,6 +2786,29 @@ extern "C" fn where_loop_xfer(db: *mut Sqlite3, p_to_1: *mut WhereLoop,
     }
 }
 
+///* Insert or replace a WhereLoop entry using the template supplied.
+///*
+///* An existing WhereLoop entry might be overwritten if the new template
+///* is better and has fewer dependencies.  Or the template will be ignored
+///* and no insert will occur if an existing WhereLoop is faster and has
+///* fewer dependencies than the template.  Otherwise a new WhereLoop is
+///* added based on the template.
+///*
+///* If pBuilder->pOrSet is not NULL then we care about only the
+///* prerequisites and rRun and nOut costs of the N best loops.  That
+///* information is gathered in the pBuilder->pOrSet object.  This special
+///* processing mode is used only for OR clause processing.
+///*
+///* When accumulating multiple loops (when pBuilder->pOrSet is NULL) we
+///* still might overwrite similar loops with the new template if the
+///* new template is better.  Loops may be overwritten if the following
+///* conditions are met:
+///*
+///*    (1)  They have the same iTab.
+///*    (2)  They have the same iSortIdx.
+///*    (3)  The template has same or fewer dependencies than the current loop
+///*    (4)  The template has the same or lower cost than the current loop
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
     p_template_1: *mut WhereLoop) -> i32 {
     unsafe {
@@ -2309,13 +2841,21 @@ extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
             }
             return 0;
         }
-        pp_prev =
+
+        /// Look for an existing WhereLoop to replace with pTemplate
+        (pp_prev =
             where_loop_find_lesser(unsafe { &mut (*p_w_info).p_loops },
-                unsafe { &*p_template_1 });
+                unsafe { &*p_template_1 }));
         if pp_prev == core::ptr::null_mut() {
+
+            /// There already exists a WhereLoop on the list that is better
+            ///* than pTemplate, so just ignore pTemplate
+            /// 0x8
             return 0;
         } else { p = unsafe { *pp_prev }; }
         if p == core::ptr::null_mut() {
+
+            /// Allocate a new WhereLoop to add to the end of the list
             unsafe {
                 *pp_prev =
                     {
@@ -2331,6 +2871,9 @@ extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
             where_loop_init(unsafe { &mut *p });
             unsafe { (*p).p_next_loop = core::ptr::null_mut() };
         } else {
+            /// We will be overwriting WhereLoop p[].  But before we do, first
+            ///* go through the rest of the list and delete any other entries besides
+            ///* p[] that are also supplanted by pTemplate
             let mut pp_tail: *mut *mut WhereLoop =
                 unsafe { &mut (*p).p_next_loop };
             let mut p_to_del: *mut WhereLoop = core::ptr::null_mut();
@@ -2341,6 +2884,8 @@ extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
                 p_to_del = unsafe { *pp_tail };
                 if p_to_del == core::ptr::null_mut() { break; }
                 unsafe { *pp_tail = unsafe { (*p_to_del).p_next_loop } };
+
+                /// 0x8
                 where_loop_delete(db, p_to_del);
             }
         }
@@ -2357,6 +2902,25 @@ extern "C" fn where_loop_insert(p_builder_1: &mut WhereLoopBuilder,
     }
 }
 
+///* Argument pIdxInfo is already populated with all constraints that may
+///* be used by the virtual table identified by pBuilder->pNew->iTab. This
+///* function marks a subset of those constraints usable, invokes the
+///* xBestIndex method and adds the returned plan to pBuilder.
+///*
+///* A constraint is marked usable if:
+///*
+///*   * Argument mUsable indicates that its prerequisites are available, and
+///*
+///*   * It is not one of the operators specified in the mExclude mask passed
+///*     as the fourth argument (which in practice is either WO_IN or 0).
+///*
+///* Argument mPrereq is a mask of tables that must be scanned before the
+///* virtual table in question. These are added to the plans prerequisites
+///* before it is added to pBuilder.
+///*
+///* Output parameter *pbIn is set to true if the plan added to pBuilder
+///* uses one or more WO_IN terms, or false otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_usable_1: Bitmask, m_exclude_1: u16,
     p_idx_info_1: *mut Sqlite3IndexInfo, m_no_omit_1: u16, pb_in_1: &mut i32,
@@ -2388,11 +2952,14 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
         { let _ = 0; };
         *pb_in_1 = 0;
         unsafe { (*p_new).prereq = m_prereq_1 };
-        p_idx_cons =
+
+        /// Set the usable flag on the subset of constraints identified by
+        ///* arguments mUsable and mExclude.
+        (p_idx_cons =
             unsafe {
                 *(unsafe { &raw mut (*p_idx_info_1).a_constraint } as
                         *mut *mut Sqlite3IndexConstraint)
-            };
+            });
         {
             i = 0;
             '__b35: loop {
@@ -2423,6 +2990,8 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
                 };
             }
         }
+
+        /// Initialize the output fields of the sqlite3_index_info structure
         unsafe {
             memset(p_usage as *mut (), 0,
                 core::mem::size_of::<Sqlite3IndexConstraintUsage>() as u64 *
@@ -2436,9 +3005,11 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
         unsafe { (*p_idx_info_1).estimated_rows = 25 as Sqlite3Int64 };
         unsafe { (*p_idx_info_1).idx_flags = 0 };
         unsafe { (*p_hidden).m_handle_in = 0 as u32 };
-        rc =
+
+        /// Invoke the virtual table xBestIndex() method
+        (rc =
             vtab_best_index(p_parse, unsafe { (*p_src).p_s_tab },
-                p_idx_info_1);
+                p_idx_info_1));
         if rc != 0 {
             if rc == 19 {
                 free_idx_str(unsafe { &mut *p_idx_info_1 });
@@ -2517,11 +3088,20 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
                             };
                         } else if unsafe { (*p_term_1).e_operator } as i32 & 1 != 0
                             {
+
+                            /// A virtual table that is constrained by an IN clause may not
+                            ///* consume the ORDER BY clause because (1) the order of IN terms
+                            ///* is not necessarily related to the order of output terms and
+                            ///* (2) Multiple outputs from a single IN value will not merge
+                            ///* together.
                             unsafe { (*p_idx_info_1).order_by_consumed = 0 };
                             unsafe { (*p_idx_info_1).idx_flags &= !1 };
                             *pb_in_1 = 1;
                             { let _ = 0; };
                         }
+
+                        /// Unless pbRetryLimit is non-NULL, there should be no LIMIT/OFFSET
+                        ///* terms. And if there are any, they should follow all other terms.
                         { let _ = 0; };
                         { let _ = 0; };
                         { let _ = 0; };
@@ -2533,6 +3113,14 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
                                                             &[]
                                                         } else { core::slice::from_raw_parts(__p, i as usize) }
                                                     }) == 0) as i32 != 0) {
+
+                            /// If there is an IN(...) term handled as an == (separate call to
+                            ///* xFilter for each value on the RHS of the IN) and a LIMIT or
+                            ///* OFFSET term handled as well, the plan is unusable. Similarly,
+                            ///* if there is a LIMIT/OFFSET and there are other unused terms,
+                            ///* the plan cannot be used. In these cases set variable *pbRetryLimit
+                            ///* to true to tell the caller to retry with LIMIT and OFFSET 
+                            ///* disabled.
                             free_idx_str(unsafe { &mut *p_idx_info_1 });
                             unsafe { *pb_retry_limit_1 = 1 };
                             return 0;
@@ -2560,6 +3148,9 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
                     if unsafe {
                                 *unsafe { (*p_new).a_l_term.offset(i as isize) }
                             } == core::ptr::null_mut() {
+
+                        /// The non-zero argvIdx values must be contiguous.  Raise an
+                        ///* error if they are not
                         unsafe {
                             sqlite3_error_msg(p_parse,
                                 c"%s.xBestIndex malfunction".as_ptr() as *mut i8 as
@@ -2627,21 +3218,56 @@ extern "C" fn where_loop_add_virtual_one(p_builder_1: *mut WhereLoopBuilder,
     }
 }
 
+///* Add all WhereLoop objects for a table of the join identified by
+///* pBuilder->pNew->iTab.  That table is guaranteed to be a virtual table.
+///*
+///* If there are no LEFT or CROSS JOIN joins in the query, both mPrereq and
+///* mUnusable are set to 0. Otherwise, mPrereq is a mask of all FROM clause
+///* entries that occur before the virtual table in the FROM clause and are
+///* separated from it by at least one LEFT or CROSS JOIN. Similarly, the
+///* mUnusable mask contains all FROM clause entries that occur after the
+///* virtual table and are separated from it by at least one LEFT or
+///* CROSS JOIN.
+///*
+///* For example, if the query were:
+///*
+///*   ... FROM t1, t2 LEFT JOIN t3, t4, vt CROSS JOIN t5, t6;
+///*
+///* then mPrereq corresponds to (t1, t2) and mUnusable to (t5, t6).
+///*
+///* All the tables in mPrereq must be scanned before the current virtual
+///* table. So any terms for which all prerequisites are satisfied by
+///* mPrereq may be specified as "usable" in all calls to xBestIndex.
+///* Conversely, all tables in mUnusable must be scanned after the current
+///* virtual table, so any terms for which the prerequisites overlap with
+///* mUnusable should always be configured as "not-usable" for xBestIndex.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_virtual(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_unusable_1: Bitmask) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// WHERE analysis context
         let mut p_parse: *const Parse = core::ptr::null();
+        /// The parsing context
         let mut p_wc: *mut WhereClause = core::ptr::null_mut();
+        /// The WHERE clause
         let mut p_src: *mut SrcItem = core::ptr::null_mut();
+        /// The FROM clause term to search
         let mut p: *mut Sqlite3IndexInfo = core::ptr::null_mut();
+        /// Object to pass to xBestIndex()
         let mut n_constraint: i32 = 0;
+        /// Number of constraints in p
         let mut b_in: i32 = 0;
+        /// True if plan uses IN(...) operator
         let mut p_new: *mut WhereLoop = core::ptr::null_mut();
         let mut m_best: Bitmask = 0 as Bitmask;
+        /// Tables used by best possible plan
         let mut m_no_omit: u16 = 0 as u16;
         let mut b_retry: i32 = 0;
+
+        /// True to retry with LIMIT/OFFSET disabled
         { let _ = 0; };
         p_w_info = unsafe { (*p_builder_1).p_w_info };
         p_parse = unsafe { (*p_w_info).p_parse };
@@ -2683,7 +3309,9 @@ extern "C" fn where_loop_add_virtual(p_builder_1: *mut WhereLoopBuilder,
                 ({ m_best = unsafe { (*p_new).prereq } & !m_prereq_1; m_best }
                         != 0 as u64 || b_in != 0) {
             let mut seen_zero: i32 = 0;
+            /// True if a plan with no prereqs seen
             let mut seen_zero_no_in: i32 = 0;
+            /// Plan with no prereqs and no IN(...) seen
             let mut m_prev: Bitmask = 0 as Bitmask;
             let mut m_best_no_in: Bitmask = 0 as Bitmask;
             if b_in != 0 {
@@ -2754,6 +3382,7 @@ extern "C" fn where_loop_add_virtual(p_builder_1: *mut WhereLoopBuilder,
     }
 }
 
+///* Estimate the logarithm of the input value to base 2.
 extern "C" fn est_log(n_1: LogEst) -> LogEst {
     return if n_1 as i32 <= 10 {
                 0
@@ -2761,6 +3390,23 @@ extern "C" fn est_log(n_1: LogEst) -> LogEst {
             LogEst;
 }
 
+///* Return true if column iCol of table pTab seem like it might be a
+///* good column to use as part of a query-time index.
+///*
+///* Current algorithm (subject to improvement!):
+///*
+///*   1.   If iCol is already the left-most column of some other index,
+///*        then return false.
+///*
+///*   2.   If iCol is part of an existing index that has an aiRowLogEst of
+///*        more than 20, then return false.
+///*
+///*   3.   If no disqualifying conditions above are found, return true.
+///*
+///* 2025-01-03: I experimented with a new rule that returns false if the
+///* the datatype of the column is "BOOLEAN". This did not improve
+///* performance on any queries at hand, but it did burn CPU cycles, so the
+///* idea was not committed.
 extern "C" fn column_is_good_index_candidate(p_tab_1: &Table, i_col_1: i32)
     -> i32 {
     let mut p_idx: *const Index = core::ptr::null();
@@ -2802,6 +3448,9 @@ extern "C" fn column_is_good_index_candidate(p_tab_1: &Table, i_col_1: i32)
     return 1;
 }
 
+///* Return TRUE if the WHERE clause term pTerm is of a form where it
+///* could be used with an index to access pSrc, assuming an appropriate
+///* index existed.
 extern "C" fn term_can_drive_index(p_term_1: *const WhereTerm,
     p_src_1: *const SrcItem, not_ready_1: Bitmask) -> i32 {
     unsafe {
@@ -2847,6 +3496,8 @@ extern "C" fn term_can_drive_index(p_term_1: *const WhereTerm,
     }
 }
 
+/// Check to see if a partial index with pPartIndexWhere can be used
+///* in the current query.  Return true if it can be and false if not.
 extern "C" fn where_usable_partial_index(i_tab_1: i32, jointype: u8,
     p_wc_1: *mut WhereClause, mut p_where_1: *const Expr) -> i32 {
     unsafe {
@@ -2902,6 +3553,12 @@ extern "C" fn where_usable_partial_index(i_tab_1: i32, jointype: u8,
     }
 }
 
+///* Return True if it is possible that pIndex might be useful in
+///* implementing the ORDER BY clause in pBuilder.
+///*
+///* Return False if pBuilder does not contain an ORDER BY clause or
+///* if there is no way for pIndex to be useful in implementing that
+///* ORDER BY clause.
 extern "C" fn index_might_help_with_order_by(p_builder_1: &WhereLoopBuilder,
     p_index_1: &Index, i_cursor_1: i32) -> i32 {
     let mut p_ob: *const ExprList = core::ptr::null();
@@ -2979,14 +3636,27 @@ extern "C" fn index_might_help_with_order_by(p_builder_1: &WhereLoopBuilder,
     return 0;
 }
 
+///* Callback for estLikePatternLength().
+///*
+///* If this node is a string literal that is longer pWalker->sz, then set
+///* pWalker->sz to the byte length of that string literal.
+///*
+///* pWalker->eCode indicates how to count characters:
+///*
+///*    eCode==0     Count as a GLOB pattern
+///*    eCode==1     Count as a LIKE pattern
+#[allow(unused_doc_comments)]
 extern "C" fn expr_node_pattern_length_est(p_walker_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
         if unsafe { (*p_expr_1).op } as i32 == 118 {
             let mut sz: i32 = 0;
+            /// Pattern size in bytes
             let mut z: *const u8 =
                 unsafe { (*p_expr_1).u.z_token } as *mut u8 as *const u8;
+            /// The pattern
             let mut c: u8 = 0 as u8;
+            /// Next character of the pattern
             let mut c1: u8 = 0 as u8;
             let mut c2: u8 = 0 as u8;
             let mut c3: u8 = 0 as u8;
@@ -3041,6 +3711,13 @@ extern "C" fn expr_node_pattern_length_est(p_walker_1: *mut Walker,
     }
 }
 
+///* Return the length of the longest string literal in the given
+///* expression.
+///*
+///* eCode indicates how to count characters:
+///*
+///*    eCode==0     Count as a GLOB pattern
+///*    eCode==1     Count as a LIKE pattern
 extern "C" fn est_like_pattern_length(p: *mut Expr, e_code_1: u16) -> i32 {
     unsafe {
         let mut w: Walker = unsafe { core::mem::zeroed() };
@@ -3053,6 +3730,41 @@ extern "C" fn est_like_pattern_length(p: *mut Expr, e_code_1: u16) -> i32 {
     }
 }
 
+///* Adjust the WhereLoop.nOut value downward to account for terms of the
+///* WHERE clause that reference the loop but which are not used by an
+///* index.
+///
+///* For every WHERE clause term that is not used by the index
+///* and which has a truth probability assigned by one of the likelihood(),
+///* likely(), or unlikely() SQL functions, reduce the estimated number
+///* of output rows by the probability specified.
+///*
+///* TUNING:  For every WHERE clause term that is not used by the index
+///* and which does not have an assigned truth probability, heuristics
+///* described below are used to try to estimate the truth probability.
+///* TODO --> Perhaps this is something that could be improved by better
+///* table statistics.
+///*
+///* Heuristic 1:  Estimate the truth probability as 93.75%.  The 93.75%
+///* value corresponds to -1 in LogEst notation, so this means decrement
+///* the WhereLoop.nOut field for every such WHERE clause term.
+///*
+///* Heuristic 2:  If there exists one or more WHERE clause terms of the
+///* form "x==EXPR" and EXPR is not a constant 0 or 1, then make sure the
+///* final output row estimate is no greater than 1/4 of the total number
+///* of rows in the table.  In other words, assume that x==EXPR will filter
+///* out at least 3 out of 4 rows.  If EXPR is -1 or 0 or 1, then maybe the
+///* "x" column is boolean or else -1 or 0 or 1 is a common default value
+///* on the "x" column and so in that case only cap the output row estimate
+///* at 1/2 instead of 1/4.
+///*
+///* Heuristic 3:  If there is a LIKE or GLOB (or REGEXP or MATCH) operator
+///* with a large constant pattern, then reduce the size of the search
+///* space according to the length of the pattern, under the theory that
+///* longer patterns are less likely to match.  This heuristic was added
+///* to give better output-row count estimates when preparing queries for
+///* the Join-Order Benchmarks.  See forum thread 2026-01-30T09:57:54z
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
     p_loop_1: &mut WhereLoop, n_row_1: LogEst) -> () {
     unsafe {
@@ -3063,6 +3775,8 @@ extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         let mut i_reduce: LogEst = 0 as LogEst;
+
+        /// pLoop->nOut should not exceed nRow-iReduce
         { let _ = 0; };
         {
             { i = (*p_wc_1).n_base; p_term = (*p_wc_1).a };
@@ -3119,9 +3833,14 @@ extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
                             }
                         }
                         if unsafe { (*p_term).truth_prob } as i32 <= 0 {
-                            (*p_loop_1).n_out +=
-                                unsafe { (*p_term).truth_prob } as i32 as LogEst;
+
+                            /// If a truth probability is specified using the likelihood() hints,
+                            ///* then use the probability provided by the application.
+                            ((*p_loop_1).n_out +=
+                                unsafe { (*p_term).truth_prob } as i32 as LogEst);
                         } else {
+                            /// In the absence of explicit truth probabilities, use heuristics to
+                            ///* guess a reasonable truth probability.
                             let p_op_expr: *const Expr =
                                 unsafe { (*p_term).p_expr } as *const Expr;
                             {
@@ -3191,6 +3910,8 @@ extern "C" fn where_loop_output_adjust(p_wc_1: &WhereClause,
     }
 }
 
+///* This is an sqlite3ParserAddCleanup() callback that is invoked to
+///* free the Parse->pIdxEpr list when the Parse object is destroyed.
 extern "C" fn where_indexed_expr_cleanup(db: *mut Sqlite3,
     p_object_1: *mut ()) -> () {
     let pp: *mut *mut IndexedExpr = p_object_1 as *mut *mut IndexedExpr;
@@ -3202,6 +3923,31 @@ extern "C" fn where_indexed_expr_cleanup(db: *mut Sqlite3,
     }
 }
 
+///* This function is called for a partial index - one with a WHERE clause - in 
+///* two scenarios. In both cases, it determines whether or not the WHERE 
+///* clause on the index implies that a column of the table may be safely
+///* replaced by a constant expression. For example, in the following 
+///* SELECT:
+///*
+///*   CREATE INDEX i1 ON t1(b, c) WHERE a=<expr>;
+///*   SELECT a, b, c FROM t1 WHERE a=<expr> AND b=?;
+///*
+///* The "a" in the select-list may be replaced by <expr>, iff:
+///*
+///*    (a) <expr> is a constant expression, and
+///*    (b) The (a=<expr>) comparison uses the BINARY collation sequence, and
+///*    (c) Column "a" has an affinity other than NONE or BLOB.
+///*
+///* If argument pItem is NULL, then pMask must not be NULL. In this case this 
+///* function is being called as part of determining whether or not pIdx
+///* is a covering index. This function clears any bits in (*pMask) 
+///* corresponding to columns that may be replaced by constants as described
+///* above.
+///*
+///* Otherwise, if pItem is not NULL, then this function is being called
+///* as part of coding a loop that uses index pIdx. In this case, add entries
+///* to the Parse.pIdxPartExpr list for each column that can be replaced
+///* by a constant.
 extern "C" fn where_part_idx_expr(p_parse_1: *mut Parse, p_idx_1: *mut Index,
     mut p_part_1: *const Expr, p_mask_1: *mut Bitmask, i_idx_cur_1: i32,
     p_item_1: *mut SrcItem) -> () {
@@ -3292,6 +4038,8 @@ extern "C" fn where_part_idx_expr(p_parse_1: *mut Parse, p_idx_1: *mut Index,
     }
 }
 
+///* pIdx is an index containing expressions.  Check it see if any of the
+///* expressions in the index match the pExpr expression.
 extern "C" fn expr_is_covered_by_index(p_expr_1: *const Expr, p_idx_1: &Index,
     i_tab_cur_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -3319,15 +4067,37 @@ extern "C" fn expr_is_covered_by_index(p_expr_1: *const Expr, p_idx_1: &Index,
     return 0;
 }
 
+///* Information passed in is pWalk->u.pCovIdxCk.  Call it pCk.
+///*
+///* If the Expr node references the table with cursor pCk->iTabCur, then
+///* make sure that column is covered by the index pCk->pIdx.  We know that
+///* all columns less than 63 (really BMS-1) are covered, so we don't need
+///* to check them.  But we do need to check any column at 63 or greater.
+///*
+///* If the index does not cover the column, then set pWalk->eCode to
+///* non-zero and return WRC_Abort to stop the search.
+///*
+///* If this node does not disprove that the index can be a covering index,
+///* then just return WRC_Continue, to continue the search.
+///*
+///* If pCk->pIdx contains indexed expressions and one of those expressions
+///* matches pExpr, then prune the search.
+#[allow(unused_doc_comments)]
 extern "C" fn where_is_covering_index_walk_callback(p_walk_1: *mut Walker,
     p_expr_1: *mut Expr) -> i32 {
     unsafe {
         let mut i: i32 = 0;
+        /// Loop counter
         let mut p_idx: *const Index = core::ptr::null();
+        /// The index of interest
         let mut ai_column: *const i16 = core::ptr::null();
+        /// Columns contained in the index
         let mut n_column: u16 = 0 as u16;
+        /// Number of columns in the index
         let mut p_ck: *mut CoveringIndexCheck = core::ptr::null_mut();
-        p_ck = unsafe { (*p_walk_1).u.p_cov_idx_ck };
+
+        /// Info about this search
+        (p_ck = unsafe { (*p_walk_1).u.p_cov_idx_ck });
         p_idx = unsafe { (*p_ck).p_idx } as *const Index;
         if unsafe { (*p_expr_1).op } as i32 == 168 ||
                 unsafe { (*p_expr_1).op } as i32 == 170 {
@@ -3369,6 +4139,28 @@ extern "C" fn where_is_covering_index_walk_callback(p_walk_1: *mut Walker,
     }
 }
 
+///* pIdx is an index that covers all of the low-number columns used by
+///* pWInfo->pSelect (columns from 0 through 62) or an index that has
+///* expressions terms.  Hence, we cannot determine whether or not it is
+///* a covering index by using the colUsed bitmasks.  We have to do a search
+///* to see if the index is covering.  This routine does that search.
+///*
+///* The return value is one of these:
+///*
+///*      0                The index is definitely not a covering index
+///*
+///*      WHERE_IDX_ONLY   The index is definitely a covering index
+///*
+///*      WHERE_EXPRIDX    The index is likely a covering index, but it is
+///*                       difficult to determine precisely because of the
+///*                       expressions that are indexed.  Score it as a
+///*                       covering index, but still keep the main table open
+///*                       just in case we need it.
+///*
+///* This routine is an optimization.  It is always safe to return zero.
+///* But returning one of the other two values when zero should have been
+///* returned can lead to incorrect bytecode and assertion faults.
+#[allow(unused_doc_comments)]
 extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
     p_idx_1: *mut Index, i_tab_cur_1: i32) -> u32 {
     unsafe {
@@ -3377,6 +4169,9 @@ extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
         let mut ck: CoveringIndexCheck = unsafe { core::mem::zeroed() };
         let mut w: Walker = unsafe { core::mem::zeroed() };
         if (*p_w_info_1).p_select == core::ptr::null_mut() {
+
+            /// We don't have access to the full query, so we cannot check to see
+            ///* if pIdx is covering.  Assume it is not.
             return 0 as u32;
         }
         if unsafe { (*p_idx_1).b_has_expr() } as i32 == 0 {
@@ -3399,7 +4194,13 @@ extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
                     { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                 }
             }
-            if i >= unsafe { (*p_idx_1).n_column } as i32 { return 0 as u32; }
+            if i >= unsafe { (*p_idx_1).n_column } as i32 {
+
+                /// pIdx does not index any columns greater than 62, but we know from
+                ///* colMask that columns greater than 62 are used, so this is not a
+                ///* covering index
+                return 0 as u32;
+            }
         }
         ck.p_idx = p_idx_1;
         ck.i_tab_cur = i_tab_cur_1;
@@ -3420,6 +4221,22 @@ extern "C" fn where_is_covering_index(p_w_info_1: &WhereInfo,
     }
 }
 
+///* Term pTerm is a vector range comparison operation. The first comparison
+///* in the vector can be optimized using column nEq of the index. This
+///* function returns the total number of vector elements that can be used
+///* as part of the range comparison.
+///*
+///* For example, if the query is:
+///*
+///*   WHERE a = ? AND (b, c, d) > (?, ?, ?)
+///*
+///* and the index:
+///*
+///*   CREATE INDEX ... ON (a, b, c, d, e)
+///*
+///* then this function would be invoked with nEq=1. The value returned in
+///* this case is 3.
+#[allow(unused_doc_comments)]
 extern "C" fn where_range_vector_len(p_parse_1: *mut Parse, i_cur_1: i32,
     p_idx_1: &Index, n_eq_1: i32, p_term_1: &WhereTerm) -> i32 {
     unsafe {
@@ -3439,9 +4256,14 @@ extern "C" fn where_range_vector_len(p_parse_1: *mut Parse, i_cur_1: i32,
             '__b55: loop {
                 if !(i < n_cmp) { break '__b55; }
                 '__c55: loop {
+                    /// Test if comparison i of pTerm is compatible with column (i+nEq)
+                    ///* of the index. If not, exit the loop.
                     let mut aff: i8 = 0 as i8;
+                    /// Comparison affinity
                     let mut idxaff: i8 = 0 as i8;
+                    /// Indexed columns affinity
                     let mut p_coll: *const CollSeq = core::ptr::null();
+                    /// Comparison collation sequence
                     let mut p_lhs: *mut Expr = core::ptr::null_mut();
                     let mut p_rhs: *mut Expr = core::ptr::null_mut();
                     { let _ = 0; };
@@ -3523,6 +4345,15 @@ extern "C" fn where_range_vector_len(p_parse_1: *mut Parse, i_cur_1: i32,
     }
 }
 
+///* If it is not NULL, pTerm is a term that provides an upper or lower
+///* bound on a range scan. Without considering pTerm, it is estimated
+///* that the scan will visit nNew rows. This function returns the number
+///* estimated to be visited after taking pTerm into account.
+///*
+///* If the user explicitly specified a likelihood() value for this term,
+///* then the return value is the likelihood multiplied by the number of
+///* input rows. Otherwise, this function assumes that an "IS NOT NULL" term
+///* has a likelihood of 0.50, and any other term a likelihood of 0.25.
 extern "C" fn where_range_adjust(p_term_1: *const WhereTerm, n_new_1: LogEst)
     -> LogEst {
     let mut n_ret: LogEst = n_new_1;
@@ -3537,6 +4368,44 @@ extern "C" fn where_range_adjust(p_term_1: *const WhereTerm, n_new_1: LogEst)
     return n_ret;
 }
 
+///* This function is used to estimate the number of rows that will be visited
+///* by scanning an index for a range of values. The range may have an upper
+///* bound, a lower bound, or both. The WHERE clause terms that set the upper
+///* and lower bounds are represented by pLower and pUpper respectively. For
+///* example, assuming that index p is on t1(a):
+///*
+///*   ... FROM t1 WHERE a > ? AND a < ? ...
+///*                    |_____|   |_____|
+///*                       |         |
+///*                     pLower    pUpper
+///*
+///* If either of the upper or lower bound is not present, then NULL is passed in
+///* place of the corresponding WhereTerm.
+///*
+///* The value in (pBuilder->pNew->u.btree.nEq) is the number of the index
+///* column subject to the range constraint. Or, equivalently, the number of
+///* equality constraints optimized by the proposed index scan. For example,
+///* assuming index p is on t1(a, b), and the SQL query is:
+///*
+///*   ... FROM t1 WHERE a = ? AND b > ? AND b < ? ...
+///*
+///* then nEq is set to 1 (as the range restricted column, b, is the second
+///* left-most column of the index). Or, if the query is:
+///*
+///*   ... FROM t1 WHERE a > ? AND a < ? ...
+///*
+///* then nEq is set to 0.
+///*
+///* When this function is called, *pnOut is set to the sqlite3LogEst() of the
+///* number of rows that the index scan is expected to visit without
+///* considering the range constraints. If nEq is 0, then *pnOut is the number of
+///* rows in the index. Assuming no error occurs, *pnOut is adjusted (reduced)
+///* to account for the range constraints pLower and pUpper.
+///*
+///* In the absence of sqlite_stat4 ANALYZE data, or if such data cannot be
+///* used, a single range inequality reduces the search space by a factor of 4.
+///* and a pair of constraints (x>? AND x<?) reduces the expected number of
+///* rows visited by a factor of 64.
 extern "C" fn where_range_scan_est(p_parse_1: *const Parse,
     p_builder_1: *const WhereLoopBuilder, p_lower_1: *mut WhereTerm,
     p_upper_1: *mut WhereTerm, p_loop_1: &mut WhereLoop) -> i32 {
@@ -3564,31 +4433,62 @@ extern "C" fn where_range_scan_est(p_parse_1: *const Parse,
     return rc;
 }
 
+///* We have so far matched pBuilder->pNew->u.btree.nEq terms of the
+///* index pIndex. Try to match one more.
+///*
+///* When this function is called, pBuilder->pNew->nOut contains the
+///* number of rows expected to be visited by filtering using the nEq
+///* terms only. If it is modified, this value is restored before this
+///* function returns.
+///*
+///* If pProbe->idxType==SQLITE_IDXTYPE_IPK, that means pIndex is
+///* a fake index used for the INTEGER PRIMARY KEY.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
     p_src_1: *mut SrcItem, p_probe_1: *mut Index, n_in_mul_1: LogEst) -> i32 {
     unsafe {
         let p_w_info: *const WhereInfo =
             unsafe { (*p_builder_1).p_w_info } as *const WhereInfo;
+        /// WHERE analyze context
         let p_parse: *mut Parse = unsafe { (*p_w_info).p_parse };
+        /// Parsing context
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+        /// Database connection malloc context
         let mut p_new: *mut WhereLoop = core::ptr::null_mut();
+        /// Template WhereLoop under construction
         let mut p_term: *mut WhereTerm = core::ptr::null_mut();
+        /// A WhereTerm under consideration
         let mut op_mask: i32 = 0;
+        /// Valid operators for constraints
         let mut scan: WhereScan = unsafe { core::mem::zeroed() };
+        /// Iterator for WHERE terms
         let mut saved_prereq: Bitmask = 0 as Bitmask;
+        /// Original value of pNew->prereq
         let mut saved_n_l_term: u16 = 0 as u16;
+        /// Original value of pNew->nLTerm
         let mut saved_n_eq: u16 = 0 as u16;
+        /// Original value of pNew->u.btree.nEq
         let mut saved_n_btm: u16 = 0 as u16;
+        /// Original value of pNew->u.btree.nBtm
         let mut saved_n_top: u16 = 0 as u16;
+        /// Original value of pNew->u.btree.nTop
         let mut saved_n_skip: u16 = 0 as u16;
+        /// Original value of pNew->nSkip
         let mut saved_ws_flags: u32 = 0 as u32;
+        /// Original value of pNew->wsFlags
         let mut saved_n_out: LogEst = 0 as LogEst;
+        /// Original value of pNew->nOut
         let mut rc: i32 = 0;
+        /// Return code
         let mut r_size: LogEst = 0 as LogEst;
+        /// Number of rows in the table
         let mut r_log_size: LogEst = 0 as LogEst;
+        /// Logarithm of table size
         let mut p_top: *mut WhereTerm = core::ptr::null_mut();
         let mut p_btm: *mut WhereTerm = core::ptr::null_mut();
-        p_new = unsafe { (*p_builder_1).p_new };
+
+        /// Top and bottom range constraints
+        (p_new = unsafe { (*p_builder_1).p_new });
         { let _ = 0; };
         if unsafe { (*p_parse).n_err } != 0 {
             return unsafe { (*p_parse).rc };
@@ -3634,8 +4534,10 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                 }
                 '__c56: loop {
                     let e_op: u16 = unsafe { (*p_term).e_operator };
+                    /// Shorthand for pTerm->eOperator
                     let mut r_cost_idx: LogEst = 0 as LogEst;
                     let mut n_out_unadjusted: LogEst = 0 as LogEst;
+                    /// nOut before IN() and WHERE adjustments
                     let mut n_in: i32 = 0;
                     if (e_op as i32 == 256 ||
                                 unsafe { (*p_term).wt_flags } as i32 & 128 != 0) &&
@@ -3692,6 +4594,7 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                     if e_op as i32 & 1 != 0 {
                         let p_expr: *mut Expr = unsafe { (*p_term).p_expr };
                         if unsafe { (*p_expr).flags } & 4096 as u32 != 0 as u32 {
+                            /// "x IN (SELECT ...)":  TUNING: the SELECT returns 25 rows
                             let mut i: i32 = 0;
                             let mut b_redundant: i32 = 0;
                             n_in = 46;
@@ -3717,7 +4620,12 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                                                                                 *unsafe { (*p_new).a_l_term.offset(i as isize) }
                                                                             }).u.x.i_field
                                                     } == unsafe { (*p_term).u.x.i_field } {
-                                                b_redundant = 1;
+
+                                                /// Detect when two or more columns of an index match the same 
+                                                ///* column of a vector IN operater, and avoid adding the column
+                                                ///* to the WhereLoop more than once.  See tag-20250707-01
+                                                ///* in test/rowvalue.test
+                                                (b_redundant = 1);
                                             }
                                         }
                                         break '__c57;
@@ -3736,28 +4644,52 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                             }
                         } else if !(unsafe { (*p_expr).x.p_list }).is_null() &&
                                 unsafe { (*unsafe { (*p_expr).x.p_list }).n_expr } != 0 {
-                            n_in =
+
+                            /// "x IN (value, value, ...)"
+                            (n_in =
                                 unsafe {
                                         sqlite3_log_est(unsafe {
                                                     (*unsafe { (*p_expr).x.p_list }).n_expr
                                                 } as u64)
-                                    } as i32;
+                                    } as i32);
                         }
                         if unsafe { (*p_probe_1).has_stat1() } != 0 &&
                                 r_log_size as i32 >= 10 {
                             let mut m: LogEst = 0 as LogEst;
                             let mut log_k: LogEst = 0 as LogEst;
                             let mut x: LogEst = 0 as LogEst;
-                            m =
+
+                            /// Let:
+                            ///*   N = the total number of rows in the table
+                            ///*   K = the number of entries on the RHS of the IN operator
+                            ///*   M = the number of rows in the table that match terms to the
+                            ///*       to the left in the same index.  If the IN operator is on
+                            ///*       the left-most index column, M==N.
+                            ///*
+                            ///* Given the definitions above, it is better to omit the IN operator
+                            ///* from the index lookup and instead do a scan of the M elements,
+                            ///* testing each scanned row against the IN operator separately, if:
+                            ///*
+                            ///*        M*log(K) < K*log(N)
+                            ///*
+                            ///* Our estimates for M, K, and N might be inaccurate, so we build in
+                            ///* a safety margin of 2 (LogEst: 10) that favors using the IN operator
+                            ///* with the index, as using an index has better worst-case behavior.
+                            ///* If we do not have real sqlite_stat1 data, always prefer to use
+                            ///* the index.  Do not bother with this optimization on very small
+                            ///* tables (less than 2 rows) as it is pointless in that case.
+                            (m =
                                 unsafe {
                                     *unsafe {
                                             (*p_probe_1).ai_row_log_est.add(saved_n_eq as usize)
                                         }
-                                };
+                                });
                             log_k = est_log(n_in as LogEst);
-                            x =
+
+                            /// TUNING      v-----  10 to bias toward indexed IN
+                            (x =
                                 (m as i32 + log_k as i32 + 10 - (n_in + r_log_size as i32))
-                                    as LogEst;
+                                    as LogEst);
                             if x as i32 >= 0
                                 {} else if (n_in_mul_1 as i32) < 2 &&
                                     unsafe { (*db).db_opt_flags } & 131072 as u32 == 0 as u32 {
@@ -3800,7 +4732,10 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                             p_btm = p_term;
                             p_top = core::ptr::null_mut();
                             if unsafe { (*p_term).wt_flags } as i32 & 256 != 0 {
-                                p_top = unsafe { p_term.offset(1 as isize) };
+
+                                /// Range constraints that come from the LIKE optimization are
+                                ///* always used in pairs.
+                                (p_top = unsafe { p_term.offset(1 as isize) });
                                 { let _ = 0; };
                                 { let _ = 0; };
                                 { let _ = 0; };
@@ -3808,6 +4743,8 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                                             unsafe { (*p_new).n_l_term } as i32 + 1) != 0 {
                                     break '__b56;
                                 }
+
+                                /// OOM
                                 unsafe {
                                     *unsafe {
                                                 (*p_new).a_l_term.add({
@@ -3837,8 +4774,17 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                                 } else { core::ptr::null_mut() };
                         }
                     }
+
+                    /// At this point pNew->nOut is set to the number of rows expected to
+                    ///* be visited by the index scan before considering term pTerm, or the
+                    ///* values of nIn and nInMul. In other words, assuming that all
+                    ///* "x IN(...)" terms are replaced with "x = ?". This block updates
+                    ///* the value of pNew->nOut to account for pTerm (but not nIn/nInMul).
                     { let _ = 0; };
                     if unsafe { (*p_new).ws_flags } & 2 as u32 != 0 {
+
+                        /// Adjust nOut using stat4 data. Or, if there is no stat4
+                        ///* data, using some other estimate.
                         where_range_scan_est(p_parse as *const Parse,
                             p_builder_1 as *const WhereLoopBuilder, p_btm, p_top,
                             unsafe { &mut *p_new });
@@ -3877,15 +4823,31 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                                                     } as i32) as LogEst
                                 };
                                 if e_op as i32 & 256 != 0 {
+
+                                    /// TUNING: If there is no likelihood() value, assume that a
+                                    ///* "col IS NULL" expression matches twice as many rows
+                                    ///* as (col=?).
                                     unsafe { (*p_new).n_out += 10 as LogEst };
                                 }
                             }
                         }
                     }
+
+                    /// Set rCostIdx to the estimated cost of visiting selected rows in the
+                    ///* index.  The estimate is the sum of two values:
+                    ///*   1.  The cost of doing one search-by-key to find the first matching
+                    ///*       entry
+                    ///*   2.  Stepping forward in the index pNew->nOut times to find all
+                    ///*       additional matching entries.
                     { let _ = 0; };
                     if unsafe { (*p_probe_1).idx_type() } as i32 == 3 {
-                        r_cost_idx =
-                            (unsafe { (*p_new).n_out } as i32 + 16) as LogEst;
+
+                        /// The pProbe->szIdxRow is low for an IPK table since the interior
+                        ///* pages are small.  Thus szIdxRow gives a good estimate of seek cost.
+                        ///* But the leaf pages are full-size, so pProbe->szIdxRow would badly
+                        ///* under-estimate the scanning cost.
+                        (r_cost_idx =
+                            (unsafe { (*p_new).n_out } as i32 + 16) as LogEst);
                     } else {
                         r_cost_idx =
                             (unsafe { (*p_new).n_out } as i32 + 1 +
@@ -3895,6 +4857,12 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                     }
                     r_cost_idx =
                         unsafe { sqlite3_log_est_add(r_log_size, r_cost_idx) };
+
+                    /// Estimate the cost of running the loop.  If all data is coming
+                    ///* from the index, then this is just the cost of doing the index
+                    ///* lookup and scan.  But if some data is coming out of the main table,
+                    ///* we also have to add in the cost of doing pNew->nOut searches to
+                    ///* locate the row in the main table that corresponds to the index entry.
                     unsafe { (*p_new).r_run = r_cost_idx };
                     if unsafe { (*p_new).ws_flags } &
                                 (64 | 256 | 67108864) as u32 == 0 as u32 {
@@ -3949,6 +4917,17 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
         unsafe { (*p_new).ws_flags = saved_ws_flags };
         unsafe { (*p_new).n_out = saved_n_out };
         unsafe { (*p_new).n_l_term = saved_n_l_term };
+
+        /// Consider using a skip-scan if there are no WHERE clause constraints
+        ///* available for the left-most terms of the index, and if the average
+        ///* number of repeats in the left-most terms is at least 18.
+        ///*
+        ///* The magic number 18 is selected on the basis that scanning 17 rows
+        ///* is almost always quicker than an index seek (even though if the index
+        ///* contains fewer than 2^17 rows we assume otherwise in other parts of
+        ///* the code). And, even if it is not, it should not be too much slower.
+        ///* On the other hand, the extra seeks could end up being significantly
+        ///* more expensive.
         { let _ = 0; };
         if saved_n_eq as i32 == saved_n_skip as i32 &&
                                             saved_n_eq as i32 + 1 <
@@ -4007,7 +4986,10 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
                                     }
                             } as i32) as LogEst;
             unsafe { (*p_new).n_out -= n_iter as i32 as LogEst };
-            n_iter += 5 as LogEst;
+
+            /// TUNING:  Because uncertainties in the estimates for skip-scan queries,
+            ///* add a 1.375 fudge factor to make skip-scan slightly less likely.
+            (n_iter += 5 as LogEst);
             where_loop_add_btree_index(p_builder_1, p_src_1, p_probe_1,
                 (n_iter as i32 + n_in_mul_1 as i32) as LogEst);
             unsafe { (*p_new).n_out = saved_n_out };
@@ -4019,25 +5001,75 @@ extern "C" fn where_loop_add_btree_index(p_builder_1: *mut WhereLoopBuilder,
     }
 }
 
+///* Add all WhereLoop objects for a single table of the join where the table
+///* is identified by pBuilder->pNew->iTab.  That table is guaranteed to be
+///* a b-tree table, not a virtual table.
+///*
+///* The costs (WhereLoop.rRun) of the b-tree loops added by this function
+///* are calculated as follows:
+///*
+///* For a full scan, assuming the table (or index) contains nRow rows:
+///*
+///*     cost = nRow * 3.0                    // full-table scan
+///*     cost = nRow * K                      // scan of covering index
+///*     cost = nRow * (K+3.0)                // scan of non-covering index
+///*
+///* where K is a value between 1.1 and 3.0 set based on the relative
+///* estimated average size of the index and table records.
+///*
+///* For an index scan, where nVisit is the number of index rows visited
+///* by the scan, and nSeek is the number of seek operations required on
+///* the index b-tree:
+///*
+///*     cost = nSeek * (log(nRow) + K * nVisit)          // covering index
+///*     cost = nSeek * (log(nRow) + (K+3.0) * nVisit)    // non-covering index
+///*
+///* Normally, nSeek is 1. nSeek values greater than 1 come about if the
+///* WHERE clause includes "x IN (....)" terms used in place of "x=?". Or when
+///* implicit "x IN (SELECT x FROM tbl)" terms are added for skip-scans.
+///*
+///* The estimated values (nRow, nVisit, nSeek) often contain a large amount
+///* of uncertainty.  For this reason, scoring is designed to pick plans that
+///* "do the least harm" if the estimates are inaccurate.  For example, a
+///* log(nRow) factor is omitted from a non-covering index scan in order to
+///* bias the scoring in favor of using an index, since the worst-case
+///* performance of using an index is far better than the worst-case performance
+///* of a full table scan.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask) -> i32 {
     unsafe {
         unsafe {
             let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+            /// WHERE analysis context
             let mut p_probe: *mut Index = core::ptr::null_mut();
+            /// An index we are evaluating
             let mut s_pk: Index = unsafe { core::mem::zeroed() };
+            /// A fake index object for the primary key
             let mut ai_row_est_pk: [i16; 2] = [0; 2];
+            /// The aiRowLogEst[] value for the sPk index
             let mut ai_column_pk: i16 = -1 as i16;
+            /// The aColumn[] value for the sPk index
             let mut p_tab_list: *const SrcList = core::ptr::null();
+            /// The FROM clause
             let mut p_src: *mut SrcItem = core::ptr::null_mut();
+            /// The FROM clause btree term to add
             let mut p_new: *mut WhereLoop = core::ptr::null_mut();
+            /// Template WhereLoop object
             let mut rc: i32 = 0;
+            /// Return code
             let mut i_sort_idx: i32 = 1;
+            /// Index number
             let mut b: i32 = 0;
+            /// A boolean value
             let mut r_size: LogEst = 0 as LogEst;
+            /// number of rows in the table
             let mut p_wc: *mut WhereClause = core::ptr::null_mut();
+            /// The parsed WHERE clause
             let mut p_tab: *mut Table = core::ptr::null_mut();
-            p_new = unsafe { (*p_builder_1).p_new };
+
+            /// Table being queried
+            (p_new = unsafe { (*p_builder_1).p_new });
             p_w_info = unsafe { (*p_builder_1).p_w_info };
             p_tab_list = unsafe { (*p_w_info).p_tab_list };
             p_src =
@@ -4050,12 +5082,20 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
             { let _ = 0; };
             if unsafe { (*p_src).fg.is_indexed_by() } != 0 {
                 { let _ = 0; };
-                p_probe = unsafe { (*p_src).u2.p_ib_index };
+
+                /// An INDEXED BY clause specifies a particular index to use
+                (p_probe = unsafe { (*p_src).u2.p_ib_index });
             } else if !(unsafe { (*p_tab).tab_flags } & 128 as u32 ==
                                 0 as u32) as i32 != 0 {
                 p_probe = unsafe { (*p_tab).p_index };
             } else {
+                /// There is no INDEXED BY clause.  Create a fake Index object in local
+                ///* variable sPk to represent the rowid primary key index.  Make this
+                ///* fake index the first in a chain of Index objects with all of the real
+                ///* indices to follow
                 let mut p_first: *mut Index = core::ptr::null_mut();
+
+                /// First of real indices on the table
                 unsafe {
                     memset(&raw mut s_pk as *mut (), 0,
                         core::mem::size_of::<Index>() as u64)
@@ -4068,12 +5108,17 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                 s_pk.on_error = 5 as u8;
                 s_pk.p_table = p_tab;
                 s_pk.sz_idx_row = 3 as LogEst;
+
+                /// TUNING: Interior rows of IPK table are very small
                 s_pk.set_idx_type(3 as u32 as u32);
                 ai_row_est_pk[0 as usize] = unsafe { (*p_tab).n_row_log_est };
                 ai_row_est_pk[1 as usize] = 0 as LogEst;
                 p_first = unsafe { (*unsafe { (*p_src).p_s_tab }).p_index };
                 if unsafe { (*p_src).fg.not_indexed() } as i32 == 0 {
-                    s_pk.p_next = p_first;
+
+                    /// The real indices of the table are only considered if the
+                    ///* NOT INDEXED qualifier is omitted from the FROM clause
+                    (s_pk.p_next = p_first);
                 }
                 p_probe = &mut s_pk;
             }
@@ -4089,7 +5134,9 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                             (unsafe { (*p_src).fg.is_correlated() } == 0) as i32 != 0 &&
                         (unsafe { (*p_src).fg.is_recursive() } == 0) as i32 != 0 &&
                     unsafe { (*p_src).fg.jointype } as i32 & 16 == 0 {
+                /// Generate auto-index WhereLoops
                 let mut r_log_size: LogEst = 0 as LogEst;
+                /// Logarithm of the number of rows in the table
                 let mut p_term: *mut WhereTerm = core::ptr::null_mut();
                 let p_wc_end: *mut WhereTerm =
                     unsafe {
@@ -4116,6 +5163,15 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                                 unsafe {
                                     *unsafe { (*p_new).a_l_term.offset(0 as isize) } = p_term
                                 };
+
+                                /// TUNING: One-time cost for computing the automatic index is
+                                ///* estimated to be X*N*log2(N) where N is the number of rows in
+                                ///* the table being indexed and where X is 7 (LogEst=28) for normal
+                                ///* tables or 0.5 (LogEst=-10) for views and subqueries.  The value
+                                ///* of X is smaller for views and subqueries so that the query planner
+                                ///* will be more aggressive about generating automatic indexes for
+                                ///* those objects, since there is no opportunity to add schema
+                                ///* indexes on subqueries and views.
                                 unsafe {
                                     (*p_new).r_setup =
                                         (r_log_size as i32 + r_size as i32) as LogEst
@@ -4128,6 +5184,11 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                                 if (unsafe { (*p_new).r_setup } as i32) < 0 {
                                     unsafe { (*p_new).r_setup = 0 as LogEst };
                                 }
+
+                                /// TUNING: Each index lookup yields 20 rows in the table.  This
+                                ///* is more than the usual guess of 10 rows, since we have no way
+                                ///* of knowing how selective the index will ultimately be.  It would
+                                ///* not be unreasonable to make this value much larger.
                                 unsafe { (*p_new).n_out = 43 as LogEst };
                                 { let _ = 0; };
                                 unsafe {
@@ -4164,6 +5225,8 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                                                 unsafe { (*p_src).fg.jointype }, p_wc,
                                                 unsafe { (*p_probe).p_part_idx_where } as *const Expr) == 0)
                                         as i32 != 0 {
+
+                            /// See ticket [98d973b8f5]
                             break '__c59;
                         }
                         if unsafe { (*p_probe).b_no_query() } != 0 { break '__c59; }
@@ -4188,13 +5251,31 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                         b =
                             index_might_help_with_order_by(unsafe { &*p_builder_1 },
                                 unsafe { &*p_probe }, unsafe { (*p_src).i_cursor });
+
+                        /// The ONEPASS_DESIRED flags never occurs together with ORDER BY
                         { let _ = 0; };
                         if unsafe { (*p_probe).idx_type() } as i32 == 3 {
+
+                            /// Integer primary key index
                             unsafe { (*p_new).ws_flags = 256 as u32 };
+
+                            /// Full table scan
                             unsafe {
                                 (*p_new).i_sort_idx =
                                     if b != 0 { i_sort_idx } else { 0 } as u8
                             };
+
+                            /// TUNING: Cost of full table scan is 3.0*N.  The 3.0 factor is an
+                            ///* extra cost designed to discourage the use of full table scans,
+                            ///* since index lookups have better worst-case performance if our
+                            ///* stat guesses are wrong.  Reduce the 3.0 penalty slightly
+                            ///* (to 2.75) if we have valid STAT4 information for the table.
+                            ///* At 2.75, a full table scan is preferred over using an index on
+                            ///* a column with just two distinct values where each value has about
+                            ///* an equal number of appearances.  Without STAT4 data, we still want
+                            ///* to use an index in that case, since the constraint might be for
+                            ///* the scarcer of the two values, and in that case an index lookup is
+                            ///* better.
                             unsafe { (*p_new).r_run = (r_size as i32 + 16) as LogEst };
                             where_loop_output_adjust(unsafe { &*p_wc },
                                 unsafe { &mut *p_new }, r_size);
@@ -4282,6 +5363,10 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                                     (*p_new).i_sort_idx =
                                         if b != 0 { i_sort_idx } else { 0 } as u8
                                 };
+
+                                /// The cost of visiting the index rows is N*K, where K is
+                                ///* between 1.1 and 3.0, depending on the relative sizes of the
+                                ///* index and table rows.
                                 unsafe {
                                     (*p_new).r_run =
                                         (r_size as i32 + 1 +
@@ -4289,7 +5374,13 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                                                     unsafe { (*p_tab).sz_tab_row } as i32) as LogEst
                                 };
                                 if m != 0 as u64 {
+                                    /// If this is a non-covering index scan, add in the cost of
+                                    ///* doing table lookups.  The cost will be 3x the number of
+                                    ///* lookups.  Take into account WHERE clause terms that can be
+                                    ///* satisfied using just the index, and that do not require a
+                                    ///* table lookup.
                                     let mut n_lookup: LogEst = (r_size as i32 + 16) as LogEst;
+                                    /// Base cost:  N*3
                                     let mut ii: i32 = 0;
                                     let i_cur: i32 = unsafe { (*p_src).i_cursor };
                                     let p_wc2: *const WhereClause =
@@ -4350,6 +5441,11 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
                             where_loop_add_btree_index(p_builder_1, p_src, p_probe,
                                 0 as LogEst);
                         if unsafe { (*p_builder_1).bld_flags1 } as i32 == 1 {
+
+                            /// If a non-unique index is used, or if a prefix of the key for
+                            ///* unique index is used (making the index functionally non-unique)
+                            ///* then the sqlite_stat1 data becomes important for scoring the
+                            ///* plan
                             unsafe { (*p_tab).tab_flags |= 256 as u32 };
                         }
                         break '__c59;
@@ -4373,6 +5469,7 @@ extern "C" fn where_loop_add_btree(p_builder_1: *mut WhereLoopBuilder,
     }
 }
 
+///* Move the content of pSrc into pDest
 extern "C" fn where_or_move(p_dest_1: &mut WhereOrSet, p_src_1: &WhereOrSet)
     -> () {
     unsafe {
@@ -4388,6 +5485,9 @@ extern "C" fn where_or_move(p_dest_1: &mut WhereOrSet, p_src_1: &WhereOrSet)
     }
 }
 
+///* Add WhereLoop entries to handle OR terms.  This works for either
+///* btrees or virtual tables.
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_or(p_builder_1: *mut WhereLoopBuilder,
     m_prereq_1: Bitmask, m_unusable_1: Bitmask) -> i32 {
     unsafe {
@@ -4544,6 +5644,19 @@ extern "C" fn where_loop_add_or(p_builder_1: *mut WhereLoopBuilder,
                             '__b65: loop {
                                 if !(rc == 0 && i < s_sum.n as i32) { break '__b65; }
                                 '__c65: loop {
+
+                                    /// TUNING: Currently sSum.a[i].rRun is set to the sum of the costs
+                                    ///* of all sub-scans required by the OR-scan. However, due to rounding
+                                    ///* errors, it may be that the cost of the OR-scan is equal to its
+                                    ///* most expensive sub-scan. Add the smallest possible penalty
+                                    ///* (equivalent to multiplying the cost by 1.07) to ensure that
+                                    ///* this does not happen. Otherwise, for WHERE clauses such as the
+                                    ///* following where there is an index on "y":
+                                    ///*
+                                    ///*     WHERE likelihood(x=?, 0.99) OR y=?
+                                    ///*
+                                    ///* the planner may elect to "OR" together a full-table scan and an
+                                    ///* index lookup. And other similarly odd results.
                                     unsafe {
                                         (*p_new).r_run =
                                             (s_sum.a[i as usize].r_run as i32 + 1) as LogEst
@@ -4571,6 +5684,8 @@ extern "C" fn where_loop_add_or(p_builder_1: *mut WhereLoopBuilder,
     }
 }
 
+///* Add all WhereLoop objects for all tables
+#[allow(unused_doc_comments)]
 extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
     let p_w_info: *mut WhereInfo = unsafe { (*p_builder_1).p_w_info };
     let mut m_prereq: Bitmask = 0 as Bitmask;
@@ -4588,7 +5703,11 @@ extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
     let mut b_first_past_rj: i32 = 0;
     let mut has_right_cross_join: i32 = 0;
     let mut p_new: *mut WhereLoop = core::ptr::null_mut();
-    p_new = unsafe { (*p_builder_1).p_new };
+
+    /// Loop over the tables in the join, from left to right
+    (p_new = unsafe { (*p_builder_1).p_new });
+
+    /// Verify that pNew has already been initialized
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -4620,6 +5739,8 @@ extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
                     b_first_past_rj =
                         (unsafe { (*p_item).fg.jointype } as i32 & 16 != 0) as i32;
                 } else if unsafe { (*p_item).fg.from_exists() } != 0 {
+                    /// joins that result from the EXISTS-to-JOIN optimization should not
+                    ///* be moved to the left of any of their dependencies
                     let p_wc: *const WhereClause =
                         unsafe { &raw mut (*p_w_info).s_wc } as *const WhereClause;
                     let mut p_term: *const WhereTerm = core::ptr::null();
@@ -4688,6 +5809,8 @@ extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
                 m_prior |= unsafe { (*p_new).mask_self };
                 if rc != 0 || unsafe { (*db).malloc_failed } != 0 {
                     if rc == 101 {
+
+                        /// We hit the query planner search limit set by iPlanLimit
                         unsafe {
                             sqlite3_log(28,
                                 c"abbreviated query algorithm search".as_ptr() as *mut i8 as
@@ -4713,18 +5836,93 @@ extern "C" fn where_loop_add_all(p_builder_1: *mut WhereLoopBuilder) -> i32 {
     return rc;
 }
 
+///* Compute the maximum number of paths in the solver algorithm, for
+///* queries that have three or more terms in the FROM clause.  Queries with
+///* two or fewer FROM clause terms are handled by the caller.
+///*
+///* Query planning is NP-hard.  We must limit the number of paths at
+///* each step of the solver search algorithm to avoid exponential behavior.
+///*
+///* The value returned is a tuning parameter.  Currently the value is:
+///*
+///*     18    for star queries
+///*     12    otherwise
+///*
+///* For the purposes of this heuristic, a star-query is defined as a query
+///* with a central "fact" table that is joined against multiple
+///* "dimension" tables, subject to the following constraints:
+///*
+///*   (aa)  Only a five-way or larger join is considered for this
+///*         optimization.  If there are fewer than four terms in the FROM
+///*         clause, this heuristic does not apply.
+///*
+///*   (bb)  The join between the fact table and the dimension tables must
+///*         be an INNER join.  CROSS and OUTER JOINs do not qualify.
+///*
+///*   (cc)  A table must have 3 or more dimension tables in order to be
+///*         considered a fact table. (Was 4 prior to 2026-02-10.)
+///*
+///*   (dd)  A table that is a self-join cannot be a dimension table.
+///*         Dimension tables are joined against fact tables.
+///*
+///* SIDE EFFECT:  (and really the whole point of this subroutine)
+///*
+///* If pWInfo describes a star-query, then the cost for SCANs of dimension
+///* WhereLoops is increased to be slightly larger than the cost of a SCAN
+///* in the fact table.  Only SCAN costs are increased.  SEARCH costs are
+///* unchanged. This heuristic helps keep fact tables in outer loops. Without
+///* this heuristic, paths with fact tables in outer loops tend to get pruned
+///* by the mxChoice limit on the number of paths, resulting in poor query
+///* plans.  See the starschema1.test test module for examples of queries
+///* that need this heuristic to find good query plans.
+///*
+///* This heuristic can be completely disabled, so that no query is
+///* considered a star-query, using SQLITE_TESTCTRL_OPTIMIZATION to
+///* disable the SQLITE_StarQuery optimization.  In the CLI, the command
+///* to do that is:  ".testctrl opt -starquery".
+///*
+///* HISTORICAL NOTES:
+///*
+///* This optimization was first added on 2024-05-09 by check-in 38db9b5c83d.
+///* The original optimization reduced the cost and output size estimate for
+///* fact tables to help them move to outer loops.  But months later (as people
+///* started upgrading) performance regression reports started caming in,
+///* including:
+///*
+///*    forum post b18ef983e68d06d1 (2024-12-21)
+///*    forum post 0025389d0860af82 (2025-01-14)
+///*    forum post d87570a145599033 (2025-01-17)
+///*
+///* To address these, the criteria for a star-query was tightened to exclude
+///* cases where the fact and dimensions are separated by an outer join, and
+///* the affect of star-schema detection was changed to increase the rRun cost
+///* on just full table scans of dimension tables, rather than reducing costs
+///* in the all access methods of the fact table.
+#[allow(unused_doc_comments)]
 extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
     let n_loop: i32 = (*p_w_info_1).n_level as i32;
+    /// Number of terms in the join
     let mut p_w_loop: *mut WhereLoop = core::ptr::null_mut();
     if n_loop >= 4 && ((*p_w_info_1).b_star_done() == 0) as i32 != 0 &&
             unsafe { (*unsafe { (*(*p_w_info_1).p_parse).db }).db_opt_flags }
                     & 536870912 as u32 == 0 as u32 {
         let mut a_from_tabs: *mut SrcItem = core::ptr::null_mut();
+        /// All terms of the FROM clause
         let mut i_from_idx: i32 = 0;
+        /// Term of FROM clause is the candidate fact-table
         let mut m: Bitmask = 0 as Bitmask;
+        /// Bitmask for candidate fact-table
         let mut m_self_join: Bitmask = 0 as Bitmask;
+        /// Tables that cannot be dimension tables
         let mut p_start: *mut WhereLoop = core::ptr::null_mut();
+
+        /// Where to start searching for dimension-tables
         (*p_w_info_1).set_b_star_done(1 as u32 as u32);
+
+        /// Only do this computation once
+        /// Look for fact tables with three or more dimensions where the
+        ///* dimension tables are not separately from the fact tables by an outer
+        ///* or cross join.  Adjust cost weights if found.
         { let _ = 0; };
         a_from_tabs =
             unsafe { (*(*p_w_info_1).p_tab_list).a.as_ptr() } as *mut SrcItem;
@@ -4735,11 +5933,16 @@ extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
                 if !(i_from_idx < n_loop) { break '__b69; }
                 '__c69: loop {
                     let mut n_dep: i32 = 0;
+                    /// Number of dimension tables
                     let mut mx_run: LogEst = 0 as LogEst;
+                    /// Maximum SCAN cost of a fact table
                     let mut m_seen: Bitmask = 0 as Bitmask;
+                    /// Mask of dimension tables
                     let mut p_fact_tab: *const SrcItem = core::ptr::null();
-                    p_fact_tab =
-                        unsafe { a_from_tabs.offset(i_from_idx as isize) };
+
+                    /// The candidate fact table
+                    (p_fact_tab =
+                        unsafe { a_from_tabs.offset(i_from_idx as isize) });
                     if unsafe { (*p_fact_tab).fg.jointype } as i32 & (32 | 2) !=
                             0 {
                         if i_from_idx + 3 > n_loop { break '__b69; }
@@ -4778,8 +5981,16 @@ extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
                         }
                     }
                     if n_dep <= 2 { break '__c69; }
+
+                    /// If we reach this point, it means that pFactTab is a fact table
+                    ///* with four or more dimensions connected by inner joins.  Proceed
+                    ///* to make cost adjustments.
+                    /// 0x80000
                     (*p_w_info_1).set_b_star_used(1 as u32 as u32);
-                    mx_run = -32768 as LogEst;
+
+                    /// Compute the maximum cost of any WhereLoop for the
+                    ///* fact table plus one epsilon
+                    (mx_run = -32768 as LogEst);
                     {
                         p_w_loop = p_start;
                         '__b72: loop {
@@ -4812,6 +6023,9 @@ extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
                                 }
                                 if unsafe { (*p_w_loop).n_l_term } != 0 { break '__c73; }
                                 if (unsafe { (*p_w_loop).r_run } as i32) < mx_run as i32 {
+
+                                    /// 0x80000
+                                    /// WHERETRACE_ENABLED
                                     unsafe { (*p_w_loop).r_run = mx_run };
                                 }
                                 break '__c73;
@@ -4836,18 +6050,64 @@ extern "C" fn compute_mx_choice(p_w_info_1: &mut WhereInfo) -> i32 {
     return if (*p_w_info_1).b_star_used() != 0 { 18 } else { 12 };
 }
 
+/// Implementation of the order-by-subquery optimization:
+///*
+///* WhereLoop pLoop, which the iLoop-th term of the nested loop, is really
+///* a subquery or CTE that has an ORDER BY clause.  See if any of the terms
+///* in the subquery ORDER BY clause will satisfy pOrderBy from the outer
+///* query.  Mark off all satisfied terms (by setting bits in *pOBSat) and
+///* return TRUE if they do.  If not, return false.
+///*
+///* Example:
+///*
+///*    CREATE TABLE t1(a,b,c, PRIMARY KEY(a,b));
+///*    CREATE TABLE t2(x,y);
+///*    WITH t3(p,q) AS MATERIALIZED (SELECT x+y, x-y FROM t2 ORDER BY x+y)
+///*       SELECT * FROM t3 JOIN t1 ON a=q ORDER BY p, b;
+///*
+///* The CTE named "t3" comes out in the natural order of "p", so the first
+///* first them of "ORDER BY p,b" is satisfied by a sequential scan of "t3"
+///* and sorting only needs to occur on the second term "b".
+///*
+///* Limitations:
+///*
+///* (1)  The optimization is not applied if the outer ORDER BY contains
+///*      a COLLATE clause.  The optimization might be applied if the
+///*      outer ORDER BY uses NULLS FIRST, NULLS LAST, ASC, and/or DESC as
+///*      long as the subquery ORDER BY does the same.  But if the
+///*      outer ORDER BY uses COLLATE, even a redundant COLLATE, the
+///*      optimization is bypassed.
+///*
+///* (2)  The subquery ORDER BY terms must exactly match subquery result
+///*      columns, including any COLLATE annotations.  This routine relies
+///*      on iOrderByCol to do matching between order by terms and result
+///*      columns, and iOrderByCol will not be set if the result column
+///*      and ORDER BY collations differ.
+///*
+///* (3)  The subquery and outer ORDER BY can be in opposite directions as
+///*      long as  the subquery is materialized.  If the subquery is
+///*      implemented as a co-routine, the sort orders must be in the same
+///*      direction because there is no way to run a co-routine backwards.
+#[allow(unused_doc_comments)]
 extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
     p_loop_1: &WhereLoop, i_loop_1: i32, i_cur_1: i32,
     p_order_by_1: &ExprList, p_rev_mask_1: &mut Bitmask,
     p_ob_sat_1: &mut Bitmask) -> i32 {
     unsafe {
         let mut i_ob: i32 = 0;
+        /// Index into pOrderBy->a[]
         let mut j_sub: i32 = 0;
+        /// Index into pSubOB->a[]
         let mut rev: u8 = 0 as u8;
+        /// True if iOB and jSub sort in opposite directions
         let mut rev_idx: u8 = 0 as u8;
+        /// Sort direction for jSub
         let mut p_ob_expr: *const Expr = core::ptr::null();
+        /// Current term of outer ORDER BY
         let mut p_sub_ob: *const ExprList = core::ptr::null();
-        p_sub_ob = (*p_loop_1).u.btree.p_order_by;
+
+        /// Complete ORDER BY on the subquery
+        (p_sub_ob = (*p_loop_1).u.btree.p_order_by);
         { let _ = 0; };
         {
             i_ob = 0;
@@ -4900,6 +6160,7 @@ extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
                                 (*((*p_order_by_1).a.as_ptr() as
                                                     *mut ExprListItem).offset(i_ob as isize)).fg.sort_flags
                             };
+                        /// sortFlags for iOB
                         let sf_sub: u8 =
                             unsafe {
                                 (*(unsafe { (*p_sub_ob).a.as_ptr() } as
@@ -4915,6 +6176,8 @@ extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
                             rev = (rev_idx as i32 ^ sf_ob as i32 & 1) as u8;
                             if rev != 0 {
                                 if (*p_loop_1).ws_flags & 33554432 as u32 != 0 as u32 {
+
+                                    /// Cannot run a co-routine in reverse order
                                     break '__b75;
                                 }
                                 *p_rev_mask_1 |= (1 as Bitmask) << i_loop_1;
@@ -4934,38 +6197,98 @@ extern "C" fn where_path_match_subquery_ob(p_w_info_1: &WhereInfo,
     }
 }
 
+///* Examine a WherePath (with the addition of the extra WhereLoop of the 6th
+///* parameters) to see if it outputs rows in the requested ORDER BY
+///* (or GROUP BY) without requiring a separate sort operation.  Return N:
+///*
+///*   N>0:   N terms of the ORDER BY clause are satisfied
+///*   N==0:  No terms of the ORDER BY clause are satisfied
+///*   N<0:   Unknown yet how many terms of ORDER BY might be satisfied.  
+///*
+///* Note that processing for WHERE_GROUPBY and WHERE_DISTINCTBY is not as
+///* strict.  With GROUP BY and DISTINCT the only requirement is that
+///* equivalent rows appear immediately adjacent to one another.  GROUP BY
+///* and DISTINCT do not require rows to appear in any particular order as long
+///* as equivalent rows are grouped together.  Thus for GROUP BY and DISTINCT
+///* the pOrderBy terms can be matched in any order.  With ORDER BY, the
+///* pOrderBy terms must be matched in strict left-to-right order.
+#[allow(unused_doc_comments)]
 extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
     p_order_by_1: *mut ExprList, p_path_1: &WherePath, wctrl_flags_1: u16,
     n_loop_1: u16, p_last_1: *mut WhereLoop, p_rev_mask_1: *mut Bitmask)
     -> i8 {
     unsafe {
         let mut rev_set: u8 = 0 as u8;
+        /// True if rev is known
         let mut rev: u8 = 0 as u8;
+        /// Composite sort order
         let mut rev_idx: u8 = 0 as u8;
+        /// Index sort order
         let mut is_order_distinct: u8 = 0 as u8;
+        /// All prior WhereLoops are order-distinct
         let mut distinct_columns: u8 = 0 as u8;
+        /// True if the loop has UNIQUE NOT NULL columns
         let mut is_match: u8 = 0 as u8;
+        /// iColumn matches a term of the ORDER BY clause
         let mut eq_op_mask: u16 = 0 as u16;
+        /// Allowed equality operators
         let mut n_key_col: u16 = 0 as u16;
+        /// Number of key columns in pIndex
         let mut n_column: u16 = 0 as u16;
+        /// Total number of ordered columns in the index
         let mut n_order_by: u16 = 0 as u16;
+        /// Number terms in the ORDER BY clause
         let mut i_loop: i32 = 0;
+        /// Index of WhereLoop in pPath being processed
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut i_cur: i32 = 0;
+        /// Cursor number for current WhereLoop
         let mut i_column: i32 = 0;
+        /// A column number within table iCur
         let mut p_loop: *mut WhereLoop = core::ptr::null_mut();
+        /// Current WhereLoop being processed.
         let mut p_term: *mut WhereTerm = core::ptr::null_mut();
+        /// A single term of the WHERE clause
         let mut p_ob_expr: *mut Expr = core::ptr::null_mut();
+        /// An expression from the ORDER BY clause
         let mut p_coll: *const CollSeq = core::ptr::null();
+        /// COLLATE function from an ORDER BY clause term
         let mut p_index: *const Index = core::ptr::null();
+        /// The index associated with pLoop
         let db: *const Sqlite3 =
             unsafe { (*unsafe { (*p_w_info_1).p_parse }).db } as
                 *const Sqlite3;
+        /// Database connection
         let mut ob_sat: Bitmask = 0 as Bitmask;
+        /// Mask of ORDER BY terms satisfied so far
         let mut ob_done: Bitmask = 0 as Bitmask;
+        /// Mask of all ORDER BY terms
         let mut order_distinct_mask: Bitmask = 0 as Bitmask;
+        /// Mask of all well-ordered loops
         let mut ready: Bitmask = 0 as Bitmask;
+
+        /// Mask of inner loops
+        ///* We say the WhereLoop is "one-row" if it generates no more than one
+        ///* row of output.  A WhereLoop is one-row if all of the following are true:
+        ///*  (a) All index columns match with WHERE_COLUMN_EQ.
+        ///*  (b) The index is unique
+        ///* Any WhereLoop with an WHERE_COLUMN_EQ constraint on the rowid is one-row.
+        ///* Every one-row WhereLoop will have the WHERE_ONEROW bit set in wsFlags.
+        ///*
+        ///* We say the WhereLoop is "order-distinct" if the set of columns from
+        ///* that WhereLoop that are in the ORDER BY clause are different for every
+        ///* row of the WhereLoop.  Every one-row WhereLoop is automatically
+        ///* order-distinct.   A WhereLoop that has no columns in the ORDER BY clause
+        ///* is not order-distinct. To be order-distinct is not quite the same as being
+        ///* UNIQUE since a UNIQUE column or index can have multiple rows that
+        ///* are NULL and NULL values are equivalent for the purpose of order-distinct.
+        ///* To be order-distinct, the columns must be UNIQUE and NOT NULL.
+        ///*
+        ///* The rowid for a table is always UNIQUE and NOT NULL so whenever the
+        ///* rowid appears in the ORDER BY clause, the corresponding WhereLoop is
+        ///* automatically order-distinct.
         { let _ = 0; };
         if n_loop_1 != 0 &&
                 unsafe { (*db).db_opt_flags } & 64 as u32 != 0 as u32 {
@@ -4977,7 +6300,9 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
             {
             return 0 as i8;
         }
-        is_order_distinct = 1 as u8;
+
+        /// Cannot optimize overly large ORDER BYs
+        (is_order_distinct = 1 as u8);
         ob_done = ((1 as Bitmask) << n_order_by) - 1 as Bitmask;
         order_distinct_mask = 0 as Bitmask;
         ready = 0 as Bitmask;
@@ -5003,7 +6328,12 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                         if unsafe { (*p_loop).u.vtab.is_ordered } != 0 &&
                                 unsafe { (*p_w_info_1).p_order_by } == p_order_by_1 {
                             ob_sat = ob_done;
-                        } else { is_order_distinct = 0 as u8; }
+                        } else {
+
+                            /// No further ORDER BY terms may be matched. So this call should
+                            ///* return >=0, not -1. Clear isOrderDistinct to ensure it does so.
+                            (is_order_distinct = 0 as u8);
+                        }
                         break '__b76;
                     }
                     i_cur =
@@ -5041,6 +6371,10 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                                         eq_op_mask as u32, core::ptr::null_mut());
                                 if p_term == core::ptr::null_mut() { break '__c77; }
                                 if unsafe { (*p_term).e_operator } as i32 == 1 {
+
+                                    /// IN terms are only valid for sorting in the ORDER BY LIMIT
+                                    ///* optimization, and then only if they are actually used
+                                    ///* by the query plan
                                     { let _ = 0; };
                                     {
                                         j = 0;
@@ -5116,12 +6450,20 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                             n_column = unsafe { (*p_index).n_column };
                             { let _ = 0; };
                             { let _ = 0; };
-                            is_order_distinct =
+
+                            /// All relevant terms of the index must also be non-NULL in order
+                            ///* for isOrderDistinct to be true.  So the isOrderDistinct value
+                            ///* computed here might be a false positive.  Corrections will be
+                            ///* made at tag-20210426-1 below
+                            (is_order_distinct =
                                 (unsafe { (*p_index).on_error } as i32 != 0 &&
                                         unsafe { (*p_loop).ws_flags } & 32768 as u32 == 0 as u32) as
-                                    u8;
+                                    u8);
                         }
-                        rev = { rev_set = 0 as u8; rev_set };
+
+                        /// Loop through all columns of the index and deal with the ones
+                        ///* that are not constrained by == or IN.
+                        (rev = { rev_set = 0 as u8; rev_set });
                         distinct_columns = 0 as u8;
                         {
                             j = 0;
@@ -5129,6 +6471,8 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                                 if !(j < n_column as i32) { break '__b79; }
                                 '__c79: loop {
                                     let mut b_once: u8 = 1 as u8;
+
+                                    /// True to run the ORDER BY search loop
                                     { let _ = 0; };
                                     if j < unsafe { (*p_loop).u.btree.n_eq } as i32 &&
                                             j >= unsafe { (*p_loop).n_skip } as i32 {
@@ -5144,6 +6488,10 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                                             }
                                             break '__c79;
                                         } else if e_op as i32 & 1 != 0 {
+                                            /// ALWAYS() justification: eOp is an equality operator due to the
+                                            ///* j<pLoop->u.btree.nEq constraint above.  Any equality other
+                                            ///* than WO_IN is captured by the previous "if".  So this one
+                                            ///* always has to be WO_IN.
                                             let p_x: *mut Expr =
                                                 unsafe {
                                                     (*unsafe {
@@ -5201,7 +6549,10 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
                                         }
                                         if i_column == -2 { is_order_distinct = 0 as u8; }
                                     }
-                                    is_match = 0 as u8;
+
+                                    /// Find the ORDER BY term that corresponds to the j-th column
+                                    ///* of the index and mark that ORDER BY term having been satisfied.
+                                    (is_match = 0 as u8);
                                     {
                                         i = 0;
                                         '__b81: loop {
@@ -5384,26 +6735,54 @@ extern "C" fn where_path_satisfies_order_by(p_w_info_1: *mut WhereInfo,
     }
 }
 
+///* Return the cost of sorting nRow rows, assuming that the keys have
+///* nOrderby columns and that the first nSorted columns are already in
+///* order.
+#[allow(unused_doc_comments)]
 extern "C" fn where_sorting_cost(p_w_info_1: &WhereInfo, mut n_row_1: LogEst,
     n_order_by_1: i32, n_sorted_1: i32) -> LogEst {
     unsafe {
+        /// Estimated cost of a full external sort, where N is
+        ///* the number of rows to sort is:
+        ///*
+        ///*   cost = (K * N * log(N)).
+        ///*
+        ///* Or, if the order-by clause has X terms but only the last Y
+        ///* terms are out of order, then block-sorting will reduce the
+        ///* sorting cost to:
+        ///*
+        ///*   cost = (K * N * log(N)) * (Y/X)
+        ///*
+        ///* The constant K is at least 2.0 but will be larger if there are a
+        ///* large number of columns to be sorted, as the sorting time is
+        ///* proportional to the amount of content to be sorted.  The algorithm
+        ///* does not currently distinguish between fat columns (BLOBs and TEXTs)
+        ///* and skinny columns (INTs).  It just uses the number of columns as
+        ///* an approximation for the row width.
+        ///*
+        ///* And extra factor of 2.0 or 3.0 is added to the sorting cost if the sort
+        ///* is built using OP_IdxInsert and OP_Sort rather than with OP_SorterInsert.
         let mut r_sort_cost: LogEst = 0 as LogEst;
         let mut n_col: LogEst = 0 as LogEst;
         { let _ = 0; };
         { let _ = 0; };
-        n_col =
+
+        /// TUNING: sorting cost proportional to the number of output columns:
+        (n_col =
             unsafe {
                 sqlite3_log_est(((unsafe {
                                     (*unsafe { (*(*p_w_info_1).p_select).p_e_list }).n_expr
                                 } + 59) / 30) as u64)
-            };
+            });
         r_sort_cost = (n_row_1 as i32 + n_col as i32) as LogEst;
         if n_sorted_1 > 0 {
-            r_sort_cost +=
+
+            /// Scale the result by (Y/X)
+            (r_sort_cost +=
                 (unsafe {
                                 sqlite3_log_est(((n_order_by_1 - n_sorted_1) * 100 /
                                             n_order_by_1) as u64)
-                            } as i32 - 66) as LogEst;
+                            } as i32 - 66) as LogEst);
         }
         if (*p_w_info_1).wctrl_flags as i32 & 16384 != 0 {
             r_sort_cost += 10 as LogEst;
@@ -5422,6 +6801,15 @@ extern "C" fn where_sorting_cost(p_w_info_1: &WhereInfo, mut n_row_1: LogEst,
     }
 }
 
+///* Two WhereLoop objects, pCandidate and pBaseline, are known to have the
+///* same cost.  Look deep into each to see if pCandidate is even slightly
+///* better than pBaseline.  Return false if it is, if pCandidate is is preferred.
+///* Return true if pBaseline is preferred or if we cannot tell the difference.
+///*
+///*    Result       Meaning
+///*    --------     ----------------------------------------------------------
+///*    true         We cannot tell the difference in pCandidate and pBaseline
+///*    false        pCandidate seems like a better choice than pBaseline
 extern "C" fn where_loop_is_no_better(p_candidate_1: &WhereLoop,
     p_baseline_1: &WhereLoop) -> i32 {
     unsafe {
@@ -5437,31 +6825,62 @@ extern "C" fn where_loop_is_no_better(p_candidate_1: &WhereLoop,
     }
 }
 
+///* Given the list of WhereLoop objects at pWInfo->pLoops, this routine
+///* attempts to find the lowest cost path that visits each WhereLoop
+///* once.  This path is then loaded into the pWInfo->a[].pWLoop fields.
+///*
+///* Assume that the total number of output rows that will need to be sorted
+///* will be nRowEst (in the 10*log2 representation).  Or, ignore sorting
+///* costs if nRowEst==0.
+///*
+///* Return SQLITE_OK on success or SQLITE_NOMEM of a memory allocation
+///* error occurs.
+#[allow(unused_doc_comments)]
 extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
     n_row_est_1: LogEst) -> i32 {
     unsafe {
         let mut mx_choice: i32 = 0;
+        /// Maximum number of simultaneous paths tracked
         let mut n_loop: i32 = 0;
+        /// Number of terms in the join
         let mut p_parse: *mut Parse = core::ptr::null_mut();
+        /// Parsing context
         let mut i_loop: i32 = 0;
+        /// Loop counter over the terms of the join
         let mut ii: i32 = 0;
         let mut jj: i32 = 0;
+        /// Loop counters
         let mut mx_i: i32 = 0;
+        /// Index of next entry to replace
         let mut n_order_by: i32 = 0;
+        /// Number of ORDER BY clause terms
         let mut mx_cost: LogEst = 0 as LogEst;
+        /// Maximum cost of a set of paths
         let mut mx_unsort: LogEst = 0 as LogEst;
+        /// Maximum unsorted cost of a set of path
         let mut n_to: i32 = 0;
         let mut n_from: i32 = 0;
+        /// Number of valid entries in aTo[] and aFrom[]
         let mut a_from: *mut WherePath = core::ptr::null_mut();
+        /// All nFrom paths at the previous level
         let mut a_to: *mut WherePath = core::ptr::null_mut();
+        /// The nTo best paths at the current level
         let mut p_from: *mut WherePath = core::ptr::null_mut();
+        /// An element of aFrom[] that we are working on
         let mut p_to: *mut WherePath = core::ptr::null_mut();
+        /// An element of aTo[] that we are working on
         let mut p_w_loop: *mut WhereLoop = core::ptr::null_mut();
+        /// One of the WhereLoop objects
         let mut p_x: *mut *mut WhereLoop = core::ptr::null_mut();
+        /// Used to divy up the pSpace memory
         let mut a_sort_cost: *mut LogEst = core::ptr::null_mut();
+        /// Sorting and partial sorting costs
         let mut p_space: *mut i8 = core::ptr::null_mut();
+        /// Temporary memory used by this routine
         let mut n_space: i32 = 0;
-        p_parse = unsafe { (*p_w_info_1).p_parse };
+
+        /// Bytes of space allocated at pSpace
+        (p_parse = unsafe { (*p_w_info_1).p_parse });
         n_loop = unsafe { (*p_w_info_1).n_level } as i32;
         if n_loop <= 1 {
             mx_choice = 1;
@@ -5478,10 +6897,12 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
             n_order_by =
                 unsafe { (*unsafe { (*p_w_info_1).p_order_by }).n_expr };
         }
-        n_space =
+
+        /// Allocate and initialize space for aTo, aFrom and aSortCost[]
+        (n_space =
             ((core::mem::size_of::<WherePath>() as u64 +
                             core::mem::size_of::<*mut WhereLoop>() as u64 *
-                                n_loop as u64) * mx_choice as u64 * 2 as u64) as i32;
+                                n_loop as u64) * mx_choice as u64 * 2 as u64) as i32);
         n_space +=
             (core::mem::size_of::<LogEst>() as u64 * n_order_by as u64) as
                 i32;
@@ -5527,7 +6948,21 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
             }
         }
         if n_order_by != 0 {
-            a_sort_cost = p_x as *mut LogEst;
+
+            /// If there is an ORDER BY clause and it is not being ignored, set up
+            ///* space for the aSortCost[] array. Each element of the aSortCost array
+            ///* is either zero - meaning it has not yet been initialized - or the
+            ///* cost of sorting nRowEst rows of data where the first X terms of
+            ///* the ORDER BY clause are already in order, where X is the array
+            ///* index.
+            (a_sort_cost = p_x as *mut LogEst);
+
+            /// If there is an ORDER BY clause and it is not being ignored, set up
+            ///* space for the aSortCost[] array. Each element of the aSortCost array
+            ///* is either zero - meaning it has not yet been initialized - or the
+            ///* cost of sorting nRowEst rows of data where the first X terms of
+            ///* the ORDER BY clause are already in order, where X is the array
+            ///* index.
             unsafe {
                 memset(a_sort_cost as *mut (), 0,
                     core::mem::size_of::<LogEst>() as u64 * n_order_by as u64)
@@ -5536,18 +6971,31 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
         { let _ = 0; };
         { let _ = 0; };
         unsafe {
-            (*a_from.offset(0 as isize)).n_row =
+
+            /// Seed the search with a single WherePath containing zero WhereLoops.
+            ///*
+            ///* TUNING: Do not let the number of iterations go above 28.  If the cost
+            ///* of computing an automatic index is not paid back within the first 28
+            ///* rows, then do not use the automatic index.
+            ((*a_from.offset(0 as isize)).n_row =
                 if (unsafe { (*p_parse).n_query_loop } as i32) < 48 {
                         (unsafe { (*p_parse).n_query_loop }) as i32
-                    } else { 48 } as LogEst
+                    } else { 48 } as LogEst)
         };
         { let _ = 0; };
         n_from = 1;
         { let _ = 0; };
         if n_order_by != 0 {
             unsafe {
-                (*a_from.offset(0 as isize)).is_ordered =
-                    if n_loop > 0 { -1 } else { n_order_by } as i8
+
+                /// If nLoop is zero, then there are no FROM terms in the query. Since
+                ///* in this case the query may return a maximum of one row, the results
+                ///* are already in the requested order. Set isOrdered to nOrderBy to
+                ///* indicate this. Or, if nLoop is greater than zero, set isOrdered to
+                ///* -1, indicating that the result set may or may not be ordered,
+                ///* depending on the loops added to the current plan.
+                ((*a_from.offset(0 as isize)).is_ordered =
+                    if n_loop > 0 { -1 } else { n_order_by } as i8)
             };
         }
         {
@@ -5567,10 +7015,15 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                                         if !(!(p_w_loop).is_null()) { break '__b87; }
                                         '__c87: loop {
                                             let mut n_out: LogEst = 0 as LogEst;
+                                            /// Rows visited by (pFrom+pWLoop)
                                             let mut r_cost: LogEst = 0 as LogEst;
+                                            /// Cost of path (pFrom+pWLoop)
                                             let mut r_unsort: LogEst = 0 as LogEst;
+                                            /// Unsorted cost of (pFrom+pWLoop)
                                             let mut is_ordered: i8 = 0 as i8;
+                                            /// isOrdered for (pFrom+pWLoop)
                                             let mut mask_new: Bitmask = 0 as Bitmask;
+                                            /// Mask of src visited by (..)
                                             let mut rev_mask: Bitmask = 0 as Bitmask;
                                             if unsafe { (*p_w_loop).prereq } &
                                                         !unsafe { (*p_from).mask_loop } != 0 as u64 {
@@ -5582,12 +7035,20 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                                             }
                                             if unsafe { (*p_w_loop).ws_flags } & 16384 as u32 !=
                                                         0 as u32 && (unsafe { (*p_from).n_row } as i32) < 3 {
+
+                                                /// Do not use an automatic index if the this loop is expected
+                                                ///* to run less than 1.25 times.  It is tempting to also exclude
+                                                ///* automatic index usage on an outer loop, but sometimes an automatic
+                                                ///* index is useful in the outer loop of a correlated subquery.
                                                 { let _ = 0; };
                                                 break '__c87;
                                             }
-                                            r_unsort =
+
+                                            /// At this point, pWLoop is a candidate to be the next loop.
+                                            ///* Compute its cost
+                                            (r_unsort =
                                                 (unsafe { (*p_w_loop).r_run } as i32 +
-                                                        unsafe { (*p_from).n_row } as i32) as LogEst;
+                                                        unsafe { (*p_from).n_row } as i32) as LogEst);
                                             if unsafe { (*p_w_loop).r_setup } != 0 {
                                                 r_unsort =
                                                     unsafe {
@@ -5624,11 +7085,16 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                                                                 n_order_by, is_ordered as i32)
                                                     };
                                                 }
-                                                r_cost =
+
+                                                /// TUNING:  Add a small extra penalty (3) to sorting as an
+                                                ///* extra encouragement to the query planner to select a plan
+                                                ///* where the rows emerge in the correct order without any sorting
+                                                ///* required.
+                                                (r_cost =
                                                     (unsafe {
                                                                     sqlite3_log_est_add(r_unsort,
                                                                         unsafe { *a_sort_cost.offset(is_ordered as isize) })
-                                                                } as i32 + 3) as LogEst;
+                                                                } as i32 + 3) as LogEst);
                                             } else { r_cost = r_unsort; r_unsort -= 2 as LogEst; }
                                             {
                                                 { jj = 0; p_to = a_to };
@@ -5658,12 +7124,23 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                                                         (r_cost as i32 > mx_cost as i32 ||
                                                             r_cost as i32 == mx_cost as i32 &&
                                                                 r_unsort as i32 >= mx_unsort as i32) {
+
+                                                    /// The current candidate is no better than any of the mxChoice
+                                                    ///* paths currently in the best-so-far buffer.  So discard
+                                                    ///* this candidate as not viable.
+                                                    /// 0x4
                                                     break '__c87;
                                                 }
                                                 if n_to < mx_choice {
-                                                    jj =
-                                                        { let __p = &mut n_to; let __t = *__p; *__p += 1; __t };
-                                                } else { jj = mx_i; }
+
+                                                    /// Increase the size of the aTo set by one
+                                                    (jj =
+                                                        { let __p = &mut n_to; let __t = *__p; *__p += 1; __t });
+                                                } else {
+
+                                                    /// New path replaces the prior worst to keep count below mxChoice
+                                                    (jj = mx_i);
+                                                }
                                                 p_to = unsafe { a_to.offset(jj as isize) };
                                             } else {
                                                 if (unsafe { (*p_to).r_cost } as i32) < r_cost as i32 ||
@@ -5684,6 +7161,8 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                                                     break '__c87;
                                                 }
                                             }
+
+                                            /// pWLoop is a winner.  Add it to the set of best so far
                                             unsafe {
                                                 (*p_to).mask_loop =
                                                     unsafe { (*p_from).mask_loop } |
@@ -5752,7 +7231,10 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                             };
                         }
                     }
-                    p_from = a_to;
+
+                    /// >=2
+                    /// Swap the roles of aFrom and aTo for the next generation
+                    (p_from = a_to);
                     a_to = a_from;
                     a_from = p_from;
                     n_from = n_to;
@@ -5772,6 +7254,8 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
             };
             return 1;
         }
+
+        /// Only one path is available, which is the best path
         { let _ = 0; };
         p_from = a_from;
         { let _ = 0; };
@@ -5838,6 +7322,8 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
                         unsafe { (*unsafe { (*p_w_info_1).p_order_by }).n_expr } {
                     unsafe { (*p_w_info_1).e_distinct = 2 as u8 };
                 }
+
+                /// vvv--- See check-in [12ad822d9b827777] on 2023-03-16 ---vvv
                 { let _ = 0; };
             } else {
                 unsafe {
@@ -5900,6 +7386,8 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
             }
         }
         unsafe { (*p_w_info_1).n_row_out = unsafe { (*p_from).n_row } };
+
+        /// Free temporary memory and return success
         unsafe {
             sqlite3_db_free_nn(unsafe { (*p_parse).db }, p_space as *mut ())
         };
@@ -5907,6 +7395,47 @@ extern "C" fn where_path_solver(p_w_info_1: *mut WhereInfo,
     }
 }
 
+///* This routine implements a heuristic designed to improve query planning.
+///* This routine is called in between the first and second call to
+///* wherePathSolver().  Hence the name "Interstage" "Heuristic".
+///*
+///* The first call to wherePathSolver() (hereafter just "solver()") computes
+///* the best path without regard to the order of the outputs.  The second call
+///* to the solver() builds upon the first call to try to find an alternative
+///* path that satisfies the ORDER BY clause.
+///*
+///* This routine looks at the results of the first solver() run, and for
+///* every FROM clause term in the resulting query plan that uses an equality
+///* constraint against an index, disable other WhereLoops for that same
+///* FROM clause term that would try to do a full-table scan.  This prevents
+///* an index search from being converted into a full-table scan in order to
+///* satisfy an ORDER BY clause, since even though we might get slightly better
+///* performance using the full-scan without sorting if the output size
+///* estimates are very precise, we might also get severe performance
+///* degradation using the full-scan if the output size estimate is too large.
+///* It is better to err on the side of caution.
+///*
+///* Except, if the first solver() call generated a full-table scan in an outer
+///* loop then stop this analysis at the first full-scan, since the second
+///* solver() run might try to swap that full-scan for another in order to
+///* get the output into the correct order.  In other words, we allow a
+///* rewrite like this:
+///*
+///*     First Solver()                      Second Solver()
+///*       |-- SCAN t1                         |-- SCAN t2
+///*       |-- SEARCH t2                       `-- SEARCH t1
+///*       `-- SORT USING B-TREE
+///*
+///* The purpose of this routine is to disallow rewrites such as:
+///*
+///*     First Solver()                      Second Solver()
+///*       |-- SEARCH t1                       |-- SCAN t2     <--- bad!
+///*       |-- SEARCH t2                       `-- SEARCH t1
+///*       `-- SORT USING B-TREE
+///*
+///* See test cases in test/whereN.test for the real-world query that
+///* originally provoked this heuristic.
+#[allow(unused_doc_comments)]
 extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
     let mut i: i32 = 0;
     {
@@ -5921,6 +7450,8 @@ extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
                         } as *const WhereLoop;
                 if p == core::ptr::null_mut() { break '__b91; }
                 if unsafe { (*p).ws_flags } & 1024 as u32 != 0 as u32 {
+
+                    /// Treat a vtab scan as similar to a full-table scan
                     break '__b91;
                 }
                 if unsafe { (*p).ws_flags } & (1 | 8 | 4) as u32 != 0 as u32 {
@@ -5936,8 +7467,12 @@ extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
                                 }
                                 if unsafe { (*p_loop).ws_flags } & (15 | 16384) as u32 !=
                                         0 as u32 {
+
+                                    /// Auto-index and index-constrained loops allowed to remain
                                     break '__c92;
                                 }
+
+                                /// WHERETRACE_ENABLED
                                 unsafe { (*p_loop).prereq = -1i32 as Bitmask };
                                 break '__c92;
                             }
@@ -5952,6 +7487,12 @@ extern "C" fn where_interstage_heuristic(p_w_info_1: &WhereInfo) -> () {
     }
 }
 
+///* Set the reverse-scan order mask to one for all tables in the query
+///* with the exception of MATERIALIZED common table expressions that have
+///* their own internal ORDER BY clauses.
+///*
+///* This implements the PRAGMA reverse_unordered_selects=ON setting.
+///* (Also SQLITE_DBCONFIG_REVERSE_SCANORDER).
 extern "C" fn where_reverse_scan_order(p_w_info_1: &mut WhereInfo) -> () {
     unsafe {
         let mut ii: i32 = 0;
@@ -5986,14 +7527,59 @@ extern "C" fn where_reverse_scan_order(p_w_info_1: &mut WhereInfo) -> () {
     }
 }
 
+/// Attempt to omit tables from a join that do not affect the result.
+///* For a table to not affect the result, the following must be true:
+///*
+///*   1) The query must not be an aggregate.
+///*   2) The table must be the RHS of a LEFT JOIN.
+///*   3) Either the query must be DISTINCT, or else the ON or USING clause
+///*      must contain a constraint that limits the scan of the table to
+///*      at most a single row.
+///*   4) The table must not be referenced by any part of the query apart
+///*      from its own USING or ON clause.
+///*   5) The table must not have an inner-join ON or USING clause if there is
+///*      a RIGHT JOIN anywhere in the query.  Otherwise the ON/USING clause
+///*      might move from the right side to the left side of the RIGHT JOIN.
+///*      Note: Due to (2), this condition can only arise if the table is
+///*      the right-most table of a subquery that was flattened into the
+///*      main query and that subquery was the right-hand operand of an
+///*      inner join that held an ON or USING clause.
+///*   6) The ORDER BY clause has 63 or fewer terms
+///*   7) The omit-noop-join optimization is enabled.
+///*
+///* Items (1), (6), and (7) are checked by the caller.
+///*
+///* For example, given:
+///*
+///*     CREATE TABLE t1(ipk INTEGER PRIMARY KEY, v1);
+///*     CREATE TABLE t2(ipk INTEGER PRIMARY KEY, v2);
+///*     CREATE TABLE t3(ipk INTEGER PRIMARY KEY, v3);
+///*
+///* then table t2 can be omitted from the following:
+///*
+///*     SELECT v1, v3 FROM t1
+///*       LEFT JOIN t2 ON (t1.ipk=t2.ipk)
+///*       LEFT JOIN t3 ON (t1.ipk=t3.ipk)
+///*
+///* or from:
+///*
+///*     SELECT DISTINCT v1, v3 FROM t1
+///*       LEFT JOIN t2
+///*       LEFT JOIN t3 ON (t1.ipk=t3.ipk)
+#[allow(unused_doc_comments)]
 extern "C" fn where_omit_noop_join(p_w_info_1: &mut WhereInfo,
     mut not_ready_1: Bitmask) -> Bitmask {
     unsafe {
         let mut i: i32 = 0;
         let mut tab_used: Bitmask = 0 as Bitmask;
         let mut has_right_join: i32 = 0;
+
+        /// Preconditions checked by the caller
         { let _ = 0; };
         { let _ = 0; };
+
+        /// These two preconditions checked by the caller combine to guarantee
+        ///* condition (1) of the header comment
         { let _ = 0; };
         { let _ = 0; };
         tab_used =
@@ -6136,6 +7722,22 @@ extern "C" fn where_omit_noop_join(p_w_info_1: &mut WhereInfo,
     }
 }
 
+///* Check to see if there are any SEARCH loops that might benefit from
+///* using a Bloom filter.  Consider a Bloom filter if:
+///*
+///*   (1)  The SEARCH happens more than N times where N is the number
+///*        of rows in the table that is being considered for the Bloom
+///*        filter.
+///*   (2)  Some searches are expected to find zero rows.  (This is determined
+///*        by the WHERE_SELFCULL flag on the term.)
+///*   (3)  Bloom-filter processing is not disabled.  (Checked by the
+///*        caller.)
+///*   (4)  The size of the table being searched is known by ANALYZE.
+///*
+///* This block of code merely checks to see if a Bloom filter would be
+///* appropriate, and if so sets the WHERE_BLOOMFILTER flag on the
+///* WhereLoop.  The implementation of the Bloom filter comes further
+///* down where the code for each WhereLoop is generated.
 extern "C" fn where_check_if_bloom_filter_is_useful(p_w_info_1: &WhereInfo)
     -> () {
     let mut i: i32 = 0;
@@ -6182,6 +7784,15 @@ extern "C" fn where_check_if_bloom_filter_is_useful(p_w_info_1: &WhereInfo)
     }
 }
 
+///* The index pIdx is used by a query and contains one or more expressions.
+///* In other words pIdx is an index on an expression.  iIdxCur is the cursor
+///* number for the index and iDataCur is the cursor number for the corresponding
+///* table.
+///*
+///* This routine adds IndexedExpr entries to the Parse->pIdxEpr field for
+///* each of the expressions in the index so that the expression code generator
+///* will know to replace occurrences of the indexed expression with
+///* references to the corresponding column of the index.
 extern "C" fn where_add_indexed_expr(p_parse_1: *mut Parse,
     p_idx_1: *mut Index, i_idx_cur_1: i32, p_tab_item_1: &SrcItem) -> () {
     let mut i: i32 = 0;
@@ -6271,6 +7882,7 @@ extern "C" fn where_add_indexed_expr(p_parse_1: *mut Parse,
     }
 }
 
+/// Allocate memory that is automatically freed when pWInfo is freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_malloc(p_w_info_1: &mut WhereInfo,
     n_byte_1: u64) -> *mut () {
@@ -6297,6 +7909,16 @@ pub extern "C" fn sqlite3_where_malloc(p_w_info_1: &mut WhereInfo,
     }
 }
 
+///* Convert OP_Column opcodes to OP_Copy in previously generated code.
+///*
+///* This routine runs over generated VDBE code and translates OP_Column
+///* opcodes into OP_Copy when the table is being accessed via co-routine
+///* instead of via table lookup.
+///*
+///* If the iAutoidxCur is not zero, then any OP_Rowid instructions on
+///* cursor iTabCur are transformed into OP_Sequence opcode for the
+///* iAutoidxCur cursor, in order to generate unique rowids for the
+///* automatic index being generated.
 extern "C" fn translate_column_to_copy(p_parse_1: &Parse, mut i_start_1: i32,
     i_tab_cur_1: i32, i_register_1: i32, i_autoidx_cur_1: i32) -> () {
     let v: *mut Vdbe = (*p_parse_1).p_vdbe;
@@ -6335,42 +7957,99 @@ extern "C" fn translate_column_to_copy(p_parse_1: &Parse, mut i_start_1: i32,
     }
 }
 
+///* Generate code to construct the Index object for an automatic index
+///* and to set up the WhereLevel object pLevel so that the code generator
+///* makes use of the automatic index.
+#[allow(unused_doc_comments)]
 extern "C" fn construct_automatic_index(p_parse_1: *mut Parse,
     p_wc_1: &WhereClause, not_ready_1: Bitmask, p_level_1: *mut WhereLevel)
     -> () {
     unsafe {
         unsafe {
             let mut n_key_col: i32 = 0;
+            /// Number of columns in the constructed index
             let mut p_term: *mut WhereTerm = core::ptr::null_mut();
+            /// A single term of the WHERE clause
             let mut p_wc_end: *mut WhereTerm = core::ptr::null_mut();
+            /// End of pWC->a[]
             let mut p_idx: *mut Index = core::ptr::null_mut();
+            /// Object describing the transient index
             let mut v: *mut Vdbe = core::ptr::null_mut();
+            /// Prepared statement under construction
             let mut addr_init: i32 = 0;
+            /// Address of the initialization bypass jump
             let mut p_table: *mut Table = core::ptr::null_mut();
+            /// The table being indexed
             let mut addr_top: i32 = 0;
+            /// Top of the index fill loop
             let mut reg_record: i32 = 0;
+            /// Register holding an index record
             let mut n: i32 = 0;
+            /// Column counter
             let mut i: i32 = 0;
+            /// Loop counter
             let mut mx_bit_col: i32 = 0;
+            /// Maximum column in pSrc->colUsed
             let mut p_coll: *const CollSeq = core::ptr::null();
+            /// Collating sequence to on a column
             let mut p_loop: *mut WhereLoop = core::ptr::null_mut();
+            /// The Loop object
             let mut z_not_used: *mut i8 = core::ptr::null_mut();
+            /// Extra space on the end of pIdx
             let mut idx_cols: Bitmask = 0 as Bitmask;
+            /// Bitmap of columns used for indexing
             let mut extra_cols: Bitmask = 0 as Bitmask;
+            /// Bitmap of additional columns
             let mut sent_warning: u8 = 0 as u8;
+            /// True if a warning has been issued
             let mut use_bloom_filter: u8 = 0 as u8;
+            /// True to also add a Bloom filter
             let mut p_partial: *mut Expr = core::ptr::null_mut();
+            /// Partial Index Expression
             let mut i_continue: i32 = 0;
+            /// Jump here to skip excluded rows
             let mut p_tab_list: *mut SrcList = core::ptr::null_mut();
+            /// The complete FROM clause
             let mut p_src: *mut SrcItem = core::ptr::null_mut();
+            /// The FROM clause term to get the next index
             let mut addr_counter: i32 = 0;
+            /// Address where integer counter is initialized
             let mut reg_base: i32 = 0;
+            /// Array of registers where record is assembled
+            /// Generate code to skip over the creation and initialization of the
+            ///* transient index on 2nd and subsequent iterations of the loop.
+            /// Count the number of columns that will be added to the index
+            ///* and used to match WHERE clause constraints
             let mut p_expr: *mut Expr = core::ptr::null_mut();
+            /// Make the automatic index a partial index if there are terms in the
+            ///* WHERE clause (or the ON clause of a LEFT join) that constrain which
+            ///* rows of the target table (pSrc) that can be used.
             let mut i_col: i32 = 0;
             let mut c_mask: Bitmask = 0 as Bitmask;
+            /// Count the number of additional columns needed to create a
+            ///* covering index.  A "covering index" is an index that contains all
+            ///* columns that are needed by the query.  With a covering index, the
+            ///* original table never needs to be accessed.  Automatic indices must
+            ///* be a covering index because the index will not be updated if the
+            ///* original table changes and the index and table cannot both be used
+            ///* if they go out of sync.
+            /// For WITHOUT ROWID tables, ensure that all PRIMARY KEY columns are
+            ///* either in the idxCols mask or in the extraCols mask
+            /// Construct the Index object to describe this index
+            /// ^-- This guarantees that the number of index columns will fit in the u16
             let mut i_col_1: i32 = 0;
             let mut c_mask_1: Bitmask = 0 as Bitmask;
             let mut p_x: *const Expr = core::ptr::null();
+            /// TH3 collate01.800
+            /// TUNING: only use a Bloom filter on an automatic index
+            ///* if one or more key columns has the ability to hold numeric
+            ///* values, since strings all have the same hash in the Bloom
+            ///* filter implementation and hence a Bloom filter on a text column
+            ///* is not usually helpful.
+            /// Add additional columns needed to make the automatic index into
+            ///* a covering index
+            /// Create the automatic index
+            /// Fill the automatic index with content
             let mut reg_yield: i32 = 0;
             let mut p_subq: *const Subquery = core::ptr::null();
             let mut __state: i32 = 0;
@@ -7141,23 +8820,54 @@ extern "C" fn construct_automatic_index(p_parse_1: *mut Parse,
     }
 }
 
+///* Generate bytecode that will initialize a Bloom filter that is appropriate
+///* for pLevel.
+///*
+///* If there are inner loops within pLevel that have the WHERE_BLOOMFILTER
+///* flag set, initialize a Bloomfilter for them as well.  Except don't do
+///* this recursive initialization if the SQLITE_BloomPulldown optimization has
+///* been turned off.
+///*
+///* When the Bloom filter is initialized, the WHERE_BLOOMFILTER flag is cleared
+///* from the loop, but the regFilter value is set to a register that implements
+///* the Bloom filter.  When regFilter is positive, the
+///* sqlite3WhereCodeOneLoopStart() will generate code to test the Bloom filter
+///* and skip the subsequence B-Tree seek if the Bloom filter indicates that
+///* no matching rows exist.
+///*
+///* This routine may only be called if it has previously been determined that
+///* the loop would benefit from a Bloom filter, and the WHERE_BLOOMFILTER bit
+///* is set.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
     mut i_level_1: i32, mut p_level_1: *mut WhereLevel, not_ready_1: Bitmask)
     -> () {
     unsafe {
         let mut addr_once: i32 = 0;
+        /// Address of opening OP_Once
         let mut addr_top: i32 = 0;
+        /// Address of OP_Rewind
         let mut addr_cont: i32 = 0;
+        /// Jump here to skip a row
         let mut p_term: *const WhereTerm = core::ptr::null();
+        /// For looping over WHERE clause terms
         let mut p_wc_end: *const WhereTerm = core::ptr::null();
+        /// Last WHERE clause term
         let p_parse: *mut Parse = unsafe { (*p_w_info_1).p_parse };
+        /// Parsing context
         let v: *mut Vdbe = unsafe { (*p_parse).p_vdbe };
+        /// VDBE under construction
         let mut p_loop: *mut WhereLoop = unsafe { (*p_level_1).p_w_loop };
+        /// The loop being coded
         let mut i_cur: i32 = 0;
+        /// Cursor for table getting the filter
         let mut saved_p_idx_epr: *mut IndexedExpr = core::ptr::null_mut();
+        /// saved copy of Parse.pIdxEpr
         let mut saved_p_idx_part_expr: *mut IndexedExpr =
             core::ptr::null_mut();
-        saved_p_idx_epr = unsafe { (*p_parse).p_idx_epr };
+
+        /// saved copy of Parse.pIdxPartExpr
+        (saved_p_idx_epr = unsafe { (*p_parse).p_idx_epr });
         saved_p_idx_part_expr = unsafe { (*p_parse).p_idx_part_expr };
         unsafe { (*p_parse).p_idx_epr = core::ptr::null_mut() };
         unsafe { (*p_parse).p_idx_part_expr = core::ptr::null_mut() };
@@ -7188,8 +8898,16 @@ extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
                             *__p
                         }
                 };
-                p_tab_list =
-                    unsafe { (*p_w_info_1).p_tab_list } as *const SrcList;
+
+                /// The Bloom filter is a Blob held in a register.  Initialize it
+                ///* to zero-filled blob of at least 80K bits, but maybe more if the
+                ///* estimated size of the table is larger.  We could actually
+                ///* measure the size of the table at run-time using OP_Count with
+                ///* P3==1 and use that value to initialize the blob.  But that makes
+                ///* testing complicated.  By basing the blob size on the value in the
+                ///* sqlite_stat1 table, testing is much easier.
+                (p_tab_list =
+                    unsafe { (*p_w_info_1).p_tab_list } as *const SrcList);
                 i_src = unsafe { (*p_level_1).i_from } as i32;
                 p_item =
                     unsafe {
@@ -7318,6 +9036,11 @@ extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
                     }
                     if unsafe { (*p_loop).ws_flags } & (4194304 | 4) as u32 ==
                             4194304 as u32 {
+
+                        /// This is a candidate for bloom-filter pull-down (early evaluation).
+                        ///* The test that WHERE_COLUMN_IN is omitted is important, as we are
+                        ///* not able to do early evaluation of bloom filters that make use of
+                        ///* the IN operator
                         break;
                     }
                 }
@@ -7333,7 +9056,94 @@ extern "C" fn sqlite3_construct_bloom_filter(p_w_info_1: *mut WhereInfo,
     }
 }
 
+///* Generate the beginning of the loop used for WHERE clause processing.
+///* The return value is a pointer to an opaque structure that contains
+///* information needed to terminate the loop.  Later, the calling routine
+///* should invoke sqlite3WhereEnd() with the return value of this function
+///* in order to complete the WHERE clause processing.
+///*
+///* If an error occurs, this routine returns NULL.
+///*
+///* The basic idea is to do a nested loop, one loop for each table in
+///* the FROM clause of a select.  (INSERT and UPDATE statements are the
+///* same as a SELECT with only a single table in the FROM clause.)  For
+///* example, if the SQL is this:
+///*
+///*       SELECT * FROM t1, t2, t3 WHERE ...;
+///*
+///* Then the code generated is conceptually like the following:
+///*
+///*      foreach row1 in t1 do       \    Code generated
+///*        foreach row2 in t2 do      |-- by sqlite3WhereBegin()
+///*          foreach row3 in t3 do   /
+///*            ...
+///*          end                     \    Code generated
+///*        end                        |-- by sqlite3WhereEnd()
+///*      end                         /
+///*
+///* Note that the loops might not be nested in the order in which they
+///* appear in the FROM clause if a different order is better able to make
+///* use of indices.  Note also that when the IN operator appears in
+///* the WHERE clause, it might result in additional nested loops for
+///* scanning through all values on the right-hand side of the IN.
+///*
+///* There are Btree cursors associated with each table.  t1 uses cursor
+///* number pTabList->a[0].iCursor.  t2 uses the cursor pTabList->a[1].iCursor.
+///* And so forth.  This routine generates code to open those VDBE cursors
+///* and sqlite3WhereEnd() generates the code to close them.
+///*
+///* The code that sqlite3WhereBegin() generates leaves the cursors named
+///* in pTabList pointing at their appropriate entries.  The [...] code
+///* can use OP_Column and OP_Rowid opcodes on these cursors to extract
+///* data from the various tables of the loop.
+///*
+///* If the WHERE clause is empty, the foreach loops must each scan their
+///* entire tables.  Thus a three-way join is an O(N^3) operation.  But if
+///* the tables have indices and there are terms in the WHERE clause that
+///* refer to those indices, a complete table scan can be avoided and the
+///* code will run much faster.  Most of the work of this routine is checking
+///* to see if there are indices that can be used to speed up the loop.
+///*
+///* Terms of the WHERE clause are also used to limit which rows actually
+///* make it to the "..." in the middle of the loop.  After each "foreach",
+///* terms of the WHERE clause that use only terms in that loop and outer
+///* loops are evaluated and if false a jump is made around all subsequent
+///* inner loops (or around the "..." if the test occurs within the inner-
+///* most loop)
+///*
+///* OUTER JOINS
+///*
+///* An outer join of tables t1 and t2 is conceptually coded as follows:
+///*
+///*    foreach row1 in t1 do
+///*      flag = 0
+///*      foreach row2 in t2 do
+///*        start:
+///*          ...
+///*          flag = 1
+///*      end
+///*      if flag==0 then
+///*        move the row2 cursor to a null row
+///*        goto start
+///*      fi
+///*    end
+///*
+///* ORDER BY CLAUSE PROCESSING
+///*
+///* pOrderBy is a pointer to the ORDER BY clause (or the GROUP BY clause
+///* if the WHERE_GROUPBY flag is set in wctrlFlags) of a SELECT statement
+///* if there is one.  If there is no ORDER BY clause or if this routine
+///* is called from an UPDATE or DELETE statement, then pOrderBy is NULL.
+///*
+///* The iIdxCur parameter is the cursor number of an index.  If
+///* WHERE_OR_SUBCLAUSE is set, iIdxCur is the cursor number of an index
+///* to use for OR clause processing.  The WHERE clause should use this
+///* specific cursor.  If WHERE_ONEPASS_DESIRED is set, then iIdxCur is
+///* the first cursor in an array of cursors for all indices.  iIdxCur should
+///* be used to compute the appropriate cursor depending on which index is
+///* used.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_where_begin(p_parse_1: *mut Parse,
     p_tab_list_1: *mut SrcList, p_where_1: *mut Expr,
     mut p_order_by_1: *mut ExprList, p_result_set_1: *mut ExprList,
@@ -7341,37 +9151,177 @@ pub extern "C" fn sqlite3_where_begin(p_parse_1: *mut Parse,
     -> *mut WhereInfo {
     unsafe {
         let mut n_byte_w_info: i32 = 0;
+        /// Num. bytes allocated for WhereInfo struct
         let mut n_tab_list: i32 = 0;
+        /// Number of elements in pTabList
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// Will become the return value of this function
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The virtual database engine
         let mut not_ready: Bitmask = 0 as Bitmask;
+        /// Cursors that are not yet positioned
         let mut s_wlb: WhereLoopBuilder = unsafe { core::mem::zeroed() };
+        /// The WhereLoop builder
         let mut p_mask_set: *mut WhereMaskSet = core::ptr::null_mut();
+        /// The expression mask set
         let mut p_level: *mut WhereLevel = core::ptr::null_mut();
+        /// A single level in pWInfo->a[]
         let mut p_loop: *mut WhereLoop = core::ptr::null_mut();
+        /// Pointer to a single WhereLoop object
         let mut ii: i32 = 0;
+        /// Loop counter
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Database connection
         let mut rc: i32 = 0;
+        /// Return code
         let mut b_fordelete: u8 = 0 as u8;
+        /// OPFLAG_FORDELETE or zero, as appropriate
+        /// Only one of WHERE_OR_SUBCLAUSE or WHERE_USE_LIMIT
+        /// Variable initialization
+        /// An ORDER/GROUP BY clause of more than 63 terms cannot be optimized
+        /// Disable omit-noop-join opt
+        /// The number of tables in the FROM clause is limited by the number of
+        ///* bits in a Bitmask
+        /// This function normally generates a nested loop for all tables in
+        ///* pTabList.  But if the WHERE_OR_SUBCLAUSE flag is set, then we should
+        ///* only generate code for the first table in pTabList and assume that
+        ///* any cursors associated with subsequent tables are uninitialized.
+        /// Allocate and initialize the WhereInfo structure that will become the
+        ///* return value. A single allocation is used to store the WhereInfo
+        ///* struct, the contents of WhereInfo.a[], the WhereClause structure
+        ///* and the WhereMaskSet structure. Since WhereClause contains an 8-byte
+        ///* field (type Bitmask) it must be aligned on an 8-byte boundary on
+        ///* some architectures. Hence the ROUND8() below.
+        /// ONEPASS defaults to OFF
+        /// Initialize ix[0] to a value that can never be
+        ///* a valid cursor number, to avoid an initial
+        ///* test for pMaskSet->n==0 in sqlite3WhereGetMask()
+        /// Split the WHERE clause into separate subexpressions where each
+        ///* subexpression is separated by an AND operator.
+        /// Special case: No FROM clause
+        /// Assign a bit from the bitmask to every term in the FROM clause.
+        ///*
+        ///* The N-th term of the FROM clause is assigned a bitmask of 1<<N.
+        ///*
+        ///* The rule of the previous sentence ensures that if X is the bitmask for
+        ///* a table T, then X-1 is the bitmask for all other tables to the left of T.
+        ///* Knowing the bitmask for all tables to the left of a left join is
+        ///* important.  Ticket #3015.
+        ///*
+        ///* Note that bitmasks are created for all pTabList->nSrc tables in
+        ///* pTabList, not just the first nTabList tables.  nTabList is normally
+        ///* equal to pTabList->nSrc but might be shortened to 1 if the
+        ///* WHERE_OR_SUBCLAUSE flag is set.
+        /// Analyze all of the subexpressions.
+        /// The False-WHERE-Term-Bypass optimization:
+        ///*
+        ///* If there are WHERE terms that are false, then no rows will be output,
+        ///* so skip over all of the code generated here.
+        ///*
+        ///* Conditions:
+        ///*
+        ///*   (1)  The WHERE term must not refer to any tables in the join.
+        ///*   (2)  The term must not come from an ON clause on the
+        ///*        right-hand side of a LEFT or FULL JOIN.
+        ///*   (3)  The term must not come from an ON clause, or there must be
+        ///*        no RIGHT or FULL OUTER joins in pTabList.
+        ///*   (4)  If the expression contains non-deterministic functions
+        ///*        that are not within a sub-select. This is not required
+        ///*        for correctness but rather to preserves SQLite's legacy
+        ///*        behaviour in the following two cases:
+        ///*
+        ///*          WHERE random()>0;           -- eval random() once per row
+        ///*          WHERE (SELECT random())>0;  -- eval random() just once overall
+        ///*
+        ///* Note that the Where term need not be a constant in order for this
+        ///* optimization to apply, though it does need to be constant relative to
+        ///* the current subquery (condition 1).  The term might include variables
+        ///* from outer queries so that the value of the term changes from one
+        ///* invocation of the current subquery to the next.
         let mut p_t: *mut WhereTerm = core::ptr::null_mut();
+        /// A term of the WHERE clause
         let mut p_x: *mut Expr = core::ptr::null_mut();
+        /// The expression of pT
+        /// Conditions (1) and (2)
+        /// Condition (4)
+        /// Condition (3)
+        /// Disable the DISTINCT optimization if SQLITE_DistinctOpt is set via
+        ///* sqlite3_test_ctrl(SQLITE_TESTCTRL_OPTIMIZATIONS,...)
+        /// The DISTINCT marking is pointless.  Ignore it.
+        /// Try to ORDER BY the result set to make distinct processing easier
+        /// Construct the WhereLoop objects
+        /// TUNING:  Assume that a DISTINCT clause on a subquery reduces
+        ///* the output size by a factor of 8 (LogEst -30).  Search for
+        ///* tag-20250414a to see other cases.
+        /// Attempt to omit tables from a join that do not affect the result.
+        ///* See the comment on whereOmitNoopJoin() for further information.
+        ///*
+        ///* This query optimization is factored out into a separate "no-inline"
+        ///* procedure to keep the sqlite3WhereBegin() procedure from becoming
+        ///* too large.  If sqlite3WhereBegin() becomes too large, that prevents
+        ///* some C-compiler optimizers from in-lining the
+        ///* sqlite3WhereCodeOneLoopStart() procedure, and it is important to
+        ///* in-line sqlite3WhereCodeOneLoopStart() for performance reasons.
+        /// Must be a join, or this opt8n is pointless
+        /// Condition (1)
+        /// (1),(6)
+        /// (7)
+        /// Check to see if there are any SEARCH loops that might benefit from
+        ///* using a Bloom filter.
+        /// If the caller is an UPDATE or DELETE statement that is requesting
+        ///* to use a one-pass algorithm, determine if this is appropriate.
+        ///*
+        ///* A one-pass approach can be used if the caller has requested one
+        ///* and either (a) the scan visits at most one row or (b) each
+        ///* of the following are true:
+        ///*
+        ///*   * the caller has indicated that a one-pass approach can be used
+        ///*     with multiple rows (by setting WHERE_ONEPASS_MULTIROW), and
+        ///*   * the table is not a virtual table, and
+        ///*   * either the scan does not use the OR optimization or the caller
+        ///*     is a DELETE operation (WHERE_DUPLICATES_OK is only specified
+        ///*     for DELETE).
+        ///*
+        ///* The last qualification is because an UPDATE statement uses
+        ///* WhereInfo.aiCurOnePass[1] to determine whether or not it really can
+        ///* use a one-pass approach, and this is not set accurately for scans
+        ///* that use the OR optimization.
         let mut ws_flags: i32 = 0;
         let mut b_onerow: i32 = 0;
+        /// Open all tables in the pTabList and any indices selected for
+        ///* searching those tables.
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// Table to open
         let mut i_db: i32 = 0;
+        /// Index of database containing table/index
         let mut p_tab_item: *mut SrcItem = core::ptr::null_mut();
+        /// Do nothing
         let mut p_v_tab: *const i8 = core::ptr::null();
         let mut i_cur: i32 = 0;
+        /// noop
         let mut op: i32 = 0;
+        /// If we know that only a prefix of the record will be used,
+        ///* it is advantageous to reduce the "column count" field in
+        ///* the P4 operand of the OP_OpenRead/Write opcode.
         let mut b: Bitmask = 0 as Bitmask;
         let mut n: i32 = 0;
         let mut p_ix: *mut Index = core::ptr::null_mut();
         let mut i_index_cur: i32 = 0;
         let mut op__1: i32 = 0;
+        /// iAuxArg is always set to a positive value if ONEPASS is possible
+        /// This is one term of an OR-optimization using the PRIMARY KEY of a
+        ///* WITHOUT ROWID table.  No need for a separate index
         let mut p_j: *mut Index = core::ptr::null_mut();
+        /// SQLITE_ENABLE_COLUMN_USED_MASK
         let mut p_rj: *mut WhereRightJoin = core::ptr::null_mut();
         let mut p_info: *mut KeyInfo = core::ptr::null_mut();
         let mut p_pk: *mut Index = core::ptr::null_mut();
+        /// The nature of RIGHT JOIN processing is such that it messes up
+        ///* the output order.  So omit any ORDER BY/GROUP BY elimination
+        ///* optimizations.  We need to do an actual sort for RIGHT JOIN.
+        /// Generate the code to do the search.  Each iteration of the for
+        ///* loop below generates code for a single nested loop of the VM
+        ///* program.
         let mut addr_explain: i32 = 0;
         let mut ws_flags_1: i32 = 0;
         let mut p_src: *const SrcItem = core::ptr::null();
@@ -8648,11 +10598,158 @@ pub extern "C" fn sqlite3_where_begin(p_parse_1: *mut Parse,
                 }
             }
         }
+
+        /// Num. bytes allocated for WhereInfo struct
+        /// Number of elements in pTabList
+        /// Will become the return value of this function
+        /// The virtual database engine
+        /// Cursors that are not yet positioned
+        /// The WhereLoop builder
+        /// The expression mask set
+        /// A single level in pWInfo->a[]
+        /// Pointer to a single WhereLoop object
+        /// Loop counter
+        /// Database connection
+        /// Return code
+        /// OPFLAG_FORDELETE or zero, as appropriate
+        /// Only one of WHERE_OR_SUBCLAUSE or WHERE_USE_LIMIT
+        /// Variable initialization
+        /// An ORDER/GROUP BY clause of more than 63 terms cannot be optimized
+        /// Disable omit-noop-join opt
+        /// The number of tables in the FROM clause is limited by the number of
+        ///* bits in a Bitmask
+        /// This function normally generates a nested loop for all tables in
+        ///* pTabList.  But if the WHERE_OR_SUBCLAUSE flag is set, then we should
+        ///* only generate code for the first table in pTabList and assume that
+        ///* any cursors associated with subsequent tables are uninitialized.
+        /// Allocate and initialize the WhereInfo structure that will become the
+        ///* return value. A single allocation is used to store the WhereInfo
+        ///* struct, the contents of WhereInfo.a[], the WhereClause structure
+        ///* and the WhereMaskSet structure. Since WhereClause contains an 8-byte
+        ///* field (type Bitmask) it must be aligned on an 8-byte boundary on
+        ///* some architectures. Hence the ROUND8() below.
+        /// ONEPASS defaults to OFF
+        /// Initialize ix[0] to a value that can never be
+        ///* a valid cursor number, to avoid an initial
+        ///* test for pMaskSet->n==0 in sqlite3WhereGetMask()
+        /// Split the WHERE clause into separate subexpressions where each
+        ///* subexpression is separated by an AND operator.
+        /// Special case: No FROM clause
+        /// Assign a bit from the bitmask to every term in the FROM clause.
+        ///*
+        ///* The N-th term of the FROM clause is assigned a bitmask of 1<<N.
+        ///*
+        ///* The rule of the previous sentence ensures that if X is the bitmask for
+        ///* a table T, then X-1 is the bitmask for all other tables to the left of T.
+        ///* Knowing the bitmask for all tables to the left of a left join is
+        ///* important.  Ticket #3015.
+        ///*
+        ///* Note that bitmasks are created for all pTabList->nSrc tables in
+        ///* pTabList, not just the first nTabList tables.  nTabList is normally
+        ///* equal to pTabList->nSrc but might be shortened to 1 if the
+        ///* WHERE_OR_SUBCLAUSE flag is set.
+        /// Analyze all of the subexpressions.
+        /// The False-WHERE-Term-Bypass optimization:
+        ///*
+        ///* If there are WHERE terms that are false, then no rows will be output,
+        ///* so skip over all of the code generated here.
+        ///*
+        ///* Conditions:
+        ///*
+        ///*   (1)  The WHERE term must not refer to any tables in the join.
+        ///*   (2)  The term must not come from an ON clause on the
+        ///*        right-hand side of a LEFT or FULL JOIN.
+        ///*   (3)  The term must not come from an ON clause, or there must be
+        ///*        no RIGHT or FULL OUTER joins in pTabList.
+        ///*   (4)  If the expression contains non-deterministic functions
+        ///*        that are not within a sub-select. This is not required
+        ///*        for correctness but rather to preserves SQLite's legacy
+        ///*        behaviour in the following two cases:
+        ///*
+        ///*          WHERE random()>0;           -- eval random() once per row
+        ///*          WHERE (SELECT random())>0;  -- eval random() just once overall
+        ///*
+        ///* Note that the Where term need not be a constant in order for this
+        ///* optimization to apply, though it does need to be constant relative to
+        ///* the current subquery (condition 1).  The term might include variables
+        ///* from outer queries so that the value of the term changes from one
+        ///* invocation of the current subquery to the next.
+        /// A term of the WHERE clause
+        /// The expression of pT
+        /// Conditions (1) and (2)
+        /// Condition (4)
+        /// Condition (3)
+        /// Disable the DISTINCT optimization if SQLITE_DistinctOpt is set via
+        ///* sqlite3_test_ctrl(SQLITE_TESTCTRL_OPTIMIZATIONS,...)
+        /// The DISTINCT marking is pointless.  Ignore it.
+        /// Try to ORDER BY the result set to make distinct processing easier
+        /// Construct the WhereLoop objects
+        /// TUNING:  Assume that a DISTINCT clause on a subquery reduces
+        ///* the output size by a factor of 8 (LogEst -30).  Search for
+        ///* tag-20250414a to see other cases.
+        /// Attempt to omit tables from a join that do not affect the result.
+        ///* See the comment on whereOmitNoopJoin() for further information.
+        ///*
+        ///* This query optimization is factored out into a separate "no-inline"
+        ///* procedure to keep the sqlite3WhereBegin() procedure from becoming
+        ///* too large.  If sqlite3WhereBegin() becomes too large, that prevents
+        ///* some C-compiler optimizers from in-lining the
+        ///* sqlite3WhereCodeOneLoopStart() procedure, and it is important to
+        ///* in-line sqlite3WhereCodeOneLoopStart() for performance reasons.
+        /// Must be a join, or this opt8n is pointless
+        /// Condition (1)
+        /// (1),(6)
+        /// (7)
+        /// Check to see if there are any SEARCH loops that might benefit from
+        ///* using a Bloom filter.
+        /// If the caller is an UPDATE or DELETE statement that is requesting
+        ///* to use a one-pass algorithm, determine if this is appropriate.
+        ///*
+        ///* A one-pass approach can be used if the caller has requested one
+        ///* and either (a) the scan visits at most one row or (b) each
+        ///* of the following are true:
+        ///*
+        ///*   * the caller has indicated that a one-pass approach can be used
+        ///*     with multiple rows (by setting WHERE_ONEPASS_MULTIROW), and
+        ///*   * the table is not a virtual table, and
+        ///*   * either the scan does not use the OR optimization or the caller
+        ///*     is a DELETE operation (WHERE_DUPLICATES_OK is only specified
+        ///*     for DELETE).
+        ///*
+        ///* The last qualification is because an UPDATE statement uses
+        ///* WhereInfo.aiCurOnePass[1] to determine whether or not it really can
+        ///* use a one-pass approach, and this is not set accurately for scans
+        ///* that use the OR optimization.
+        /// Open all tables in the pTabList and any indices selected for
+        ///* searching those tables.
+        /// Table to open
+        /// Index of database containing table/index
+        /// Do nothing
+        /// noop
+        /// If we know that only a prefix of the record will be used,
+        ///* it is advantageous to reduce the "column count" field in
+        ///* the P4 operand of the OP_OpenRead/Write opcode.
+        /// iAuxArg is always set to a positive value if ONEPASS is possible
+        /// This is one term of an OR-optimization using the PRIMARY KEY of a
+        ///* WITHOUT ROWID table.  No need for a separate index
+        /// SQLITE_ENABLE_COLUMN_USED_MASK
+        /// The nature of RIGHT JOIN processing is such that it messes up
+        ///* the output order.  So omit any ORDER BY/GROUP BY elimination
+        ///* optimizations.  We need to do an actual sort for RIGHT JOIN.
+        /// Generate the code to do the search.  Each iteration of the for
+        ///* loop below generates code for a single nested loop of the VM
+        ///* program.
+        /// Done.
+        /// Jump here if malloc fails
+        /// WHERETRACE_ENABLED
         unreachable!();
     }
 }
 
+///* Generate the end of the WHERE loop.  See comments on
+///* sqlite3WhereBegin() for additional information.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
     unsafe {
         let p_parse: *mut Parse = unsafe { (*p_w_info_1).p_parse };
@@ -8677,11 +10774,17 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                             *mut WhereLevel).offset(i as isize)
                         };
                     if !(unsafe { (*p_level).p_rj }).is_null() {
+                        /// Terminate the subroutine that forms the interior of the loop of
+                        ///* the RIGHT JOIN table
                         let p_rj: *mut WhereRightJoin = unsafe { (*p_level).p_rj };
                         unsafe {
                             sqlite3_vdbe_resolve_label(v,
                                 unsafe { (*p_level).addr_cont })
                         };
+
+                        /// Replace addrCont with a new label that will never be used, just so
+                        ///* the subsequent call to resolve pLevel->addrCont will have something
+                        ///* to resolve.
                         unsafe {
                             (*p_level).addr_cont =
                                 unsafe { sqlite3_vdbe_make_label(p_parse) }
@@ -8761,6 +10864,9 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                                     *mut SrcItem).add(unsafe { (*p_level).i_from } as
                                                     usize)).fg.from_exists()
                             } != 0 {
+
+                        /// This is an EXISTS-to-JOIN optimization loop. If this loop sees a 
+                        ///* successful row, it should break out of itself.
                         unsafe {
                             sqlite3_vdbe_add_op2(v, 9, 0,
                                 unsafe { (*p_level).addr_brk })
@@ -8828,6 +10934,15 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                                         unsafe { (*p_loop).ws_flags } & 262144 as u32 != 0 as u32)
                                                     as i32;
                                             if unsafe { (*p_level).i_left_join } != 0 {
+
+                                                /// For LEFT JOIN queries, cursor pIn->iCur may not have been
+                                                ///* opened yet. This occurs for WHERE clauses such as
+                                                ///* "a = ? AND b IN (...)", where the index is on (a, b). If
+                                                ///* the RHS of the (a=?) is NULL, then the "b IN (...)" may
+                                                ///* never have been coded, but the body of the loop run to
+                                                ///* return the null-row. So, if the cursor is not open yet,
+                                                ///* jump over the OP_Next or OP_Prev instruction about to
+                                                ///* be coded.
                                                 unsafe {
                                                     sqlite3_vdbe_add_op2(v, 25, unsafe { (*p_in).i_cur },
                                                         unsafe { sqlite3_vdbe_current_addr(v) } + 2 + b_early_out)
@@ -8840,6 +10955,11 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                                         unsafe { sqlite3_vdbe_current_addr(v) } + 2,
                                                         unsafe { (*p_in).i_base }, unsafe { (*p_in).n_prefix })
                                                 };
+
+                                                /// Retarget the OP_IsNull against the left operand of IN so
+                                                ///* it jumps past the OP_IfNoHope.  This is because the
+                                                ///* OP_IsNull also bypasses the OP_Affinity opcode that is
+                                                ///* required by OP_IfNoHope.
                                                 unsafe {
                                                     sqlite3_vdbe_jump_here(v,
                                                         unsafe { (*p_in).addr_in_top } + 1)
@@ -9062,6 +11182,10 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                     } else if unsafe { (*p_loop).ws_flags } &
                                                 (64 | 67108864) as u32 != 0 {
                                         if unsafe { (*p_loop).ws_flags } & 64 as u32 != 0 {
+
+                                            /// An error. pLoop is supposed to be a covering index loop,
+                                            ///* and yet the VM code refers to a column of the table that 
+                                            ///* is not part of the index.
                                             unsafe {
                                                 sqlite3_error_msg(p_parse,
                                                     c"internal query planner error".as_ptr() as *mut i8 as
@@ -9069,6 +11193,14 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                                             };
                                             unsafe { (*p_parse).rc = 2 };
                                         } else {
+
+                                            /// The WHERE_EXPRIDX flag is set by the planner when it is likely
+                                            ///* that pLoop is a covering index loop, but it is not possible
+                                            ///* to be 100% sure. In this case, any OP_Explain opcode
+                                            ///* corresponding to this loop describes the index as a "COVERING
+                                            ///* INDEX". But, pOp proves that pLoop is not actually a covering 
+                                            ///* index loop. So clear the WHERE_EXPRIDX flag and rewrite the
+                                            ///* text that accompanies the OP_Explain opcode, if any.
                                             unsafe { (*p_loop).ws_flags &= !67108864 as u32 };
                                             unsafe {
                                                 sqlite3_where_add_explain_text(p_parse,
@@ -9107,9 +11239,14 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
                 };
             }
         }
+
+        /// The "break" point is here, just past the end of the outer loop.
+        ///* Set it.
         unsafe {
             sqlite3_vdbe_resolve_label(v, unsafe { (*p_w_info_1).i_break })
         };
+
+        /// Final cleanup
         unsafe {
             (*p_parse).n_query_loop =
                 unsafe { (*p_w_info_1).saved_n_query_loop } as LogEst
@@ -9120,17 +11257,26 @@ pub extern "C" fn sqlite3_where_end(p_w_info_1: *mut WhereInfo) -> () {
     }
 }
 
+///* Return the estimated number of output rows from a WHERE clause
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_output_row_count(p_w_info_1: &WhereInfo)
     -> LogEst {
     return (*p_w_info_1).n_row_out;
 }
 
+///* Return one of the WHERE_DISTINCT_xxxxx values to indicate how this
+///* WHERE clause returns outputs for DISTINCT processing.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_distinct(p_w_info_1: &WhereInfo) -> i32 {
     return (*p_w_info_1).e_distinct as i32;
 }
 
+///* Return the number of ORDER BY terms that are satisfied by the
+///* WHERE clause.  A return of 0 means that the output must be
+///* completely sorted.  A return equal to the number of ORDER BY
+///* terms means that no sorting is needed at all.  A return that
+///* is positive but less than the number of ORDER BY terms means that
+///* block sorting is required.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_ordered(p_w_info_1: &WhereInfo) -> i32 {
     return if ((*p_w_info_1).n_ob_sat as i32) < 0 {
@@ -9138,11 +11284,36 @@ pub extern "C" fn sqlite3_where_is_ordered(p_w_info_1: &WhereInfo) -> i32 {
         } else { (*p_w_info_1).n_ob_sat as i32 };
 }
 
+///* In the ORDER BY LIMIT optimization, if the inner-most loop is known
+///* to emit rows in increasing order, and if the last row emitted by the
+///* inner-most loop did not fit within the sorter, then we can skip all
+///* subsequent rows for the current iteration of the inner loop (because they
+///* will not fit in the sorter either) and continue with the second inner
+///* loop - the loop immediately outside the inner-most.
+///*
+///* When a row does not fit in the sorter (because the sorter already
+///* holds LIMIT+OFFSET rows that are smaller), then a jump is made to the
+///* label returned by this function.
+///*
+///* If the ORDER BY LIMIT optimization applies, the jump destination should
+///* be the continuation for the second-inner-most loop.  If the ORDER BY
+///* LIMIT optimization does not apply, then the jump destination should
+///* be the continuation for the inner-most loop.
+///*
+///* It is always safe for this routine to return the continuation of the
+///* inner-most loop, in the sense that a correct answer will result. 
+///* Returning the continuation the second inner loop is an optimization
+///* that might make the code run a little faster, but should not change
+///* the final answer.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_where_order_by_limit_opt_label(p_w_info_1:
         &mut WhereInfo) -> i32 {
     let mut p_inner: *const WhereLevel = core::ptr::null();
     if ((*p_w_info_1).b_ordered_inner_loop() == 0) as i32 != 0 {
+
+        /// The ORDER BY LIMIT optimization does not apply.  Jump to the
+        ///* continuation of the inner-most loop.
         return (*p_w_info_1).i_continue;
     }
     p_inner =
@@ -9157,6 +11328,15 @@ pub extern "C" fn sqlite3_where_order_by_limit_opt_label(p_w_info_1:
         } else { unsafe { (*p_inner).addr_nxt } };
 }
 
+///* While generating code for the min/max optimization, after handling
+///* the aggregate-step call to min() or max(), check to see if any
+///* additional looping is required.  If the output order is such that
+///* we are certain that the correct answer has already been found, then
+///* code an OP_Goto to by pass subsequent processing.
+///*
+///* Any extra OP_Goto that is coded here is an optimization.  The
+///* correct answer should be obtained regardless.  This OP_Goto just
+///* makes the answer appear faster.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_min_max_opt_early_out(v: *mut Vdbe,
     p_w_info_1: &mut WhereInfo) -> () {
@@ -9189,6 +11369,27 @@ pub extern "C" fn sqlite3_where_min_max_opt_early_out(v: *mut Vdbe,
     unsafe { sqlite3_vdbe_goto(v, (*p_w_info_1).i_break) };
 }
 
+///* If the WHERE_GROUPBY flag is set in the mask passed to sqlite3WhereBegin(),
+///* the planner assumes that the specified pOrderBy list is actually a GROUP
+///* BY clause - and so any order that groups rows as required satisfies the
+///* request.
+///*
+///* Normally, in this case it is not possible for the caller to determine
+///* whether or not the rows are really being delivered in sorted order, or
+///* just in some other order that provides the required grouping. However,
+///* if the WHERE_SORTBYGROUP flag is also passed to sqlite3WhereBegin(), then
+///* this function may be called on the returned WhereInfo object. It returns
+///* true if the rows really will be sorted in the specified order, or false
+///* otherwise.
+///*
+///* For example, assuming:
+///*
+///*   CREATE INDEX i1 ON t1(x, Y);
+///*
+///* then
+///*
+///*   SELECT * FROM t1 GROUP BY x,y ORDER BY x,y;   -- IsSorted()==1
+///*   SELECT * FROM t1 GROUP BY y,x ORDER BY y,x;   -- IsSorted()==0
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_is_sorted(p_w_info_1: &WhereInfo) -> i32 {
     { let _ = 0; };
@@ -9196,6 +11397,8 @@ pub extern "C" fn sqlite3_where_is_sorted(p_w_info_1: &WhereInfo) -> i32 {
     return (*p_w_info_1).sorted() as i32;
 }
 
+///* Return the VDBE address or label to jump to in order to continue
+///* immediately with the next row of a WHERE clause.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_continue_label(p_w_info_1: &WhereInfo)
     -> i32 {
@@ -9203,11 +11406,28 @@ pub extern "C" fn sqlite3_where_continue_label(p_w_info_1: &WhereInfo)
     return (*p_w_info_1).i_continue;
 }
 
+///* Return the VDBE address or label to jump to in order to break
+///* out of a WHERE loop.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_break_label(p_w_info_1: &WhereInfo) -> i32 {
     return (*p_w_info_1).i_break;
 }
 
+///* Return ONEPASS_OFF (0) if an UPDATE or DELETE statement is unable to
+///* operate directly on the rowids returned by a WHERE clause.  Return
+///* ONEPASS_SINGLE (1) if the statement can operation directly because only
+///* a single row is to be changed.  Return ONEPASS_MULTI (2) if the one-pass
+///* optimization can be used on multiple
+///*
+///* If the ONEPASS optimization is used (if this routine returns true)
+///* then also write the indices of open cursors used by ONEPASS
+///* into aiCur[0] and aiCur[1].  iaCur[0] gets the cursor of the data
+///* table and aiCur[1] gets the cursor used by an auxiliary index.
+///* Either value may be -1, indicating that cursor is not used.
+///* Any cursors returned will have been opened for writing.
+///*
+///* aiCur[0] and aiCur[1] both get -1 if the where-clause logic is
+///* unable to use the ONEPASS optimization.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_ok_one_pass(p_w_info_1: &WhereInfo,
     ai_cur_1: *mut i32) -> i32 {
@@ -9219,6 +11439,8 @@ pub extern "C" fn sqlite3_where_ok_one_pass(p_w_info_1: &WhereInfo,
     return (*p_w_info_1).e_one_pass as i32;
 }
 
+///* Return TRUE if the WHERE loop uses the OP_DeferredSeek opcode to move
+///* the data cursor to the row selected by the index cursor.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_where_uses_deferred_seek(p_w_info_1: &WhereInfo)
     -> i32 {

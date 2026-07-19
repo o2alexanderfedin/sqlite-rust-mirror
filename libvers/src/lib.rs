@@ -1,3 +1,7 @@
+//!* Compile this program against an SQLite library of unknown version
+//!* and then run this program, and it will print out the SQLite version
+//!* information.
+
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {

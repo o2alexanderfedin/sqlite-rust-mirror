@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With, YnVar,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,16 @@ impl Parse {
     }
 }
 
+///* Check to see if index pIdx is a partial index whose conditional
+///* expression might change values due to an UPDATE.  Return true if
+///* the index is subject to change and false if the index is guaranteed
+///* to be unchanged.  This is an optimization.  False-positives are a
+///* performance degradation, but false-negatives can result in a corrupt
+///* index and incorrect answers.
+///*
+///* aXRef[j] will be non-negative if column j of the original table is
+///* being updated.  chngRowid will be true if the rowid of the table is
+///* being updated.
 extern "C" fn index_where_clause_might_change(p_idx_1: &Index,
     a_x_ref_1: *mut i32, chng_rowid_1: i32) -> i32 {
     if (*p_idx_1).p_part_idx_where == core::ptr::null_mut() { return 0; }
@@ -402,6 +427,15 @@ extern "C" fn index_where_clause_might_change(p_idx_1: &Index,
         };
 }
 
+///* Check to see if column iCol of index pIdx references any of the
+///* columns defined by aXRef and chngRowid.  Return true if it does
+///* and false if not.  This is an optimization.  False-positives are a
+///* performance degradation, but false-negatives can result in a corrupt
+///* index and incorrect answers.
+///*
+///* aXRef[j] will be non-negative if column j of the original table is
+///* being updated.  chngRowid will be true if the rowid of the table is
+///* being updated.
 extern "C" fn index_column_is_being_updated(p_idx_1: &Index, i_col_1: i32,
     a_x_ref_1: *mut i32, chng_rowid_1: i32) -> i32 {
     let i_idx_col: i16 =
@@ -421,6 +455,10 @@ extern "C" fn index_column_is_being_updated(p_idx_1: &Index, i_col_1: i32,
         };
 }
 
+///* Allocate and return a pointer to an expression of type TK_ROW with
+///* Expr.iColumn set to value (iCol+1). The resolver will modify the
+///* expression to be a TK_COLUMN reading column iCol of the first
+///* table in the source-list (pSrc->a[0]).
 extern "C" fn expr_row_column(p_parse_1: *mut Parse, i_col_1: i32)
     -> *mut Expr {
     let p_ret: *mut Expr =
@@ -434,6 +472,42 @@ extern "C" fn expr_row_column(p_parse_1: *mut Parse, i_col_1: i32)
     return p_ret;
 }
 
+///* Assuming both the pLimit and pOrderBy parameters are NULL, this function
+///* generates VM code to run the query:
+///*
+///*   SELECT <other-columns>, pChanges FROM pTabList WHERE pWhere
+///*
+///* and write the results to the ephemeral table already opened as cursor
+///* iEph. None of pChanges, pTabList or pWhere are modified or consumed by
+///* this function, they must be deleted by the caller.
+///*
+///* Or, if pLimit and pOrderBy are not NULL, and pTab is not a view:
+///*
+///*   SELECT <other-columns>, pChanges FROM pTabList
+///*   WHERE pWhere
+///*   GROUP BY <other-columns>
+///*   ORDER BY pOrderBy LIMIT pLimit
+///*
+///* If pTab is a view, the GROUP BY clause is omitted.
+///*
+///* Exactly how results are written to table iEph, and exactly what
+///* the <other-columns> in the query above are is determined by the type
+///* of table pTabList->a[0].pTab.
+///*
+///* If the table is a WITHOUT ROWID table, then argument pPk must be its
+///* PRIMARY KEY. In this case <other-columns> are the primary key columns
+///* of the table, in order. The results of the query are written to ephemeral
+///* table iEph as index keys, using OP_IdxInsert.
+///*
+///* If the table is actually a view, then <other-columns> are all columns of
+///* the view. The results are written to the ephemeral table iEph as records
+///* with automatically assigned integer keys.
+///*
+///* If the table is a virtual or ordinary intkey table, then <other-columns>
+///* is its rowid. For a virtual table, the results are written to iEph as
+///* records with automatically assigned integer keys For intkey tables, the
+///* rowid value in <other-columns> is used as the integer key, and the
+///* remaining fields make up the table record.
 extern "C" fn update_from_select(p_parse_1: *mut Parse, i_eph_1: i32,
     p_pk_1: *const Index, p_changes_1: *const ExprList,
     p_tab_list_1: *const SrcList, p_where_1: *const Expr,
@@ -581,28 +655,46 @@ extern "C" fn update_from_select(p_parse_1: *mut Parse, i_eph_1: i32,
     unsafe { sqlite3_select_delete(db, p_select) };
 }
 
+/// Forward declaration
+#[allow(unused_doc_comments)]
 extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
     p_tab: *mut Table, p_changes: &ExprList, p_rowid: *mut Expr,
     a_x_ref: *mut i32, p_where: *mut Expr, on_error: i32) -> () {
     let v: *mut Vdbe = unsafe { (*p_parse).p_vdbe };
+    /// Virtual machine under construction
     let mut ephem_tab: i32 = 0;
+    /// Table holding the result of the SELECT
     let mut i: i32 = 0;
+    /// Loop counter
     let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+    /// Database connection
     let p_v_tab: *const i8 =
         unsafe { sqlite3_get_v_table(db, p_tab) } as *const i8;
     let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
     let n_arg: i32 = 2 + unsafe { (*p_tab).n_col } as i32;
+    /// Number of arguments to VUpdate
     let mut reg_arg: i32 = 0;
+    /// First register in VUpdate arg array
     let mut reg_rec: i32 = 0;
+    /// Register in which to assemble record
     let mut reg_rowid: i32 = 0;
+    /// Register for ephemeral table rowid
     let i_csr: i32 =
         unsafe {
             (*(unsafe { (*p_src).a.as_ptr() } as
                             *mut SrcItem).offset(0 as isize)).i_cursor
         };
+    /// Cursor used for virtual table scan
     let mut a_dummy: [i32; 2] = [0; 2];
+    /// Unused arg for sqlite3WhereOkOnePass()
     let mut e_one_pass: i32 = 0;
+    /// True to use onepass strategy
     let mut addr: i32 = 0;
+
+    /// Address of OP_OpenEphemeral
+    /// Allocate nArg registers in which to gather the arguments for VUpdate. Then
+    ///* create and open the ephemeral table in which the records created from
+    ///* these arguments will be temporarily stored.
     { let _ = 0; };
     ephem_tab =
         {
@@ -631,7 +723,9 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
             }
         } else {
             let mut i_pk: i16 = 0 as i16;
-            p_pk = unsafe { sqlite3_primary_key_index(p_tab) };
+
+            /// PRIMARY KEY column
+            (p_pk = unsafe { sqlite3_primary_key_index(p_tab) });
             { let _ = 0; };
             { let _ = 0; };
             i_pk =
@@ -698,12 +792,14 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
             { let __p = unsafe { &mut (*p_parse).n_mem }; *__p += 1; *__p };
         reg_rowid =
             { let __p = unsafe { &mut (*p_parse).n_mem }; *__p += 1; *__p };
-        p_w_info =
+
+        /// Start scanning the virtual table
+        (p_w_info =
             unsafe {
                 sqlite3_where_begin(p_parse, p_src, p_where,
                     core::ptr::null_mut(), core::ptr::null_mut(),
                     core::ptr::null_mut(), 4 as u16, 0)
-            };
+            });
         if p_w_info == core::ptr::null_mut() { return; }
         {
             i = 0;
@@ -741,8 +837,11 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
             }
         } else {
             let mut p_pk_1: *const Index = core::ptr::null();
+            /// PRIMARY KEY index
             let mut i_pk_1: i16 = 0 as i16;
-            p_pk_1 = unsafe { sqlite3_primary_key_index(p_tab) };
+
+            /// PRIMARY KEY column
+            (p_pk_1 = unsafe { sqlite3_primary_key_index(p_tab) });
             { let _ = 0; };
             { let _ = 0; };
             i_pk_1 =
@@ -760,11 +859,19 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
                 sqlite3_where_ok_one_pass(p_w_info,
                     &raw mut a_dummy[0 as usize] as *mut i32)
             };
+
+        /// There is no ONEPASS_MULTI on virtual tables
         { let _ = 0; };
         if e_one_pass != 0 {
+
+            /// If using the onepass strategy, no-op out the OP_OpenEphemeral coded
+            ///* above.
             unsafe { sqlite3_vdbe_change_to_noop(v, addr) };
             unsafe { sqlite3_vdbe_add_op1(v, 124, i_csr) };
         } else {
+
+            /// Create a record from the argument register contents and insert it into
+            ///* the ephemeral table.
             unsafe { sqlite3_multi_write(p_parse) };
             unsafe { sqlite3_vdbe_add_op3(v, 99, reg_arg, n_arg, reg_rec) };
             unsafe { sqlite3_vdbe_add_op2(v, 129, ephem_tab, reg_rowid) };
@@ -777,7 +884,9 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
         if unsafe { (*p_src).n_src } == 1 {
             unsafe { sqlite3_where_end(p_w_info) };
         }
-        addr = unsafe { sqlite3_vdbe_add_op1(v, 36, ephem_tab) };
+
+        /// Begin scanning through the ephemeral table.
+        (addr = unsafe { sqlite3_vdbe_add_op1(v, 36, ephem_tab) });
         {
             i = 0;
             '__b5: loop {
@@ -806,7 +915,15 @@ extern "C" fn update_virtual_table(p_parse: *mut Parse, p_src: *mut SrcList,
     } else { unsafe { sqlite3_where_end(p_w_info) }; }
 }
 
+///* Process an UPDATE statement.
+///*
+///*   UPDATE OR IGNORE tbl SET a=b, c=d FROM tbl2... WHERE e<5 AND f NOT NULL;
+///*          \_______/ \_/     \______/      \_____/       \________________/
+///*           onError   |      pChanges         |                pWhere
+///*                     \_______________________/
+///*                               pTabList
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_update(p_parse: *mut Parse,
     p_tab_list: *mut SrcList, p_changes: *mut ExprList, p_where: *mut Expr,
     on_error: i32, mut p_order_by: *mut ExprList, mut p_limit: *mut Expr,
@@ -815,65 +932,223 @@ pub extern "C" fn sqlite3_update(p_parse: *mut Parse,
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         let mut k: i32 = 0;
+        /// Loop counters
         let mut p_tab: *mut Table = core::ptr::null_mut();
+        /// The table to be updated
         let mut addr_top: i32 = 0;
+        /// VDBE instruction address of the start of the loop
         let mut p_w_info: *mut WhereInfo = core::ptr::null_mut();
+        /// Information about the WHERE clause
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// The virtual database engine
         let mut p_idx: *mut Index = core::ptr::null_mut();
+        /// For looping over indices
         let mut p_pk: *mut Index = core::ptr::null_mut();
+        /// The PRIMARY KEY index for WITHOUT ROWID tables
         let mut n_idx: i32 = 0;
+        /// Number of indices that need updating
         let mut n_all_idx: i32 = 0;
+        /// Total number of indexes
         let mut i_base_cur: i32 = 0;
+        /// Base cursor number
         let mut i_data_cur: i32 = 0;
+        /// Cursor for the canonical data btree
         let mut i_idx_cur: i32 = 0;
+        /// Cursor for the first index
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// The database structure
         let mut a_reg_idx: *mut i32 = core::ptr::null_mut();
+        /// Registers for to each index and the main table
         let mut a_x_ref: *mut i32 = core::ptr::null_mut();
+        /// aXRef[i] is the index in pChanges->a[] of the
+        ///* an expression for the i-th column of the table.
+        ///* aXRef[i]==-1 if the i-th column is not changed.
         let mut a_to_open: *mut u8 = core::ptr::null_mut();
+        /// 1 for tables and indices to be opened
         let mut chng_pk: u8 = 0 as u8;
+        /// PRIMARY KEY changed in a WITHOUT ROWID table
         let mut chng_rowid: u8 = 0 as u8;
+        /// Rowid changed in a normal table
         let mut chng_key: u8 = 0 as u8;
+        /// Either chngPk or chngRowid
         let mut p_rowid_expr: *mut Expr = core::ptr::null_mut();
+        /// Expression defining the new record number
         let mut i_rowid_expr: i32 = 0;
+        /// Index of "rowid=" (or IPK) assignment in pChanges
         let mut s_context: AuthContext = unsafe { core::mem::zeroed() };
+        /// The authorization context
         let mut s_nc: NameContext = unsafe { core::mem::zeroed() };
+        /// The name-context to resolve expressions in
         let mut i_db: i32 = 0;
+        /// Database containing the table being updated
         let mut e_one_pass: i32 = 0;
+        /// ONEPASS_XXX value from where.c
         let mut has_fk: i32 = 0;
+        /// True if foreign key processing is required
         let mut label_break: i32 = 0;
+        /// Jump here to break out of UPDATE loop
         let mut label_continue: i32 = 0;
+        /// Jump here to continue next step of UPDATE loop
         let mut flags: i32 = 0;
+        /// Flags for sqlite3WhereBegin()
         let mut is_view: i32 = 0;
+        /// True when updating a view (INSTEAD OF trigger)
         let mut p_trigger: *mut Trigger = core::ptr::null_mut();
+        /// List of triggers on pTab, if required
         let mut tmask: i32 = 0;
+        /// Mask of TRIGGER_BEFORE|TRIGGER_AFTER
         let mut newmask: i32 = 0;
+        /// Mask of NEW.* columns accessed by BEFORE triggers
         let mut i_eph: i32 = 0;
+        /// Ephemeral table holding all primary key values
         let mut n_key: i32 = 0;
+        /// Number of elements in regKey for WITHOUT ROWID
         let mut ai_cur_one_pass: [i32; 2] = [0; 2];
+        /// The write cursors opened by WHERE_ONEPASS
         let mut addr_open: i32 = 0;
+        /// Address of OP_OpenEphemeral
         let mut i_pk: i32 = 0;
+        /// First of nPk cells holding PRIMARY KEY value
         let mut n_pk: i16 = 0 as i16;
+        /// Number of components of the PRIMARY KEY
         let mut b_replace: i32 = 0;
+        /// True if REPLACE conflict resolution might happen
         let mut b_finish_seek: i32 = 0;
+        /// The OP_FinishSeek opcode is needed
         let mut n_change_from: i32 = 0;
+        /// If there is a FROM, pChanges->nExpr, else 0
+        /// Register Allocations
         let mut reg_row_count: i32 = 0;
+        /// A count of rows changed
         let mut reg_old_rowid: i32 = 0;
+        /// The old rowid
         let mut reg_new_rowid: i32 = 0;
+        /// The new rowid
         let mut reg_new: i32 = 0;
+        /// Content of the NEW.* table in triggers
         let mut reg_old: i32 = 0;
+        /// Content of OLD.* table in triggers
         let mut reg_row_set: i32 = 0;
+        /// Rowset of rows to be updated
         let mut reg_key: i32 = 0;
+        /// composite PRIMARY KEY value
+        /// Locate the table which we want to update.
+        /// Figure out if we have any triggers and if the table being
+        ///* updated is a view.
+        /// If there was a FROM clause, set nChangeFrom to the number of expressions
+        ///* in the change-list. Otherwise, set it to 0. There cannot be a FROM
+        ///* clause if this function is being called to generate code for part of
+        ///* an UPSERT statement.
+        /// Allocate a cursors for the main database table and for all indices.
+        ///* The index cursors might not be used, but if they are used they
+        ///* need to occur right after the database cursor.  So go ahead and
+        ///* allocate enough space, just in case.
+        /// On an UPSERT, reuse the same cursors already opened by INSERT
+        /// Allocate space for aXRef[], aRegIdx[], and aToOpen[].
+        ///* Initialize aXRef[] and aToOpen[] to their default values.
+        /// Initialize the name-context
+        /// Begin generating code.
+        /// Resolve the column names in all the expressions of the
+        ///* of the UPDATE statement.  Also find the column index
+        ///* for each column to be updated in the pChanges array.  For each
+        ///* column to be updated, make sure we have authorization to change
+        ///* that column.
+        /// If this is an UPDATE with a FROM clause, do not resolve expressions
+        ///* here. The call to sqlite3Select() below will do that.
         let mut rc: i32 = 0;
+        /// Mark generated columns as changing if their generator expressions
+        ///* reference any changing column.  The actual aXRef[] value for
+        ///* generated expressions is not used, other than to check to see that it
+        ///* is non-negative, so the value of aXRef[] for generated columns can be
+        ///* set to any non-negative number.  We use 99999 so that the value is
+        ///* obvious when looking at aXRef[] in a symbolic debugger.
         let mut b_progress: i32 = 0;
+        /// The SET expressions are not actually used inside the WHERE loop.
+        ///* So reset the colUsed mask. Unless this is a virtual table. In that
+        ///* case, set all bits of the colUsed mask (to ensure that the virtual
+        ///* table implementation makes all columns available).
+        /// There is one entry in the aRegIdx[] array for each index on the table
+        ///* being updated.  Fill in aRegIdx[] with a register number that will hold
+        ///* the key for accessing each index.
         let mut reg: i32 = 0;
+        /// Register storing the table record
+        /// If REPLACE conflict resolution might be invoked, open cursors on all
+        ///* indexes in case they are needed to delete records.
+        /// Allocate required registers.
+        /// For now, regRowSet and aRegIdx[nAllIdx] share the same register.
+        ///* If regRowSet turns out to be needed, then aRegIdx[nAllIdx] will be
+        ///* reallocated.  aRegIdx[nAllIdx] is the register in which the main
+        ///* table record is written.  regRowSet holds the RowSet for the
+        ///* two-pass update algorithm.
+        /// Start the view context.
+        /// If we are trying to update a view, realize that view into
+        ///* an ephemeral table.
+        /// Resolve the column names in all the expressions in the
+        ///* WHERE clause.
+        /// Virtual tables must be handled separately
+        /// Jump to labelBreak to abandon further processing of this UPDATE
+        /// Not an UPSERT.  Normal processing.  Begin by
+        ///* initialize the count of updated rows
         let mut n_eph_col: i32 = 0;
         let mut p_key_info: *mut KeyInfo = core::ptr::null_mut();
+        /// If this is an UPSERT, then all cursors have already been opened by
+        ///* the outer INSERT and the data cursor should be pointing at the row
+        ///* that is to be updated.  So bypass the code that searches for the
+        ///* row(s) to be updated.
+        /// Begin the database scan.
+        ///*
+        ///* Do not consider a single-pass strategy for a multi-row update if
+        ///* there is anything that might disrupt the cursor being used to do
+        ///* the UPDATE:
+        ///*   (1) This is a nested UPDATE
+        ///*   (2) There are triggers
+        ///*   (3) There are FOREIGN KEY constraints
+        ///*   (4) There are REPLACE conflict handlers
+        ///*   (5) There are subqueries in the WHERE clause
+        /// A one-pass strategy that might update more than one row may not
+        ///* be used if any column of the index used for the scan is being
+        ///* updated. Otherwise, if there is an index on "b", statements like
+        ///* the following could create an infinite loop:
+        ///*
+        ///*   UPDATE t1 SET b=b+1 WHERE b>?
+        ///*
+        ///* Fall back to ONEPASS_OFF if where.c has selected a ONEPASS_MULTI
+        ///* strategy that uses an index for which one or more columns are being
+        ///* updated.
         let mut i_cur: i32 = 0;
+        /// Read the rowid of the current row of the WHERE scan. In ONEPASS_OFF
+        ///* mode, write the rowid into the FIFO. In either of the one-pass modes,
+        ///* leave it in register regOldRowid.
+        /// Read the PK of the current row into an array of registers. In
+        ///* ONEPASS_OFF mode, serialize the array into a record and store it in
+        ///* the ephemeral table. Or, in ONEPASS_SINGLE or MULTI mode, change
+        ///* the OP_OpenEphemeral instruction to a Noop (the ephemeral table
+        ///* is not required) and leave the PK fields in the array of registers.
         let mut addr_once: i32 = 0;
         let mut i_not_used1: i32 = 0;
         let mut i_not_used2: i32 = 0;
+        /// Open every index that needs updating.
+        /// Top of the update loop
+        /// If the rowid value will change, set register regNewRowid to
+        ///* contain the new value. If the rowid is not being modified,
+        ///* then regNewRowid is the same register as regOldRowid, which is
+        ///* already populated.
+        /// Compute the old pre-UPDATE content of the row being changed, if that
+        ///* information is needed
         let mut oldmask: u32 = 0 as u32;
         let mut col_flags: u32 = 0 as u32;
+        /// Populate the array of registers beginning at regNew with the new
+        ///* row data. This array is used to check constants, create the new
+        ///* table and index records, and as the values for any new.* references
+        ///* made by triggers.
+        ///*
+        ///* If there are one or more BEFORE triggers, then do not populate the
+        ///* registers associated with columns that are (a) not modified by
+        ///* this UPDATE statement and (b) not accessed by new.* references. The
+        ///* values for registers not modified by the UPDATE must be reloaded from
+        ///* the database after the BEFORE triggers are fired anyway (as the trigger
+        ///* may have modified them). So not loading those that are not going to
+        ///* be used eliminates some redundant opcodes.
         let mut n_off: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -2743,6 +3018,34 @@ pub extern "C" fn sqlite3_update(p_parse: *mut Parse,
     }
 }
 
+///* The most recently coded instruction was an OP_Column to retrieve the
+///* i-th column of table pTab. This routine sets the P4 parameter of the
+///* OP_Column to the default value, if any.
+///*
+///* The default value of a column is specified by a DEFAULT clause in the
+///* column definition. This was either supplied by the user when the table
+///* was created, or added later to the table definition by an ALTER TABLE
+///* command. If the latter, then the row-records in the table btree on disk
+///* may not contain a value for the column and the default value, taken
+///* from the P4 parameter of the OP_Column instruction, is returned instead.
+///* If the former, then all row-records are guaranteed to include a value
+///* for the column and the P4 value is not required.
+///*
+///* Column definitions created by an ALTER TABLE command may only have
+///* literal default values specified: a number, null or a string. (If a more
+///* complicated default expression value was provided, it is evaluated
+///* when the ALTER TABLE is executed and one of the literal values written
+///* into the sqlite_schema table.)
+///*
+///* Therefore, the P4 parameter is only required if the default value for
+///* the column is a literal number, string or null. The sqlite3ValueFromExpr()
+///* function is capable of transforming these types of expressions into
+///* sqlite3_value objects.
+///*
+///* If column as REAL affinity and the table is an ordinary b-tree table
+///* (not a virtual table) then the value might have been stored as an
+///* integer.  In that case, add an OP_RealAffinity opcode to make sure
+///* it has been converted into REAL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_default(v: *mut Vdbe, p_tab: *mut Table,
     i: i32, i_reg: i32) -> () {

@@ -2,19 +2,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3MemMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcacheMethods2,
+    Sqlite3PcachePage, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs,
+    Sqlite3Vtab, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbClientData, DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey,
+    FpDecode, FuncDef, FuncDefHash, FuncDestructor, IdList, Index, KeyInfo,
+    LogEst, LookasideSlot, Module, NameContext, OnOrUsing, Parse, RowSet,
+    SQLiteThread, Savepoint, Schema, Select, SelectDest, Sqlite3,
+    Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList,
+    StrAccum, Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord,
+    Upsert, VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -22,20 +38,68 @@ type DarwinVaList = *mut i8;
 
 type DarwinIntptrT = i64;
 
+///* CAPI3REF: Run-Time Library Version Numbers
+///* KEYWORDS: sqlite3_version sqlite3_sourceid
+///*
+///* These interfaces provide the same information as the [SQLITE_VERSION],
+///* [SQLITE_VERSION_NUMBER], and [SQLITE_SOURCE_ID] C preprocessor macros
+///* but are associated with the library instead of the header file.  ^(Cautious
+///* programmers might include assert() statements in their application to
+///* verify that values returned by these interfaces match the macros in
+///* the header, and thus ensure that the application is
+///* compiled with matching library and header files.
+///*
+///* <blockquote><pre>
+///* assert( sqlite3_libversion_number()==SQLITE_VERSION_NUMBER );
+///* assert( strncmp(sqlite3_sourceid(),SQLITE_SOURCE_ID,80)==0 );
+///* assert( strcmp(sqlite3_libversion(),SQLITE_VERSION)==0 );
+///* </pre></blockquote>)^
+///*
+///* ^The sqlite3_version[] string constant contains the text of the
+///* [SQLITE_VERSION] macro.  ^The sqlite3_libversion() function returns a
+///* pointer to the sqlite3_version[] string constant.  The sqlite3_libversion()
+///* function is provided for use in DLLs since DLL users usually do not have
+///* direct access to string constants within the DLL.  ^The
+///* sqlite3_libversion_number() function returns an integer equal to
+///* [SQLITE_VERSION_NUMBER].  ^(The sqlite3_sourceid() function returns
+///* a pointer to a string constant whose value is the same as the
+///* [SQLITE_SOURCE_ID] C preprocessor macro.  Except if SQLite is built
+///* using an edited copy of [the amalgamation], then the last four characters
+///* of the hash might be different from [SQLITE_SOURCE_ID].)^
+///*
+///* See also: [sqlite_version()] and [sqlite_source_id()].
+#[unsafe(no_mangle)]
+pub static sqlite3_version: [i8; 7] =
+    [51 as i8, 46 as i8, 53 as i8, 52 as i8, 46 as i8, 48 as i8, 0 as i8];
+
+/// IMPLEMENTATION-OF: R-53536-42575 The sqlite3_libversion() function returns
+///* a pointer to the to the sqlite3_version[] string constant.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_libversion() -> *const i8 {
     return &raw const sqlite3_version[0 as usize] as *const i8;
 }
 
+/// IMPLEMENTATION-OF: R-25063-23286 The sqlite3_sourceid() function returns a
+///* pointer to a string constant whose value is the same as the
+///* SQLITE_SOURCE_ID C preprocessor macro. Except if SQLite is built using
+///* an edited copy of the amalgamation, then the last four characters of
+///* the hash might be different from SQLITE_SOURCE_ID.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_sourceid() -> *const i8 {
     return c"2026-06-29 15:11:58 007f0496619e571092382a3668b6bbcc17919908895dc4be71f8d1b6ec2aeeed".as_ptr()
                 as *mut i8 as *const i8;
 }
 
+/// IMPLEMENTATION-OF: R-35210-63508 The sqlite3_libversion_number() function
+///* returns an integer equal to SQLITE_VERSION_NUMBER.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_libversion_number() -> i32 { return 3054000; }
 
+///* Given the name of a compile-time option, return true if that option
+///* was used and false if not.
+///*
+///* The name can optionally begin with "SQLITE_" but the "SQLITE_" prefix
+///* is not required for a match.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_compileoption_used(mut z_opt_name: *const i8)
     -> i32 {
@@ -81,6 +145,8 @@ pub extern "C" fn sqlite3_compileoption_used(mut z_opt_name: *const i8)
     return 0;
 }
 
+///* Return the N-th compile-time option string.  If N is out of range,
+///* return a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_compileoption_get(n: i32) -> *const i8 {
     let mut n_opt: i32 = 0;
@@ -92,6 +158,40 @@ pub extern "C" fn sqlite3_compileoption_get(n: i32) -> *const i8 {
     return core::ptr::null();
 }
 
+///* CAPI3REF: Test To See If The Library Is Threadsafe
+///*
+///* ^The sqlite3_threadsafe() function returns zero if and only if
+///* SQLite was compiled with mutexing code omitted due to the
+///* [SQLITE_THREADSAFE] compile-time option being set to 0.
+///*
+///* SQLite can be compiled with or without mutexes.  When
+///* the [SQLITE_THREADSAFE] C preprocessor macro is 1 or 2, mutexes
+///* are enabled and SQLite is threadsafe.  When the
+///* [SQLITE_THREADSAFE] macro is 0,
+///* the mutexes are omitted.  Without the mutexes, it is not safe
+///* to use SQLite concurrently from more than one thread.
+///*
+///* Enabling mutexes incurs a measurable performance penalty.
+///* So if speed is of utmost importance, it makes sense to disable
+///* the mutexes.  But for maximum safety, mutexes should be enabled.
+///* ^The default behavior is for mutexes to be enabled.
+///*
+///* This interface can be used by an application to make sure that the
+///* version of SQLite that it is linking against was compiled with
+///* the desired setting of the [SQLITE_THREADSAFE] macro.
+///*
+///* This interface only reports on the compile-time mutex setting
+///* of the [SQLITE_THREADSAFE] flag.  If SQLite is compiled with
+///* SQLITE_THREADSAFE=1 or =2 then mutexes are enabled by default but
+///* can be fully or partially disabled using a call to [sqlite3_config()]
+///* with the verbs [SQLITE_CONFIG_SINGLETHREAD], [SQLITE_CONFIG_MULTITHREAD],
+///* or [SQLITE_CONFIG_SERIALIZED].  ^(The return value of the
+///* sqlite3_threadsafe() function shows only the compile-time setting of
+///* thread safety, not any run-time changes to that setting made by
+///* sqlite3_config(). In other words, the return value from sqlite3_threadsafe()
+///* is unchanged by calls to sqlite3_config().)^
+///*
+///* See the [threading mode] documentation for additional information.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_threadsafe() -> i32 { return 1; }
 
@@ -471,6 +571,11 @@ impl Parse {
     }
 }
 
+///* The SQLITE_*_BKPT macros are substitutes for the error codes with
+///* the same name but without the _BKPT suffix.  These macros invoke
+///* routines that report the line-number on which the error originated
+///* using sqlite3_log().  The routines also provide a convenient place
+///* to set a debugger breakpoint.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_report_error(i_err: i32, lineno: i32,
     z_type: *const i8) -> i32 {
@@ -488,6 +593,8 @@ pub extern "C" fn sqlite3_misuse_error(lineno: i32) -> i32 {
             c"misuse".as_ptr() as *mut i8 as *const i8);
 }
 
+///* Disconnect all sqlite3_vtab objects that belong to database connection
+///* db. This is called when db is being closed.
 extern "C" fn disconnect_all_vtab(db: *mut Sqlite3) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -546,6 +653,8 @@ extern "C" fn disconnect_all_vtab(db: *mut Sqlite3) -> () {
     }
 }
 
+///* Return TRUE if database connection db has unfinalized prepared
+///* statements or unfinished sqlite3_backup objects.
 extern "C" fn connection_is_busy(db: &Sqlite3) -> i32 {
     let mut j: i32 = 0;
     { let _ = 0; };
@@ -569,7 +678,13 @@ extern "C" fn connection_is_busy(db: &Sqlite3) -> i32 {
     return 0;
 }
 
+///* Rollback all database files.  If tripCode is not SQLITE_OK, then
+///* any write cursors are invalidated ("tripped" - as in "tripping a circuit
+///* breaker") and made to return tripCode if there are any further
+///* attempts to use that cursor.  Read cursors remain open and valid
+///* but are "saved" in case the table pages are moved around.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_rollback_all(db: *mut Sqlite3, trip_code_1: i32)
     -> () {
     let mut i: i32 = 0;
@@ -577,6 +692,13 @@ pub extern "C" fn sqlite3_rollback_all(db: *mut Sqlite3, trip_code_1: i32)
     let mut schema_change: i32 = 0;
     { let _ = 0; };
     unsafe { sqlite3_begin_benign_malloc() };
+
+    /// Obtain all b-tree mutexes before making any calls to BtreeRollback().
+    ///* This is important in case the transaction being rolled back has
+    ///* modified the database schema. If the b-tree mutexes are not taken
+    ///* here, then another shared-cache connection might sneak in between
+    ///* the database rollback and schema reset, which can cause false
+    ///* corruption reports in some cases.
     unsafe { sqlite3_btree_enter_all(db) };
     schema_change =
         (unsafe { (*db).m_db_flags } & 1 as u32 != 0 as u32 &&
@@ -609,6 +731,8 @@ pub extern "C" fn sqlite3_rollback_all(db: *mut Sqlite3, trip_code_1: i32)
         unsafe { sqlite3_reset_all_schemas_of_connection(db) };
     }
     unsafe { sqlite3_btree_leave_all(db) };
+
+    /// Any deferred constraint violations have now been resolved.
     unsafe { (*db).n_deferred_cons = 0 as i64 };
     unsafe { (*db).n_deferred_imm_cons = 0 as i64 };
     unsafe { (*db).flags &= !((524288 as u64 | (2 as u64) << 32) as u64) };
@@ -623,6 +747,9 @@ pub extern "C" fn sqlite3_rollback_all(db: *mut Sqlite3, trip_code_1: i32)
     }
 }
 
+///* Close all open savepoints. This function only manipulates fields of the
+///* database handle object, it does not close any savepoints that may be open
+///* at the b-tree/pager level.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_close_savepoints(db: *mut Sqlite3) -> () {
     while !(unsafe { (*db).p_savepoint }).is_null() {
@@ -635,6 +762,10 @@ pub extern "C" fn sqlite3_close_savepoints(db: *mut Sqlite3) -> () {
     unsafe { (*db).is_transaction_savepoint = 0 as u8 };
 }
 
+///* Invoke the destructor function associated with FuncDef p, if any. Except,
+///* if this is not the last copy of the function, do not invoke it. Multiple
+///* copies of a single function are created when create_function() is called
+///* with SQLITE_ANY as the encoding.
 extern "C" fn function_destroy(db: *mut Sqlite3, p: &FuncDef) -> () {
     unsafe {
         let mut p_destructor: *mut FuncDestructor = core::ptr::null_mut();
@@ -659,18 +790,37 @@ extern "C" fn function_destroy(db: *mut Sqlite3, p: &FuncDef) -> () {
     }
 }
 
+///* Close the mutex on database connection db.
+///*
+///* Furthermore, if database connection db is a zombie (meaning that there
+///* has been a prior call to sqlite3_close(db) or sqlite3_close_v2(db)) and
+///* every sqlite3_stmt has now been finalized and every sqlite3_backup has
+///* finished, then free all resources.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_leave_mutex_and_close_zombie(db: *mut Sqlite3)
     -> () {
     unsafe {
         let mut i: *mut HashElem = core::ptr::null_mut();
+        /// Hash table iterator
         let mut j: i32 = 0;
         if unsafe { (*db).e_open_state } as i32 != 167 ||
                 connection_is_busy(unsafe { &*db }) != 0 {
             unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
             return;
         }
+
+        /// If we reach this point, it means that the database connection has
+        ///* closed all sqlite3_stmt and sqlite3_backup objects and has been
+        ///* passed to sqlite3_close (meaning that it is a zombie).  Therefore,
+        ///* go ahead and free all resources.
+        /// If a transaction is open, roll it back. This also ensures that if
+        ///* any database schemas have been modified by an uncommitted transaction
+        ///* they are reset. And that the required b-tree mutex is held to make
+        ///* the pager rollback and schema reset an atomic operation.
         unsafe { sqlite3_rollback_all(db, 0) };
+
+        /// Free any outstanding Savepoint structures.
         sqlite3_close_savepoints(db);
         {
             j = 0;
@@ -702,6 +852,8 @@ pub extern "C" fn sqlite3_leave_mutex_and_close_zombie(db: *mut Sqlite3)
             { let _ = 0; };
         }
         unsafe { sqlite3_vtab_unlock_list(db) };
+
+        /// Free up the array of auxiliary databases
         unsafe { sqlite3_collapse_database_array(db) };
         { let _ = 0; };
         { let _ = 0; };
@@ -776,9 +928,17 @@ pub extern "C" fn sqlite3_leave_mutex_and_close_zombie(db: *mut Sqlite3)
         }
         unsafe { sqlite3_hash_clear(unsafe { &mut (*db).a_module }) };
         unsafe { sqlite3_error(db, 0) };
+
+        /// Deallocates any cached error strings.
         unsafe { sqlite3ValueFree(unsafe { (*db).p_err }) };
         unsafe { sqlite3_close_extensions(db) };
         unsafe { (*db).e_open_state = 213 as u8 };
+
+        /// The temp-database schema is allocated differently from the other schema
+        ///* objects (using sqliteMalloc() directly, instead of sqlite3BtreeSchema()).
+        ///* So it needs to be freed here. Todo: Why not roll the temp schema into
+        ///* the same sqliteMalloc() as the one that allocates the database
+        ///* structure?
         unsafe {
             sqlite3_db_free(db,
                 unsafe {
@@ -803,9 +963,16 @@ pub extern "C" fn sqlite3_leave_mutex_and_close_zombie(db: *mut Sqlite3)
     }
 }
 
+///* Close an existing SQLite database
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_close_2(db: *mut Sqlite3, force_zombie_1: i32) -> i32 {
     unsafe {
-        if (db).is_null() as i32 != 0 { return 0; }
+        if (db).is_null() as i32 != 0 {
+
+            /// EVIDENCE-OF: R-63257-11740 Calling sqlite3_close() or
+            ///* sqlite3_close_v2() with a NULL pointer argument is a harmless no-op.
+            return 0;
+        }
         if (unsafe { sqlite3_safety_check_sick_or_ok(db) } == 0) as i32 != 0 {
             return sqlite3_misuse_error(1274);
         }
@@ -818,7 +985,16 @@ extern "C" fn sqlite3_close_2(db: *mut Sqlite3, force_zombie_1: i32) -> i32 {
                     core::ptr::null_mut())
             };
         }
+
+        /// Force xDisconnect calls on all virtual tables
         disconnect_all_vtab(db);
+
+        /// If a transaction is open, the disconnectAllVtab() call above
+        ///* will not have called the xDisconnect() method on any virtual
+        ///* tables in the db->aVTrans[] array. The following sqlite3VtabRollback()
+        ///* call will do so. We need to do this before the check for active
+        ///* SQL statements below, as the v-table implementation may be storing
+        ///* some prepared statements internally.
         unsafe { sqlite3_vtab_rollback(db) };
         if (force_zombie_1 == 0) as i32 != 0 &&
                 connection_is_busy(unsafe { &*db }) != 0 {
@@ -843,12 +1019,50 @@ extern "C" fn sqlite3_close_2(db: *mut Sqlite3, force_zombie_1: i32) -> i32 {
             }
             unsafe { sqlite3_free(p as *mut ()) };
         }
+
+        /// Convert the connection into a zombie and then close it.
         unsafe { (*db).e_open_state = 167 as u8 };
         unsafe { sqlite3_leave_mutex_and_close_zombie(db) };
         return 0;
     }
 }
 
+///* CAPI3REF: Closing A Database Connection
+///* DESTRUCTOR: sqlite3
+///*
+///* ^The sqlite3_close() and sqlite3_close_v2() routines are destructors
+///* for the [sqlite3] object.
+///* ^Calls to sqlite3_close() and sqlite3_close_v2() return [SQLITE_OK] if
+///* the [sqlite3] object is successfully destroyed and all associated
+///* resources are deallocated.
+///*
+///* Ideally, applications should [sqlite3_finalize | finalize] all
+///* [prepared statements], [sqlite3_blob_close | close] all [BLOB handles], and
+///* [sqlite3_backup_finish | finish] all [sqlite3_backup] objects associated
+///* with the [sqlite3] object prior to attempting to close the object.
+///* ^If the database connection is associated with unfinalized prepared
+///* statements, BLOB handlers, and/or unfinished sqlite3_backup objects then
+///* sqlite3_close() will leave the database connection open and return
+///* [SQLITE_BUSY]. ^If sqlite3_close_v2() is called with unfinalized prepared
+///* statements, unclosed BLOB handlers, and/or unfinished sqlite3_backups,
+///* it returns [SQLITE_OK] regardless, but instead of deallocating the database
+///* connection immediately, it marks the database connection as an unusable
+///* "zombie" and makes arrangements to automatically deallocate the database
+///* connection after all prepared statements are finalized, all BLOB handles
+///* are closed, and all backups have finished. The sqlite3_close_v2() interface
+///* is intended for use with host languages that are garbage collected, and
+///* where the order in which destructors are called is arbitrary.
+///*
+///* ^If an [sqlite3] object is destroyed while a transaction is open,
+///* the transaction is automatically rolled back.
+///*
+///* The C parameter to [sqlite3_close(C)] and [sqlite3_close_v2(C)]
+///* must be either a NULL
+///* pointer or an [sqlite3] object pointer obtained
+///* from [sqlite3_open()], [sqlite3_open16()], or
+///* [sqlite3_open_v2()], and not previously closed.
+///* ^Calling sqlite3_close() or sqlite3_close_v2() with a NULL pointer
+///* argument is a harmless no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_close(db: *mut Sqlite3) -> i32 {
     return sqlite3_close_2(db, 0);
@@ -859,19 +1073,113 @@ pub extern "C" fn sqlite3_close_v2(db: *mut Sqlite3) -> i32 {
     return sqlite3_close_2(db, 1);
 }
 
+///* CAPI3REF: Initialize The SQLite Library
+///*
+///* ^The sqlite3_initialize() routine initializes the
+///* SQLite library.  ^The sqlite3_shutdown() routine
+///* deallocates any resources that were allocated by sqlite3_initialize().
+///* These routines are designed to aid in process initialization and
+///* shutdown on embedded systems.  Workstation applications using
+///* SQLite normally do not need to invoke either of these routines.
+///*
+///* A call to sqlite3_initialize() is an "effective" call if it is
+///* the first time sqlite3_initialize() is invoked during the lifetime of
+///* the process, or if it is the first time sqlite3_initialize() is invoked
+///* following a call to sqlite3_shutdown().  ^(Only an effective call
+///* of sqlite3_initialize() does any initialization.  All other calls
+///* are harmless no-ops.)^
+///*
+///* A call to sqlite3_shutdown() is an "effective" call if it is the first
+///* call to sqlite3_shutdown() since the last sqlite3_initialize().  ^(Only
+///* an effective call to sqlite3_shutdown() does any deinitialization.
+///* All other valid calls to sqlite3_shutdown() are harmless no-ops.)^
+///*
+///* The sqlite3_initialize() interface is threadsafe, but sqlite3_shutdown()
+///* is not.  The sqlite3_shutdown() interface must only be called from a
+///* single thread.  All open [database connections] must be closed and all
+///* other SQLite resources must be deallocated prior to invoking
+///* sqlite3_shutdown().
+///*
+///* Among other things, ^sqlite3_initialize() will invoke
+///* sqlite3_os_init().  Similarly, ^sqlite3_shutdown()
+///* will invoke sqlite3_os_end().
+///*
+///* ^The sqlite3_initialize() routine returns [SQLITE_OK] on success.
+///* ^If for some reason, sqlite3_initialize() is unable to initialize
+///* the library (perhaps it is unable to allocate a needed resource such
+///* as a mutex) it returns an [error code] other than [SQLITE_OK].
+///*
+///* ^The sqlite3_initialize() routine is called internally by many other
+///* SQLite interfaces so that an application usually does not need to
+///* invoke sqlite3_initialize() directly.  For example, [sqlite3_open()]
+///* calls sqlite3_initialize() so the SQLite library will be automatically
+///* initialized when [sqlite3_open()] is called if it has not been initialized
+///* already.  ^However, if SQLite is compiled with the [SQLITE_OMIT_AUTOINIT]
+///* compile-time option, then the automatic calls to sqlite3_initialize()
+///* are omitted and the application must call sqlite3_initialize() directly
+///* prior to using any other SQLite interface.  For maximum portability,
+///* it is recommended that applications always invoke sqlite3_initialize()
+///* directly prior to using any other SQLite interface.  Future releases
+///* of SQLite may require this.  In other words, the behavior exhibited
+///* when SQLite is compiled with [SQLITE_OMIT_AUTOINIT] might become the
+///* default behavior in some future release of SQLite.
+///*
+///* The sqlite3_os_init() routine does operating-system specific
+///* initialization of the SQLite library.  The sqlite3_os_end()
+///* routine undoes the effect of sqlite3_os_init().  Typical tasks
+///* performed by these routines include allocation or deallocation
+///* of static resources, initialization of global variables,
+///* setting up a default [sqlite3_vfs] module, or setting up
+///* a default configuration using [sqlite3_config()].
+///*
+///* The application should never invoke either sqlite3_os_init()
+///* or sqlite3_os_end() directly.  The application should only invoke
+///* sqlite3_initialize() and sqlite3_shutdown().  The sqlite3_os_init()
+///* interface is called automatically by sqlite3_initialize() and
+///* sqlite3_os_end() is called by sqlite3_shutdown().  Appropriate
+///* implementations for sqlite3_os_init() and sqlite3_os_end()
+///* are built into SQLite when it is compiled for Unix, Windows, or OS/2.
+///* When [custom builds | built for other platforms]
+///* (using the [SQLITE_OS_OTHER=1] compile-time
+///* option) the application must supply a suitable implementation for
+///* sqlite3_os_init() and sqlite3_os_end().  An application-supplied
+///* implementation of sqlite3_os_init() or sqlite3_os_end()
+///* must return [SQLITE_OK] on success and some other [error code] upon
+///* failure.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_initialize() -> i32 {
     unsafe {
         let mut p_main_mtx: *mut Sqlite3Mutex = core::ptr::null_mut();
+        /// The main static mutex
         let mut rc: i32 = 0;
+
+        /// Result code
+        /// If the following assert() fails on some obscure processor/compiler
+        ///* combination, the work-around is to set the correct pointer
+        ///* size at compile-time using -DSQLITE_PTRSIZE=n compile-time option
         { let _ = 0; };
         if sqlite3Config.is_init != 0 {
             unsafe { sqlite3_memory_barrier() };
             return 0;
         }
-        rc = unsafe { sqlite3_mutex_init() };
+
+        /// Make sure the mutex subsystem is initialized.  If unable to
+        ///* initialize the mutex subsystem, return early with the error.
+        ///* If the system is so sick that we are unable to allocate a mutex,
+        ///* there is not much SQLite is going to be able to do.
+        ///*
+        ///* The mutex subsystem must take care of serializing its own
+        ///* initialization.
+        (rc = unsafe { sqlite3_mutex_init() });
         if rc != 0 { return rc; }
-        p_main_mtx = unsafe { sqlite3MutexAlloc(2) };
+
+        /// Initialize the malloc() system and the recursive pInitMutex mutex.
+        ///* This operation is protected by the STATIC_MAIN mutex.  Note that
+        ///* MutexAlloc() is called for a static mutex prior to initializing the
+        ///* malloc subsystem - this implies that the allocation of a static
+        ///* mutex must not require support from the malloc subsystem.
+        (p_main_mtx = unsafe { sqlite3MutexAlloc(2) });
         unsafe { sqlite3_mutex_enter(p_main_mtx) };
         sqlite3Config.is_mutex_init = 1;
         if (sqlite3Config.is_malloc_init == 0) as i32 != 0 {
@@ -897,6 +1205,19 @@ pub extern "C" fn sqlite3_initialize() -> i32 {
         }
         unsafe { sqlite3_mutex_leave(p_main_mtx) };
         if rc != 0 { return rc; }
+
+        /// Do the rest of the initialization under the recursive mutex so
+        ///* that we will be able to handle recursive calls into
+        ///* sqlite3_initialize().  The recursive calls normally come through
+        ///* sqlite3_os_init() when it invokes sqlite3_vfs_register(), but other
+        ///* recursive calls might also be possible.
+        ///*
+        ///* IMPLEMENTATION-OF: R-00140-37445 SQLite automatically serializes calls
+        ///* to the xInit method, so the xInit method need not be threadsafe.
+        ///*
+        ///* The following mutex is what serializes access to the appdef pcache xInit
+        ///* methods.  The sqlite3_pcache_methods.xInit() all is embedded in the
+        ///* call to sqlite3PcacheInitialize().
         unsafe { sqlite3_mutex_enter(sqlite3Config.p_init_mutex) };
         if sqlite3Config.is_init == 0 && sqlite3Config.in_progress == 0 {
             sqlite3Config.in_progress = 1;
@@ -926,6 +1247,9 @@ pub extern "C" fn sqlite3_initialize() -> i32 {
             sqlite3Config.in_progress = 0;
         }
         unsafe { sqlite3_mutex_leave(sqlite3Config.p_init_mutex) };
+
+        /// Go back under the static mutex and clean up the recursive
+        ///* mutex to prevent a resource leak.
         unsafe { sqlite3_mutex_enter(p_main_mtx) };
         {
             let __p = &mut sqlite3Config.n_ref_init_mutex;
@@ -939,11 +1263,118 @@ pub extern "C" fn sqlite3_initialize() -> i32 {
             sqlite3Config.p_init_mutex = core::ptr::null_mut();
         }
         unsafe { sqlite3_mutex_leave(p_main_mtx) };
+
+        /// The following is just a sanity check to make sure SQLite has
+        ///* been compiled correctly.  It is important to run this code, but
+        ///* we don't want to run it too often and soak up CPU cycles for no
+        ///* reason.  So we run it once during initialization.
+        /// Do extra initialization steps requested by the SQLITE_EXTRA_INIT
+        ///* compile-time option.
         return rc;
     }
 }
 
+///* CAPI3REF: Name Of The Folder Holding Database Files
+///*
+///* ^(If this global variable is made to point to a string which is
+///* the name of a folder (a.k.a. directory), then all database files
+///* specified with a relative pathname and created or accessed by
+///* SQLite when using a built-in windows [sqlite3_vfs | VFS] will be assumed
+///* to be relative to that directory.)^ ^If this variable is a NULL
+///* pointer, then SQLite assumes that all database files specified
+///* with a relative pathname are relative to the current directory
+///* for the process.  Only the windows VFS makes use of this global
+///* variable; it is ignored by the unix VFS.
+///*
+///* Changing the value of this variable while a database connection is
+///* open can result in a corrupt database.
+///*
+///* It is not safe to read or modify this variable in more than one
+///* thread at a time.  It is not safe to read or modify this variable
+///* if a [database connection] is being used at the same time in a separate
+///* thread.
+///* It is intended that this variable be set once
+///* as part of process initialization and before any SQLite interface
+///* routines have been called and that this variable remain unchanged
+///* thereafter.
+///*
+///* ^The [data_store_directory pragma] may modify this variable and cause
+///* it to point to memory obtained from [sqlite3_malloc].  ^Furthermore,
+///* the [data_store_directory pragma] always assumes that any string
+///* that this variable points to is held in memory obtained from
+///* [sqlite3_malloc] and the pragma may attempt to free that memory
+///* using [sqlite3_free].
+///* Hence, if this variable is modified directly, either it should be
+///* made NULL or made to point to memory obtained from [sqlite3_malloc]
+///* or else the use of the [data_store_directory pragma] should be avoided.
 #[unsafe(no_mangle)]
+pub static mut sqlite3_data_directory: *mut i8 = core::ptr::null_mut();
+
+///* CAPI3REF: Name Of The Folder Holding Temporary Files
+///*
+///* ^(If this global variable is made to point to a string which is
+///* the name of a folder (a.k.a. directory), then all temporary files
+///* created by SQLite when using a built-in [sqlite3_vfs | VFS]
+///* will be placed in that directory.)^  ^If this variable
+///* is a NULL pointer, then SQLite performs a search for an appropriate
+///* temporary file directory.
+///*
+///* Applications are strongly discouraged from using this global variable.
+///* It is required to set a temporary folder on Windows Runtime (WinRT).
+///* But for all other platforms, it is highly recommended that applications
+///* neither read nor write this variable.  This global variable is a relic
+///* that exists for backwards compatibility of legacy applications and should
+///* be avoided in new projects.
+///*
+///* It is not safe to read or modify this variable in more than one
+///* thread at a time.  It is not safe to read or modify this variable
+///* if a [database connection] is being used at the same time in a separate
+///* thread.
+///* It is intended that this variable be set once
+///* as part of process initialization and before any SQLite interface
+///* routines have been called and that this variable remain unchanged
+///* thereafter.
+///*
+///* ^The [temp_store_directory pragma] may modify this variable and cause
+///* it to point to memory obtained from [sqlite3_malloc].  ^Furthermore,
+///* the [temp_store_directory pragma] always assumes that any string
+///* that this variable points to is held in memory obtained from
+///* [sqlite3_malloc] and the pragma may attempt to free that memory
+///* using [sqlite3_free].
+///* Hence, if this variable is modified directly, either it should be
+///* made NULL or made to point to memory obtained from [sqlite3_malloc]
+///* or else the use of the [temp_store_directory pragma] should be avoided.
+///* Except when requested by the [temp_store_directory pragma], SQLite
+///* does not free the memory that sqlite3_temp_directory points to.  If
+///* the application wants that memory to be freed, it must do
+///* so itself, taking care to only do so after all [database connection]
+///* objects have been destroyed.
+///*
+///* <b>Note to Windows Runtime users:</b>  The temporary directory must be set
+///* prior to calling [sqlite3_open] or [sqlite3_open_v2].  Otherwise, various
+///* features that require the use of temporary files may fail.  Here is an
+///* example of how to do this using C++ with the Windows Runtime:
+///*
+///* <blockquote><pre>
+///* LPCWSTR zPath = Windows::Storage::ApplicationData::Current->
+///* &nbsp;     TemporaryFolder->Path->Data();
+///* char zPathBuf&#91;MAX_PATH + 1&#93;;
+///* memset(zPathBuf, 0, sizeof(zPathBuf));
+///* WideCharToMultiByte(CP_UTF8, 0, zPath, -1, zPathBuf, sizeof(zPathBuf),
+///* &nbsp;     NULL, NULL);
+///* sqlite3_temp_directory = sqlite3_mprintf("%s", zPathBuf);
+///* </pre></blockquote>
+#[unsafe(no_mangle)]
+pub static mut sqlite3_temp_directory: *mut i8 = core::ptr::null_mut();
+
+///* Undo the effects of sqlite3_initialize().  Must not be called while
+///* there are outstanding database connections or memory allocations or
+///* while any part of SQLite is otherwise in use in any thread.  This
+///* routine is not threadsafe.  But it is safe to invoke this routine
+///* on when SQLite is already shut down.  If SQLite is already shut down
+///* when this routine is invoked, then this routine is a harmless no-op.
+#[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_shutdown() -> i32 {
     unsafe {
         if sqlite3Config.is_init != 0 {
@@ -958,7 +1389,14 @@ pub extern "C" fn sqlite3_shutdown() -> i32 {
         if sqlite3Config.is_malloc_init != 0 {
             unsafe { sqlite3_malloc_end() };
             sqlite3Config.is_malloc_init = 0;
-            sqlite3_data_directory = core::ptr::null_mut();
+
+            /// The heap subsystem has now been shutdown and these values are supposed
+            ///* to be NULL or point to memory that was obtained from sqlite3_malloc(),
+            ///* which would rely on that heap subsystem; therefore, make sure these
+            ///* values cannot refer to heap memory that was just invalidated when the
+            ///* heap subsystem was shutdown.  This is only done if the current call to
+            ///* this function resulted in the heap subsystem actually being shutdown.
+            (sqlite3_data_directory = core::ptr::null_mut());
             sqlite3_temp_directory = core::ptr::null_mut();
         }
         if sqlite3Config.is_mutex_init != 0 {
@@ -969,7 +1407,41 @@ pub extern "C" fn sqlite3_shutdown() -> i32 {
     }
 }
 
+///* CAPI3REF: Configuring The SQLite Library
+///*
+///* The sqlite3_config() interface is used to make global configuration
+///* changes to SQLite in order to tune SQLite to the specific needs of
+///* the application.  The default configuration is recommended for most
+///* applications and so this routine is usually not necessary.  It is
+///* provided to support rare applications with unusual needs.
+///*
+///* <b>The sqlite3_config() interface is not threadsafe. The application
+///* must ensure that no other SQLite interfaces are invoked by other
+///* threads while sqlite3_config() is running.</b>
+///*
+///* The first argument to sqlite3_config() is an integer
+///* [configuration option] that determines
+///* what property of SQLite is to be configured.  Subsequent arguments
+///* vary depending on the [configuration option]
+///* in the first argument.
+///*
+///* For most configuration options, the sqlite3_config() interface
+///* may only be invoked prior to library initialization using
+///* [sqlite3_initialize()] or after shutdown by [sqlite3_shutdown()].
+///* The exceptional configuration options that may be invoked at any time
+///* are called "anytime configuration options".
+///* ^If sqlite3_config() is called after [sqlite3_initialize()] and before
+///* [sqlite3_shutdown()] with a first argument that is not an anytime
+///* configuration option, then the sqlite3_config() call will
+///* return SQLITE_MISUSE.
+///* Note, however, that ^sqlite3_config() can be called as part of the
+///* implementation of an application-defined [sqlite3_os_init()].
+///*
+///* ^When a configuration option is set, sqlite3_config() returns [SQLITE_OK].
+///* ^If the option is unknown or SQLite is unable to set the option
+///* then this routine returns a non-zero [error code].
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
     unsafe {
         let mut ap: *const i8 = core::ptr::null();
@@ -987,22 +1459,45 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
             match op {
                 1 => {
                     {
-                        sqlite3Config.b_core_mutex = 0 as u8;
-                        sqlite3Config.b_full_mutex = 0 as u8;
+
+                        /// EVIDENCE-OF: R-02748-19096 This option sets the threading mode to
+                        ///* Single-thread.
+                        (sqlite3Config.b_core_mutex = 0 as u8);
+
+                        /// Disable mutex on core
+                        (sqlite3Config.b_full_mutex = 0 as u8);
+
+                        /// Disable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_core_mutex = 1 as u8;
-                        sqlite3Config.b_full_mutex = 0 as u8;
+
+                        /// EVIDENCE-OF: R-14374-42468 This option sets the threading mode to
+                        ///* Multi-thread.
+                        (sqlite3Config.b_core_mutex = 1 as u8);
+
+                        /// Enable mutex on core
+                        (sqlite3Config.b_full_mutex = 0 as u8);
+
+                        /// Disable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_core_mutex = 1 as u8;
-                        sqlite3Config.b_full_mutex = 1 as u8;
+
+                        /// EVIDENCE-OF: R-41220-51800 This option sets the threading mode to
+                        ///* Serialized.
+                        (sqlite3Config.b_core_mutex = 1 as u8);
+
+                        /// Enable mutex on core
+                        (sqlite3Config.b_full_mutex = 1 as u8);
+
+                        /// Enable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.mutex =
+
+                        /// Specify an alternative mutex implementation
+                        (sqlite3Config.mutex =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1012,10 +1507,12 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MutexMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
+
+                        /// Retrieve the current mutex implementation
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1029,7 +1526,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1039,7 +1542,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1060,13 +1563,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1080,14 +1588,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1105,6 +1618,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1119,10 +1637,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1132,7 +1664,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1207,6 +1739,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1223,16 +1759,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1308,17 +1853,33 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 2 => {
                     {
-                        sqlite3Config.b_core_mutex = 1 as u8;
-                        sqlite3Config.b_full_mutex = 0 as u8;
+
+                        /// EVIDENCE-OF: R-14374-42468 This option sets the threading mode to
+                        ///* Multi-thread.
+                        (sqlite3Config.b_core_mutex = 1 as u8);
+
+                        /// Enable mutex on core
+                        (sqlite3Config.b_full_mutex = 0 as u8);
+
+                        /// Disable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_core_mutex = 1 as u8;
-                        sqlite3Config.b_full_mutex = 1 as u8;
+
+                        /// EVIDENCE-OF: R-41220-51800 This option sets the threading mode to
+                        ///* Serialized.
+                        (sqlite3Config.b_core_mutex = 1 as u8);
+
+                        /// Enable mutex on core
+                        (sqlite3Config.b_full_mutex = 1 as u8);
+
+                        /// Enable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.mutex =
+
+                        /// Specify an alternative mutex implementation
+                        (sqlite3Config.mutex =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1328,10 +1889,12 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MutexMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
+
+                        /// Retrieve the current mutex implementation
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1345,7 +1908,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1355,7 +1924,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1376,13 +1945,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1396,14 +1970,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1421,6 +2000,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1435,10 +2019,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1448,7 +2046,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1523,6 +2121,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1539,16 +2141,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1624,12 +2235,21 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 3 => {
                     {
-                        sqlite3Config.b_core_mutex = 1 as u8;
-                        sqlite3Config.b_full_mutex = 1 as u8;
+
+                        /// EVIDENCE-OF: R-41220-51800 This option sets the threading mode to
+                        ///* Serialized.
+                        (sqlite3Config.b_core_mutex = 1 as u8);
+
+                        /// Enable mutex on core
+                        (sqlite3Config.b_full_mutex = 1 as u8);
+
+                        /// Enable mutex on connections
                         break '__s14;
                     }
                     {
-                        sqlite3Config.mutex =
+
+                        /// Specify an alternative mutex implementation
+                        (sqlite3Config.mutex =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1639,10 +2259,12 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MutexMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
+
+                        /// Retrieve the current mutex implementation
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1656,7 +2278,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1666,7 +2294,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1687,13 +2315,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1707,14 +2340,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1732,6 +2370,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1746,10 +2389,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1759,7 +2416,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1834,6 +2491,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1850,16 +2511,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -1935,7 +2605,9 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 10 => {
                     {
-                        sqlite3Config.mutex =
+
+                        /// Specify an alternative mutex implementation
+                        (sqlite3Config.mutex =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1945,10 +2617,12 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MutexMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
+
+                        /// Retrieve the current mutex implementation
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -1962,7 +2636,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -1972,7 +2652,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -1993,13 +2673,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2013,14 +2698,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2038,6 +2728,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -2052,10 +2747,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2065,7 +2774,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2140,6 +2849,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2156,16 +2869,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2241,6 +2963,8 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 11 => {
                     {
+
+                        /// Retrieve the current mutex implementation
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -2254,7 +2978,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2264,7 +2994,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2285,13 +3015,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2305,14 +3040,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2330,6 +3070,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -2344,10 +3089,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2357,7 +3116,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2432,6 +3191,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2448,16 +3211,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2533,7 +3305,13 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 4 => {
                     {
-                        sqlite3Config.m =
+
+                        /// EVIDENCE-OF: R-55594-21030 The SQLITE_CONFIG_MALLOC option takes a
+                        ///* single argument which is a pointer to an instance of the
+                        ///* sqlite3_mem_methods structure. The argument specifies alternative
+                        ///* low-level memory allocation routines to be used in place of the memory
+                        ///* allocation routines built into SQLite.
+                        (sqlite3Config.m =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2543,7 +3321,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3MemMethods)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2564,13 +3342,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2584,14 +3367,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2609,6 +3397,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -2623,10 +3416,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2636,7 +3443,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2711,6 +3518,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2727,16 +3538,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2829,13 +3649,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     }
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2849,14 +3674,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2874,6 +3704,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -2888,10 +3723,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -2901,7 +3750,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -2976,6 +3825,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -2992,16 +3845,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3078,13 +3940,18 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 9 => {
                     {
                         { let _ = 0; };
-                        sqlite3Config.b_memstat =
+
+                        /// Cannot change at runtime */
+                        ///      /* EVIDENCE-OF: R-61275-35157 The SQLITE_CONFIG_MEMSTATUS option takes
+                        ///* single argument of type int, interpreted as a boolean, which enables
+                        ///* or disables the collection of memory allocation statistics.
+                        (sqlite3Config.b_memstat =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                 *(__va_p as *const i32)
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -3098,14 +3965,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3123,6 +3995,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -3137,10 +4014,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -3150,7 +4041,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -3225,6 +4116,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3241,16 +4136,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3336,14 +4240,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3361,6 +4270,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -3375,10 +4289,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -3388,7 +4316,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -3463,6 +4391,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3479,16 +4411,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3564,14 +4505,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 7 => {
                     {
-                        sqlite3Config.p_page =
+
+                        /// EVIDENCE-OF: R-18761-36601 There are three arguments to
+                        ///* SQLITE_CONFIG_PAGECACHE: A pointer to 8-byte aligned memory (pMem),
+                        ///* the size of each page cache line (sz), and the number of cache lines
+                        ///* (N).
+                        (sqlite3Config.p_page =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                                 *(__va_p as *const *mut ())
-                            };
+                            });
                         sqlite3Config.sz_page =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3589,6 +4535,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -3603,10 +4554,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -3616,7 +4581,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -3691,6 +4656,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3707,16 +4676,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3792,6 +4770,11 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 24 => {
                     {
+
+                        /// EVIDENCE-OF: R-39100-27317 The SQLITE_CONFIG_PCACHE_HDRSZ option takes
+                        ///* a single parameter which is a pointer to an integer and writes into
+                        ///* that integer the number of extra bytes per page required for each page
+                        ///* in SQLITE_CONFIG_PAGECACHE.
                         unsafe {
                             *unsafe {
                                         let __ap = &mut ap;
@@ -3806,10 +4789,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         };
                         break '__s14;
                     }
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -3819,7 +4816,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -3894,6 +4891,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3910,16 +4911,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -3994,10 +5004,24 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     { rc = 1; break '__s14; }
                 }
                 14 => {
-                    { break '__s14; }
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// no-op
+                        break '__s14;
+                    }
+                    {
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -4007,7 +5031,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -4082,6 +5106,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4098,16 +5126,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4182,9 +5219,19 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                     { rc = 1; break '__s14; }
                 }
                 15 => {
-                    { rc = 1; break '__s14; }
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// now an error
+                        (rc = 1);
+                        break '__s14;
+                    }
+                    {
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -4194,7 +5241,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -4269,6 +5316,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4285,16 +5336,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4370,7 +5430,12 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 18 => {
                     {
-                        sqlite3Config.pcache2 =
+
+                        /// EVIDENCE-OF: R-63325-48378 The SQLITE_CONFIG_PCACHE2 option takes a
+                        ///* single argument which is a pointer to an sqlite3_pcache_methods2
+                        ///* object. This object specifies the interface to a custom page cache
+                        ///* implementation.
+                        (sqlite3Config.pcache2 =
                             unsafe {
                                 core::ptr::read(unsafe {
                                         let __ap = &mut ap;
@@ -4380,7 +5445,7 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                                                             + 7) & !7);
                                         *(__va_p as *const *mut Sqlite3PcacheMethods2)
                                     })
-                            };
+                            });
                         break '__s14;
                     }
                     {
@@ -4455,6 +5520,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4471,16 +5540,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4627,6 +5705,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4643,16 +5725,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4783,6 +5874,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4799,16 +5894,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4922,6 +6026,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -4938,16 +6046,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -5023,6 +6140,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 17 => {
                     {
+                        /// EVIDENCE-OF: R-25451-61125 The SQLITE_CONFIG_URI option takes a single
+                        ///* argument of type int. If non-zero, then URI handling is globally
+                        ///* enabled. If the parameter is zero, then URI handling is globally
+                        ///* disabled.
                         let b_open_uri: i32 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -5039,16 +6160,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                         break '__s14;
                     }
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -5124,16 +6254,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 20 => {
                     {
-                        sqlite3Config.b_use_cis =
+
+                        /// EVIDENCE-OF: R-36592-02772 The SQLITE_CONFIG_COVERING_INDEX_SCAN
+                        ///* option takes a single integer argument which is interpreted as a
+                        ///* boolean in order to enable or disable the use of covering indices for
+                        ///* full table scans in the query optimizer.
+                        (sqlite3Config.b_use_cis =
                             unsafe {
                                     let __ap = &mut ap;
                                     let __va_p = *__ap;
                                     *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                                     *(__va_p as *const i32)
-                                } as u8;
+                                } as u8);
                         break '__s14;
                     }
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -5209,6 +6348,10 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
                 }
                 22 => {
                     {
+                        /// EVIDENCE-OF: R-58063-38258 SQLITE_CONFIG_MMAP_SIZE takes two 64-bit
+                        ///* integer (sqlite3_int64) values that are the default mmap size limit
+                        ///* (the default setting for PRAGMA mmap_size) and the maximum allowed
+                        ///* mmap size limit.
                         let mut sz_mmap: Sqlite3Int64 =
                             unsafe {
                                 let __ap = &mut ap;
@@ -5416,12 +6559,25 @@ pub unsafe extern "C" fn sqlite3_config(op: i32, mut __va0: ...) -> i32 {
     }
 }
 
+///* Set up the lookaside buffers for a database connection.
+///* Return SQLITE_OK on success. 
+///* If lookaside is already active, return SQLITE_BUSY.
+///*
+///* The sz parameter is the number of bytes in each lookaside slot.
+///* The cnt parameter is the number of slots.  If pBuf is NULL the
+///* space for the lookaside memory is obtained from sqlite3_malloc()
+///* or similar.  If pBuf is not NULL then it is sz*cnt bytes of memory
+///* to use for the lookaside memory.
+#[allow(unused_doc_comments)]
 extern "C" fn setup_lookaside(db: *mut Sqlite3, p_buf_1: *mut (), mut sz: i32,
     mut cnt: i32) -> i32 {
     unsafe {
         let mut p_start: *mut () = core::ptr::null_mut();
+        /// Start of the lookaside buffer
         let mut sz_alloc: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Total space set aside for lookaside memory
         let mut n_big: i32 = 0;
+        /// Number of full-size slots
         let mut n_sm: i32 = 0;
         if unsafe { sqlite3_lookaside_used(db, core::ptr::null_mut()) } > 0 {
             return 5;
@@ -5429,7 +6585,10 @@ extern "C" fn setup_lookaside(db: *mut Sqlite3, p_buf_1: *mut (), mut sz: i32,
         if unsafe { (*db).lookaside.b_malloced } != 0 {
             unsafe { sqlite3_free(unsafe { (*db).lookaside.p_start }) };
         }
-        sz = sz & !7;
+
+        /// The size of a lookaside slot after ROUNDDOWN8 needs to be larger
+        ///* than a pointer and small enough to fit in a u16.
+        (sz = sz & !7);
         if sz <= core::mem::size_of::<*mut LookasideSlot>() as i32 { sz = 0; }
         if sz > 65528 { sz = 65528; }
         if cnt < 1 { cnt = 0; }
@@ -5507,6 +6666,8 @@ extern "C" fn setup_lookaside(db: *mut Sqlite3, p_buf_1: *mut (), mut sz: i32,
                     { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                 }
             }
+
+            /// SQLITE_OMIT_TWOSIZE_LOOKASIDE
             { let _ = 0; };
             unsafe { (*db).lookaside.p_end = p as *mut () };
             unsafe { (*db).lookaside.b_disable = 0 as u32 };
@@ -5520,7 +6681,11 @@ extern "C" fn setup_lookaside(db: *mut Sqlite3, p_buf_1: *mut (), mut sz: i32,
             unsafe { (*db).lookaside.p_small_init = core::ptr::null_mut() };
             unsafe { (*db).lookaside.p_small_free = core::ptr::null_mut() };
             unsafe { (*db).lookaside.p_middle = core::ptr::null_mut() };
-            unsafe { (*db).lookaside.p_end = core::ptr::null_mut() };
+            unsafe {
+
+                /// SQLITE_OMIT_TWOSIZE_LOOKASIDE
+                ((*db).lookaside.p_end = core::ptr::null_mut())
+            };
             unsafe { (*db).lookaside.b_disable = 1 as u32 };
             unsafe { (*db).lookaside.sz = 0 as u16 };
             unsafe { (*db).lookaside.b_malloced = 0 as u8 };
@@ -5530,11 +6695,29 @@ extern "C" fn setup_lookaside(db: *mut Sqlite3, p_buf_1: *mut (), mut sz: i32,
             (*db).lookaside.p_true_end = unsafe { (*db).lookaside.p_end }
         };
         { let _ = 0; };
+
+        /// SQLITE_OMIT_LOOKASIDE
         return 0;
     }
 }
 
+///* CAPI3REF: Configure database connections
+///* METHOD: sqlite3
+///*
+///* The sqlite3_db_config() interface is used to make configuration
+///* changes to a [database connection].  The interface is similar to
+///* [sqlite3_config()] except that the changes apply to a single
+///* [database connection] (specified in the first argument).
+///*
+///* The second argument to sqlite3_db_config(D,V,...)  is the
+///* [SQLITE_DBCONFIG_LOOKASIDE | configuration verb] - an integer code
+///* that indicates what aspect of the [database connection] is being configured.
+///* Subsequent arguments vary depending on the configuration verb.
+///*
+///* ^Calls to sqlite3_db_config() return SQLITE_OK if and only if
+///* the call is considered successful.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
     mut __va0: ...) -> i32 {
     let mut ap: *const i8 = core::ptr::null();
@@ -5547,14 +6730,17 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
             1000 => {
                 {
                     unsafe {
-                        (*unsafe { (*db).a_db.offset(0 as isize) }).z_db_s_name =
+
+                        /// IMP: R-06824-28531 */
+                        ///      /* IMP: R-36257-52125
+                        ((*unsafe { (*db).a_db.offset(0 as isize) }).z_db_s_name =
                             unsafe {
                                 let __ap = &mut ap;
                                 let __va_p = *__ap;
                                 *__ap =
                                     (*__ap).add((core::mem::size_of::<*mut i8>() + 7) & !7);
                                 *(__va_p as *const *mut i8)
-                            }
+                            })
                     };
                     rc = 0;
                     break '__s17;
@@ -5568,6 +6754,7 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                                 (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                             *(__va_p as *const *mut ())
                         };
+                    /// IMP: R-26835-10964
                     let sz: i32 =
                         unsafe {
                             let __ap = &mut ap;
@@ -5575,6 +6762,7 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                             *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                             *(__va_p as *const i32)
                         };
+                    /// IMP: R-47871-25994
                     let cnt: i32 =
                         unsafe {
                             let __ap = &mut ap;
@@ -5582,7 +6770,9 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                             *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                             *(__va_p as *const i32)
                         };
-                    rc = setup_lookaside(db, p_buf, sz, cnt);
+
+                    /// IMP: R-04460-53386
+                    (rc = setup_lookaside(db, p_buf, sz, cnt));
                     break '__s17;
                 }
                 {
@@ -5611,6 +6801,8 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                     break '__s17;
                 }
                 {
+                    /// The opcode
+                    /// Mask of the bit in sqlite3.flags to set/clear
                     let mut i: u32 = 0 as u32;
                     rc = 1;
                     {
@@ -5677,6 +6869,7 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                                 (*__ap).add((core::mem::size_of::<*mut ()>() + 7) & !7);
                             *(__va_p as *const *mut ())
                         };
+                    /// IMP: R-26835-10964
                     let sz: i32 =
                         unsafe {
                             let __ap = &mut ap;
@@ -5684,6 +6877,7 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                             *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                             *(__va_p as *const i32)
                         };
+                    /// IMP: R-47871-25994
                     let cnt: i32 =
                         unsafe {
                             let __ap = &mut ap;
@@ -5691,7 +6885,9 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                             *__ap = (*__ap).add((core::mem::size_of::<i32>() + 7) & !7);
                             *(__va_p as *const i32)
                         };
-                    rc = setup_lookaside(db, p_buf, sz, cnt);
+
+                    /// IMP: R-04460-53386
+                    (rc = setup_lookaside(db, p_buf, sz, cnt));
                     break '__s17;
                 }
                 {
@@ -5720,6 +6916,8 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                     break '__s17;
                 }
                 {
+                    /// The opcode
+                    /// Mask of the bit in sqlite3.flags to set/clear
                     let mut i: u32 = 0 as u32;
                     rc = 1;
                     {
@@ -5803,6 +7001,8 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
                     break '__s17;
                 }
                 {
+                    /// The opcode
+                    /// Mask of the bit in sqlite3.flags to set/clear
                     let mut i: u32 = 0 as u32;
                     rc = 1;
                     {
@@ -5861,6 +7061,8 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
             }
             _ => {
                 {
+                    /// The opcode
+                    /// Mask of the bit in sqlite3.flags to set/clear
                     let mut i: u32 = 0 as u32;
                     rc = 1;
                     {
@@ -5924,6 +7126,12 @@ pub unsafe extern "C" fn sqlite3_db_config(db: *mut Sqlite3, op: i32,
     return rc;
 }
 
+///* CAPI3REF: Enable Or Disable Extended Result Codes
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_extended_result_codes() routine enables or disables the
+///* [extended result codes] feature of SQLite. ^The extended result
+///* codes are disabled by default for historical compatibility.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_extended_result_codes(db: &mut Sqlite3, onoff: i32)
     -> i32 {
@@ -5934,6 +7142,64 @@ pub extern "C" fn sqlite3_extended_result_codes(db: &mut Sqlite3, onoff: i32)
     return 0;
 }
 
+///* CAPI3REF: Last Insert Rowid
+///* METHOD: sqlite3
+///*
+///* ^Each entry in most SQLite tables (except for [WITHOUT ROWID] tables)
+///* has a unique 64-bit signed
+///* integer key called the [ROWID | "rowid"]. ^The rowid is always available
+///* as an undeclared column named ROWID, OID, or _ROWID_ as long as those
+///* names are not also used by explicitly declared columns. ^If
+///* the table has a column of type [INTEGER PRIMARY KEY] then that column
+///* is another alias for the rowid.
+///*
+///* ^The sqlite3_last_insert_rowid(D) interface usually returns the [rowid] of
+///* the most recent successful [INSERT] into a rowid table or [virtual table]
+///* on database connection D. ^Inserts into [WITHOUT ROWID] tables are not
+///* recorded. ^If no successful [INSERT]s into rowid tables have ever occurred
+///* on the database connection D, then sqlite3_last_insert_rowid(D) returns
+///* zero.
+///*
+///* As well as being set automatically as rows are inserted into database
+///* tables, the value returned by this function may be set explicitly by
+///* [sqlite3_set_last_insert_rowid()]
+///*
+///* Some virtual table implementations may INSERT rows into rowid tables as
+///* part of committing a transaction (e.g. to flush data accumulated in memory
+///* to disk). In this case subsequent calls to this function return the rowid
+///* associated with these internal INSERT operations, which leads to
+///* unintuitive results. Virtual table implementations that do write to rowid
+///* tables in this way can avoid this problem by restoring the original
+///* rowid value using [sqlite3_set_last_insert_rowid()] before returning
+///* control to the user.
+///*
+///* ^(If an [INSERT] occurs within a trigger then this routine will
+///* return the [rowid] of the inserted row as long as the trigger is
+///* running. Once the trigger program ends, the value returned
+///* by this routine reverts to what it was before the trigger was fired.)^
+///*
+///* ^An [INSERT] that fails due to a constraint violation is not a
+///* successful [INSERT] and does not change the value returned by this
+///* routine.  ^Thus INSERT OR FAIL, INSERT OR IGNORE, INSERT OR ROLLBACK,
+///* and INSERT OR ABORT make no changes to the return value of this
+///* routine when their insertion fails.  ^(When INSERT OR REPLACE
+///* encounters a constraint violation, it does not fail.  The
+///* INSERT continues to completion after deleting rows that caused
+///* the constraint problem so INSERT OR REPLACE will always change
+///* the return value of this interface.)^
+///*
+///* ^For the purposes of this routine, an [INSERT] is considered to
+///* be successful even if it is subsequently rolled back.
+///*
+///* This function is accessible to SQL statements via the
+///* [last_insert_rowid() SQL function].
+///*
+///* If a separate thread performs a new [INSERT] on the same
+///* database connection while the [sqlite3_last_insert_rowid()]
+///* function is running and thus changes the last insert [rowid],
+///* then the value returned by [sqlite3_last_insert_rowid()] is
+///* unpredictable and might not equal either the old or the new
+///* last insert [rowid].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_last_insert_rowid(db: &Sqlite3) -> Sqlite3Int64 {
     let mut i_ret: i64 = 0 as i64;
@@ -5943,6 +7209,12 @@ pub extern "C" fn sqlite3_last_insert_rowid(db: &Sqlite3) -> Sqlite3Int64 {
     return i_ret;
 }
 
+///* CAPI3REF: Set the Last Insert Rowid value.
+///* METHOD: sqlite3
+///*
+///* The sqlite3_set_last_insert_rowid(D, R) method allows the application to
+///* set the value returned by calling sqlite3_last_insert_rowid(D) to R
+///* without inserting a row into the database.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_last_insert_rowid(db: &mut Sqlite3,
     i_rowid_1: Sqlite3Int64) -> () {
@@ -5951,6 +7223,8 @@ pub extern "C" fn sqlite3_set_last_insert_rowid(db: &mut Sqlite3,
     unsafe { sqlite3_mutex_leave((*db).mutex) };
 }
 
+///* Return the number of changes in the most recently executed DML
+///* statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_changes64(db: &Sqlite3) -> Sqlite3Int64 {
     let mut i_ret: i64 = 0 as i64;
@@ -5960,11 +7234,73 @@ pub extern "C" fn sqlite3_changes64(db: &Sqlite3) -> Sqlite3Int64 {
     return i_ret;
 }
 
+///* CAPI3REF: Count The Number Of Rows Modified
+///* METHOD: sqlite3
+///*
+///* ^These functions return the number of rows modified, inserted or
+///* deleted by the most recently completed INSERT, UPDATE or DELETE
+///* statement on the database connection specified by the only parameter.
+///* The two functions are identical except for the type of the return value
+///* and that if the number of rows modified by the most recent INSERT, UPDATE,
+///* or DELETE is greater than the maximum value supported by type "int", then
+///* the return value of sqlite3_changes() is undefined. ^Executing any other
+///* type of SQL statement does not modify the value returned by these functions.
+///* For the purposes of this interface, a CREATE TABLE AS SELECT statement
+///* does not count as an INSERT, UPDATE or DELETE statement and hence the rows
+///* added to the new table by the CREATE TABLE AS SELECT statement are not
+///* counted.
+///*
+///* ^Only changes made directly by the INSERT, UPDATE or DELETE statement are
+///* considered - auxiliary changes caused by [CREATE TRIGGER | triggers],
+///* [foreign key actions] or [REPLACE] constraint resolution are not counted.
+///*
+///* Changes to a view that are intercepted by
+///* [INSTEAD OF trigger | INSTEAD OF triggers] are not counted. ^The value
+///* returned by sqlite3_changes() immediately after an INSERT, UPDATE or
+///* DELETE statement run on a view is always zero. Only changes made to real
+///* tables are counted.
+///*
+///* Things are more complicated if the sqlite3_changes() function is
+///* executed while a trigger program is running. This may happen if the
+///* program uses the [changes() SQL function], or if some other callback
+///* function invokes sqlite3_changes() directly. Essentially:
+///*
+///* <ul>
+///*   <li> ^(Before entering a trigger program the value returned by
+///*        sqlite3_changes() function is saved. After the trigger program
+///*        has finished, the original value is restored.)^
+///*
+///*   <li> ^(Within a trigger program each INSERT, UPDATE and DELETE
+///*        statement sets the value returned by sqlite3_changes()
+///*        upon completion as normal. Of course, this value will not include
+///*        any changes performed by sub-triggers, as the sqlite3_changes()
+///*        value will be saved and restored after each sub-trigger has run.)^
+///* </ul>
+///*
+///* ^This means that if the changes() SQL function (or similar) is used
+///* by the first INSERT, UPDATE or DELETE statement within a trigger, it
+///* returns the value as set when the calling statement began executing.
+///* ^If it is used by the second or subsequent such statement within a trigger
+///* program, the value returned reflects the number of rows modified by the
+///* previous INSERT, UPDATE or DELETE statement within the same trigger.
+///*
+///* If a separate thread makes changes on the same database connection
+///* while [sqlite3_changes()] is running then the value returned
+///* is unpredictable and not meaningful.
+///*
+///* See also:
+///* <ul>
+///* <li> the [sqlite3_total_changes()] interface
+///* <li> the [count_changes pragma]
+///* <li> the [changes() SQL function]
+///* <li> the [data_version pragma]
+///* </ul>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_changes(db: *mut Sqlite3) -> i32 {
     return sqlite3_changes64(unsafe { &*db }) as i32;
 }
 
+///* Return the number of changes since the database handle was opened.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_total_changes64(db: &Sqlite3) -> Sqlite3Int64 {
     let mut i_ret: i64 = 0 as i64;
@@ -5974,11 +7310,85 @@ pub extern "C" fn sqlite3_total_changes64(db: &Sqlite3) -> Sqlite3Int64 {
     return i_ret;
 }
 
+///* CAPI3REF: Total Number Of Rows Modified
+///* METHOD: sqlite3
+///*
+///* ^These functions return the total number of rows inserted, modified or
+///* deleted by all [INSERT], [UPDATE] or [DELETE] statements completed
+///* since the database connection was opened, including those executed as
+///* part of trigger programs. The two functions are identical except for the
+///* type of the return value and that if the number of rows modified by the
+///* connection exceeds the maximum value supported by type "int", then
+///* the return value of sqlite3_total_changes() is undefined. ^Executing
+///* any other type of SQL statement does not affect the value returned by
+///* sqlite3_total_changes().
+///*
+///* ^Changes made as part of [foreign key actions] are included in the
+///* count, but those made as part of REPLACE constraint resolution are
+///* not. ^Changes to a view that are intercepted by INSTEAD OF triggers
+///* are not counted.
+///*
+///* The [sqlite3_total_changes(D)] interface only reports the number
+///* of rows that changed due to SQL statement run against database
+///* connection D.  Any changes by other database connections are ignored.
+///* To detect changes against a database file from other database
+///* connections use the [PRAGMA data_version] command or the
+///* [SQLITE_FCNTL_DATA_VERSION] [file control].
+///*
+///* If a separate thread makes changes on the same database connection
+///* while [sqlite3_total_changes()] is running then the value
+///* returned is unpredictable and not meaningful.
+///*
+///* See also:
+///* <ul>
+///* <li> the [sqlite3_changes()] interface
+///* <li> the [count_changes pragma]
+///* <li> the [changes() SQL function]
+///* <li> the [data_version pragma]
+///* <li> the [SQLITE_FCNTL_DATA_VERSION] [file control]
+///* </ul>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_total_changes(db: *mut Sqlite3) -> i32 {
     return sqlite3_total_changes64(unsafe { &*db }) as i32;
 }
 
+///* CAPI3REF: Interrupt A Long-Running Query
+///* METHOD: sqlite3
+///*
+///* ^This function causes any pending database operation to abort and
+///* return at its earliest opportunity. This routine is typically
+///* called in response to a user action such as pressing "Cancel"
+///* or Ctrl-C where the user wants a long query operation to halt
+///* immediately.
+///*
+///* ^It is safe to call this routine from a thread different from the
+///* thread that is currently running the database operation.  But it
+///* is not safe to call this routine with a [database connection] that
+///* is closed or might close before sqlite3_interrupt() returns.
+///*
+///* ^If an SQL operation is very nearly finished at the time when
+///* sqlite3_interrupt() is called, then it might not have an opportunity
+///* to be interrupted and might continue to completion.
+///*
+///* ^An SQL operation that is interrupted will return [SQLITE_INTERRUPT].
+///* ^If the interrupted SQL operation is an INSERT, UPDATE, or DELETE
+///* that is inside an explicit transaction, then the entire transaction
+///* will be rolled back automatically.
+///*
+///* ^The sqlite3_interrupt(D) call is in effect until all currently running
+///* SQL statements on [database connection] D complete.  ^Any new SQL statements
+///* that are started after the sqlite3_interrupt() call and before the
+///* running statement count reaches zero are interrupted as if they had been
+///* running prior to the sqlite3_interrupt() call.  ^New SQL statements
+///* that are started after the running statement count reaches zero are
+///* not effected by the sqlite3_interrupt().
+///* ^A call to sqlite3_interrupt(D) that occurs when there are no running
+///* SQL statements is a no-op and has no effect on SQL statements
+///* that are started after the sqlite3_interrupt() call returns.
+///*
+///* ^The [sqlite3_is_interrupted(D)] interface can be used to determine whether
+///* or not an interrupt is currently in effect for [database connection] D.
+///* It returns 1 if an interrupt is currently in effect, or 0 otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_interrupt(db: &mut Sqlite3) -> () {
     unsafe {
@@ -5991,6 +7401,8 @@ pub extern "C" fn sqlite3_interrupt(db: &mut Sqlite3) -> () {
     }
 }
 
+///* Return true or false depending on whether or not an interrupt is
+///* pending on connection db.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_interrupted(db: &mut Sqlite3) -> i32 {
     unsafe {
@@ -6001,6 +7413,63 @@ pub extern "C" fn sqlite3_is_interrupted(db: &mut Sqlite3) -> i32 {
     }
 }
 
+///* CAPI3REF: Register A Callback To Handle SQLITE_BUSY Errors
+///* KEYWORDS: {busy-handler callback} {busy handler}
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_busy_handler(D,X,P) routine sets a callback function X
+///* that might be invoked with argument P whenever
+///* an attempt is made to access a database table associated with
+///* [database connection] D when another thread
+///* or process has the table locked.
+///* The sqlite3_busy_handler() interface is used to implement
+///* [sqlite3_busy_timeout()] and [PRAGMA busy_timeout].
+///*
+///* ^If the busy callback is NULL, then [SQLITE_BUSY]
+///* is returned immediately upon encountering the lock.  ^If the busy callback
+///* is not NULL, then the callback might be invoked with two arguments.
+///*
+///* ^The first argument to the busy handler is a copy of the void* pointer which
+///* is the third argument to sqlite3_busy_handler().  ^The second argument to
+///* the busy handler callback is the number of times that the busy handler has
+///* been invoked previously for the same locking event.  ^If the
+///* busy callback returns 0, then no additional attempts are made to
+///* access the database and [SQLITE_BUSY] is returned
+///* to the application.
+///* ^If the callback returns non-zero, then another attempt
+///* is made to access the database and the cycle repeats.
+///*
+///* The presence of a busy handler does not guarantee that it will be invoked
+///* when there is lock contention. ^If SQLite determines that invoking the busy
+///* handler could result in a deadlock, it will go ahead and return [SQLITE_BUSY]
+///* to the application instead of invoking the
+///* busy handler.
+///* Consider a scenario where one process is holding a read lock that
+///* it is trying to promote to a reserved lock and
+///* a second process is holding a reserved lock that it is trying
+///* to promote to an exclusive lock.  The first process cannot proceed
+///* because it is blocked by the second and the second process cannot
+///* proceed because it is blocked by the first.  If both processes
+///* invoke the busy handlers, neither will make any progress.  Therefore,
+///* SQLite returns [SQLITE_BUSY] for the first process, hoping that this
+///* will induce the first process to release its read lock and allow
+///* the second process to proceed.
+///*
+///* ^The default busy callback is NULL.
+///*
+///* ^(There can only be a single busy handler defined for each
+///* [database connection].  Setting a new busy handler clears any
+///* previously set handler.)^  ^Note that calling [sqlite3_busy_timeout()]
+///* or evaluating [PRAGMA busy_timeout=N] will change the
+///* busy handler and thus clear any previously set busy handler.
+///*
+///* The busy callback should not take any actions which modify the
+///* database connection that invoked the busy handler.  In other words,
+///* the busy handler is not reentrant.  Any such actions
+///* result in undefined behavior.
+///*
+///* A busy handler must not close the database connection
+///* or [prepared statement] that invoked the busy handler.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_busy_handler(db: &mut Sqlite3,
     x_busy_1: Option<unsafe extern "C" fn(*mut (), i32) -> i32>,
@@ -6014,6 +7483,13 @@ pub extern "C" fn sqlite3_busy_handler(db: &mut Sqlite3,
     return 0;
 }
 
+///* This routine implements a busy callback that sleeps and tries
+///* again until a timeout value is reached.  The timeout value is
+///* an integer number of milliseconds passed in as the first
+///* argument.
+///*
+///* Return non-zero to retry the lock.  Return zero to stop trying
+///* and cause SQLite to return SQLITE_BUSY.
 extern "C" fn sqlite_default_busy_callback(ptr: *mut (), count: i32) -> i32 {
     let db: *const Sqlite3 = ptr as *mut Sqlite3 as *const Sqlite3;
     let tmout: i32 = unsafe { (*db).busy_timeout };
@@ -6047,6 +7523,25 @@ extern "C" fn sqlite_default_busy_callback(ptr: *mut (), count: i32) -> i32 {
     return 1;
 }
 
+///* CAPI3REF: Set A Busy Timeout
+///* METHOD: sqlite3
+///*
+///* ^This routine sets a [sqlite3_busy_handler | busy handler] that sleeps
+///* for a specified amount of time when a table is locked.  ^The handler
+///* will sleep multiple times until at least "ms" milliseconds of sleeping
+///* have accumulated.  ^After at least "ms" milliseconds of sleeping,
+///* the handler returns 0 which causes [sqlite3_step()] to return
+///* [SQLITE_BUSY].
+///*
+///* ^Calling this routine with an argument less than or equal to zero
+///* turns off all busy handlers.
+///*
+///* ^(There can only be a single busy handler for a particular
+///* [database connection] at any given moment.  If another busy handler
+///* was defined  (using [sqlite3_busy_handler()]) prior to calling
+///* this routine, that other busy handler is cleared.)^
+///*
+///* See also:  [PRAGMA busy_timeout]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_busy_timeout(db: *mut Sqlite3, ms: i32) -> i32 {
     unsafe { sqlite3_mutex_enter(unsafe { (*db).mutex }) };
@@ -6066,6 +7561,35 @@ pub extern "C" fn sqlite3_busy_timeout(db: *mut Sqlite3, ms: i32) -> i32 {
     return 0;
 }
 
+///* CAPI3REF: Set the Setlk Timeout
+///* METHOD: sqlite3
+///*
+///* This routine is only useful in SQLITE_ENABLE_SETLK_TIMEOUT builds. If
+///* the VFS supports blocking locks, it sets the timeout in ms used by
+///* eligible locks taken on wal mode databases by the specified database
+///* handle. In non-SQLITE_ENABLE_SETLK_TIMEOUT builds, or if the VFS does
+///* not support blocking locks, this function is a no-op.
+///*
+///* Passing 0 to this function disables blocking locks altogether. Passing
+///* -1 to this function requests that the VFS blocks for a long time -
+///* indefinitely if possible. The results of passing any other negative value
+///* are undefined.
+///*
+///* Internally, each SQLite database handle stores two timeout values - the
+///* busy-timeout (used for rollback mode databases, or if the VFS does not
+///* support blocking locks) and the setlk-timeout (used for blocking locks
+///* on wal-mode databases). The sqlite3_busy_timeout() method sets both
+///* values, this function sets only the setlk-timeout value. Therefore,
+///* to configure separate busy-timeout and setlk-timeout values for a single
+///* database handle, call sqlite3_busy_timeout() followed by this function.
+///*
+///* Whenever the number of connections to a wal mode database falls from
+///* 1 to 0, the last connection takes an exclusive lock on the database,
+///* then checkpoints and deletes the wal file. While it is doing this, any
+///* new connection that tries to read from the database fails with an
+///* SQLITE_BUSY error. Or, if the SQLITE_SETLK_BLOCK_ON_CONNECT flag is
+///* passed to this API, the new connection blocks until the exclusive lock
+///* has been released.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_setlk_timeout(db: *const Sqlite3, ms: i32,
     flags: i32) -> i32 {
@@ -6075,6 +7599,36 @@ pub extern "C" fn sqlite3_setlk_timeout(db: *const Sqlite3, ms: i32,
     return 0;
 }
 
+///* CAPI3REF: Deprecated Tracing And Profiling Functions
+///* DEPRECATED
+///*
+///* These routines are deprecated. Use the [sqlite3_trace_v2()] interface
+///* instead of the routines described here.
+///*
+///* These routines register callback functions that can be used for
+///* tracing and profiling the execution of SQL statements.
+///*
+///* ^The callback function registered by sqlite3_trace() is invoked at
+///* various times when an SQL statement is being run by [sqlite3_step()].
+///* ^The sqlite3_trace() callback is invoked with a UTF-8 rendering of the
+///* SQL statement text as the statement first begins executing.
+///* ^(Additional sqlite3_trace() callbacks might occur
+///* as each triggered subprogram is entered.  The callbacks for triggers
+///* contain a UTF-8 SQL comment that identifies the trigger.)^
+///*
+///* The [SQLITE_TRACE_SIZE_LIMIT] compile-time option can be used to limit
+///* the length of [bound parameter] expansion in the output of sqlite3_trace().
+///*
+///* ^The callback function registered by sqlite3_profile() is invoked
+///* as each SQL statement finishes.  ^The profile callback contains
+///* the original statement text and an estimate of wall-clock time
+///* of how long that statement took to run.  ^The profile callback
+///* time is in units of nanoseconds, however the current implementation
+///* is only capable of millisecond resolution so the six least significant
+///* digits in the time are meaningless.  Future versions of SQLite
+///* might provide greater resolution on the profiler callback.  Invoking
+///* either [sqlite3_trace()] or [sqlite3_trace_v2()] will cancel the
+///* profile callback.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trace(db: &mut Sqlite3,
     x_trace_1: Option<unsafe extern "C" fn(*mut (), *const i8) -> ()>,
@@ -6091,6 +7645,12 @@ pub extern "C" fn sqlite3_trace(db: &mut Sqlite3,
     }
 }
 
+///* Register a profile function.  The pArg from the previously registered
+///* profile function is returned. 
+///*
+///* A NULL profile function means that no profiling is executes.  A non-NULL
+///* profile is a pointer to a function that is invoked at the conclusion of
+///* each SQL statement that is run.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_profile(db: &mut Sqlite3,
     x_profile_1: Option<unsafe extern "C" fn(*mut (), *const i8, u64) -> ()>,
@@ -6106,6 +7666,35 @@ pub extern "C" fn sqlite3_profile(db: &mut Sqlite3,
     return p_old;
 }
 
+///* CAPI3REF: SQL Trace Hook
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_trace_v2(D,M,X,P) interface registers a trace callback
+///* function X against [database connection] D, using property mask M
+///* and context pointer P.  ^If the X callback is
+///* NULL or if the M mask is zero, then tracing is disabled.  The
+///* M argument should be the bitwise OR-ed combination of
+///* zero or more [SQLITE_TRACE] constants.
+///*
+///* ^Each call to either sqlite3_trace(D,X,P) or sqlite3_trace_v2(D,M,X,P)
+///* overrides (cancels) all prior calls to sqlite3_trace(D,X,P) or
+///* sqlite3_trace_v2(D,M,X,P) for the [database connection] D.  Each
+///* database connection may have at most one trace callback.
+///*
+///* ^The X callback is invoked whenever any of the events identified by
+///* mask M occur.  ^The integer return value from the callback is currently
+///* ignored, though this may change in future releases.  Callback
+///* implementations should return zero to ensure future compatibility.
+///*
+///* ^A trace callback is invoked with four arguments: callback(T,C,P,X).
+///* ^The T argument is one of the [SQLITE_TRACE]
+///* constants to indicate why the callback was invoked.
+///* ^The C argument is a copy of the context pointer.
+///* The P and X arguments are pointers whose meanings depend on T.
+///*
+///* The sqlite3_trace_v2() interface is intended to replace the legacy
+///* interfaces [sqlite3_trace()] and [sqlite3_profile()], both of which
+///* are deprecated.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_trace_v2(db: &mut Sqlite3, mut m_trace_1: u32,
     mut x_trace_1:
@@ -6123,6 +7712,43 @@ pub extern "C" fn sqlite3_trace_v2(db: &mut Sqlite3, mut m_trace_1: u32,
     }
 }
 
+///* CAPI3REF: Query Progress Callbacks
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_progress_handler(D,N,X,P) interface causes the callback
+///* function X to be invoked periodically during long running calls to
+///* [sqlite3_step()] and [sqlite3_prepare()] and similar for
+///* database connection D.  An example use for this
+///* interface is to keep a GUI updated during a large query.
+///*
+///* ^The parameter P is passed through as the only parameter to the
+///* callback function X.  ^The parameter N is the approximate number of
+///* [virtual machine instructions] that are evaluated between successive
+///* invocations of the callback X.  ^If N is less than one then the progress
+///* handler is disabled.
+///*
+///* ^Only a single progress handler may be defined at one time per
+///* [database connection]; setting a new progress handler cancels the
+///* old one.  ^Setting parameter X to NULL disables the progress handler.
+///* ^The progress handler is also disabled by setting N to a value less
+///* than 1.
+///*
+///* ^If the progress callback returns non-zero, the operation is
+///* interrupted.  This feature can be used to implement a
+///* "Cancel" button on a GUI progress dialog box.
+///*
+///* The progress handler callback must not do anything that will modify
+///* the database connection that invoked the progress handler.
+///* Note that [sqlite3_prepare_v2()] and [sqlite3_step()] both modify their
+///* database connections for the meaning of "modify" in this paragraph.
+///*
+///* The progress handler callback would originally only be invoked from the
+///* bytecode engine.  It still might be invoked during [sqlite3_prepare()]
+///* and similar because those routines might force a reparse of the schema
+///* which involves running the bytecode engine.  However, beginning with
+///* SQLite version 3.41.0, the progress handler callback might also be
+///* invoked directly from [sqlite3_prepare()] while analyzing and generating
+///* code for complex queries.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_progress_handler(db: &mut Sqlite3, n_ops_1: i32,
     x_progress_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
@@ -6140,10 +7766,16 @@ pub extern "C" fn sqlite3_progress_handler(db: &mut Sqlite3, n_ops_1: i32,
     unsafe { sqlite3_mutex_leave((*db).mutex) };
 }
 
+///* This array defines hard upper bounds on limit values.  The
+///* initializer must be kept in sync with the SQLITE_LIMIT_*
+///* #defines in sqlite3.h.
 static a_hard_limit: [i32; 13] =
     [1000000000, 1000000000, 2000, 1000, 500, 250000000, 1000, 10, 50000,
             32766, 1000, 8, 2500];
 
+///* Create a new collating function for database "db".  The name is zName
+///* and the encoding is enc.
+#[allow(unused_doc_comments)]
 extern "C" fn create_collation(db: *mut Sqlite3, z_name_1: *const i8, enc: u8,
     p_ctx_1: *mut (),
     x_compare_1:
@@ -6153,10 +7785,18 @@ extern "C" fn create_collation(db: *mut Sqlite3, z_name_1: *const i8, enc: u8,
     let mut p_coll: *mut CollSeq = core::ptr::null_mut();
     let mut enc2: i32 = 0;
     { let _ = 0; };
-    enc2 = enc as i32;
+
+    /// If SQLITE_UTF16 is specified as the encoding type, transform this
+    ///* to one of SQLITE_UTF16LE or SQLITE_UTF16BE using the
+    ///* SQLITE_UTF16NATIVE macro. SQLITE_UTF16 is not used internally.
+    (enc2 = enc as i32);
     if enc2 == 4 || enc2 == 8 { enc2 = 2; }
     if enc2 < 1 || enc2 > 3 { return sqlite3_misuse_error(2911); }
-    p_coll = unsafe { sqlite3_find_coll_seq(db, enc2 as u8, z_name_1, 0) };
+
+    /// Check if this call is removing or replacing an existing collation
+    ///* sequence. If so, and there are active VMs, return busy. If there
+    ///* are no active VMs, invalidate any pre-compiled statements.
+    (p_coll = unsafe { sqlite3_find_coll_seq(db, enc2 as u8, z_name_1, 0) });
     if !(p_coll).is_null() && unsafe { (*p_coll).x_cmp.is_some() } {
         if unsafe { (*db).n_vdbe_active } != 0 {
             unsafe {
@@ -6207,18 +7847,32 @@ extern "C" fn create_collation(db: *mut Sqlite3, z_name_1: *const i8, enc: u8,
     return 0;
 }
 
+///* This is the default collating function named "BINARY" which is always
+///* available.
+#[allow(unused_doc_comments)]
 extern "C" fn bin_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let mut rc: i32 = 0;
     let mut n: i32 = 0;
     { let _ = not_used_1; };
     n = if n_key1_1 < n_key2_1 { n_key1_1 } else { n_key2_1 };
+
+    /// EVIDENCE-OF: R-65033-28449 The built-in BINARY collation compares
+    ///* strings byte by byte using the memcmp() function from the standard C
+    ///* library.
     { let _ = 0; };
     rc = unsafe { memcmp(p_key1_1, p_key2_1, n as u64) };
     if rc == 0 { rc = n_key1_1 - n_key2_1; }
     return rc;
 }
 
+///* Another built-in collating sequence: NOCASE.
+///*
+///* This collating sequence is intended to be used for "case independent
+///* comparison". SQLite's knowledge of upper and lower case equivalents
+///* extends only to the 26 characters used in the English language.
+///*
+///* At the moment there is only a UTF-8 implementation.
 extern "C" fn nocase_collating_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let mut r: i32 =
@@ -6231,6 +7885,8 @@ extern "C" fn nocase_collating_func(not_used_1: *mut (), n_key1_1: i32,
     return r;
 }
 
+///* This is the collating function named "RTRIM" which is always
+///* available.  Ignore trailing spaces.
 extern "C" fn rtrim_coll_func(p_user_1: *mut (), mut n_key1_1: i32,
     p_key1_1: *const (), mut n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let p_k1: *const u8 = p_key1_1 as *const u8;
@@ -6248,6 +7904,12 @@ extern "C" fn rtrim_coll_func(p_user_1: *mut (), mut n_key1_1: i32,
     return bin_coll_func(p_user_1, n_key1_1, p_key1_1, n_key2_1, p_key2_1);
 }
 
+///* The Pager stores the Database filename, Journal filename, and WAL filename
+///* consecutively in memory, in that order.  The database filename is prefixed
+///* by four zero bytes.  Locate the start of the database filename by searching
+///* backwards for the first byte following four consecutive zero bytes.
+///*
+///* This only works if the filename passed in was obtained from the Pager.
 extern "C" fn database_name(mut z_name_1: *const i8) -> *const i8 {
     while unsafe { *z_name_1.offset(-1 as isize) } as i32 != 0 ||
                     unsafe { *z_name_1.offset(-2 as isize) } as i32 != 0 ||
@@ -6263,6 +7925,9 @@ extern "C" fn database_name(mut z_name_1: *const i8) -> *const i8 {
     return z_name_1;
 }
 
+///* Free memory obtained from sqlite3_create_filename().  It is a severe
+///* error to call this routine with any parameter other than a pointer
+///* previously obtained from sqlite3_create_filename() or a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_free_filename(mut p: Sqlite3Filename) -> () {
     if p == core::ptr::null() { return; }
@@ -6273,7 +7938,32 @@ pub extern "C" fn sqlite3_free_filename(mut p: Sqlite3Filename) -> () {
     };
 }
 
+///* This function is used to parse both URIs and non-URI filenames passed by the
+///* user to API functions sqlite3_open() or sqlite3_open_v2(), and for database
+///* URIs specified as part of ATTACH statements.
+///*
+///* The first argument to this function is the name of the VFS to use (or
+///* a NULL to signify the default VFS) if the URI does not contain a "vfs=xxx"
+///* query parameter. The second argument contains the URI (or non-URI filename)
+///* itself. When this function is called the *pFlags variable should contain
+///* the default flags to open the database handle with. The value stored in
+///* *pFlags may be updated before returning if the URI filename contains
+///* "cache=xxx" or "mode=xxx" query parameters.
+///*
+///* If successful, SQLITE_OK is returned. In this case *ppVfs is set to point to
+///* the VFS that should be used to open the database file. *pzFile is set to
+///* point to a buffer containing the name of the file to open.  The value
+///* stored in *pzFile is a database name acceptable to sqlite3_uri_parameter()
+///* and is in the same format as names created using sqlite3_create_filename().
+///* The caller must invoke sqlite3_free_filename() (not sqlite3_free()!) on
+///* the value returned in *pzFile to avoid a memory leak.
+///*
+///* If an error occurs, then an SQLite error code is returned and *pzErrMsg
+///* may be set to point to a buffer containing an English language error
+///* message. It is the responsibility of the caller to eventually release
+///* this buffer by calling sqlite3_free().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_parse_uri(z_default_vfs_1: *const i8,
     z_uri_1: *const i8, p_flags_1: &mut u32, pp_vfs_1: &mut *mut Sqlite3Vfs,
     pz_file_1: &mut *mut i8, pz_err_msg_1: &mut *mut i8) -> i32 {
@@ -6285,12 +7975,42 @@ pub extern "C" fn sqlite3_parse_uri(z_default_vfs_1: *const i8,
             let mut z_file: *mut i8 = core::ptr::null_mut();
             let mut c: i8 = 0 as i8;
             let mut n_uri: i64 = 0 as i64;
+            /// IMP: R-48725-32206
+            /// IMP: R-51689-46548
+            /// IMP: R-57884-37496
             let mut z_opt: *mut i8 = core::ptr::null_mut();
             let mut e_state: i32 = 0;
+            /// Parser state when parsing URI
             let mut i_in: i64 = 0 as i64;
+            /// Input character index
             let mut i_out: i64 = 0 as i64;
+            /// Output character index
             let mut n_byte: u64 = 0 as u64;
+            /// Bytes of space to allocate
+            /// Make sure the SQLITE_OPEN_URI flag is set to indicate to the VFS xOpen
+            ///* method that there may be extra parameters following the file-name.
+            /// 4-byte of 0x00 is the start of DB name marker
+            /// Discard the scheme and authority segments of the URI.
+            /// Copy the filename and any query parameters into the zFile buffer.
+            ///* Decode %HH escape codes along the way.
+            ///*
+            ///* Within this loop, variable eState may be set to 0, 1 or 2, depending
+            ///* on the parsing context. As follows:
+            ///*
+            ///*   0: Parsing file-name.
+            ///*   1: Parsing name section of a name=value query parameter.
+            ///*   2: Parsing value section of a name=value query parameter.
             let mut octet: i32 = 0;
+            /// This branch is taken when "%00" appears within the URI. In this
+            ///* case we ignore all text in the remainder of the path, name or
+            ///* value currently being parsed. So ignore the current character
+            ///* and skip to the next "?", "=" or "&", as appropriate.
+            /// An empty option name. Ignore this option altogether.
+            /// end-of-options + empty journal filenames
+            /// Check if there were any options specified that should be interpreted
+            ///* here. Options that are interpreted here include "vfs" and those that
+            ///* correspond to flags that may be passed to the sqlite3_open_v2()
+            ///* method.
             let mut n_opt: i64 = 0 as i64;
             let mut z_val: *mut i8 = core::ptr::null_mut();
             let mut n_val: i64 = 0 as i64;
@@ -6814,11 +8534,104 @@ pub extern "C" fn sqlite3_parse_uri(z_default_vfs_1: *const i8,
                     }
                 }
             }
+
+            /// IMP: R-48725-32206
+            /// IMP: R-51689-46548
+            /// IMP: R-57884-37496
+            /// Parser state when parsing URI
+            /// Input character index
+            /// Output character index
+            /// Bytes of space to allocate
+            /// Make sure the SQLITE_OPEN_URI flag is set to indicate to the VFS xOpen
+            ///* method that there may be extra parameters following the file-name.
+            /// 4-byte of 0x00 is the start of DB name marker
+            /// Discard the scheme and authority segments of the URI.
+            /// Copy the filename and any query parameters into the zFile buffer.
+            ///* Decode %HH escape codes along the way.
+            ///*
+            ///* Within this loop, variable eState may be set to 0, 1 or 2, depending
+            ///* on the parsing context. As follows:
+            ///*
+            ///*   0: Parsing file-name.
+            ///*   1: Parsing name section of a name=value query parameter.
+            ///*   2: Parsing value section of a name=value query parameter.
+            /// This branch is taken when "%00" appears within the URI. In this
+            ///* case we ignore all text in the remainder of the path, name or
+            ///* value currently being parsed. So ignore the current character
+            ///* and skip to the next "?", "=" or "&", as appropriate.
+            /// An empty option name. Ignore this option altogether.
+            /// end-of-options + empty journal filenames
+            /// Check if there were any options specified that should be interpreted
+            ///* here. Options that are interpreted here include "vfs" and those that
+            ///* correspond to flags that may be passed to the sqlite3_open_v2()
+            ///* method.
             unreachable!();
         }
     }
 }
 
+///* CAPI3REF: Error Codes And Messages
+///* METHOD: sqlite3
+///*
+///* ^If the most recent sqlite3_* API call associated with
+///* [database connection] D failed, then the sqlite3_errcode(D) interface
+///* returns the numeric [result code] or [extended result code] for that
+///* API call.
+///* ^The sqlite3_extended_errcode()
+///* interface is the same except that it always returns the
+///* [extended result code] even when extended result codes are
+///* disabled.
+///*
+///* The values returned by sqlite3_errcode() and/or
+///* sqlite3_extended_errcode() might change with each API call.
+///* Except, there are some interfaces that are guaranteed to never
+///* change the value of the error code.  The error-code preserving
+///* interfaces include the following:
+///*
+///* <ul>
+///* <li> sqlite3_errcode()
+///* <li> sqlite3_extended_errcode()
+///* <li> sqlite3_errmsg()
+///* <li> sqlite3_errmsg16()
+///* <li> sqlite3_error_offset()
+///* <li> sqlite3_db_handle()
+///* </ul>
+///*
+///* ^The sqlite3_errmsg() and sqlite3_errmsg16() return English-language
+///* text that describes the error, as either UTF-8 or UTF-16 respectively,
+///* or NULL if no error message is available.
+///* (See how SQLite handles [invalid UTF] for exceptions to this rule.)
+///* ^(Memory to hold the error message string is managed internally.
+///* The application does not need to worry about freeing the result.
+///* However, the error string might be overwritten or deallocated by
+///* subsequent calls to other SQLite interface functions.)^
+///*
+///* ^The sqlite3_errstr(E) interface returns the English-language text
+///* that describes the [result code] E, as UTF-8, or NULL if E is not a
+///* result code for which a text error message is available.
+///* ^(Memory to hold the error message string is managed internally
+///* and must not be freed by the application)^.
+///*
+///* ^If the most recent error references a specific token in the input
+///* SQL, the sqlite3_error_offset() interface returns the byte offset
+///* of the start of that token.  ^The byte offset returned by
+///* sqlite3_error_offset() assumes that the input SQL is UTF-8.
+///* ^If the most recent error does not reference a specific token in the input
+///* SQL, then the sqlite3_error_offset() function returns -1.
+///*
+///* When the serialized [threading mode] is in use, it might be the
+///* case that a second error occurs on a separate thread in between
+///* the time of the first error and the call to these interfaces.
+///* When that happens, the second error will be reported since these
+///* interfaces always report the most recent result.  To avoid
+///* this, each thread can obtain exclusive use of the [database connection] D
+///* by invoking [sqlite3_mutex_enter]([sqlite3_db_mutex](D)) before beginning
+///* to use D and invoking [sqlite3_mutex_leave]([sqlite3_db_mutex](D)) after
+///* all calls to the interfaces listed here are completed.
+///*
+///* If an interface fails with SQLITE_MISUSE, that means the interface
+///* was invoked incorrectly by the application.  In that case, the
+///* error code and message may or may not be set.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_errcode(db: *mut Sqlite3) -> i32 {
     let mut i_ret: i32 = 0;
@@ -6834,15 +8647,66 @@ pub extern "C" fn sqlite3_errcode(db: *mut Sqlite3) -> i32 {
     return i_ret;
 }
 
+///* This is an extension initializer that is a no-op and always
+///* succeeds, except that it fails if the fault-simulation is set
+///* to 500.
 extern "C" fn sqlite3_test_ext_init(db: *mut Sqlite3) -> i32 {
     { let _ = db; };
     return unsafe { sqlite3_fault_sim(500) };
 }
 
+///* An array of pointers to extension initializer functions for
+///* built-in extensions.
 static sqlite3_builtin_extensions:
     [unsafe extern "C" fn(*mut Sqlite3) -> i32; 1] =
     [sqlite3_test_ext_init];
 
+///* CAPI3REF: Write-Ahead Log Commit Hook
+///* METHOD: sqlite3
+///*
+///* ^The [sqlite3_wal_hook()] function is used to register a callback that
+///* is invoked each time data is committed to a database in wal mode.
+///*
+///* ^(The callback is invoked by SQLite after the commit has taken place and
+///* the associated write-lock on the database released)^, so the implementation
+///* may read, write or [checkpoint] the database as required.
+///*
+///* ^The first parameter passed to the callback function when it is invoked
+///* is a copy of the third parameter passed to sqlite3_wal_hook() when
+///* registering the callback. ^The second is a copy of the database handle.
+///* ^The third parameter is the name of the database that was written to -
+///* either "main" or the name of an [ATTACH]-ed database. ^The fourth parameter
+///* is the number of pages currently in the write-ahead log file,
+///* including those that were just committed.
+///*
+///* ^The callback function should normally return [SQLITE_OK].  ^If an error
+///* code is returned, that error will propagate back up through the
+///* SQLite code base to cause the statement that provoked the callback
+///* to report an error, though the commit will have still occurred. If the
+///* callback returns [SQLITE_ROW] or [SQLITE_DONE], or if it returns a value
+///* that does not correspond to any valid SQLite error code, the results
+///* are undefined.
+///*
+///* ^A single database handle may have at most a single write-ahead log
+///* callback registered at one time. ^Calling [sqlite3_wal_hook()]
+///* replaces the default behavior or previously registered write-ahead
+///* log callback.
+///*
+///* ^The return value is a copy of the third parameter from the
+///* previous call, if any, or 0.
+///*
+///* ^The [sqlite3_wal_autocheckpoint()] interface and the
+///* [wal_autocheckpoint pragma] both invoke [sqlite3_wal_hook()] and
+///* will overwrite any prior [sqlite3_wal_hook()] settings.
+///*
+///* ^If a write-ahead log callback is set using this function then
+///* [sqlite3_wal_checkpoint_v2()] or [PRAGMA wal_checkpoint]
+///* should be invoked periodically to keep the write-ahead log file
+///* from growing without bound.
+///*
+///* ^Passing a NULL pointer for the callback disables automatic
+///* checkpointing entirely. To re-enable the default behavior, call
+///* sqlite3_wal_autocheckpoint(db,1000) or use [PRAGMA wal_checkpoint].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_hook(db: &mut Sqlite3,
     x_callback_1:
@@ -6857,12 +8721,35 @@ pub extern "C" fn sqlite3_wal_hook(db: &mut Sqlite3,
     return p_ret;
 }
 
+///* Run a checkpoint on database iDb. This is a no-op if database iDb is
+///* not currently open in WAL mode.
+///*
+///* If a transaction is open on the database being checkpointed, this
+///* function returns SQLITE_LOCKED and a checkpoint is not attempted. If
+///* an error occurs while running the checkpoint, an SQLite error code is
+///* returned (i.e. SQLITE_IOERR). Otherwise, SQLITE_OK.
+///*
+///* The mutex on database handle db should be held by the caller. The mutex
+///* associated with the specific b-tree being checkpointed is taken by
+///* this function while the checkpoint is running.
+///*
+///* If iDb is passed SQLITE_MAX_DB then all attached databases are
+///* checkpointed. If an error is encountered it is returned immediately -
+///* no attempt is made to checkpoint any remaining databases.
+///*
+///* Parameter eMode is one of SQLITE_CHECKPOINT_PASSIVE, FULL, RESTART
+///* or TRUNCATE.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_checkpoint(db: &Sqlite3, i_db_1: i32, e_mode_1: i32,
     mut pn_log_1: *mut i32, mut pn_ckpt_1: *mut i32) -> i32 {
     let mut rc: i32 = 0;
+    /// Return code
     let mut i: i32 = 0;
+    /// Used to iterate through attached dbs
     let mut b_busy: i32 = 0;
+
+    /// True if SQLITE_BUSY has been encountered
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -6890,12 +8777,109 @@ pub extern "C" fn sqlite3_checkpoint(db: &Sqlite3, i_db_1: i32, e_mode_1: i32,
     return if rc == 0 && b_busy != 0 { 5 } else { rc };
 }
 
+///* CAPI3REF: Checkpoint a database
+///* METHOD: sqlite3
+///*
+///* ^(The sqlite3_wal_checkpoint_v2(D,X,M,L,C) interface runs a checkpoint
+///* operation on database X of [database connection] D in mode M.  Status
+///* information is written back into integers pointed to by L and C.)^
+///* ^(The M parameter must be a valid [checkpoint mode]:)^
+///*
+///* <dl>
+///* <dt>SQLITE_CHECKPOINT_PASSIVE<dd>
+///*   ^Checkpoint as many frames as possible without waiting for any database
+///*   readers or writers to finish, then sync the database file if all frames
+///*   in the log were checkpointed. ^The [busy-handler callback]
+///*   is never invoked in the SQLITE_CHECKPOINT_PASSIVE mode.
+///*   ^On the other hand, passive mode might leave the checkpoint unfinished
+///*   if there are concurrent readers or writers.
+///*
+///* <dt>SQLITE_CHECKPOINT_FULL<dd>
+///*   ^This mode blocks (it invokes the
+///*   [sqlite3_busy_handler|busy-handler callback]) until there is no
+///*   database writer and all readers are reading from the most recent database
+///*   snapshot. ^It then checkpoints all frames in the log file and syncs the
+///*   database file. ^This mode blocks new database writers while it is pending,
+///*   but new database readers are allowed to continue unimpeded.
+///*
+///* <dt>SQLITE_CHECKPOINT_RESTART<dd>
+///*   ^This mode works the same way as SQLITE_CHECKPOINT_FULL with the addition
+///*   that after checkpointing the log file it blocks (calls the
+///*   [busy-handler callback])
+///*   until all readers are reading from the database file only. ^This ensures
+///*   that the next writer will restart the log file from the beginning.
+///*   ^Like SQLITE_CHECKPOINT_FULL, this mode blocks new
+///*   database writer attempts while it is pending, but does not impede readers.
+///*
+///* <dt>SQLITE_CHECKPOINT_TRUNCATE<dd>
+///*   ^This mode works the same way as SQLITE_CHECKPOINT_RESTART with the
+///*   addition that it also truncates the log file to zero bytes just prior
+///*   to a successful return.
+///*
+///* <dt>SQLITE_CHECKPOINT_NOOP<dd>
+///*   ^This mode always checkpoints zero frames. The only reason to invoke
+///*   a NOOP checkpoint is to access the values returned by
+///*   sqlite3_wal_checkpoint_v2() via output parameters *pnLog and *pnCkpt.
+///* </dl>
+///*
+///* ^If pnLog is not NULL, then *pnLog is set to the total number of frames in
+///* the log file or to -1 if the checkpoint could not run because
+///* of an error or because the database is not in [WAL mode]. ^If pnCkpt is not
+///* NULL,then *pnCkpt is set to the total number of checkpointed frames in the
+///* log file (including any that were already checkpointed before the function
+///* was called) or to -1 if the checkpoint could not run due to an error or
+///* because the database is not in WAL mode. ^Note that upon successful
+///* completion of an SQLITE_CHECKPOINT_TRUNCATE, the log file will have been
+///* truncated to zero bytes and so both *pnLog and *pnCkpt will be set to zero.
+///*
+///* ^All calls obtain an exclusive "checkpoint" lock on the database file. ^If
+///* any other process is running a checkpoint operation at the same time, the
+///* lock cannot be obtained and SQLITE_BUSY is returned. ^Even if there is a
+///* busy-handler configured, it will not be invoked in this case.
+///*
+///* ^The SQLITE_CHECKPOINT_FULL, RESTART and TRUNCATE modes also obtain the
+///* exclusive "writer" lock on the database file. ^If the writer lock cannot be
+///* obtained immediately, and a busy-handler is configured, it is invoked and
+///* the writer lock retried until either the busy-handler returns 0 or the lock
+///* is successfully obtained. ^The busy-handler is also invoked while waiting for
+///* database readers as described above. ^If the busy-handler returns 0 before
+///* the writer lock is obtained or while waiting for database readers, the
+///* checkpoint operation proceeds from that point in the same way as
+///* SQLITE_CHECKPOINT_PASSIVE - checkpointing as many frames as possible
+///* without blocking any further. ^SQLITE_BUSY is returned in this case.
+///*
+///* ^If parameter zDb is NULL or points to a zero length string, then the
+///* specified operation is attempted on all WAL databases [attached] to
+///* [database connection] db.  In this case the
+///* values written to output parameters *pnLog and *pnCkpt are undefined. ^If
+///* an SQLITE_BUSY error is encountered when processing one or more of the
+///* attached WAL databases, the operation is still attempted on any remaining
+///* attached databases and SQLITE_BUSY is returned at the end. ^If any other
+///* error occurs while processing an attached database, processing is abandoned
+///* and the error code is returned to the caller immediately. ^If no error
+///* (SQLITE_BUSY or otherwise) is encountered while processing the attached
+///* databases, SQLITE_OK is returned.
+///*
+///* ^If database zDb is the name of an attached database that is not in WAL
+///* mode, SQLITE_OK is returned and both *pnLog and *pnCkpt set to -1. ^If
+///* zDb is not NULL (or a zero length string) and is not the name of any
+///* attached database, SQLITE_ERROR is returned to the caller.
+///*
+///* ^Unless it returns SQLITE_MISUSE,
+///* the sqlite3_wal_checkpoint_v2() interface
+///* sets the error information that is queried by
+///* [sqlite3_errcode()] and [sqlite3_errmsg()].
+///*
+///* ^The [PRAGMA wal_checkpoint] command can be used to invoke this interface
+///* from SQL.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_checkpoint_v2(db: *mut Sqlite3,
     z_db_1: *const i8, e_mode_1: i32, pn_log_1: *mut i32, pn_ckpt_1: *mut i32)
     -> i32 {
     unsafe {
         let mut rc: i32 = 0;
+        /// Return code
         let mut i_db: i32 = 0;
         if !(pn_log_1).is_null() { unsafe { *pn_log_1 = -1 }; }
         if !(pn_ckpt_1).is_null() { unsafe { *pn_ckpt_1 = -1 }; }
@@ -6905,6 +8889,9 @@ pub extern "C" fn sqlite3_wal_checkpoint_v2(db: *mut Sqlite3,
         { let _ = 0; };
         { let _ = 0; };
         if e_mode_1 < -1 || e_mode_1 > 3 {
+
+            /// EVIDENCE-OF: R-03996-12088 The M parameter must be a valid checkpoint
+            ///* mode:
             return sqlite3_misuse_error(2596);
         }
         unsafe { sqlite3_mutex_enter(unsafe { (*db).mutex }) };
@@ -6942,13 +8929,39 @@ pub extern "C" fn sqlite3_wal_checkpoint_v2(db: *mut Sqlite3,
     }
 }
 
+///* CAPI3REF: Checkpoint a database
+///* METHOD: sqlite3
+///*
+///* ^(The sqlite3_wal_checkpoint(D,X) is equivalent to
+///* [sqlite3_wal_checkpoint_v2](D,X,[SQLITE_CHECKPOINT_PASSIVE],0,0).)^
+///*
+///* In brief, sqlite3_wal_checkpoint(D,X) causes the content in the
+///* [write-ahead log] for database X on [database connection] D to be
+///* transferred into the database file and for the write-ahead log to
+///* be reset.  See the [checkpointing] documentation for addition
+///* information.
+///*
+///* This interface used to be the only way to cause a checkpoint to
+///* occur.  But then the newer and more powerful [sqlite3_wal_checkpoint_v2()]
+///* interface was added.  This interface is retained for backwards
+///* compatibility and as a convenience for applications that need to manually
+///* start a callback but which do not need the full power (and corresponding
+///* complication) of [sqlite3_wal_checkpoint_v2()].
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_wal_checkpoint(db: *mut Sqlite3, z_db_1: *const i8)
     -> i32 {
+
+    /// EVIDENCE-OF: R-41613-20553 The sqlite3_wal_checkpoint(D,X) is equivalent to
+    ///* sqlite3_wal_checkpoint_v2(D,X,SQLITE_CHECKPOINT_PASSIVE,0,0).
     return sqlite3_wal_checkpoint_v2(db, z_db_1, 0, core::ptr::null_mut(),
             core::ptr::null_mut());
 }
 
+///* The sqlite3_wal_hook() callback registered by sqlite3_wal_autocheckpoint().
+///* Invoke sqlite3_wal_checkpoint if the number of frames in the log file
+///* is greater than sqlite3.pWalArg cast to an integer (the value configured by
+///* wal_autocheckpoint()).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_default_hook(p_client_data_1: *mut (),
     db: *mut Sqlite3, z_db_1: *const i8, n_frame_1: i32) -> i32 {
@@ -6960,6 +8973,34 @@ pub extern "C" fn sqlite3_wal_default_hook(p_client_data_1: *mut (),
     return 0;
 }
 
+///* CAPI3REF: Configure an auto-checkpoint
+///* METHOD: sqlite3
+///*
+///* ^The [sqlite3_wal_autocheckpoint(D,N)] is a wrapper around
+///* [sqlite3_wal_hook()] that causes any database on [database connection] D
+///* to automatically [checkpoint]
+///* after committing a transaction if there are N or
+///* more frames in the [write-ahead log] file.  ^Passing zero or
+///* a negative value as the N parameter disables automatic
+///* checkpoints entirely.
+///*
+///* ^The callback registered by this function replaces any existing callback
+///* registered using [sqlite3_wal_hook()].  ^Likewise, registering a callback
+///* using [sqlite3_wal_hook()] disables the automatic checkpoint mechanism
+///* configured by this function.
+///*
+///* ^The [wal_autocheckpoint pragma] can be used to invoke this interface
+///* from SQL.
+///*
+///* ^Checkpoints initiated by this mechanism are
+///* [sqlite3_wal_checkpoint_v2|PASSIVE].
+///*
+///* ^Every new [database connection] defaults to having the auto-checkpoint
+///* enabled with a threshold of 1000 or [SQLITE_DEFAULT_WAL_AUTOCHECKPOINT]
+///* pages.
+///*
+///* ^The use of this interface is only necessary if the default setting
+///* is found to be suboptimal for a particular application.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_wal_autocheckpoint(db: *mut Sqlite3, n_frame_1: i32)
     -> i32 {
@@ -6976,15 +9017,24 @@ pub extern "C" fn sqlite3_wal_autocheckpoint(db: *mut Sqlite3, n_frame_1: i32)
     return 0;
 }
 
+///* This routine does the work of opening a database on behalf of
+///* sqlite3_open() and sqlite3_open16(). The database filename "zFilename" 
+///* is UTF-8 encoded.
+#[allow(unused_doc_comments)]
 extern "C" fn open_database(mut z_filename_1: *const i8,
     pp_db_1: &mut *mut Sqlite3, mut flags: u32, z_vfs_1: *const i8) -> i32 {
     unsafe {
         unsafe {
             let mut db: *mut Sqlite3 = core::ptr::null_mut();
+            /// Store allocated handle here
             let mut rc: i32 = 0;
+            /// Return code
             let mut is_threadsafe: i32 = 0;
+            /// True for threadsafe connections
             let mut z_open: *mut i8 = core::ptr::null_mut();
+            /// Filename argument to pass to BtreeOpen()
             let mut z_err_msg: *mut i8 = core::ptr::null_mut();
+            /// Error message from sqlite3ParseUri()
             let mut i: i32 = 0;
             let mut __state: i32 = 0;
             loop {
@@ -7458,11 +9508,353 @@ extern "C" fn open_database(mut z_filename_1: *const i8,
                     }
                 }
             }
+
+            /// Store allocated handle here
+            /// Return code
+            /// True for threadsafe connections
+            /// Filename argument to pass to BtreeOpen()
+            /// Error message from sqlite3ParseUri()
+            /// Loop counter
+            /// Remove harmful bits from the flags parameter
+            ///*
+            ///* The SQLITE_OPEN_NOMUTEX and SQLITE_OPEN_FULLMUTEX flags were
+            ///* dealt with in the previous code block.  Besides these, the only
+            ///* valid input flags for sqlite3_open_v2() are SQLITE_OPEN_READONLY,
+            ///* SQLITE_OPEN_READWRITE, SQLITE_OPEN_CREATE, SQLITE_OPEN_SHAREDCACHE,
+            ///* SQLITE_OPEN_PRIVATECACHE, SQLITE_OPEN_EXRESCODE, and some reserved
+            ///* bits.  Silently mask off all other flags.
+            /// Allocate the sqlite data structure
+            /// Any array of string ptrs will do
+            /// The SQLITE_DQS compile-time option determines the default settings
+            ///* for SQLITE_DBCONFIG_DQS_DDL and SQLITE_DBCONFIG_DQS_DML.
+            ///*
+            ///*    SQLITE_DQS     SQLITE_DBCONFIG_DQS_DDL    SQLITE_DBCONFIG_DQS_DML
+            ///*    ----------     -----------------------    -----------------------
+            ///*     undefined               on                          on
+            ///*         3                   on                          on
+            ///*         2                   on                         off
+            ///*         1                  off                          on
+            ///*         0                  off                         off
+            ///*
+            ///* Legacy behavior is 3 (double-quoted string literals are allowed anywhere)
+            ///* and so that is the default.  But developers are encouraged to use
+            ///* -DSQLITE_DQS=0 (best) or -DSQLITE_DQS=1 (second choice) if possible.
+            /// Add the default collation sequence BINARY. BINARY works for both UTF-8
+            ///* and UTF-16, so add a version for each to avoid any unnecessary
+            ///* conversions. The only error that can occur here is a malloc() failure.
+            ///*
+            ///* EVIDENCE-OF: R-52786-44878 SQLite defines three built-in collating
+            ///* functions:
+            /// SQLITE_OS_UNIX && defined(SQLITE_OS_KV_OPTIONAL)
+            /// Parse the filename/URI argument
+            ///*
+            ///* Only allow sensible combinations of bits in the flags argument. 
+            ///* Throw an error if any non-sense combination is used.  If we
+            ///* do not block illegal combinations here, it could trigger
+            ///* assert() statements in deeper layers.  Sensible combinations
+            ///* are:
+            ///*
+            ///*  1:  SQLITE_OPEN_READONLY
+            ///*  2:  SQLITE_OPEN_READWRITE
+            ///*  6:  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+            /// READONLY
+            /// READWRITE
+            /// READWRITE | CREATE
+            /// IMP: R-18321-05872
+            /// Open the backend database driver
+            /// The default safety_level for the main database is FULL; for the temp
+            ///* database it is OFF. This matches the pager layer defaults.
+            /// Register all built-in functions, but do not attempt to read the
+            ///* database schema yet. This is delayed until the first time the database
+            ///* is accessed.
+            /// Load compiled-in extensions
+            /// Load automatic extensions - extensions that have been registered
+            ///* using the sqlite3_automatic_extension() API.
+            /// -DSQLITE_DEFAULT_LOCKING_MODE=1 makes EXCLUSIVE the default locking
+            ///* mode.  -DSQLITE_DEFAULT_LOCKING_MODE=0 make NORMAL the default locking
+            ///* mode.  Doing nothing at all also makes NORMAL the default.
+            /// Enable the lookaside-malloc subsystem
             unreachable!();
         }
     }
 }
 
+///* CAPI3REF: Opening A New Database Connection
+///* CONSTRUCTOR: sqlite3
+///*
+///* ^These routines open an SQLite database file as specified by the
+///* filename argument. ^The filename argument is interpreted as UTF-8 for
+///* sqlite3_open() and sqlite3_open_v2() and as UTF-16 in the native byte
+///* order for sqlite3_open16(). ^(A [database connection] handle is usually
+///* returned in *ppDb, even if an error occurs.  The only exception is that
+///* if SQLite is unable to allocate memory to hold the [sqlite3] object,
+///* a NULL will be written into *ppDb instead of a pointer to the [sqlite3]
+///* object.)^ ^(If the database is opened (and/or created) successfully, then
+///* [SQLITE_OK] is returned.  Otherwise an [error code] is returned.)^ ^The
+///* [sqlite3_errmsg()] or [sqlite3_errmsg16()] routines can be used to obtain
+///* an English language description of the error following a failure of any
+///* of the sqlite3_open() routines.
+///*
+///* ^The default encoding will be UTF-8 for databases created using
+///* sqlite3_open() or sqlite3_open_v2().  ^The default encoding for databases
+///* created using sqlite3_open16() will be UTF-16 in the native byte order.
+///*
+///* Whether or not an error occurs when it is opened, resources
+///* associated with the [database connection] handle should be released by
+///* passing it to [sqlite3_close()] when it is no longer required.
+///*
+///* The sqlite3_open_v2() interface works like sqlite3_open()
+///* except that it accepts two additional parameters for additional control
+///* over the new database connection.  ^(The flags parameter to
+///* sqlite3_open_v2() must include, at a minimum, one of the following
+///* three flag combinations:)^
+///*
+///* <dl>
+///* ^(<dt>[SQLITE_OPEN_READONLY]</dt>
+///* <dd>The database is opened in read-only mode.  If the database does
+///* not already exist, an error is returned.</dd>)^
+///*
+///* ^(<dt>[SQLITE_OPEN_READWRITE]</dt>
+///* <dd>The database is opened for reading and writing if possible, or
+///* reading only if the file is write protected by the operating
+///* system.  In either case the database must already exist, otherwise
+///* an error is returned.  For historical reasons, if opening in
+///* read-write mode fails due to OS-level permissions, an attempt is
+///* made to open it in read-only mode. [sqlite3_db_readonly()] can be
+///* used to determine whether the database is actually
+///* read-write.</dd>)^
+///*
+///* ^(<dt>[SQLITE_OPEN_READWRITE] | [SQLITE_OPEN_CREATE]</dt>
+///* <dd>The database is opened for reading and writing, and is created if
+///* it does not already exist. This is the behavior that is always used for
+///* sqlite3_open() and sqlite3_open16().</dd>)^
+///* </dl>
+///*
+///* In addition to the required flags, the following optional flags are
+///* also supported:
+///*
+///* <dl>
+///* ^(<dt>[SQLITE_OPEN_URI]</dt>
+///* <dd>The filename can be interpreted as a URI if this flag is set.</dd>)^
+///*
+///* ^(<dt>[SQLITE_OPEN_MEMORY]</dt>
+///* <dd>The database will be opened as an in-memory database.  The database
+///* is named by the "filename" argument for the purposes of cache-sharing,
+///* if shared cache mode is enabled, but the "filename" is otherwise ignored.
+///* </dd>)^
+///*
+///* ^(<dt>[SQLITE_OPEN_NOMUTEX]</dt>
+///* <dd>The new database connection will use the "multi-thread"
+///* [threading mode].)^  This means that separate threads are allowed
+///* to use SQLite at the same time, as long as each thread is using
+///* a different [database connection].
+///*
+///* ^(<dt>[SQLITE_OPEN_FULLMUTEX]</dt>
+///* <dd>The new database connection will use the "serialized"
+///* [threading mode].)^  This means the multiple threads can safely
+///* attempt to use the same database connection at the same time.
+///* (Mutexes will block any actual concurrency, but in this mode
+///* there is no harm in trying.)
+///*
+///* ^(<dt>[SQLITE_OPEN_SHAREDCACHE]</dt>
+///* <dd>The database is opened with [shared cache] enabled, overriding
+///* the default shared cache setting provided by
+///* [sqlite3_enable_shared_cache()].)^
+///* The [use of shared cache mode is discouraged] and hence shared cache
+///* capabilities may be omitted from many builds of SQLite.  In such cases,
+///* this option is a no-op.
+///*
+///* ^(<dt>[SQLITE_OPEN_PRIVATECACHE]</dt>
+///* <dd>The database is opened with [shared cache] disabled, overriding
+///* the default shared cache setting provided by
+///* [sqlite3_enable_shared_cache()].)^
+///*
+///* [[OPEN_EXRESCODE]] ^(<dt>[SQLITE_OPEN_EXRESCODE]</dt>
+///* <dd>The database connection comes up in "extended result code mode".
+///* In other words, the database behaves as if
+///* [sqlite3_extended_result_codes(db,1)] were called on the database
+///* connection as soon as the connection is created. In addition to setting
+///* the extended result code mode, this flag also causes [sqlite3_open_v2()]
+///* to return an extended result code.</dd>
+///*
+///* [[OPEN_NOFOLLOW]] ^(<dt>[SQLITE_OPEN_NOFOLLOW]</dt>
+///* <dd>The database filename is not allowed to contain a symbolic link</dd>
+///* </dl>)^
+///*
+///* If the 3rd parameter to sqlite3_open_v2() is not one of the
+///* required combinations shown above optionally combined with other
+///* [SQLITE_OPEN_READONLY | SQLITE_OPEN_* bits]
+///* then the behavior is undefined.  Historic versions of SQLite
+///* have silently ignored surplus bits in the flags parameter to
+///* sqlite3_open_v2(), however that behavior might not be carried through
+///* into future versions of SQLite and so applications should not rely
+///* upon it.  Note in particular that the SQLITE_OPEN_EXCLUSIVE flag is a no-op
+///* for sqlite3_open_v2().  The SQLITE_OPEN_EXCLUSIVE does *not* cause
+///* the open to fail if the database already exists.  The SQLITE_OPEN_EXCLUSIVE
+///* flag is intended for use by the [sqlite3_vfs|VFS interface] only, and not
+///* by sqlite3_open_v2().
+///*
+///* ^The fourth parameter to sqlite3_open_v2() is the name of the
+///* [sqlite3_vfs] object that defines the operating system interface that
+///* the new database connection should use.  ^If the fourth parameter is
+///* a NULL pointer then the default [sqlite3_vfs] object is used.
+///*
+///* ^If the filename is ":memory:", then a private, temporary in-memory database
+///* is created for the connection.  ^This in-memory database will vanish when
+///* the database connection is closed.  Future versions of SQLite might
+///* make use of additional special filenames that begin with the ":" character.
+///* It is recommended that when a database filename actually does begin with
+///* a ":" character you should prefix the filename with a pathname such as
+///* "./" to avoid ambiguity.
+///*
+///* ^If the filename is an empty string, then a private, temporary
+///* on-disk database will be created.  ^This private database will be
+///* automatically deleted as soon as the database connection is closed.
+///*
+///* [[URI filenames in sqlite3_open()]] <h3>URI Filenames</h3>
+///*
+///* ^If [URI filename] interpretation is enabled, and the filename argument
+///* begins with "file:", then the filename is interpreted as a URI. ^URI
+///* filename interpretation is enabled if the [SQLITE_OPEN_URI] flag is
+///* set in the third argument to sqlite3_open_v2(), or if it has
+///* been enabled globally using the [SQLITE_CONFIG_URI] option with the
+///* [sqlite3_config()] method or by the [SQLITE_USE_URI] compile-time option.
+///* URI filename interpretation is turned off
+///* by default, but future releases of SQLite might enable URI filename
+///* interpretation by default.  See "[URI filenames]" for additional
+///* information.
+///*
+///* URI filenames are parsed according to RFC 3986. ^If the URI contains an
+///* authority, then it must be either an empty string or the string
+///* "localhost". ^If the authority is not an empty string or "localhost", an
+///* error is returned to the caller. ^The fragment component of a URI, if
+///* present, is ignored.
+///*
+///* ^SQLite uses the path component of the URI as the name of the disk file
+///* which contains the database. ^If the path begins with a '/' character,
+///* then it is interpreted as an absolute path. ^If the path does not begin
+///* with a '/' (meaning that the authority section is omitted from the URI)
+///* then the path is interpreted as a relative path.
+///* ^(On windows, the first component of an absolute path
+///* is a drive specification (e.g. "C:").)^
+///*
+///* [[core URI query parameters]]
+///* The query component of a URI may contain parameters that are interpreted
+///* either by SQLite itself, or by a [VFS | custom VFS implementation].
+///* SQLite and its built-in [VFSes] interpret the
+///* following query parameters:
+///*
+///* <ul>
+///*   <li> <b>vfs</b>: ^The "vfs" parameter may be used to specify the name of
+///*     a VFS object that provides the operating system interface that should
+///*     be used to access the database file on disk. ^If this option is set to
+///*     an empty string the default VFS object is used. ^Specifying an unknown
+///*     VFS is an error. ^If sqlite3_open_v2() is used and the vfs option is
+///*     present, then the VFS specified by the option takes precedence over
+///*     the value passed as the fourth parameter to sqlite3_open_v2().
+///*
+///*   <li> <b>mode</b>: ^(The mode parameter may be set to either "ro", "rw",
+///*     "rwc", or "memory". Attempting to set it to any other value is
+///*     an error)^.
+///*     ^If "ro" is specified, then the database is opened for read-only
+///*     access, just as if the [SQLITE_OPEN_READONLY] flag had been set in the
+///*     third argument to sqlite3_open_v2(). ^If the mode option is set to
+///*     "rw", then the database is opened for read-write (but not create)
+///*     access, as if SQLITE_OPEN_READWRITE (but not SQLITE_OPEN_CREATE) had
+///*     been set. ^Value "rwc" is equivalent to setting both
+///*     SQLITE_OPEN_READWRITE and SQLITE_OPEN_CREATE.  ^If the mode option is
+///*     set to "memory" then a pure [in-memory database] that never reads
+///*     or writes from disk is used. ^It is an error to specify a value for
+///*     the mode parameter that is less restrictive than that specified by
+///*     the flags passed in the third parameter to sqlite3_open_v2().
+///*
+///*   <li> <b>cache</b>: ^The cache parameter may be set to either "shared" or
+///*     "private". ^Setting it to "shared" is equivalent to setting the
+///*     SQLITE_OPEN_SHAREDCACHE bit in the flags argument passed to
+///*     sqlite3_open_v2(). ^Setting the cache parameter to "private" is
+///*     equivalent to setting the SQLITE_OPEN_PRIVATECACHE bit.
+///*     ^If sqlite3_open_v2() is used and the "cache" parameter is present in
+///*     a URI filename, its value overrides any behavior requested by setting
+///*     SQLITE_OPEN_PRIVATECACHE or SQLITE_OPEN_SHAREDCACHE flag.
+///*
+///*  <li> <b>psow</b>: ^The psow parameter indicates whether or not the
+///*     [powersafe overwrite] property does or does not apply to the
+///*     storage media on which the database file resides.
+///*
+///*  <li> <b>nolock</b>: ^The nolock parameter is a boolean query parameter
+///*     which if set disables file locking in rollback journal modes.  This
+///*     is useful for accessing a database on a filesystem that does not
+///*     support locking.  Caution:  Database corruption might result if two
+///*     or more processes write to the same database and any one of those
+///*     processes uses nolock=1.
+///*
+///*  <li> <b>immutable</b>: ^The immutable parameter is a boolean query
+///*     parameter that indicates that the database file is stored on
+///*     read-only media.  ^When immutable is set, SQLite assumes that the
+///*     database file cannot be changed, even by a process with higher
+///*     privilege, and so the database is opened read-only and all locking
+///*     and change detection is disabled.  Caution: Setting the immutable
+///*     property on a database file that does in fact change can result
+///*     in incorrect query results and/or [SQLITE_CORRUPT] errors.
+///*     See also: [SQLITE_IOCAP_IMMUTABLE].
+///*
+///* </ul>
+///*
+///* ^Specifying an unknown parameter in the query component of a URI is not an
+///* error.  Future versions of SQLite might understand additional query
+///* parameters.  See "[query parameters with special meaning to SQLite]" for
+///* additional information.
+///*
+///* [[URI filename examples]] <h3>URI filename examples</h3>
+///*
+///* <table border="1" align=center cellpadding=5>
+///* <tr><th> URI filenames <th> Results
+///* <tr><td> file:data.db <td>
+///*          Open the file "data.db" in the current directory.
+///* <tr><td> file:/home/fred/data.db<br>
+///*          file:///home/fred/data.db <br>
+///*          file://localhost/home/fred/data.db <br> <td>
+///*          Open the database file "/home/fred/data.db".
+///* <tr><td> file://darkstar/home/fred/data.db <td>
+///*          An error. "darkstar" is not a recognized authority.
+///* <tr><td style="white-space:nowrap">
+///*          file:///C:/Documents%20and%20Settings/fred/Desktop/data.db
+///*     <td> Windows only: Open the file "data.db" on fred's desktop on drive
+///*          C:. Note that the %20 escaping in this example is not strictly
+///*          necessary - space characters can be used literally
+///*          in URI filenames.
+///* <tr><td> file:data.db?mode=ro&cache=private <td>
+///*          Open file "data.db" in the current directory for read-only access.
+///*          Regardless of whether or not shared-cache mode is enabled by
+///*          default, use a private cache.
+///* <tr><td> file:/home/fred/data.db?vfs=unix-dotfile <td>
+///*          Open file "/home/fred/data.db". Use the special VFS "unix-dotfile"
+///*          that uses dot-files in place of posix advisory locking.
+///* <tr><td> file:data.db?mode=readonly <td>
+///*          An error. "readonly" is not a valid option for the "mode" parameter.
+///*          Use "ro" instead:  "file:data.db?mode=ro".
+///* </table>
+///*
+///* ^URI hexadecimal escape sequences (%HH) are supported within the path and
+///* query components of a URI. A hexadecimal escape sequence consists of a
+///* percent sign - "%" - followed by exactly two hexadecimal digits
+///* specifying an octet value. ^Before the path or query components of a
+///* URI filename are interpreted, they are encoded using UTF-8 and all
+///* hexadecimal escape sequences replaced by a single byte containing the
+///* corresponding octet. If this process generates an invalid UTF-8 encoding,
+///* the results are undefined.
+///*
+///* <b>Note to Windows users:</b>  The encoding used for the filename argument
+///* of sqlite3_open() and sqlite3_open_v2() must be UTF-8, not whatever
+///* codepage is currently defined.  Filenames containing international
+///* characters must be converted to UTF-8 prior to passing them into
+///* sqlite3_open() or sqlite3_open_v2().
+///*
+///* <b>Note to Windows Runtime users:</b>  The temporary directory must be set
+///* prior to calling sqlite3_open() or sqlite3_open_v2().  Otherwise, various
+///* features that require the use of temporary files may fail.
+///*
+///* See also: [sqlite3_temp_directory]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_open(z_filename_1: *const i8,
     pp_db_1: *mut *mut Sqlite3) -> i32 {
@@ -7470,11 +9862,14 @@ pub extern "C" fn sqlite3_open(z_filename_1: *const i8,
             (2 | 4) as u32, core::ptr::null());
 }
 
+///* Open a new database handle.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_open16(mut z_filename_1: *const (),
     pp_db_1: *mut *mut Sqlite3) -> i32 {
     unsafe {
         let mut z_filename8: *const i8 = core::ptr::null();
+        /// zFilename encoded in UTF-8 instead of UTF-16
         let mut p_val: *mut Sqlite3Value = core::ptr::null_mut();
         let mut rc: i32 = 0;
         unsafe { *pp_db_1 = core::ptr::null_mut() };
@@ -7527,6 +9922,8 @@ pub extern "C" fn sqlite3_open_v2(filename: *const i8,
             z_vfs_1);
 }
 
+///* This routine does the core work of extracting URI parameters from a
+///* database filename for the sqlite3_uri_parameter() interface.
 extern "C" fn uri_parameter(mut z_filename_1: *const i8, z_param_1: *const i8)
     -> *const i8 {
     {
@@ -7552,6 +9949,69 @@ extern "C" fn uri_parameter(mut z_filename_1: *const i8, z_param_1: *const i8)
     return core::ptr::null();
 }
 
+///* CAPI3REF: Obtain Values For URI Parameters
+///*
+///* These are utility routines, useful to [VFS|custom VFS implementations],
+///* that check if a database file was a URI that contained a specific query
+///* parameter, and if so obtains the value of that query parameter.
+///*
+///* The first parameter to these interfaces (hereafter referred to
+///* as F) must be one of:
+///* <ul>
+///* <li> A database filename pointer created by the SQLite core and
+///* passed into the xOpen() method of a VFS implementation, or
+///* <li> A filename obtained from [sqlite3_db_filename()], or
+///* <li> A new filename constructed using [sqlite3_create_filename()].
+///* </ul>
+///* If the F parameter is not one of the above, then the behavior is
+///* undefined and probably undesirable.  Older versions of SQLite were
+///* more tolerant of invalid F parameters than newer versions.
+///*
+///* If F is a suitable filename (as described in the previous paragraph)
+///* and if P is the name of the query parameter, then
+///* sqlite3_uri_parameter(F,P) returns the value of the P
+///* parameter if it exists or a NULL pointer if P does not appear as a
+///* query parameter on F.  If P is a query parameter of F and it
+///* has no explicit value, then sqlite3_uri_parameter(F,P) returns
+///* a pointer to an empty string.
+///*
+///* The sqlite3_uri_boolean(F,P,B) routine assumes that P is a boolean
+///* parameter and returns true (1) or false (0) according to the value
+///* of P.  The sqlite3_uri_boolean(F,P,B) routine returns true (1) if the
+///* value of query parameter P is one of "yes", "true", or "on" in any
+///* case or if the value begins with a non-zero number.  The
+///* sqlite3_uri_boolean(F,P,B) routines returns false (0) if the value of
+///* query parameter P is one of "no", "false", or "off" in any case or
+///* if the value begins with a numeric zero.  If P is not a query
+///* parameter on F or if the value of P does not match any of the
+///* above, then sqlite3_uri_boolean(F,P,B) returns (B!=0).
+///*
+///* The sqlite3_uri_int64(F,P,D) routine converts the value of P into a
+///* 64-bit signed integer and returns that integer, or D if P does not
+///* exist or ff the value of P is something other than an integer.
+///*
+///* The sqlite3_uri_key(F,N) returns a pointer to the name (not
+///* the value) of the N-th query parameter for filename F, or a NULL
+///* pointer if N is less than zero or greater than the number of query
+///* parameters minus 1.  The N value is zero-based so N should be 0 to obtain
+///* the name of the first query parameter, 1 for the second parameter, and
+///* so forth.
+///*
+///* If F is a NULL pointer, then sqlite3_uri_parameter(F,P) returns NULL and
+///* sqlite3_uri_boolean(F,P,B) returns B.  If F is not a NULL pointer and
+///* is not a database file pathname pointer that the SQLite core passed
+///* into the xOpen VFS method, then the behavior of this routine is undefined
+///* and probably undesirable.
+///*
+///* Beginning with SQLite [version 3.31.0] ([dateof:3.31.0]) the input F
+///* parameter can also be the name of a rollback journal file or WAL file
+///* in addition to the main database file.  Prior to version 3.31.0, these
+///* routines would only work if F was the name of the main database file.
+///* When the F parameter is the name of the rollback journal or WAL file,
+///* it has access to all the same query parameters as were found on the
+///* main database file.
+///*
+///* See the [URI filename] documentation for additional information.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uri_parameter(mut z_filename: Sqlite3Filename,
     z_param: *const i8) -> *const i8 {
@@ -7562,6 +10022,7 @@ pub extern "C" fn sqlite3_uri_parameter(mut z_filename: Sqlite3Filename,
     return uri_parameter(z_filename, z_param);
 }
 
+///* Return a boolean value for a query parameter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uri_boolean(z_filename: Sqlite3Filename,
     z_param: *const i8, mut b_dflt: i32) -> i32 {
@@ -7572,6 +10033,7 @@ pub extern "C" fn sqlite3_uri_boolean(z_filename: Sqlite3Filename,
         } else { b_dflt };
 }
 
+///* Return a 64-bit integer value for a query parameter.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uri_int64(z_filename: Sqlite3Filename,
     z_param: *const i8, mut b_dflt: Sqlite3Int64) -> Sqlite3Int64 {
@@ -7584,6 +10046,7 @@ pub extern "C" fn sqlite3_uri_int64(z_filename: Sqlite3Filename,
     return b_dflt;
 }
 
+///* Return a pointer to the name of Nth query parameter of the filename.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_uri_key(mut z_filename: Sqlite3Filename, mut n: i32)
     -> *const i8 {
@@ -7613,6 +10076,31 @@ pub extern "C" fn sqlite3_uri_key(mut z_filename: Sqlite3Filename, mut n: i32)
         } else { core::ptr::null() };
 }
 
+///* CAPI3REF:  Translate filenames
+///*
+///* These routines are available to [VFS|custom VFS implementations] for
+///* translating filenames between the main database file, the journal file,
+///* and the WAL file.
+///*
+///* If F is the name of an sqlite database file, journal file, or WAL file
+///* passed by the SQLite core into the VFS, then sqlite3_filename_database(F)
+///* returns the name of the corresponding database file.
+///*
+///* If F is the name of an sqlite database file, journal file, or WAL file
+///* passed by the SQLite core into the VFS, or if F is a database filename
+///* obtained from [sqlite3_db_filename()], then sqlite3_filename_journal(F)
+///* returns the name of the corresponding rollback journal file.
+///*
+///* If F is the name of an sqlite database file, journal file, or WAL file
+///* that was passed by the SQLite core into the VFS, or if F is a database
+///* filename obtained from [sqlite3_db_filename()], then
+///* sqlite3_filename_wal(F) returns the name of the corresponding
+///* WAL file.
+///*
+///* In all of the above, if F is not the name of a database, journal or WAL
+///* filename passed into the VFS from the SQLite core and F is not the
+///* return value from [sqlite3_db_filename()], then the result is
+///* undefined and is likely a memory access violation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_filename_database(z_filename: Sqlite3Filename)
     -> *const i8 {
@@ -7660,12 +10148,57 @@ pub extern "C" fn sqlite3_filename_wal(mut z_filename: Sqlite3Filename)
     return z_filename;
 }
 
+///* Append text z[] to the end of p[].  Return a pointer to the first
+///* character after then zero terminator on the new text in p[].
 extern "C" fn append_text(p: *mut i8, z: *const i8) -> *mut i8 {
     let n: u64 = unsafe { strlen(z) };
     unsafe { memcpy(p as *mut (), z as *const (), n + 1 as u64) };
     return unsafe { unsafe { p.add(n as usize).offset(1 as isize) } };
 }
 
+///* CAPI3REF: Create and Destroy VFS Filenames
+///*
+///* These interfaces are provided for use by [VFS shim] implementations and
+///* are not useful outside of that context.
+///*
+///* The sqlite3_create_filename(D,J,W,N,P) allocates memory to hold a version of
+///* database filename D with corresponding journal file J and WAL file W and
+///* an array P of N URI Key/Value pairs.  The result from
+///* sqlite3_create_filename(D,J,W,N,P) is a pointer to a database filename that
+///* is safe to pass to routines like:
+///* <ul>
+///* <li> [sqlite3_uri_parameter()],
+///* <li> [sqlite3_uri_boolean()],
+///* <li> [sqlite3_uri_int64()],
+///* <li> [sqlite3_uri_key()],
+///* <li> [sqlite3_filename_database()],
+///* <li> [sqlite3_filename_journal()], or
+///* <li> [sqlite3_filename_wal()].
+///* </ul>
+///* If a memory allocation error occurs, sqlite3_create_filename() might
+///* return a NULL pointer.  The memory obtained from sqlite3_create_filename(X)
+///* must be released by a corresponding call to sqlite3_free_filename(Y).
+///*
+///* The P parameter in sqlite3_create_filename(D,J,W,N,P) should be an array
+///* of 2*N pointers to strings.  Each pair of pointers in this array corresponds
+///* to a key and value for a query parameter.  The P parameter may be a NULL
+///* pointer if N is zero.  None of the 2*N pointers in the P array may be
+///* NULL pointers and key pointers should not be empty strings.
+///* None of the D, J, or W parameters to sqlite3_create_filename(D,J,W,N,P) may
+///* be NULL pointers, though they can be empty strings.
+///*
+///* The sqlite3_free_filename(Y) routine releases a memory allocation
+///* previously obtained from sqlite3_create_filename().  Invoking
+///* sqlite3_free_filename(Y) where Y is a NULL pointer is a harmless no-op.
+///*
+///* If the Y parameter to sqlite3_free_filename(Y) is anything other
+///* than a NULL pointer or a pointer previously acquired from
+///* sqlite3_create_filename(), then bad things such as heap
+///* corruption or segfaults may occur. The value Y should not be
+///* used again after sqlite3_free_filename(Y) has been called.  This means
+///* that if the [sqlite3_vfs.xOpen()] method of a VFS has been called using Y,
+///* then the corresponding [sqlite3_module.xClose() method should also be
+///* invoked prior to calling sqlite3_free_filename(Y).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_filename(z_database: *const i8,
     z_journal: *const i8, z_wal: *const i8, n_param: i32,
@@ -7761,9 +10294,41 @@ pub extern "C" fn sqlite3_extended_errcode(db: *mut Sqlite3) -> i32 {
     return i_ret;
 }
 
+///* Return a static string that describes the kind of error specified in the
+///* argument.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_err_str(mut rc: i32) -> *const i8 {
     unsafe {
+        /// SQLITE_OK
+        /// SQLITE_ERROR
+        /// SQLITE_INTERNAL
+        /// SQLITE_PERM
+        /// SQLITE_ABORT
+        /// SQLITE_BUSY
+        /// SQLITE_LOCKED
+        /// SQLITE_NOMEM
+        /// SQLITE_READONLY
+        /// SQLITE_INTERRUPT
+        /// SQLITE_IOERR
+        /// SQLITE_CORRUPT
+        /// SQLITE_NOTFOUND
+        /// SQLITE_FULL
+        /// SQLITE_CANTOPEN
+        /// SQLITE_PROTOCOL
+        /// SQLITE_EMPTY
+        /// SQLITE_SCHEMA
+        /// SQLITE_TOOBIG
+        /// SQLITE_CONSTRAINT
+        /// SQLITE_MISMATCH
+        /// SQLITE_MISUSE
+        /// SQLITE_NOLFS
+        /// SQLITE_AUTH
+        /// SQLITE_FORMAT
+        /// SQLITE_RANGE
+        /// SQLITE_NOTADB
+        /// SQLITE_NOTICE
+        /// SQLITE_WARNING
         let mut z_err: *const i8 =
             c"unknown error".as_ptr() as *mut i8 as *const i8;
         '__s33:
@@ -7857,6 +10422,8 @@ pub extern "C" fn sqlite3_err_str(mut rc: i32) -> *const i8 {
     }
 }
 
+///* Return UTF-8 encoded English language explanation of the most recent
+///* error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_errmsg(db: *mut Sqlite3) -> *const i8 {
     let mut z: *const i8 = core::ptr::null();
@@ -7882,7 +10449,10 @@ pub extern "C" fn sqlite3_errmsg(db: *mut Sqlite3) -> *const i8 {
     return z;
 }
 
+///* Return UTF-16 encoded English language explanation of the most recent
+///* error.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_errmsg16(db: *mut Sqlite3) -> *const () {
     let mut z: *const () = core::ptr::null();
     if (db).is_null() as i32 != 0 {
@@ -7903,17 +10473,26 @@ pub extern "C" fn sqlite3_errmsg16(db: *mut Sqlite3) -> *const () {
             };
             z = unsafe { sqlite3_value_text16(unsafe { (*db).p_err }) };
         }
+
+        /// A malloc() may have failed within the call to sqlite3_value_text16()
+        ///* above. If this is the case, then the db->mallocFailed flag needs to
+        ///* be cleared before returning. Do this directly, instead of via
+        ///* sqlite3ApiExit(), to avoid setting the database handle error message.
         unsafe { sqlite3_oom_clear(db) };
     }
     unsafe { sqlite3_mutex_leave(unsafe { (*db).mutex }) };
     return z;
 }
 
+///* Return a string that describes the kind of error specified in the
+///* argument.  For now, this simply calls the internal sqlite3ErrStr()
+///* function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_errstr(rc: i32) -> *const i8 {
     return sqlite3_err_str(rc);
 }
 
+///* Return the byte offset of the most recent error
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_error_offset(db: *mut Sqlite3) -> i32 {
     let mut i_offset: i32 = -1;
@@ -7928,6 +10507,30 @@ pub extern "C" fn sqlite3_error_offset(db: *mut Sqlite3) -> i32 {
     return i_offset;
 }
 
+///* CAPI3REF: Set Error Code And Message
+///* METHOD: sqlite3
+///*
+///* Set the error code of the database handle passed as the first argument
+///* to errcode, and the error message to a copy of nul-terminated string
+///* zErrMsg. If zErrMsg is passed NULL, then the error message is set to
+///* the default message associated with the supplied error code.  Subsequent
+///* calls to [sqlite3_errcode()] and [sqlite3_errmsg()] and similar will
+///* return the values set by this routine in place of what was previously
+///* set by SQLite itself.
+///*
+///* This function returns SQLITE_OK if the error code and error message are
+///* successfully set, SQLITE_NOMEM if an OOM occurs, and SQLITE_MISUSE if
+///* the database handle is NULL or invalid.
+///*
+///* The error code and message set by this routine remains in effect until
+///* they are changed, either by another call to this routine or until they are
+///* changed to by SQLite itself to reflect the result of some subsquent
+///* API call.
+///*
+///* This function is intended for use by SQLite extensions or wrappers.  The
+///* idea is that an extension or wrapper can use this routine to set error
+///* messages and error codes and thus behave more like a core SQLite
+///* feature from the point of view of an application.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_errmsg(db: *mut Sqlite3, errcode: i32,
     z_msg_1: *const i8) -> i32 {
@@ -7947,10 +10550,54 @@ pub extern "C" fn sqlite3_set_errmsg(db: *mut Sqlite3, errcode: i32,
     return rc;
 }
 
+///* CAPI3REF: Run-time Limits
+///* METHOD: sqlite3
+///*
+///* ^(This interface allows the size of various constructs to be limited
+///* on a connection by connection basis.  The first parameter is the
+///* [database connection] whose limit is to be set or queried.  The
+///* second parameter is one of the [limit categories] that define a
+///* class of constructs to be size limited.  The third parameter is the
+///* new limit for that construct.)^
+///*
+///* ^If the new limit is a negative number, the limit is unchanged.
+///* ^(For each limit category SQLITE_LIMIT_<i>NAME</i> there is a
+///* [limits | hard upper bound]
+///* set at compile-time by a C preprocessor macro called
+///* [limits | SQLITE_MAX_<i>NAME</i>].
+///* (The "_LIMIT_" in the name is changed to "_MAX_".))^
+///* ^Attempts to increase a limit above its hard upper bound are
+///* silently truncated to the hard upper bound.
+///*
+///* ^Regardless of whether or not the limit was changed, the
+///* [sqlite3_limit()] interface returns the prior value of the limit.
+///* ^Hence, to find the current value of a limit without changing it,
+///* simply invoke this interface with the third parameter set to -1.
+///*
+///* Run-time limits are intended for use in applications that manage
+///* both their own internal database and also databases that are controlled
+///* by untrusted external sources.  An example application might be a
+///* web browser that has its own databases for storing history and
+///* separate databases controlled by JavaScript applications downloaded
+///* off the Internet.  The internal databases can be given the
+///* large, default limits.  Databases managed by external sources can
+///* be given much smaller limits designed to prevent a denial of service
+///* attack.  Developers might also want to use the [sqlite3_set_authorizer()]
+///* interface to further control untrusted SQL.  The size of the database
+///* created by an untrusted script can be contained using the
+///* [max_page_count] [PRAGMA].
+///*
+///* New run-time limit categories may be added in future releases.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_limit(db: &mut Sqlite3, limit_id_1: i32,
     mut new_limit_1: i32) -> i32 {
     let mut old_limit: i32 = 0;
+
+    /// EVIDENCE-OF: R-30189-54097 For each limit category SQLITE_LIMIT_NAME
+    ///* there is a hard upper bound set at compile-time by a C preprocessor
+    ///* macro called SQLITE_MAX_NAME. (The "_LIMIT_" in the name is changed to
+    ///* "_MAX_".)
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -7978,7 +10625,12 @@ pub extern "C" fn sqlite3_limit(db: &mut Sqlite3, limit_id_1: i32,
     return old_limit;
 }
 
+///* This function is exactly the same as sqlite3_create_function(), except
+///* that it is designed to be called by internal code. The difference is
+///* that if a malloc() fails in sqlite3_create_function(), an error code
+///* is returned and the mallocFailed flag cleared.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
     z_function_name_1: *const i8, n_arg_1: i32, mut enc: i32,
     p_user_data_1: *mut (),
@@ -8014,6 +10666,9 @@ pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
         extra_flags =
             enc & (2048 | 524288 | 1048576 | 2097152 | 16777216 | 33554432);
         enc &= 3 | 5;
+
+        /// The SQLITE_INNOCUOUS flag is the same bit as SQLITE_FUNC_UNSAFE.  But
+        ///* the meaning is inverted.  So flip the bit.
         { let _ = 0; };
         extra_flags ^= 2097152;
         '__s34:
@@ -8048,11 +10703,16 @@ pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
                 _ => { enc = 1; }
             }
         }
-        p =
+
+        /// Check if an existing function is being overridden or deleted. If so,
+        ///* and there are active VMs, then return SQLITE_BUSY. If a function
+        ///* is being overridden/deleted but there are no active VMs, allow the
+        ///* operation to continue but invalidate all precompiled statements.
+        (p =
             unsafe {
                 sqlite3_find_function(db, z_function_name_1, n_arg_1,
                     enc as u8, 0 as u8)
-            };
+            });
         if !(p).is_null() &&
                     unsafe { (*p).func_flags } & 3 as u32 == enc as u32 &&
                 unsafe { (*p).n_arg } as i32 == n_arg_1 {
@@ -8067,6 +10727,9 @@ pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
             } else { unsafe { sqlite3_expire_prepared_statements(db, 0) }; }
         } else if !x_s_func_1.is_some() as i32 != 0 &&
                 !x_final_1.is_some() as i32 != 0 {
+
+            /// Trying to delete a function that does not exist.  This is a no-op.
+            ///* https://sqlite.org/forum/forumpost/726219164b
             return 0;
         }
         p =
@@ -8076,6 +10739,9 @@ pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
             };
         { let _ = 0; };
         if (p).is_null() as i32 != 0 { return 7; }
+
+        /// If an older version of the function with a configured destructor is
+        ///* being replaced invoke the destructor function here.
         function_destroy(db, unsafe { &*p });
         if !(p_destructor_1).is_null() {
             {
@@ -8103,6 +10769,11 @@ pub extern "C" fn sqlite3_create_func(db: *mut Sqlite3,
     }
 }
 
+///* Worker function used by utf-8 APIs that create new functions:
+///*
+///*    sqlite3_create_function()
+///*    sqlite3_create_function_v2()
+///*    sqlite3_create_window_function()
 extern "C" fn create_function_api(db: *mut Sqlite3, z_func_1: *const i8,
     n_arg_1: i32, enc: i32, p: *mut (),
     x_s_func_1:
@@ -8153,6 +10824,127 @@ extern "C" fn create_function_api(db: *mut Sqlite3, z_func_1: *const i8,
     return rc;
 }
 
+///* CAPI3REF: Create Or Redefine SQL Functions
+///* KEYWORDS: {function creation routines}
+///* METHOD: sqlite3
+///*
+///* ^These functions (collectively known as "function creation routines")
+///* are used to add SQL functions or aggregates or to redefine the behavior
+///* of existing SQL functions or aggregates. The only differences between
+///* the three "sqlite3_create_function*" routines are the text encoding
+///* expected for the second parameter (the name of the function being
+///* created) and the presence or absence of a destructor callback for
+///* the application data pointer. Function sqlite3_create_window_function()
+///* is similar, but allows the user to supply the extra callback functions
+///* needed by [aggregate window functions].
+///*
+///* ^The first parameter is the [database connection] to which the SQL
+///* function is to be added.  ^If an application uses more than one database
+///* connection then application-defined SQL functions must be added
+///* to each database connection separately.
+///*
+///* ^The second parameter is the name of the SQL function to be created or
+///* redefined.  ^The length of the name is limited to 255 bytes in a UTF-8
+///* representation, exclusive of the zero-terminator.  ^Note that the name
+///* length limit is in UTF-8 bytes, not characters nor UTF-16 bytes.
+///* ^Any attempt to create a function with a longer name
+///* will result in [SQLITE_MISUSE] being returned.
+///*
+///* ^The third parameter (nArg)
+///* is the number of arguments that the SQL function or
+///* aggregate takes. ^If this parameter is -1, then the SQL function or
+///* aggregate may take any number of arguments between 0 and the limit
+///* set by [sqlite3_limit]([SQLITE_LIMIT_FUNCTION_ARG]).  If the third
+///* parameter is less than -1 or greater than 127 then the behavior is
+///* undefined.
+///*
+///* ^The fourth parameter, eTextRep, specifies what
+///* [SQLITE_UTF8 | text encoding] this SQL function prefers for
+///* its parameters.  The application should set this parameter to
+///* [SQLITE_UTF16LE] if the function implementation invokes
+///* [sqlite3_value_text16le()] on an input, or [SQLITE_UTF16BE] if the
+///* implementation invokes [sqlite3_value_text16be()] on an input, or
+///* [SQLITE_UTF16] if [sqlite3_value_text16()] is used, or [SQLITE_UTF8]
+///* otherwise.  ^The same SQL function may be registered multiple times using
+///* different preferred text encodings, with different implementations for
+///* each encoding.
+///* ^When multiple implementations of the same function are available, SQLite
+///* will pick the one that involves the least amount of data conversion.
+///*
+///* ^The fourth parameter may optionally be ORed with [SQLITE_DETERMINISTIC]
+///* to signal that the function will always return the same result given
+///* the same inputs within a single SQL statement.  Most SQL functions are
+///* deterministic.  The built-in [random()] SQL function is an example of a
+///* function that is not deterministic.  The SQLite query planner is able to
+///* perform additional optimizations on deterministic functions, so use
+///* of the [SQLITE_DETERMINISTIC] flag is recommended where possible.
+///*
+///* ^The fourth parameter may also optionally include the [SQLITE_DIRECTONLY]
+///* flag, which if present prevents the function from being invoked from
+///* within VIEWs, TRIGGERs, CHECK constraints, generated column expressions,
+///* index expressions, or the WHERE clause of partial indexes.
+///*
+///* For best security, the [SQLITE_DIRECTONLY] flag is recommended for
+///* all application-defined SQL functions that do not need to be
+///* used inside of triggers, views, CHECK constraints, or other elements of
+///* the database schema.  This flag is especially recommended for SQL
+///* functions that have side effects or reveal internal application state.
+///* Without this flag, an attacker might be able to modify the schema of
+///* a database file to include invocations of the function with parameters
+///* chosen by the attacker, which the application will then execute when
+///* the database file is opened and read.
+///*
+///* ^(The fifth parameter is an arbitrary pointer.  The implementation of the
+///* function can gain access to this pointer using [sqlite3_user_data()].)^
+///*
+///* ^The sixth, seventh and eighth parameters passed to the three
+///* "sqlite3_create_function*" functions, xFunc, xStep and xFinal, are
+///* pointers to C-language functions that implement the SQL function or
+///* aggregate. ^A scalar SQL function requires an implementation of the xFunc
+///* callback only; NULL pointers must be passed as the xStep and xFinal
+///* parameters. ^An aggregate SQL function requires an implementation of xStep
+///* and xFinal and NULL pointer must be passed for xFunc. ^To delete an existing
+///* SQL function or aggregate, pass NULL pointers for all three function
+///* callbacks.
+///*
+///* ^The sixth, seventh, eighth and ninth parameters (xStep, xFinal, xValue
+///* and xInverse) passed to sqlite3_create_window_function are pointers to
+///* C-language callbacks that implement the new function. xStep and xFinal
+///* must both be non-NULL. xValue and xInverse may either both be NULL, in
+///* which case a regular aggregate function is created, or must both be
+///* non-NULL, in which case the new function may be used as either an aggregate
+///* or aggregate window function. More details regarding the implementation
+///* of aggregate window functions are
+///* [user-defined window functions|available here].
+///*
+///* ^(If the final parameter to sqlite3_create_function_v2() or
+///* sqlite3_create_window_function() is not NULL, then it is the destructor for
+///* the application data pointer. The destructor is invoked when the function
+///* is deleted, either by being overloaded or when the database connection
+///* closes.)^ ^The destructor is also invoked if the call to
+///* sqlite3_create_function_v2() fails.  ^When the destructor callback is
+///* invoked, it is passed a single argument which is a copy of the application
+///* data pointer which was the fifth parameter to sqlite3_create_function_v2().
+///*
+///* ^It is permitted to register multiple implementations of the same
+///* functions with the same name but with either differing numbers of
+///* arguments or differing preferred text encodings.  ^SQLite will use
+///* the implementation that most closely matches the way in which the
+///* SQL function is used.  ^A function implementation with a non-negative
+///* nArg parameter is a better match than a function implementation with
+///* a negative nArg.  ^A function where the preferred text encoding
+///* matches the database encoding is a better
+///* match than a function where the encoding is different.
+///* ^A function where the encoding difference is between UTF16le and UTF16be
+///* is a closer match than a function where the encoding difference is
+///* between UTF8 and UTF16.
+///*
+///* ^Built-in functions may be overloaded by new application-defined functions.
+///*
+///* ^An application-defined function is permitted to call other
+///* SQLite interfaces.  However, such calls must not
+///* close the database connection nor finalize or reset the prepared
+///* statement in which the function is running.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_function(db: *mut Sqlite3,
     z_func_1: *const i8, n_arg_1: i32, enc: i32, p: *mut (),
@@ -8225,12 +11017,75 @@ pub extern "C" fn sqlite3_create_window_function(db: *mut Sqlite3,
             x_final_1, x_value_1, x_inverse_1, x_destroy_1);
 }
 
+///* This function is now an anachronism. It used to be used to recover from a
+///* malloc() failure, but SQLite now does this automatically.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_global_recover() -> i32 { return 0; }
 
+///* This is a convenience routine that makes sure that all thread-specific
+///* data for this thread has been deallocated.
+///*
+///* SQLite no longer uses thread-specific data so this routine is now a
+///* no-op.  It is retained for historical compatibility.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_thread_cleanup() -> () {}
 
+///* CAPI3REF: Database Connection Client Data
+///* METHOD: sqlite3
+///*
+///* These functions are used to associate one or more named pointers
+///* with a [database connection].
+///* A call to sqlite3_set_clientdata(D,N,P,X) causes the pointer P
+///* to be attached to [database connection] D using name N.  Subsequent
+///* calls to sqlite3_get_clientdata(D,N) will return a copy of pointer P
+///* or a NULL pointer if there were no prior calls to
+///* sqlite3_set_clientdata() with the same values of D and N.
+///* Names are compared using strcmp() and are thus case sensitive.
+///* It returns 0 on success and SQLITE_NOMEM on allocation failure.
+///*
+///* If P and X are both non-NULL, then the destructor X is invoked with
+///* argument P on the first of the following occurrences:
+///* <ul>
+///* <li> An out-of-memory error occurs during the call to
+///*      sqlite3_set_clientdata() which attempts to register pointer P.
+///* <li> A subsequent call to sqlite3_set_clientdata(D,N,P,X) is made
+///*      with the same D and N parameters.
+///* <li> The database connection closes.  SQLite does not make any guarantees
+///*      about the order in which destructors are called, only that all
+///*      destructors will be called exactly once at some point during the
+///*      database connection closing process.
+///* </ul>
+///*
+///* SQLite does not do anything with client data other than invoke
+///* destructors on the client data at the appropriate time.  The intended
+///* use for client data is to provide a mechanism for wrapper libraries
+///* to store additional information about an SQLite database connection.
+///*
+///* There is no limit (other than available memory) on the number of different
+///* client data pointers (with different names) that can be attached to a
+///* single database connection.  However, the current implementation stores
+///* the content on a linked list.  Insert and retrieval performance will
+///* be proportional to the number of entries.  The design use case, and
+///* the use case for which the implementation is optimized, is
+///* that an application will store only small number of client data names,
+///* typically just one or two.  This interface is not intended to be a
+///* generalized key/value store for thousands or millions of keys.  It
+///* will work for that, but performance might be disappointing.
+///*
+///* There is no way to enumerate the client data pointers
+///* associated with a database connection.  The N parameter can be thought
+///* of as a secret key such that only code that knows the secret key is able
+///* to access the associated data.
+///*
+///* Security Warning:  These interfaces should not be exposed in scripting
+///* languages or in other circumstances where it might be possible for an
+///* attacker to invoke them.  Any agent that can invoke these interfaces
+///* can probably also take control of the process.
+///*
+///* Database connection client data is only available for SQLite
+///* version 3.44.0 ([dateof:3.44.0]) and later.
+///*
+///* See also: [sqlite3_set_auxdata()] and [sqlite3_get_auxdata()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_clientdata(db: &Sqlite3, z_name_1: *const i8)
     -> *mut () {
@@ -8258,6 +11113,7 @@ pub extern "C" fn sqlite3_get_clientdata(db: &Sqlite3, z_name_1: *const i8)
     return core::ptr::null_mut();
 }
 
+///* Add new client data to a database connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_set_clientdata(db: &mut Sqlite3,
     z_name_1: *const i8, p_data_1: *mut (),
@@ -8325,6 +11181,7 @@ pub extern "C" fn sqlite3_set_clientdata(db: &mut Sqlite3,
     return 0;
 }
 
+///* Register a new collation sequence with the database handle db.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_collation_v2(db: *mut Sqlite3,
     z_name_1: *const i8, enc: i32, p_ctx_1: *mut (),
@@ -8343,6 +11200,85 @@ pub extern "C" fn sqlite3_create_collation_v2(db: *mut Sqlite3,
     return rc;
 }
 
+///* CAPI3REF: Define New Collating Sequences
+///* METHOD: sqlite3
+///*
+///* ^These functions add, remove, or modify a [collation] associated
+///* with the [database connection] specified as the first argument.
+///*
+///* ^The name of the collation is a UTF-8 string
+///* for sqlite3_create_collation() and sqlite3_create_collation_v2()
+///* and a UTF-16 string in native byte order for sqlite3_create_collation16().
+///* ^Collation names that compare equal according to [sqlite3_strnicmp()] are
+///* considered to be the same name.
+///*
+///* ^(The third argument (eTextRep) must be one of the constants:
+///* <ul>
+///* <li> [SQLITE_UTF8],
+///* <li> [SQLITE_UTF16LE],
+///* <li> [SQLITE_UTF16BE],
+///* <li> [SQLITE_UTF16], or
+///* <li> [SQLITE_UTF16_ALIGNED].
+///* </ul>)^
+///* ^The eTextRep argument determines the encoding of strings passed
+///* to the collating function callback, xCompare.
+///* ^The [SQLITE_UTF16] and [SQLITE_UTF16_ALIGNED] values for eTextRep
+///* force strings to be UTF16 with native byte order.
+///* ^The [SQLITE_UTF16_ALIGNED] value for eTextRep forces strings to begin
+///* on an even byte address.
+///*
+///* ^The fourth argument, pArg, is an application data pointer that is passed
+///* through as the first argument to the collating function callback.
+///*
+///* ^The fifth argument, xCompare, is a pointer to the collating function.
+///* ^Multiple collating functions can be registered using the same name but
+///* with different eTextRep parameters and SQLite will use whichever
+///* function requires the least amount of data transformation.
+///* ^If the xCompare argument is NULL then the collating function is
+///* deleted.  ^When all collating functions having the same name are deleted,
+///* that collation is no longer usable.
+///*
+///* ^The collating function callback is invoked with a copy of the pArg
+///* application data pointer and with two strings in the encoding specified
+///* by the eTextRep argument.  The two integer parameters to the collating
+///* function callback are the length of the two strings, in bytes. The collating
+///* function must return an integer that is negative, zero, or positive
+///* if the first string is less than, equal to, or greater than the second,
+///* respectively.  A collating function must always return the same answer
+///* given the same inputs.  If two or more collating functions are registered
+///* to the same collation name (using different eTextRep values) then all
+///* must give an equivalent answer when invoked with equivalent strings.
+///* The collating function must obey the following properties for all
+///* strings A, B, and C:
+///*
+///* <ol>
+///* <li> If A==B then B==A.
+///* <li> If A==B and B==C then A==C.
+///* <li> If A&lt;B THEN B&gt;A.
+///* <li> If A&lt;B and B&lt;C then A&lt;C.
+///* </ol>
+///*
+///* If a collating function fails any of the above constraints and that
+///* collating function is registered and used, then the behavior of SQLite
+///* is undefined.
+///*
+///* ^The sqlite3_create_collation_v2() works like sqlite3_create_collation()
+///* with the addition that the xDestroy callback is invoked on pArg when
+///* the collating function is deleted.
+///* ^Collating functions are deleted when they are overridden by later
+///* calls to the collation creation functions or when the
+///* [database connection] is closed using [sqlite3_close()].
+///*
+///* ^The xDestroy callback is <u>not</u> called if the
+///* sqlite3_create_collation_v2() function fails.  Applications that invoke
+///* sqlite3_create_collation_v2() with a non-NULL xDestroy argument should
+///* check the return code and dispose of the application data pointer
+///* themselves rather than expecting SQLite to deal with it for them.
+///* This is different from every other SQLite interface.  The inconsistency
+///* is unfortunate but cannot be changed without breaking backwards
+///* compatibility.
+///*
+///* See also:  [sqlite3_collation_needed()] and [sqlite3_collation_needed16()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_collation(db: *mut Sqlite3,
     z_name_1: *const i8, enc: i32, p_ctx_1: *mut (),
@@ -8355,6 +11291,7 @@ pub extern "C" fn sqlite3_create_collation(db: *mut Sqlite3,
         };
 }
 
+///* Register a new collation sequence with the database handle db.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_collation16(db: *mut Sqlite3,
     z_name_1: *const (), enc: i32, p_ctx_1: *mut (),
@@ -8377,6 +11314,31 @@ pub extern "C" fn sqlite3_create_collation16(db: *mut Sqlite3,
     return rc;
 }
 
+///* CAPI3REF: Collation Needed Callbacks
+///* METHOD: sqlite3
+///*
+///* ^To avoid having to register all collation sequences before a database
+///* can be used, a single callback function may be registered with the
+///* [database connection] to be invoked whenever an undefined collation
+///* sequence is required.
+///*
+///* ^If the function is registered using the sqlite3_collation_needed() API,
+///* then it is passed the names of undefined collation sequences as strings
+///* encoded in UTF-8. ^If sqlite3_collation_needed16() is used,
+///* the names are passed as UTF-16 in machine native byte order.
+///* ^A call to either function replaces the existing collation-needed callback.
+///*
+///* ^(When the callback is invoked, the first argument passed is a copy
+///* of the second argument to sqlite3_collation_needed() or
+///* sqlite3_collation_needed16().  The second argument is the database
+///* connection.  The third argument is one of [SQLITE_UTF8], [SQLITE_UTF16BE],
+///* or [SQLITE_UTF16LE], indicating the most desirable form of the collation
+///* sequence function required.  The fourth parameter is the name of the
+///* required collation sequence.)^
+///*
+///* The callback function should register the desired collation using
+///* [sqlite3_create_collation()], [sqlite3_create_collation16()], or
+///* [sqlite3_create_collation_v2()].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_collation_needed(db: &mut Sqlite3,
     p_coll_needed_arg_1: *mut (),
@@ -8391,6 +11353,8 @@ pub extern "C" fn sqlite3_collation_needed(db: &mut Sqlite3,
     return 0;
 }
 
+///* Register a collation sequence factory callback with the database handle
+///* db. Replace any previously installed collation sequence factory.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_collation_needed16(db: &mut Sqlite3,
     p_coll_needed_arg_1: *mut (),
@@ -8405,18 +11369,64 @@ pub extern "C" fn sqlite3_collation_needed16(db: &mut Sqlite3,
     return 0;
 }
 
+///* CAPI3REF: Suspend Execution For A Short Time
+///*
+///* The sqlite3_sleep() function causes the current thread to suspend execution
+///* for at least a number of milliseconds specified in its parameter.
+///*
+///* If the operating system does not support sleep requests with
+///* millisecond time resolution, then the time will be rounded up to
+///* the nearest second. The number of milliseconds of sleep actually
+///* requested from the operating system is returned.
+///*
+///* ^SQLite implements this interface by calling the xSleep()
+///* method of the default [sqlite3_vfs] object.  If the xSleep() method
+///* of the default VFS is not implemented correctly, or not implemented at
+///* all, then the behavior of sqlite3_sleep() may deviate from the description
+///* in the previous paragraphs.
+///*
+///* If a negative argument is passed to sqlite3_sleep() the results vary by
+///* VFS and operating system.  Some system treat a negative argument as an
+///* instruction to sleep forever.  Others understand it to mean do not sleep
+///* at all. ^In SQLite version 3.42.0 and later, a negative
+///* argument passed into sqlite3_sleep() is changed to zero before it is relayed
+///* down into the xSleep method of the VFS.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_sleep(ms: i32) -> i32 {
     let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
     let mut rc: i32 = 0;
     p_vfs = unsafe { sqlite3_vfs_find(core::ptr::null()) };
     if p_vfs == core::ptr::null_mut() { return 0; }
-    rc =
+
+    /// This function works in milliseconds, but the underlying OsSleep()
+    ///* API uses microseconds. Hence the 1000's.
+    (rc =
         unsafe { sqlite3_os_sleep(p_vfs, if ms < 0 { 0 } else { 1000 * ms }) }
-            / 1000;
+            / 1000);
     return rc;
 }
 
+///* CAPI3REF: Test For Auto-Commit Mode
+///* KEYWORDS: {autocommit mode}
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_get_autocommit() interface returns non-zero or
+///* zero if the given database connection is or is not in autocommit mode,
+///* respectively.  ^Autocommit mode is on by default.
+///* ^Autocommit mode is disabled by a [BEGIN] statement.
+///* ^Autocommit mode is re-enabled by a [COMMIT] or [ROLLBACK].
+///*
+///* If certain kinds of errors occur on a statement within a multi-statement
+///* transaction (errors including [SQLITE_FULL], [SQLITE_IOERR],
+///* [SQLITE_NOMEM], [SQLITE_BUSY], and [SQLITE_INTERRUPT]) then the
+///* transaction might be rolled back automatically.  The only way to
+///* find out whether SQLite automatically rolled back the transaction after
+///* an error is to use this function.
+///*
+///* If another thread changes the autocommit status of the database
+///* connection while this routine is running, then the return value
+///* is undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_get_autocommit(db: &Sqlite3) -> i32 {
     let mut i_ret: i32 = 0;
@@ -8426,6 +11436,24 @@ pub extern "C" fn sqlite3_get_autocommit(db: &Sqlite3) -> i32 {
     return i_ret;
 }
 
+///* CAPI3REF: Return The Schema Name For A Database Connection
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_db_name(D,N) interface returns a pointer to the schema name
+///* for the N-th database on database connection D, or a NULL pointer if N is
+///* out of range.  An N value of 0 means the main database file.  An N of 1 is
+///* the "temp" schema.  Larger values of N correspond to various ATTACH-ed
+///* databases.
+///*
+///* Space to hold the string that is returned by sqlite3_db_name() is managed
+///* by SQLite itself.  The string might be deallocated by any operation that
+///* changes the schema, including [ATTACH] or [DETACH] or calls to
+///* [sqlite3_serialize()] or [sqlite3_deserialize()], even operations that
+///* occur on a different thread.  Applications that need to
+///* remember the string long-term should make their own copy.  Applications that
+///* are accessing the same database connection simultaneously on multiple
+///* threads should mutex-protect calls to this API and should make their own
+///* private copy of the result prior to releasing the mutex.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_name(db: &Sqlite3, n_1: i32) -> *const i8 {
     let mut z_ret: *const i8 = core::ptr::null();
@@ -8439,6 +11467,7 @@ pub extern "C" fn sqlite3_db_name(db: &Sqlite3, n_1: i32) -> *const i8 {
     return z_ret;
 }
 
+///* Return the Btree pointer identified by zDbName.  Return NULL if not found.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_name_to_btree(db: *mut Sqlite3,
     z_db_name_1: *const i8) -> *mut Btree {
@@ -8453,6 +11482,34 @@ pub extern "C" fn sqlite3_db_name_to_btree(db: *mut Sqlite3,
         };
 }
 
+///* CAPI3REF: Return The Filename For A Database Connection
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_db_filename(D,N) interface returns a pointer to the filename
+///* associated with database N of connection D.
+///* ^If there is no attached database N on the database
+///* connection D, or if database N is a temporary or in-memory database, then
+///* this function will return either a NULL pointer or an empty string.
+///*
+///* ^The string value returned by this routine is owned and managed by
+///* the database connection.  ^The value will be valid until the database N
+///* is [DETACH]-ed or until the database connection closes.
+///*
+///* ^The filename returned by this function is the output of the
+///* xFullPathname method of the [VFS].  ^In other words, the filename
+///* will be an absolute pathname, even if the filename used
+///* to open the database originally was a URI or relative pathname.
+///*
+///* If the filename pointer returned by this routine is not NULL, then it
+///* can be used as the filename input parameter to these routines:
+///* <ul>
+///* <li> [sqlite3_uri_parameter()]
+///* <li> [sqlite3_uri_boolean()]
+///* <li> [sqlite3_uri_int64()]
+///* <li> [sqlite3_filename_database()]
+///* <li> [sqlite3_filename_journal()]
+///* <li> [sqlite3_filename_wal()]
+///* </ul>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_filename(db: *mut Sqlite3,
     z_db_name_1: *const i8) -> Sqlite3Filename {
@@ -8463,6 +11520,12 @@ pub extern "C" fn sqlite3_db_filename(db: *mut Sqlite3,
         } else { core::ptr::null() };
 }
 
+///* CAPI3REF: Determine if a database is read-only
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_db_readonly(D,N) interface returns 1 if the database N
+///* of connection D is read-only, 0 if it is read/write, or -1 if N is not
+///* the name of a database on connection D.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_readonly(db: *mut Sqlite3,
     z_db_name_1: *const i8) -> i32 {
@@ -8473,6 +11536,20 @@ pub extern "C" fn sqlite3_db_readonly(db: *mut Sqlite3,
         } else { -1 };
 }
 
+///* CAPI3REF: Determine the transaction state of a database
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_txn_state(D,S) interface returns the current
+///* [transaction state] of schema S in database connection D.  ^If S is NULL,
+///* then the highest transaction state of any schema on database connection D
+///* is returned.  Transaction states are (in order of lowest to highest):
+///* <ol>
+///* <li value="0"> SQLITE_TXN_NONE
+///* <li value="1"> SQLITE_TXN_READ
+///* <li value="2"> SQLITE_TXN_WRITE
+///* </ol>
+///* ^If the S argument to sqlite3_txn_state(D,S) is not the name of
+///* a valid schema, then -1 is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_txn_state(db: *mut Sqlite3, z_schema_1: *const i8)
     -> i32 {
@@ -8509,6 +11586,51 @@ pub extern "C" fn sqlite3_txn_state(db: *mut Sqlite3, z_schema_1: *const i8)
     return i_txn;
 }
 
+///* CAPI3REF: Commit And Rollback Notification Callbacks
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_commit_hook() interface registers a callback
+///* function to be invoked whenever a transaction is [COMMIT | committed].
+///* ^Any callback set by a previous call to sqlite3_commit_hook()
+///* for the same database connection is overridden.
+///* ^The sqlite3_rollback_hook() interface registers a callback
+///* function to be invoked whenever a transaction is [ROLLBACK | rolled back].
+///* ^Any callback set by a previous call to sqlite3_rollback_hook()
+///* for the same database connection is overridden.
+///* ^The pArg argument is passed through to the callback.
+///* ^If the callback on a commit hook function returns non-zero,
+///* then the commit is converted into a rollback.
+///*
+///* ^The sqlite3_commit_hook(D,C,P) and sqlite3_rollback_hook(D,C,P) functions
+///* return the P argument from the previous call of the same function
+///* on the same [database connection] D, or NULL for
+///* the first call for each function on D.
+///*
+///* The commit and rollback hook callbacks are not reentrant.
+///* The callback implementation must not do anything that will modify
+///* the database connection that invoked the callback.  Any actions
+///* to modify the database connection must be deferred until after the
+///* completion of the [sqlite3_step()] call that triggered the commit
+///* or rollback hook in the first place.
+///* Note that running any other SQL statements, including SELECT statements,
+///* or merely calling [sqlite3_prepare_v2()] and [sqlite3_step()] will modify
+///* the database connections for the meaning of "modify" in this paragraph.
+///*
+///* ^Registering a NULL function disables the callback.
+///*
+///* ^When the commit hook callback routine returns zero, the [COMMIT]
+///* operation is allowed to continue normally.  ^If the commit hook
+///* returns non-zero, then the [COMMIT] is converted into a [ROLLBACK].
+///* ^The rollback hook is invoked on a rollback that results from a commit
+///* hook returning non-zero, just as it would be with any other rollback.
+///*
+///* ^For the purposes of this API, a transaction is said to have been
+///* rolled back if an explicit "ROLLBACK" statement is executed, or
+///* an error or constraint causes an implicit rollback to occur.
+///* ^The rollback callback is not invoked if a transaction is
+///* automatically rolled back because the database connection is closed.
+///*
+///* See also the [sqlite3_update_hook()] interface.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_commit_hook(db: &mut Sqlite3,
     x_callback_1: Option<unsafe extern "C" fn(*mut ()) -> i32>,
@@ -8522,6 +11644,8 @@ pub extern "C" fn sqlite3_commit_hook(db: &mut Sqlite3,
     return p_old;
 }
 
+///* Register a callback to be invoked each time a transaction is rolled
+///* back by this database connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rollback_hook(db: &mut Sqlite3,
     x_callback_1: Option<unsafe extern "C" fn(*mut ()) -> ()>,
@@ -8535,6 +11659,62 @@ pub extern "C" fn sqlite3_rollback_hook(db: &mut Sqlite3,
     return p_ret;
 }
 
+///* CAPI3REF: Autovacuum Compaction Amount Callback
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_autovacuum_pages(D,C,P,X) interface registers a callback
+///* function C that is invoked prior to each autovacuum of the database
+///* file.  ^The callback is passed a copy of the generic data pointer (P),
+///* the schema-name of the attached database that is being autovacuumed,
+///* the size of the database file in pages, the number of free pages,
+///* and the number of bytes per page, respectively.  The callback should
+///* return the number of free pages that should be removed by the
+///* autovacuum.  ^If the callback returns zero, then no autovacuum happens.
+///* ^If the value returned is greater than or equal to the number of
+///* free pages, then a complete autovacuum happens.
+///*
+///* <p>^If there are multiple ATTACH-ed database files that are being
+///* modified as part of a transaction commit, then the autovacuum pages
+///* callback is invoked separately for each file.
+///*
+///* <p><b>The callback is not reentrant.</b> The callback function should
+///* not attempt to invoke any other SQLite interface.  If it does, bad
+///* things may happen, including segmentation faults and corrupt database
+///* files.  The callback function should be a simple function that
+///* does some arithmetic on its input parameters and returns a result.
+///*
+///* ^The X parameter to sqlite3_autovacuum_pages(D,C,P,X) is an optional
+///* destructor for the P parameter.  ^If X is not NULL, then X(P) is
+///* invoked whenever the database connection closes or when the callback
+///* is overwritten by another invocation of sqlite3_autovacuum_pages().
+///*
+///* <p>^There is only one autovacuum pages callback per database connection.
+///* ^Each call to the sqlite3_autovacuum_pages() interface overrides all
+///* previous invocations for that database connection.  ^If the callback
+///* argument (C) to sqlite3_autovacuum_pages(D,C,P,X) is a NULL pointer,
+///* then the autovacuum steps callback is canceled.  The return value
+///* from sqlite3_autovacuum_pages() is normally SQLITE_OK, but might
+///* be some other error code if something goes wrong.  The current
+///* implementation will only return SQLITE_OK or SQLITE_MISUSE, but other
+///* return codes might be added in future releases.
+///*
+///* <p>If no autovacuum pages callback is specified (the usual case) or
+///* a NULL pointer is provided for the callback,
+///* then the default behavior is to vacuum all free pages.  So, in other
+///* words, the default behavior is the same as if the callback function
+///* were something like this:
+///*
+///* <blockquote><pre>
+///* &nbsp;   unsigned int demonstration_autovac_pages_callback(
+///* &nbsp;     void *pClientData,
+///* &nbsp;     const char *zSchema,
+///* &nbsp;     unsigned int nDbPage,
+///* &nbsp;     unsigned int nFreePage,
+///* &nbsp;     unsigned int nBytePerPage
+///* &nbsp;   ){
+///* &nbsp;     return nFreePage;
+///* &nbsp;   }
+///* </pre></blockquote>
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_autovacuum_pages(db: &mut Sqlite3,
     x_callback_1:
@@ -8552,6 +11732,61 @@ pub extern "C" fn sqlite3_autovacuum_pages(db: &mut Sqlite3,
     return 0;
 }
 
+///* CAPI3REF: Data Change Notification Callbacks
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_update_hook() interface registers a callback function
+///* with the [database connection] identified by the first argument
+///* to be invoked whenever a row is updated, inserted or deleted in
+///* a [rowid table].
+///* ^Any callback set by a previous call to this function
+///* for the same database connection is overridden.
+///*
+///* ^The second argument is a pointer to the function to invoke when a
+///* row is updated, inserted or deleted in a rowid table.
+///* ^The update hook is disabled by invoking sqlite3_update_hook()
+///* with a NULL pointer as the second parameter.
+///* ^The first argument to the callback is a copy of the third argument
+///* to sqlite3_update_hook().
+///* ^The second callback argument is one of [SQLITE_INSERT], [SQLITE_DELETE],
+///* or [SQLITE_UPDATE], depending on the operation that caused the callback
+///* to be invoked.
+///* ^The third and fourth arguments to the callback contain pointers to the
+///* database and table name containing the affected row.
+///* ^The final callback parameter is the [rowid] of the row.
+///* ^In the case of an update, this is the [rowid] after the update takes place.
+///*
+///* ^(The update hook is not invoked when internal system tables are
+///* modified (i.e. sqlite_sequence).)^
+///* ^The update hook is not invoked when [WITHOUT ROWID] tables are modified.
+///*
+///* ^In the current implementation, the update hook
+///* is not invoked when conflicting rows are deleted because of an
+///* [ON CONFLICT | ON CONFLICT REPLACE] clause.  ^Nor is the update hook
+///* invoked when rows are deleted using the [truncate optimization].
+///* The exceptions defined in this paragraph might change in a future
+///* release of SQLite.
+///*
+///* Whether the update hook is invoked before or after the
+///* corresponding change is currently unspecified and may differ
+///* depending on the type of change. Do not rely on the order of the
+///* hook call with regards to the final result of the operation which
+///* triggers the hook.
+///*
+///* The update hook implementation must not do anything that will modify
+///* the database connection that invoked the update hook.  Any actions
+///* to modify the database connection must be deferred until after the
+///* completion of the [sqlite3_step()] call that triggered the update hook.
+///* Note that [sqlite3_prepare_v2()] and [sqlite3_step()] both modify their
+///* database connections for the meaning of "modify" in this paragraph.
+///*
+///* ^The sqlite3_update_hook(D,C,P) function
+///* returns the P argument from the previous call
+///* on the same [database connection] D, or NULL for
+///* the first call on D.
+///*
+///* See also the [sqlite3_commit_hook()], [sqlite3_rollback_hook()],
+///* and [sqlite3_preupdate_hook()] interfaces.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_update_hook(db: &mut Sqlite3,
     x_callback_1:
@@ -8566,6 +11801,16 @@ pub extern "C" fn sqlite3_update_hook(db: &mut Sqlite3,
     return p_ret;
 }
 
+///* CAPI3REF: Free Memory Used By A Database Connection
+///* METHOD: sqlite3
+///*
+///* ^The sqlite3_db_release_memory(D) interface attempts to free as much heap
+///* memory as possible from database connection D. Unlike the
+///* [sqlite3_release_memory()] interface, this interface is in effect even
+///* when the [SQLITE_ENABLE_MEMORY_MANAGEMENT] compile-time option is
+///* omitted.
+///*
+///* See also: [sqlite3_release_memory()]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_release_memory(db: *mut Sqlite3) -> i32 {
     let mut i: i32 = 0;
@@ -8593,7 +11838,75 @@ pub extern "C" fn sqlite3_db_release_memory(db: *mut Sqlite3) -> i32 {
     return 0;
 }
 
+///* CAPI3REF: Extract Metadata About A Column Of A Table
+///* METHOD: sqlite3
+///*
+///* ^(The sqlite3_table_column_metadata(X,D,T,C,....) routine returns
+///* information about column C of table T in database D
+///* on [database connection] X.)^  ^The sqlite3_table_column_metadata()
+///* interface returns SQLITE_OK and fills in the non-NULL pointers in
+///* the final five arguments with appropriate values if the specified
+///* column exists.  ^The sqlite3_table_column_metadata() interface returns
+///* SQLITE_ERROR if the specified column does not exist.
+///* ^If the column-name parameter to sqlite3_table_column_metadata() is a
+///* NULL pointer, then this routine simply checks for the existence of the
+///* table and returns SQLITE_OK if the table exists and SQLITE_ERROR if it
+///* does not.  If the table name parameter T in a call to
+///* sqlite3_table_column_metadata(X,D,T,C,...) is NULL then the result is
+///* undefined behavior.
+///*
+///* ^The column is identified by the second, third and fourth parameters to
+///* this function. ^(The second parameter is either the name of the database
+///* (i.e. "main", "temp", or an attached database) containing the specified
+///* table or NULL.)^ ^If it is NULL, then all attached databases are searched
+///* for the table using the same algorithm used by the database engine to
+///* resolve unqualified table references.
+///*
+///* ^The third and fourth parameters to this function are the table and column
+///* name of the desired column, respectively.
+///*
+///* ^Metadata is returned by writing to the memory locations passed as the 5th
+///* and subsequent parameters to this function. ^Any of these arguments may be
+///* NULL, in which case the corresponding element of metadata is omitted.
+///*
+///* ^(<blockquote>
+///* <table border="1">
+///* <tr><th> Parameter <th> Output<br>Type <th>  Description
+///*
+///* <tr><td> 5th <td> const char* <td> Data type
+///* <tr><td> 6th <td> const char* <td> Name of default collation sequence
+///* <tr><td> 7th <td> int         <td> True if column has a NOT NULL constraint
+///* <tr><td> 8th <td> int         <td> True if column is part of the PRIMARY KEY
+///* <tr><td> 9th <td> int         <td> True if column is [AUTOINCREMENT]
+///* </table>
+///* </blockquote>)^
+///*
+///* ^The memory pointed to by the character pointers returned for the
+///* declaration type and collation sequence is valid until the next
+///* call to any SQLite API function.
+///*
+///* ^If the specified table is actually a view, an [error code] is returned.
+///*
+///* ^If the specified column is "rowid", "oid" or "_rowid_" and the table
+///* is not a [WITHOUT ROWID] table and an
+///* [INTEGER PRIMARY KEY] column has been explicitly declared, then the output
+///* parameters are set for the explicitly declared column. ^(If there is no
+///* [INTEGER PRIMARY KEY] column, then the outputs
+///* for the [rowid] are set as follows:
+///*
+///* <pre>
+///*     data type: "INTEGER"
+///*     collation sequence: "BINARY"
+///*     not null: 0
+///*     primary key: 1
+///*     auto increment: 0
+///* </pre>)^
+///*
+///* ^This function causes all database schemas to be read from disk and
+///* parsed, if that has not already been done, and returns an error if
+///* any errors are encountered while loading the schema.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_table_column_metadata(db: *mut Sqlite3,
     z_db_name_1: *const i8, z_table_name_1: *const i8,
     z_column_name_1: *const i8, pz_data_type_1: *mut *const i8,
@@ -8612,14 +11925,18 @@ pub extern "C" fn sqlite3_table_column_metadata(db: *mut Sqlite3,
             '__c40: loop {
                 let mut p_col: *mut Column = core::ptr::null_mut();
                 let mut i_col: i32 = 0;
+
+                /// Ensure the database schema has been loaded
                 unsafe { sqlite3_mutex_enter(unsafe { (*db).mutex }) };
                 unsafe { sqlite3_btree_enter_all(db) };
                 rc = unsafe { sqlite3_init(db, &mut z_err_msg) };
                 if 0 != rc { break '__b40; }
-                p_tab =
+
+                /// Locate the table in question
+                (p_tab =
                     unsafe {
                         sqlite3_find_table(db, z_table_name_1, z_db_name_1)
-                    };
+                    });
                 if (p_tab).is_null() as i32 != 0 ||
                         unsafe { (*p_tab).e_tab_type } as i32 == 2 {
                     p_tab = core::ptr::null_mut();
@@ -8669,6 +11986,20 @@ pub extern "C" fn sqlite3_table_column_metadata(db: *mut Sqlite3,
             }
             if !(false) { break '__b40; }
         }
+
+        /// Ensure the database schema has been loaded
+        /// Locate the table in question
+        /// Find the column for which info is requested
+        /// Query for existence of table only
+        /// The following block stores the meta information that will be returned
+        ///* to the caller in local variables zDataType, zCollSeq, notnull, primarykey
+        ///* and autoinc. At this point there are two possibilities:
+        ///*
+        ///*     1. The specified column name was rowid", "oid" or "_rowid_"
+        ///*        and there is no explicitly declared IPK column.
+        ///*
+        ///*     2. The table is not a view and the column name identified an
+        ///*        explicitly declared column. Copy meta information from *pCol.
         unsafe { sqlite3_btree_leave_all(db) };
         if !(pz_data_type_1).is_null() {
             unsafe { *pz_data_type_1 = z_data_type };
@@ -8704,6 +12035,12 @@ pub extern "C" fn sqlite3_table_column_metadata(db: *mut Sqlite3,
     }
 }
 
+///* The following is the implementation of an SQL function that always
+///* fails with an error message stating that the function is used in the
+///* wrong context.  The sqlite3_overload_function() API might construct
+///* SQL function that use this routine so that the functions will exist
+///* for name resolution but are actually overloaded by the xFindFunction
+///* method of virtual tables.
 extern "C" fn sqlite3_invalid_function(context: *mut Sqlite3Context,
     not_used_1: i32, not_used2_1: *mut *mut Sqlite3Value) -> () {
     let z_name: *const i8 =
@@ -8719,6 +12056,21 @@ extern "C" fn sqlite3_invalid_function(context: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_err as *mut ()) };
 }
 
+///* CAPI3REF: Overload A Function For A Virtual Table
+///* METHOD: sqlite3
+///*
+///* ^(Virtual tables can provide alternative implementations of functions
+///* using the [xFindFunction] method of the [virtual table module].
+///* But global versions of those functions
+///* must exist in order to be overloaded.)^
+///*
+///* ^(This API makes sure a global version of a function with a particular
+///* name and number of parameters exists.  If no such function exists
+///* before this API is called, a new function is created.)^  ^The implementation
+///* of the new function always causes an exception to be thrown.  So
+///* the new function is not good for anything by itself.  Its only
+///* purpose is to be a placeholder function that can be overloaded
+///* by a [virtual table].
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_overload_function(db: *mut Sqlite3,
     z_name_1: *const i8, n_arg_1: i32) -> i32 {
@@ -8742,11 +12094,58 @@ pub extern "C" fn sqlite3_overload_function(db: *mut Sqlite3,
             Some(sqlite3_free));
 }
 
+///* CAPI3REF: Retrieve the mutex for a database connection
+///* METHOD: sqlite3
+///*
+///* ^This interface returns a pointer to the [sqlite3_mutex] object that
+///* serializes access to the [database connection] given in the argument
+///* when the [threading mode] is Serialized.
+///* ^If the [threading mode] is Single-thread or Multi-thread then this
+///* routine returns a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_mutex(db: &Sqlite3) -> *mut Sqlite3Mutex {
     return (*db).mutex;
 }
 
+///* CAPI3REF: Low-Level Control Of Database Files
+///* METHOD: sqlite3
+///* KEYWORDS: {file control}
+///*
+///* ^The [sqlite3_file_control()] interface makes a direct call to the
+///* xFileControl method for the [sqlite3_io_methods] object associated
+///* with a particular database identified by the second argument. ^The
+///* name of the database is "main" for the main database or "temp" for the
+///* TEMP database, or the name that appears after the AS keyword for
+///* databases that are added using the [ATTACH] SQL command.
+///* ^A NULL pointer can be used in place of "main" to refer to the
+///* main database file.
+///* ^The third and fourth parameters to this routine
+///* are passed directly through to the second and third parameters of
+///* the xFileControl method.  ^The return value of the xFileControl
+///* method becomes the return value of this routine.
+///*
+///* A few opcodes for [sqlite3_file_control()] are handled directly
+///* by the SQLite core and never invoke the
+///* sqlite3_io_methods.xFileControl method.
+///* ^The [SQLITE_FCNTL_FILE_POINTER] value for the op parameter causes
+///* a pointer to the underlying [sqlite3_file] object to be written into
+///* the space pointed to by the 4th parameter.  The
+///* [SQLITE_FCNTL_JOURNAL_POINTER] works similarly except that it returns
+///* the [sqlite3_file] object associated with the journal file instead of
+///* the main database.  The [SQLITE_FCNTL_VFS_POINTER] opcode returns
+///* a pointer to the underlying [sqlite3_vfs] object for the file.
+///* The [SQLITE_FCNTL_DATA_VERSION] returns the data version counter
+///* from the pager.
+///*
+///* ^If the second parameter (zDbName) does not match the name of any
+///* open database file, then SQLITE_ERROR is returned.  ^This error
+///* code is not remembered and will not be recalled by [sqlite3_errcode()]
+///* or [sqlite3_errmsg()].  The underlying xFileControl method might
+///* also return SQLITE_ERROR.  There is no way to distinguish between
+///* an incorrect zDbName and an SQLITE_ERROR return from the underlying
+///* xFileControl method.
+///*
+///* See also: [file control opcodes]
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_file_control(db: *mut Sqlite3,
     z_db_name_1: *const i8, op: i32, p_arg_1: *mut ()) -> i32 {
@@ -8807,7 +12206,23 @@ pub extern "C" fn sqlite3_file_control(db: *mut Sqlite3,
     return rc;
 }
 
+///* CAPI3REF: Testing Interface
+///*
+///* ^The sqlite3_test_control() interface is used to read out internal
+///* state of SQLite and to inject faults into SQLite for testing
+///* purposes.  ^The first parameter is an operation code that determines
+///* the number, meaning, and operation of all subsequent parameters.
+///*
+///* This interface is not for use by applications.  It exists solely
+///* for verifying the correct operation of the SQLite library.  Depending
+///* on how the SQLite library is compiled, this interface might not exist.
+///*
+///* The details of the operation codes, their meanings, the parameters
+///* they take, and what they do are all subject to change without notice.
+///* Unlike most of the SQLite API, this function is not guaranteed to
+///* operate consistently from one release to the next.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
     -> i32 {
     unsafe {
@@ -8955,7 +12370,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -9190,6 +12607,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -9421,7 +12840,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -9656,6 +13077,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -9886,7 +13309,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -10121,6 +13546,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -10316,7 +13743,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -10551,6 +13980,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -10724,7 +14155,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -10959,6 +14392,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -11113,7 +14548,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -11348,6 +14785,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -11489,7 +14928,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -11724,6 +15165,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -11837,7 +15280,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -12072,6 +15517,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -12171,7 +15618,9 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                         {
                             let mut x: i32 = 0 as i32;
                             { let _ = 0; };
-                            rc = x as i32;
+
+                            ///side-effects-ok
+                            (rc = x as i32);
                             break '__s41;
                         }
                         {
@@ -12406,6 +15855,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -12734,6 +16185,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -13051,6 +16504,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -13367,6 +16822,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -13662,6 +17119,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -13936,6 +17395,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -14188,6 +17649,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -14427,6 +17890,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -14656,6 +18121,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -14875,6 +18342,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15084,6 +18553,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15292,6 +18763,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15479,6 +18952,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15665,6 +19140,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15795,6 +19272,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -15912,6 +19391,8 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                                 };
                             unsafe { *pn = 0 as u64 };
                             { let _ = db; };
+
+                            /// Silence harmless unused variable warning
                             break '__s41;
                         }
                         {
@@ -16195,11 +19676,42 @@ pub unsafe extern "C" fn sqlite3_test_control(op: i32, mut __va0: ...)
                 }
             }
             ();
+
+            /// SQLITE_UNTESTABLE
             return rc;
         }
     }
 }
 
+///* CAPI3REF: Flush caches to disk mid-transaction
+///* METHOD: sqlite3
+///*
+///* ^If a write-transaction is open on [database connection] D when the
+///* [sqlite3_db_cacheflush(D)] interface is invoked, any dirty
+///* pages in the pager-cache that are not currently in use are written out
+///* to disk. A dirty page may be in use if a database cursor created by an
+///* active SQL statement is reading from it, or if it is page 1 of a database
+///* file (page 1 is always "in use").  ^The [sqlite3_db_cacheflush(D)]
+///* interface flushes caches for all schemas - "main", "temp", and
+///* any [attached] databases.
+///*
+///* ^If this function needs to obtain extra database locks before dirty pages
+///* can be flushed to disk, it does so. ^If those locks cannot be obtained
+///* immediately and there is a busy-handler callback configured, it is invoked
+///* in the usual manner. ^If the required lock still cannot be obtained, then
+///* the database is skipped and an attempt made to flush any dirty pages
+///* belonging to the next (if any) database. ^If any databases are skipped
+///* because locks cannot be obtained, but no other error occurs, this
+///* function returns SQLITE_BUSY.
+///*
+///* ^If any other error occurs while flushing dirty pages to disk (for
+///* example an IO error or out-of-memory condition), then processing is
+///* abandoned and an SQLite [error code] is returned to the caller immediately.
+///*
+///* ^Otherwise, if no error occurs, [sqlite3_db_cacheflush()] returns SQLITE_OK.
+///*
+///* ^This function does not set the database handle error code or message
+///* returned by the [sqlite3_errcode()] and [sqlite3_errmsg()] functions.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_db_cacheflush(db: *mut Sqlite3) -> i32 {
     let mut i: i32 = 0;
@@ -16231,6 +19743,15 @@ pub extern "C" fn sqlite3_db_cacheflush(db: *mut Sqlite3) -> i32 {
     return if rc == 0 && b_seen_busy != 0 { 5 } else { rc };
 }
 
+///* CAPI3REF: Low-level system error code
+///* METHOD: sqlite3
+///*
+///* ^Attempt to return the underlying operating system error code or error
+///* number that caused the most recent I/O error or failure to open a file.
+///* The return value is OS-dependent.  For example, on unix systems, after
+///* [sqlite3_open_v2()] returns [SQLITE_CANTOPEN], this interface could be
+///* called to get back the underlying "errno" that caused the problem, such
+///* as ENOSPC, EAUTH, EISDIR, and so forth.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_system_errno(db: *const Sqlite3) -> i32 {
     let mut i_ret: i32 = 0;
@@ -16254,6 +19775,7 @@ pub extern "C" fn sqlite3_cantopen_error(lineno: i32) -> i32 {
             c"cannot open file".as_ptr() as *mut i8 as *const i8);
 }
 
+///* Return true if CollSeq is the default built-in BINARY.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_is_binary(p: *const CollSeq) -> i32 {
     { let _ = 0; };
@@ -16261,6 +19783,13 @@ pub extern "C" fn sqlite3_is_binary(p: *const CollSeq) -> i32 {
                 unsafe { (*p).x_cmp } == Some(bin_coll_func)) as i32;
 }
 
+///* Invoke the given busy handler.
+///*
+///* This routine is called when an operation failed to acquire a
+///* lock on VFS file pFile.
+///*
+///* If this routine returns non-zero, the lock is retried.  If it
+///* returns 0, the operation aborts with an SQLITE_BUSY error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_invoke_busy_handler(p: &mut BusyHandler) -> i32 {
     let mut rc: i32 = 0;
@@ -16275,6 +19804,23 @@ pub extern "C" fn sqlite3_invoke_busy_handler(p: &mut BusyHandler) -> i32 {
     return rc;
 }
 
+///* This function returns true if main-memory should be used instead of
+///* a temporary file for transient pager files and statement journals.
+///* The value returned depends on the value of db->temp_store (runtime
+///* parameter) and the compile time value of SQLITE_TEMP_STORE. The
+///* following table describes the relationship between these two values
+///* and this functions return value.
+///*
+///*   SQLITE_TEMP_STORE     db->temp_store     Location of temporary database
+///*   -----------------     --------------     ------------------------------
+///*   0                     any                file      (return 0)
+///*   1                     1                  file      (return 0)
+///*   1                     2                  memory    (return 1)
+///*   1                     0                  file      (return 0)
+///*   2                     1                  file      (return 0)
+///*   2                     2                  memory    (return 1)
+///*   2                     0                  memory    (return 1)
+///*   3                     any                memory    (return 1)
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_temp_in_memory(db: &Sqlite3) -> i32 {
     return ((*db).temp_store as i32 == 2) as i32;

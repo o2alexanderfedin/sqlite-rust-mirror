@@ -2,19 +2,35 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor,
+    SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDefU0, FuncDestructor, IdList, Index, KeyInfo, LogEst,
+    Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema,
+    Select, SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str,
+    SrcItem, SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -396,6 +412,20 @@ impl Parse {
     }
 }
 
+/// A parsed JSON value.  Lifecycle:
+///*
+///*   1.  JSON comes in and is parsed into a JSONB value in aBlob.  The
+///*       original text is stored in zJson.  This step is skipped if the
+///*       input is JSONB instead of text JSON.
+///*
+///*   2.  The aBlob[] array is searched using the JSON path notation, if needed.
+///*       
+///*   3.  Zero or more changes are made to aBlob[] (via json_remove() or
+///*       json_replace() or json_patch() or similar).
+///*
+///*   4.  New JSON text is generated from the aBlob[] for output.  This step
+///*       is skipped if the function is one of the jsonb_* functions that
+///*       returns JSONB instead of text JSON.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonParse {
@@ -420,6 +450,18 @@ struct JsonParse {
     a_ins: *mut u8,
 }
 
+/// A cache mapping JSON text into JSONB blobs.
+///*
+///* Each cache entry is a JsonParse object with the following restrictions:
+///*
+///*    *   The bReadOnly flag must be set
+///*
+///*    *   The aBlob[] array must be owned by the JsonParse object.  In other
+///*        words, nBlobAlloc must be non-zero.
+///*
+///*    *   eEdit and delta must be zero.
+///*
+///*    *   zJson must be an RCStr.  In other words bJsonIsRCStr must be true.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonCache {
@@ -428,6 +470,16 @@ struct JsonCache {
     a: [*mut JsonParse; 4],
 }
 
+///* Search for a cached translation the json text supplied by pArg.  Return
+///* the JsonParse object if found.  Return NULL if not found.
+///*
+///* When a match if found, the matching entry is moved to become the
+///* most-recently used entry if it isn't so already.
+///*
+///* The JsonParse object returned still belongs to the Cache and might
+///* be deleted at any moment.  If the caller wants the JsonParse to
+///* linger, it needs to increment the nPJRef reference counter.
+#[allow(unused_doc_comments)]
 extern "C" fn json_cache_search(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value) -> *mut JsonParse {
     let mut p: *mut JsonCache = core::ptr::null_mut();
@@ -480,6 +532,7 @@ extern "C" fn json_cache_search(ctx: *mut Sqlite3Context,
     }
     if i < unsafe { (*p).n_used } {
         if i < unsafe { (*p).n_used } - 1 {
+            /// Make the matching entry the most recently used entry
             let tmp: *mut JsonParse = unsafe { (*p).a[i as usize] };
             unsafe {
                 memmove(unsafe { &raw mut (*p).a[i as usize] } as *mut (),
@@ -495,6 +548,8 @@ extern "C" fn json_cache_search(ctx: *mut Sqlite3Context,
     } else { return core::ptr::null_mut(); }
 }
 
+///* Reclaim all memory allocated by a JsonParse object.  But do not
+///* delete the JsonParse object itself.
 extern "C" fn json_parse_reset(p_parse_1: &mut JsonParse) -> () {
     { let _ = 0; };
     if (*p_parse_1).b_json_is_rc_str != 0 {
@@ -513,6 +568,8 @@ extern "C" fn json_parse_reset(p_parse_1: &mut JsonParse) -> () {
     }
 }
 
+///* Decrement the reference count on the JsonParse object.  When the
+///* count reaches zero, free the object.
 extern "C" fn json_parse_free(p_parse_1: *mut JsonParse) -> () {
     if !(p_parse_1).is_null() {
         if unsafe { (*p_parse_1).n_jp_ref } > 1 as u32 {
@@ -532,6 +589,10 @@ extern "C" fn json_parse_free(p_parse_1: *mut JsonParse) -> () {
     }
 }
 
+/// The byte at index i is a node type-code.  This routine
+///* determines the payload size for that node and writes that
+///* payload size in to *pSz.  It returns the offset from i to the
+///* beginning of the payload.  Return 0 on error.
 extern "C" fn jsonb_payload_size(p_parse_1: &JsonParse, i: u32,
     p_sz_1: &mut u32) -> u32 {
     let mut x: u8 = 0 as u8;
@@ -621,6 +682,10 @@ extern "C" fn jsonb_payload_size(p_parse_1: &JsonParse, i: u32,
     return n;
 }
 
+///* Characters that are special to JSON.  Control characters,
+///* '"' and '\\' and '\''.  Actually, '\'' is not special to
+///* canonical JSON, but it is special in JSON-5, so we include
+///* it in the set of special characters.
 static json_is_ok: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
@@ -660,6 +725,7 @@ static json_is_ok: [i8; 256] =
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8];
 
+///* Return true if z[] begins with 2 (or more) hexadecimal digits
 extern "C" fn json_is2_hex(z: *const i8) -> i32 {
     unsafe {
         return (unsafe {
@@ -675,16 +741,22 @@ extern "C" fn json_is2_hex(z: *const i8) -> i32 {
     }
 }
 
+///* Return true if z[] begins with 4 (or more) hexadecimal digits
 extern "C" fn json_is4_hex(z: *const i8) -> i32 {
     return (json_is2_hex(z) != 0 &&
                 json_is2_hex(unsafe { &*z.offset(2 as isize) }) != 0) as i32;
 }
 
+///* Translate a single byte of Hex into an integer.
+///* This routine only gives a correct answer if h really is a valid hexadecimal
+///* character:  0..9a..fA..F.  But unlike sqlite3HexToInt(), it does not
+///* assert() if the digit is not hex.
 extern "C" fn json_hex_to_int(mut h: i32) -> u8 {
     h += 9 * (1 & h >> 6);
     return (h & 15) as u8;
 }
 
+///* Convert a 4-byte hex string into an integer
 extern "C" fn json_hex_to_int4(z: *const i8) -> u32 {
     let mut v: u32 = 0 as u32;
     v =
@@ -699,6 +771,14 @@ extern "C" fn json_hex_to_int4(z: *const i8) -> u32 {
     return v;
 }
 
+///* Return the number of escaped newlines to be ignored.
+///* An escaped newline is a one of the following byte sequences:
+///*
+///*    0x5c 0x0a
+///*    0x5c 0x0d
+///*    0x5c 0x0d 0x0a
+///*    0x5c 0xe2 0x80 0xa8
+///*    0x5c 0xe2 0x80 0xa9
 extern "C" fn json_bytes_to_bypass(z: *const i8, n: u32) -> u32 {
     let mut i: u32 = 0 as u32;
     while (i + 1 as u32) < n {
@@ -731,6 +811,14 @@ extern "C" fn json_bytes_to_bypass(z: *const i8, n: u32) -> u32 {
     return i;
 }
 
+///* Input z[0..n] defines JSON escape sequence including the leading '\\'.
+///* Decode that escape sequence into a single character.  Write that
+///* character into *piOut.  Return the number of bytes in the escape sequence.
+///*
+///* If there is a syntax error of some kind (for example too few characters
+///* after the '\\' to complete the encoding) then *piOut is set to
+///* JSON_INVALID_CHAR.
+#[allow(unused_doc_comments)]
 extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
     -> u32 {
     unsafe {
@@ -789,6 +877,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -873,6 +968,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -953,6 +1055,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1029,6 +1138,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1101,6 +1217,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1169,6 +1292,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1233,6 +1363,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                         return 2 as u32;
                     }
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1293,6 +1430,13 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
                 }
                 48 => {
                     {
+
+                        /// JSON5 requires that the \0 escape not be followed by a digit.
+                        ///* But SQLite did not enforce this restriction in versions 3.42.0
+                        ///* through 3.49.2.  That was a bug.  But some applications might have
+                        ///* come to depend on that bug.  Use the SQLITE_BUG_COMPATIBLE_20250510
+                        ///* option to restore the old buggy behavior.
+                        /// Correct behavior
                         unsafe {
                             *pi_out =
                                 if n > 2 as u32 &&
@@ -1661,6 +1805,15 @@ extern "C" fn json_unescape_one_char(z: *const i8, n: u32, pi_out: *mut u32)
     }
 }
 
+///* Check a single element of the JSONB in pParse for validity.
+///*
+///* The element to be checked starts at offset i and must end at on the
+///* last byte before iEnd.
+///*
+///* Return 0 if everything is correct.  Return the 1-based byte offset of the
+///* error if a problem is detected.  (In other words, if the error is at offset
+///* 0, return 1).
+#[allow(unused_doc_comments)]
 extern "C" fn jsonb_validity_check(p_parse_1: *const JsonParse, i: u32,
     i_end_1: u32, i_depth_1: u32) -> u32 {
     unsafe {
@@ -1675,7 +1828,9 @@ extern "C" fn jsonb_validity_check(p_parse_1: *const JsonParse, i: u32,
         n = unsafe { jsonb_payload_size(unsafe { &*p_parse_1 }, i, &mut sz) };
         if n == 0 as u32 { return i + 1 as u32; }
         if i + n + sz != i_end_1 { return i + 1 as u32; }
-        z = unsafe { (*p_parse_1).a_blob } as *const u8;
+
+        /// Checked by caller
+        (z = unsafe { (*p_parse_1).a_blob } as *const u8);
         x = (unsafe { *z.add(i as usize) } as i32 & 15) as u8;
         '__s4:
             {
@@ -3683,6 +3838,32 @@ extern "C" fn jsonb_validity_check(p_parse_1: *const JsonParse, i: u32,
     }
 }
 
+///* If pArg is a blob that seems like a JSONB blob, then initialize
+///* p to point to that JSONB and return TRUE.  If pArg does not seem like
+///* a JSONB blob, then return FALSE.
+///*
+///* For small BLOBs (having no more than 7 bytes of payload) a full
+///* validity check is done.  So for small BLOBs this routine only returns
+///* true if the value is guaranteed to be a valid JSONB.  For larger BLOBs
+///* (8 byte or more of payload) only the size of the outermost element is
+///* checked to verify that the BLOB is superficially valid JSONB.
+///*
+///* A full JSONB validation is done on smaller BLOBs because those BLOBs might
+///* also be text JSON that has been incorrectly cast into a BLOB.
+///* (See tag-20240123-a and https://sqlite.org/forum/forumpost/012136abd5)
+///* If the BLOB is 9 bytes are larger, then it is not possible for the
+///* superficial size check done here to pass if the input is really text
+///* JSON so we do not need to look deeper in that case.
+///*
+///* Why we only need to do full JSONB validation for smaller BLOBs:
+///*
+///* The first byte of valid JSON text must be one of: '{', '[', '"', ' ', '\n',
+///* '\r', '\t', '-', or a digit '0' through '9'.  Of these, only a subset
+///* can also be the first byte of JSONB:  '{', '[', and digits '3'
+///* through '9'.  In every one of those cases, the payload size is 7 bytes
+///* or less.  So if we do full JSONB validation for every BLOB where the
+///* payload is less than 7 bytes, we will never get a false positive for
+///* JSONB on an input that is really text JSON.
 extern "C" fn json_arg_is_jsonb(p_arg_1: *mut Sqlite3Value, p: *mut JsonParse)
     -> i32 {
     unsafe {
@@ -3723,6 +3904,9 @@ extern "C" fn json_arg_is_jsonb(p_arg_1: *mut Sqlite3Value, p: *mut JsonParse)
     }
 }
 
+///* Expand pParse->aBlob so that it holds at least N bytes.
+///*
+///* Return the number of errors.
 extern "C" fn json_blob_expand(p_parse_1: &mut JsonParse, n_1: u32) -> i32 {
     let mut a_new: *mut u8 = core::ptr::null_mut();
     let mut t: u64 = 0 as u64;
@@ -3746,6 +3930,12 @@ extern "C" fn json_blob_expand(p_parse_1: &mut JsonParse, n_1: u32) -> i32 {
     return 0;
 }
 
+///* If pParse->aBlob is not previously editable (because it is taken
+///* from sqlite3_value_blob(), as indicated by the fact that
+///* pParse->nBlobAlloc==0 and pParse->nBlob>0) then make it editable
+///* by making a copy into space obtained from malloc.
+///*
+///* Return true on success.  Return false on OOM.
 extern "C" fn json_blob_make_editable(p_parse_1: *mut JsonParse,
     n_extra_1: u32) -> i32 {
     let mut a_old: *const u8 = core::ptr::null();
@@ -3777,6 +3967,8 @@ extern "C" fn json_blob_expand_and_append_node(p_parse_1: *mut JsonParse,
     };
 }
 
+/// Slow version of jsonBlobAppendNode() that first resizes the
+///* pParse->aBlob structure.
 extern "C" fn json_blob_append_node(p_parse_1: *mut JsonParse, e_type_1: u8,
     sz_payload_1: u64, a_payload_1: *const ()) -> () {
     let mut a: *mut u8 = core::ptr::null_mut();
@@ -3838,9 +4030,45 @@ extern "C" fn json_blob_append_node(p_parse_1: *mut JsonParse, e_type_1: u8,
     }
 }
 
+///* Return the number of bytes of JSON5 whitespace at the beginning of
+///* the input string z[].
+///*
+///* JSON5 whitespace consists of any of the following characters:
+///*
+///*    Unicode  UTF-8         Name
+///*    U+0009   09            horizontal tab
+///*    U+000a   0a            line feed
+///*    U+000b   0b            vertical tab
+///*    U+000c   0c            form feed
+///*    U+000d   0d            carriage return
+///*    U+0020   20            space
+///*    U+00a0   c2 a0         non-breaking space
+///*    U+1680   e1 9a 80      ogham space mark
+///*    U+2000   e2 80 80      en quad
+///*    U+2001   e2 80 81      em quad
+///*    U+2002   e2 80 82      en space
+///*    U+2003   e2 80 83      em space
+///*    U+2004   e2 80 84      three-per-em space
+///*    U+2005   e2 80 85      four-per-em space
+///*    U+2006   e2 80 86      six-per-em space
+///*    U+2007   e2 80 87      figure space
+///*    U+2008   e2 80 88      punctuation space
+///*    U+2009   e2 80 89      thin space
+///*    U+200a   e2 80 8a      hair space
+///*    U+2028   e2 80 a8      line separator
+///*    U+2029   e2 80 a9      paragraph separator
+///*    U+202f   e2 80 af      narrow no-break space (NNBSP)
+///*    U+205f   e2 81 9f      medium mathematical space (MMSP)
+///*    U+3000   e3 80 80      ideographical space
+///*    U+FEFF   ef bb bf      byte order mark
+///*
+///* In addition, comments between '/', '*' and '*', '/' and
+///* from '/', '/' to end-of-line are also considered to be whitespace.
+#[allow(unused_doc_comments)]
 extern "C" fn json5_whitespace(z_in_1: *const i8) -> i32 {
     let mut n: i32 = 0;
     let mut z: *const u8 = core::ptr::null();
+    ///exit by "goto whitespace_done"
     let mut j: i32 = 0;
     let mut j__1: i32 = 0;
     let mut c: i8 = 0 as i8;
@@ -4045,9 +4273,14 @@ extern "C" fn json5_whitespace(z_in_1: *const i8) -> i32 {
             }
         }
     }
+
+    ///exit by "goto whitespace_done"
     unreachable!();
 }
 
+///* If z[0] is 'u' and is followed by exactly 4 hexadecimal character,
+///* then set *pOp to JSONB_TEXTJ and return true.  If not, do not make
+///* any changes to *pOp and return false.
 extern "C" fn json_is4_hex_b(z: *const i8, p_op_1: &mut i32) -> i32 {
     if unsafe { *z.offset(0 as isize) } as i32 != 'u' as i32 { return 0; }
     if (json_is4_hex(unsafe { &*z.offset(1 as isize) }) == 0) as i32 != 0 {
@@ -4057,6 +4290,9 @@ extern "C" fn json_is4_hex_b(z: *const i8, p_op_1: &mut i32) -> i32 {
     return 1;
 }
 
+///* Growing our own isspace() routine this way is twice as fast as
+///* the library isspace() function, resulting in a 7% overall performance
+///* increase for the text-JSON parser.  (Ubuntu14.10 gcc 4.8.4 x64 with -Os).
 static json_is_space: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 1 as i8, 1 as i8, 0 as i8, 0 as i8, 1 as i8, 0 as i8,
@@ -4099,6 +4335,7 @@ static json_is_space: [i8; 256] =
 static json_spaces: [i8; 5] =
     [9 as i8, 10 as i8, 13 as i8, 32 as i8, 0 as i8];
 
+/// Change the payload size for the node at index i to be szPayload.
 extern "C" fn json_blob_change_payload_size(p_parse_1: *mut JsonParse, i: u32,
     sz_payload_1: u32) -> i32 {
     let mut a: *mut u8 = core::ptr::null_mut();
@@ -4192,6 +4429,7 @@ extern "C" fn json_blob_change_payload_size(p_parse_1: *mut JsonParse, i: u32,
     return delta;
 }
 
+/// Expand pParse->aBlob and append one bytes.
 extern "C" fn json_blob_expand_and_append_one_byte(p_parse_1: *mut JsonParse,
     c: u8) -> () {
     json_blob_expand(unsafe { &mut *p_parse_1 },
@@ -4211,6 +4449,7 @@ extern "C" fn json_blob_expand_and_append_one_byte(p_parse_1: *mut JsonParse,
     }
 }
 
+/// Append a single character.
 extern "C" fn json_blob_append_one_byte(p_parse_1: *mut JsonParse, c: u8)
     -> () {
     if unsafe { (*p_parse_1).n_blob } >= unsafe { (*p_parse_1).n_blob_alloc }
@@ -4230,6 +4469,7 @@ extern "C" fn json_blob_append_one_byte(p_parse_1: *mut JsonParse, c: u8)
     }
 }
 
+///* Extra floating-point literals to allow in JSON.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct NanInfName {
@@ -4289,6 +4529,21 @@ static mut a_nan_inf_name: [NanInfName; 5] =
                 z_repl: c"null".as_ptr() as *mut i8,
             }];
 
+///* Translate a single element of JSON text at pParse->zJson[i] into
+///* its equivalent binary JSONB representation.  Append the translation into
+///* pParse->aBlob[] beginning at pParse->nBlob.  The size of
+///* pParse->aBlob[] is increased as necessary.
+///*
+///* Return the index of the first character past the end of the element parsed,
+///* or one of the following special result codes:
+///*
+///*      0    End of input
+///*     -1    Syntax error or OOM
+///*     -2    '}' seen   \
+///*     -3    ']' seen    \___  For these returns, pParse->iErr is set to
+///*     -4    ',' seen    /     the index in zJson[] of the seen character
+///*     -5    ':' seen   /
+#[allow(unused_doc_comments)]
 extern "C" fn json_translate_text_to_blob(p_parse_1: *mut JsonParse,
     mut i: u32) -> i32 {
     unsafe {
@@ -4300,13 +4555,36 @@ extern "C" fn json_translate_text_to_blob(p_parse_1: *mut JsonParse,
             let mut x: i32 = 0;
             let mut t: u8 = 0 as u8;
             let mut z: *const i8 = core::ptr::null();
+            /// Parse object
             let mut i_blob: u32 = 0 as u32;
             let mut op: i32 = 0;
             let mut k: i32 = 0;
             let mut __state__1: i32 = 0;
+            /// Parse object
+            /// strspn() is not helpful here
+            /// Parse array
             let mut opcode: u8 = 0 as u8;
             let mut c_delim: i8 = 0 as i8;
+            /// Parse string
+            ///exit-by-break
+            /// Correct implementation
+            /// Control characters are not allowed in canonical JSON string
+            ///* literals, but are allowed in JSON5 string literals.
             let mut seen_e: u8 = 0 as u8;
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// Parse number
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// JSON5 allows for "+Infinity" and "-Infinity" using exactly
+            ///* that case.  SQLite also allows these in any case and it allows
+            ///* "+inf" and "-inf".
+            /// End of {...}
+            /// End of [...]
+            /// List separator
+            /// Object label/value separator
+            /// End of file
+            /// fall-through into the default case that checks for NaN */
+            ///    /* no break
             let mut k__1: u32 = 0 as u32;
             let mut nn: i32 = 0;
             let mut __state: i32 = 0;
@@ -5827,11 +6105,42 @@ extern "C" fn json_translate_text_to_blob(p_parse_1: *mut JsonParse,
                     }
                 }
             }
+
+            /// Parse object
+            /// strspn() is not helpful here
+            /// Parse array
+            /// Parse string
+            ///exit-by-break
+            /// Correct implementation
+            /// Control characters are not allowed in canonical JSON string
+            ///* literals, but are allowed in JSON5 string literals.
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// Parse number
+            /// Bit 0x01:  JSON5.   Bit 0x02:  FLOAT
+            /// JSON5 allows for "+Infinity" and "-Infinity" using exactly
+            ///* that case.  SQLite also allows these in any case and it allows
+            ///* "+inf" and "-inf".
+            /// End of {...}
+            /// End of [...]
+            /// List separator
+            /// Object label/value separator
+            /// End of file
+            /// fall-through into the default case that checks for NaN */
+            ///    /* no break
+            /// Syntax error
+            /// End switch(z[i])
             unreachable!();
         }
     }
 }
 
+///* Parse a complete JSON string.  Return 0 on success or non-zero if there
+///* are any errors.  If an error occurs, free all memory held by pParse,
+///* but not pParse itself.
+///*
+///* pParse must be initialized to an empty parse object prior to calling
+///* this routine.
 extern "C" fn json_convert_text_to_blob(p_parse_1: *mut JsonParse,
     p_ctx_1: *mut Sqlite3Context) -> i32 {
     let mut i: i32 = 0;
@@ -5875,6 +6184,7 @@ extern "C" fn json_convert_text_to_blob(p_parse_1: *mut JsonParse,
     return 0;
 }
 
+///* Free a JsonCache object.
 extern "C" fn json_cache_delete(p: *mut JsonCache) -> () {
     let mut i: i32 = 0;
     {
@@ -5895,6 +6205,11 @@ extern "C" fn json_cache_delete_generic(p: *mut ()) -> () {
     json_cache_delete(p as *mut JsonCache);
 }
 
+///* Insert a new entry into the cache.  If the cache is full, expel
+///* the least recently used entry.  Return SQLITE_OK on success or a
+///* result code otherwise.
+///*
+///* Cache entries are stored in age order, oldest first.
 extern "C" fn json_cache_insert(ctx: *mut Sqlite3Context,
     p_parse_1: *mut JsonParse) -> i32 {
     let mut p: *mut JsonCache = core::ptr::null_mut();
@@ -5943,13 +6258,43 @@ extern "C" fn json_cache_insert(ctx: *mut Sqlite3Context,
     return 0;
 }
 
+///* Generate a JsonParse object, containing valid JSONB in aBlob and nBlob,
+///* from the SQL function argument pArg.  Return a pointer to the new
+///* JsonParse object.
+///*
+///* Ownership of the new JsonParse object is passed to the caller.  The
+///* caller should invoke jsonParseFree() on the return value when it
+///* has finished using it.
+///*
+///* If any errors are detected, an appropriate error messages is set
+///* using sqlite3_result_error() or the equivalent and this routine
+///* returns NULL.  This routine also returns NULL if the pArg argument
+///* is an SQL NULL value, but no error message is set in that case.  This
+///* is so that SQL functions that are given NULL arguments will return
+///* a NULL value.
+#[allow(unused_doc_comments)]
 extern "C" fn json_parse_func_arg(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value, flgs: u32) -> *mut JsonParse {
     let mut e_type: i32 = 0;
+    /// Datatype of pArg
     let mut p: *mut JsonParse = core::ptr::null_mut();
+    /// Value to be returned
     let mut p_from_cache: *mut JsonParse = core::ptr::null_mut();
+    /// Value taken from cache
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
+    /// The database connection
     let mut n_blob: u32 = 0 as u32;
+    /// If the blob is not valid JSONB, fall through into trying to cast
+    ///* the blob into text which is then interpreted as JSON.  (tag-20240123-a)
+    ///*
+    ///* This goes against all historical documentation about how the SQLite
+    ///* JSON functions were suppose to work.  From the beginning, blob was
+    ///* reserved for expansion and a blob value should have raised an error.
+    ///* But it did not, due to a bug.  And many applications came to depend
+    ///* upon this buggy behavior, especially when using the CLI and reading
+    ///* JSON text using readfile(), which returns a blob.  For this reason
+    ///* we will continue to support the bug moving forward.
+    ///* See for example https://sqlite.org/forum/forumpost/012136abd5292b8d
     let mut is_rc_str: i32 = 0;
     let mut rc: i32 = 0;
     let mut z_new: *mut i8 = core::ptr::null_mut();
@@ -6222,9 +6567,38 @@ extern "C" fn json_parse_func_arg(ctx: *mut Sqlite3Context,
             }
         }
     }
+
+    /// Datatype of pArg
+    /// Value to be returned
+    /// Value taken from cache
+    /// The database connection
+    /// If the blob is not valid JSONB, fall through into trying to cast
+    ///* the blob into text which is then interpreted as JSON.  (tag-20240123-a)
+    ///*
+    ///* This goes against all historical documentation about how the SQLite
+    ///* JSON functions were suppose to work.  From the beginning, blob was
+    ///* reserved for expansion and a blob value should have raised an error.
+    ///* But it did not, due to a bug.  And many applications came to depend
+    ///* upon this buggy behavior, especially when using the CLI and reading
+    ///* JSON text using readfile(), which returns a blob.  For this reason
+    ///* we will continue to support the bug moving forward.
+    ///* See for example https://sqlite.org/forum/forumpost/012136abd5292b8d
     unreachable!();
 }
 
+///* Generate a path error.
+///*
+///* The specifics of the error are determined by the rc argument.
+///*
+///*          rc                        error
+///*  -----------------       ----------------------
+///*  JSON_LOOKUP_ARRAY       "not an array"
+///*  JSON_LOOKUP_TOODEEP     "JSON nested too deep"
+///*  JSON_LOOKUP_ERROR       "malformed JSON"
+///*  otherwise...            "bad JSON path"
+///*
+///* If ctx is not NULL then push the error message into ctx and return NULL.
+///* If ctx is NULL, then return the text of the error message.
 extern "C" fn json_bad_path_error(ctx: *mut Sqlite3Context,
     z_path_1: *const i8, rc: i32) -> *mut i8 {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -6261,10 +6635,27 @@ extern "C" fn json_bad_path_error(ctx: *mut Sqlite3Context,
     return core::ptr::null_mut();
 }
 
+///* If the JSONB at aIns[0..nIns-1] can be expanded (by denormalizing the
+///* size field) by d bytes, then write the expansion into aOut[] and
+///* return true.  In this way, an overwrite happens without changing the
+///* size of the JSONB, which reduces memcpy() operations and also make it
+///* faster and easier to update the B-Tree entry that contains the JSONB
+///* in the database.
+///*
+///* If the expansion of aIns[] by d bytes cannot be (easily) accomplished
+///* then return false.
+///*
+///* The d parameter is guaranteed to be between 1 and 8.
+///*
+///* This routine is an optimization.  A correct answer is obtained if it
+///* always leaves the output unchanged and returns false.
+#[allow(unused_doc_comments)]
 extern "C" fn json_blob_overwrite(a_out_1: *mut u8, a_ins_1: *const u8,
     n_ins_1: u32, d: u32) -> i32 {
     let mut sz_payload: u32 = 0 as u32;
+    /// Bytes of payload
     let mut i: u32 = 0 as u32;
+    /// New header size, after expansion & a loop counter
     let mut sz_hdr: u8 = 0 as u8;
     if unsafe { *a_ins_1.offset(0 as isize) } as i32 & 15 <= 2 { return 0; }
     '__s23:
@@ -6273,75 +6664,137 @@ extern "C" fn json_blob_overwrite(a_out_1: *mut u8, a_ins_1: *const u8,
             12 => {
                 {
                     if 1 << d & 138 == 0 { return 0; }
-                    i = d + 2 as u32;
-                    sz_hdr = 2 as u8;
+
+                    /// d must be 1, 3, or 7
+                    (i = d + 2 as u32);
+
+                    /// New hdr sz: 2, 5, or 9
+                    (sz_hdr = 2 as u8);
                     break '__s23;
                 }
                 {
                     if d != 2 as u32 && d != 6 as u32 { return 0; }
-                    i = d + 3 as u32;
-                    sz_hdr = 3 as u8;
+
+                    /// d must be 2 or 6
+                    (i = d + 3 as u32);
+
+                    /// New hdr sz: 5 or 9
+                    (sz_hdr = 3 as u8);
                     break '__s23;
                 }
                 {
                     if d != 4 as u32 { return 0; }
-                    i = 9 as u32;
-                    sz_hdr = 5 as u8;
+
+                    /// d must be 4
+                    (i = 9 as u32);
+
+                    /// New hdr sz: 9
+                    (sz_hdr = 5 as u8);
                     break '__s23;
                 }
-                { return 0; }
+                {
+
+                    /// aIns[] header size is 9
+                    return 0;
+                }
             }
             13 => {
                 {
                     if d != 2 as u32 && d != 6 as u32 { return 0; }
-                    i = d + 3 as u32;
-                    sz_hdr = 3 as u8;
+
+                    /// d must be 2 or 6
+                    (i = d + 3 as u32);
+
+                    /// New hdr sz: 5 or 9
+                    (sz_hdr = 3 as u8);
                     break '__s23;
                 }
                 {
                     if d != 4 as u32 { return 0; }
-                    i = 9 as u32;
-                    sz_hdr = 5 as u8;
+
+                    /// d must be 4
+                    (i = 9 as u32);
+
+                    /// New hdr sz: 9
+                    (sz_hdr = 5 as u8);
                     break '__s23;
                 }
-                { return 0; }
+                {
+
+                    /// aIns[] header size is 9
+                    return 0;
+                }
             }
             14 => {
                 {
                     if d != 4 as u32 { return 0; }
-                    i = 9 as u32;
-                    sz_hdr = 5 as u8;
+
+                    /// d must be 4
+                    (i = 9 as u32);
+
+                    /// New hdr sz: 9
+                    (sz_hdr = 5 as u8);
                     break '__s23;
                 }
-                { return 0; }
+                {
+
+                    /// aIns[] header size is 9
+                    return 0;
+                }
             }
-            15 => { { return 0; } }
+            15 => {
+                {
+
+                    /// aIns[] header size is 9
+                    return 0;
+                }
+            }
             _ => {
                 {
                     if 1 << d & 278 == 0 { return 0; }
-                    i = d + 1 as u32;
-                    sz_hdr = 1 as u8;
+
+                    /// d must be 1, 2, 4, or 8
+                    (i = d + 1 as u32);
+
+                    /// New hdr sz: 2, 3, 5, or 9
+                    (sz_hdr = 1 as u8);
                     break '__s23;
                 }
                 {
                     if 1 << d & 138 == 0 { return 0; }
-                    i = d + 2 as u32;
-                    sz_hdr = 2 as u8;
+
+                    /// d must be 1, 3, or 7
+                    (i = d + 2 as u32);
+
+                    /// New hdr sz: 2, 5, or 9
+                    (sz_hdr = 2 as u8);
                     break '__s23;
                 }
                 {
                     if d != 2 as u32 && d != 6 as u32 { return 0; }
-                    i = d + 3 as u32;
-                    sz_hdr = 3 as u8;
+
+                    /// d must be 2 or 6
+                    (i = d + 3 as u32);
+
+                    /// New hdr sz: 5 or 9
+                    (sz_hdr = 3 as u8);
                     break '__s23;
                 }
                 {
                     if d != 4 as u32 { return 0; }
-                    i = 9 as u32;
-                    sz_hdr = 5 as u8;
+
+                    /// d must be 4
+                    (i = 9 as u32);
+
+                    /// New hdr sz: 9
+                    (sz_hdr = 5 as u8);
                     break '__s23;
                 }
-                { return 0; }
+                {
+
+                    /// aIns[] header size is 9
+                    return 0;
+                }
             }
         }
     }
@@ -6367,6 +6820,17 @@ extern "C" fn json_blob_overwrite(a_out_1: *mut u8, a_ins_1: *const u8,
     return 1;
 }
 
+///* Modify the JSONB blob at pParse->aBlob by removing nDel bytes of
+///* content beginning at iDel, and replacing them with nIns bytes of
+///* content given by aIns.
+///*
+///* nDel may be zero, in which case no bytes are removed.  But iDel is
+///* still important as new bytes will be insert beginning at iDel.
+///*
+///* aIns may be zero, in which case space is created to hold nIns bytes
+///* beginning at iDel, but that space is uninitialized.
+///*
+///* Set pParse->oom if an OOM occurs.
 extern "C" fn json_blob_edit(p_parse_1: *mut JsonParse, i_del_1: u32,
     n_del_1: u32, a_ins_1: *const u8, n_ins_1: u32) -> () {
     let d: i64 = n_ins_1 as i64 - n_del_1 as i64;
@@ -6411,6 +6875,11 @@ extern "C" fn json_blob_edit(p_parse_1: *mut JsonParse, i_del_1: u32,
     }
 }
 
+///* Compare two object labels.  Return 1 if they are equal and
+///* 0 if they differ.
+///*
+///* In this version, we know that one or the other or both of the
+///* two comparands contains an escape sequence.
 extern "C" fn json_label_compare_escaped(mut z_left_1: *const i8,
     mut n_left_1: u32, raw_left_1: i32, mut z_right_1: *const i8,
     mut n_right_1: u32, raw_right_1: i32) -> i32 {
@@ -6501,6 +6970,8 @@ extern "C" fn json_label_compare_escaped(mut z_left_1: *const i8,
     }
 }
 
+///* Compare two object labels.  Return 1 if they are equal and
+///* 0 if they differ.  Return -1 if an OOM occurs.
 extern "C" fn json_label_compare(z_left_1: *const i8, n_left_1: u32,
     raw_left_1: i32, z_right_1: *const i8, n_right_1: u32, raw_right_1: i32)
     -> i32 {
@@ -6516,6 +6987,8 @@ extern "C" fn json_label_compare(z_left_1: *const i8, n_left_1: u32,
     }
 }
 
+///* Edit the payload size of the element at iRoot by the amount in
+///* pParse->delta.
 extern "C" fn json_after_edit_size_adjust(p_parse_1: *mut JsonParse,
     i_root_1: u32) -> () {
     let mut sz: u32 = 0 as u32;
@@ -6535,6 +7008,25 @@ extern "C" fn json_after_edit_size_adjust(p_parse_1: *mut JsonParse,
     };
 }
 
+/// This helper routine for jsonLookupStep() populates pIns with
+///* binary data that is to be inserted into pParse.
+///*
+///* In the common case, pIns just points to pParse->aIns and pParse->nIns.
+///* But if the zPath of the original edit operation includes path elements
+///* that go deeper, additional substructure must be created.
+///*
+///* For example:
+///*
+///*     json_insert('{}', '$.a.b.c', 123);
+///*
+///* The search stops at '$.a'  But additional substructure must be
+///* created for the ".b.c" part of the patch so that the final result
+///* is:  {"a":{"b":{"c"::123}}}.  This routine populates pIns with
+///* the binary equivalent of {"b":{"c":123}} so that it can be inserted.
+///*
+///* The caller is responsible for resetting pIns when it has finished
+///* using the substructure.
+#[allow(unused_doc_comments)]
 extern "C" fn json_create_edit_substructure(p_parse_1: &mut JsonParse,
     p_ins_1: *mut JsonParse, z_tail_1: *const i8) -> u32 {
     let mut rc: i32 = 0;
@@ -6544,10 +7036,14 @@ extern "C" fn json_create_edit_substructure(p_parse_1: &mut JsonParse,
     };
     unsafe { (*p_ins_1).db = (*p_parse_1).db };
     if unsafe { *z_tail_1.offset(0 as isize) } as i32 == 0 {
+
+        /// No substructure.  Just insert what is given in pParse.
         unsafe { (*p_ins_1).a_blob = (*p_parse_1).a_ins };
         unsafe { (*p_ins_1).n_blob = (*p_parse_1).n_ins };
         rc = 0;
     } else {
+
+        /// Construct the binary substructure
         unsafe { (*p_ins_1).n_blob = 1 as u32 };
         unsafe {
             (*p_ins_1).a_blob =
@@ -6578,6 +7074,8 @@ extern "C" fn json_create_edit_substructure(p_parse_1: &mut JsonParse,
     return rc as u32;
 }
 
+///* Given that a JSONB_ARRAY object starts at offset i, return
+///* the number of entries in that array.
 extern "C" fn jsonb_array_count(p_parse_1: *const JsonParse, i_root_1: u32)
     -> u32 {
     let mut n: u32 = 0 as u32;
@@ -6604,6 +7102,8 @@ extern "C" fn jsonb_array_count(p_parse_1: *const JsonParse, i_root_1: u32)
     return k;
 }
 
+/// Forward declaration
+#[allow(unused_doc_comments)]
 extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
     mut z_path_1: *const i8, i_label_1: u32) -> u32 {
     unsafe {
@@ -6643,6 +7143,8 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
                             unsafe { (*p_parse_1).n_ins });
                     }
                 } else {
+
+                    /// json_set() or json_replace()
                     json_blob_edit(p_parse_1, i_root_1, sz,
                         unsafe { (*p_parse_1).a_ins } as *const u8,
                         unsafe { (*p_parse_1).n_ins });
@@ -6713,7 +7215,9 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
             if x as i32 & 15 != 12 { return 4294967294u32; }
             n = jsonb_payload_size(unsafe { &*p_parse_1 }, i_root_1, &mut sz);
             j = i_root_1 + n;
-            i_end = j + sz;
+
+            /// j is the index of a label
+            (i_end = j + sz);
             while j < i_end {
                 let mut raw_label: i32 = 0;
                 let mut z_label: *const i8 = core::ptr::null();
@@ -6776,7 +7280,9 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
             if j > i_end { return 4294967295u32; }
             if unsafe { (*p_parse_1).e_edit } as i32 >= 3 {
                 let mut n_ins: u32 = 0 as u32;
+                /// Total bytes to insert (label+value)
                 let mut v: JsonParse = unsafe { core::mem::zeroed() };
+                /// BLOB encoding of the value to be inserted
                 let mut ix: JsonParse = unsafe { core::mem::zeroed() };
                 if unsafe { (*p_parse_1).e_edit } as i32 == 5 &&
                         unsafe {
@@ -6806,7 +7312,11 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
                         n_ins);
                     if (unsafe { (*p_parse_1).oom } == 0) as i32 != 0 {
                         { let _ = 0; };
+
+                        /// Because pParse->oom!=0
                         { let _ = 0; };
+
+                        /// Because pPasre->oom!=0
                         unsafe {
                             memcpy(unsafe {
                                         &raw mut *unsafe { (*p_parse_1).a_blob.add(j as usize) }
@@ -6853,6 +7363,9 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
                         kk * 10 as u64 + unsafe { *z_path_1.add(i as usize) } as u64
                             - '0' as i32 as u64;
                 }
+
+                ///     ^^^^^^^^^^--- Allow kk to be bigger than any JSON array so that
+                ///* we get NOTFOUND instead of PATHERROR, without overflowing kk.
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
             if i < 2 as u32 ||
@@ -6879,6 +7392,9 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
                                         nn * 10 as u64 + unsafe { *z_path_1.add(i as usize) } as u64
                                             - '0' as i32 as u64;
                                 }
+
+                                ///     ^^^^^^^^^^--- Allow nn to be bigger than any JSON array to
+                                ///* get NOTFOUND instead of PATHERROR, without overflowing nn.
                                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                                 break '__c31;
                             }
@@ -6954,6 +7470,13 @@ extern "C" fn json_lookup_step(p_parse_1: *mut JsonParse, mut i_root_1: u32,
     }
 }
 
+/// An instance of this object represents a JSON string
+///* under construction.  Really, this is a generic string accumulator
+///* that can be and is used to create strings other than JSON.
+///*
+///* If the generated string is longer than will fit into the zSpace[] buffer,
+///* then it will be an RCStr string.  This aids with caching of large
+///* JSON strings.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonString {
@@ -6966,6 +7489,8 @@ struct JsonString {
     z_space: [i8; 100],
 }
 
+/// Turn uninitialized bulk memory into a valid JsonString object
+///* holding a zero-length string.
 extern "C" fn json_string_zero(p: &mut JsonString) -> () {
     (*p).z_buf = &raw mut (*p).z_space[0 as usize] as *mut i8;
     (*p).n_alloc = core::mem::size_of::<[i8; 100]>() as u64;
@@ -6973,6 +7498,7 @@ extern "C" fn json_string_zero(p: &mut JsonString) -> () {
     (*p).b_static = 1 as u8;
 }
 
+/// Initialize the JsonString object
 extern "C" fn json_string_init(p: *mut JsonString,
     p_ctx_1: *mut Sqlite3Context) -> () {
     unsafe {
@@ -6982,6 +7508,8 @@ extern "C" fn json_string_init(p: *mut JsonString,
     }
 }
 
+/// Free all allocated memory and reset the JsonString object back to its
+///* initial state.
 extern "C" fn json_string_reset(p: *mut JsonString) -> () {
     if (unsafe { (*p).b_static } == 0) as i32 != 0 {
         unsafe { sqlite3_rc_str_unref(unsafe { (*p).z_buf } as *mut ()) };
@@ -6989,6 +7517,7 @@ extern "C" fn json_string_reset(p: *mut JsonString) -> () {
     json_string_zero(unsafe { &mut *p });
 }
 
+/// Report an out-of-memory (OOM) condition
 extern "C" fn json_string_oom(p: *mut JsonString) -> () {
     unsafe {
         unsafe { (*p).e_err |= 1 as u8 };
@@ -6999,6 +7528,8 @@ extern "C" fn json_string_oom(p: *mut JsonString) -> () {
     }
 }
 
+/// Enlarge pJson->zBuf so that it can hold at least N more bytes.
+///* Return zero on success.  Return non-zero on an OOM error
 extern "C" fn json_string_grow(p: *mut JsonString, n_1: u32) -> i32 {
     let n_total: u64 =
         if (n_1 as u64) < unsafe { (*p).n_alloc } {
@@ -7032,6 +7563,7 @@ extern "C" fn json_string_grow(p: *mut JsonString, n_1: u32) -> i32 {
     return 0;
 }
 
+/// Append N bytes from zIn onto the end of the JsonString string.
 extern "C" fn json_string_expand_and_append(p: *mut JsonString,
     z_in_1: *const i8, n_1: u32) -> () {
     { let _ = 0; };
@@ -7074,6 +7606,7 @@ extern "C" fn json_append_raw(p: *mut JsonString, z_in_1: *const i8, n_1: u32)
     }
 }
 
+/// Append a single character
 extern "C" fn json_append_char_expand(p: *mut JsonString, c: i8) -> () {
     if json_string_grow(p, 1 as u32) != 0 { return; }
     unsafe {
@@ -7105,6 +7638,7 @@ extern "C" fn json_append_char(p: *mut JsonString, c: i8) -> () {
     }
 }
 
+/// Append formatted text (not to exceed N bytes) to the JsonString.
 unsafe extern "C" fn json_printf(n_1: i32, p: *mut JsonString,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -7130,6 +7664,11 @@ unsafe extern "C" fn json_printf(n_1: i32, p: *mut JsonString,
     };
 }
 
+/// c is a control character.  Append the canonical JSON representation
+///* of that control character to p.
+///*
+///* This routine assumes that the output buffer has already been enlarged
+///* sufficiently to hold the worst-case encoding plus a nul terminator.
 extern "C" fn json_append_control_char(p: &mut JsonString, c: u8) -> () {
     { let _ = 0; };
     { let _ = 0; };
@@ -7178,6 +7717,13 @@ extern "C" fn json_append_control_char(p: &mut JsonString, c: u8) -> () {
     }
 }
 
+/// Append the N-byte string in zIn to the end of the JsonString string
+///* under construction.  Enclose the string in double-quotes ("...") and
+///* escape any double-quotes or backslash characters contained within the
+///* string.
+///*
+///* This routine is a high-runner.  There is a measurable performance
+///* increase associated with unwinding the jsonIsOk[] loop.
 extern "C" fn json_append_string(p: *mut JsonString, z_in_1: *const i8,
     mut n_1: u32) -> () {
     let mut k: u32 = 0 as u32;
@@ -7325,6 +7871,7 @@ extern "C" fn json_append_string(p: *mut JsonString, z_in_1: *const i8,
     { let _ = 0; };
 }
 
+/// Report JSON nested too deep
 extern "C" fn json_string_too_deep(p: *mut JsonString) -> () {
     unsafe {
         unsafe { (*p).e_err |= 4 as u8 };
@@ -7337,6 +7884,7 @@ extern "C" fn json_string_too_deep(p: *mut JsonString) -> () {
     }
 }
 
+/// Remove a single character from the end of the string
 extern "C" fn json_string_trim_one_char(p: &mut JsonString) -> () {
     if (*p).e_err as i32 == 0 {
         { let _ = 0; };
@@ -7344,6 +7892,18 @@ extern "C" fn json_string_trim_one_char(p: &mut JsonString) -> () {
     }
 }
 
+///* Translate the binary JSONB representation of JSON beginning at
+///* pParse->aBlob[i] into a JSON text string.  Append the JSON
+///* text onto the end of pOut.  Return the index in pParse->aBlob[]
+///* of the first byte past the end of the element that is translated.
+///*
+///* If an error is detected in the BLOB input, the pOut->eErr flag
+///* might get set to JSTRING_MALFORMED.  But not all BLOB input errors
+///* are detected.  So a malformed JSONB input might either result
+///* in an error, or in incorrect JSON.
+///*
+///* The pOut->eErr JSTRING_OOM flag is set on a OOM.
+#[allow(unused_doc_comments)]
 extern "C" fn json_translate_blob_to_text(p_parse_1: *mut JsonParse, i: u32,
     p_out_1: *mut JsonString) -> u32 {
     unsafe {
@@ -7351,15 +7911,20 @@ extern "C" fn json_translate_blob_to_text(p_parse_1: *mut JsonParse, i: u32,
         let mut n: u32 = 0 as u32;
         let mut j: u32 = 0 as u32;
         let mut i_end: u32 = 0 as u32;
+        /// Integer literal in hexadecimal notation
         let mut k: u32 = 0 as u32;
         let mut u: Sqlite3Uint64 = 0 as Sqlite3Uint64;
         let mut z_in: *const i8 = core::ptr::null();
         let mut b_overflow: i32 = 0;
+        /// Float literal missing digits beside "."
         let mut k__1: u32 = 0 as u32;
         let mut z_in_1: *const i8 = core::ptr::null();
         let mut z_in_2: *const i8 = core::ptr::null();
         let mut k__2: u32 = 0 as u32;
         let mut sz2: u32 = 0 as u32;
+        /// '\' followed by either U+2028 or U+2029 is ignored as
+        ///* whitespace.  Note that in UTF8, U+2028 is 0xe2 0x80 0x29.
+        ///* U+2029 is the same except for the last byte
         let mut x: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -8049,16 +8614,29 @@ extern "C" fn json_translate_blob_to_text(p_parse_1: *mut JsonParse, i: u32,
                 }
             }
         }
+
+        /// Integer literal in hexadecimal notation
+        /// Float literal missing digits beside "."
+        /// '\' followed by either U+2028 or U+2029 is ignored as
+        ///* whitespace.  Note that in UTF8, U+2028 is 0xe2 0x80 0x29.
+        ///* U+2029 is the same except for the last byte
         unreachable!();
     }
 }
 
+/// Make sure there is a zero terminator on p->zBuf[]
+///*
+///* Return true on success.  Return false if an OOM prevents this
+///* from happening.
 extern "C" fn json_string_terminate(p: *mut JsonString) -> i32 {
     json_append_char(p, 0 as i8);
     json_string_trim_one_char(unsafe { &mut *p });
     return (unsafe { (*p).e_err } as i32 == 0) as i32;
 }
 
+///***********************************************************************
+///* Forward references
+///************************************************************************
 extern "C" fn json_return_string_as_blob(p_str_1: &JsonString) -> () {
     unsafe {
         let mut px: JsonParse = unsafe { core::mem::zeroed() };
@@ -8090,6 +8668,14 @@ extern "C" fn json_return_string_as_blob(p_str_1: &JsonString) -> () {
     }
 }
 
+/// Make the text in p (which is probably a generated JSON text string)
+///* the result of the SQL function.
+///*
+///* The JsonString is reset.
+///*
+///* If pParse and ctx are both non-NULL, then the SQL string in p is
+///* loaded into the zJson field of the pParse object as a RCStr and the
+///* pParse is added to the cache.
 extern "C" fn json_return_string(p: *mut JsonString,
     p_parse_1: *mut JsonParse, ctx: *mut Sqlite3Context) -> () {
     unsafe {
@@ -8152,6 +8738,9 @@ extern "C" fn json_return_string(p: *mut JsonString,
     }
 }
 
+///* Make the return value of a JSON function either the raw JSONB blob
+///* or make it JSON text, depending on whether the JSON_BLOB flag is
+///* set on the function.
 extern "C" fn json_return_parse(ctx: *mut Sqlite3Context, p: *mut JsonParse)
     -> () {
     let mut flgs: i32 = 0;
@@ -8194,11 +8783,19 @@ extern "C" fn json_return_parse(ctx: *mut Sqlite3Context, p: *mut JsonParse)
     }
 }
 
+///* json_remove(JSON, PATH, ...)
+///*
+///* Remove the named elements from JSON and return the result.  malformed
+///* JSON or PATH arguments result in an error.
+#[allow(unused_doc_comments)]
 extern "C" fn json_remove_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
+    /// The parse
     let mut z_path: *const i8 = core::ptr::null();
+    /// Path of element to be removed
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: u32 = 0 as u32;
     let mut __state: i32 = 0;
     loop {
@@ -8295,6 +8892,8 @@ extern "C" fn json_remove_func(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+/// Append a comma separator to the output buffer, if the previous
+///* character is not '[' or '{'.
 extern "C" fn json_append_separator(p: *mut JsonString) -> () {
     let mut c: i8 = 0 as i8;
     if unsafe { (*p).n_used } == 0 as u64 { return; }
@@ -8308,6 +8907,8 @@ extern "C" fn json_append_separator(p: *mut JsonString) -> () {
     json_append_char(p, ',' as i32 as i8);
 }
 
+///* Append an sqlite3_value (such as a function parameter) to the JSON
+///* string under construction in p.
 extern "C" fn json_append_sql_value(p: *mut JsonString,
     p_value_1: *mut Sqlite3Value) -> () {
     unsafe {
@@ -8523,6 +9124,9 @@ extern "C" fn json_append_sql_value(p: *mut JsonString,
     }
 }
 
+///* Implementation of the json_array(VALUE,...) function.  Return a JSON
+///* array that contains all values given in arguments.  Or if any argument
+///* is a BLOB, throw an error.
 extern "C" fn json_array_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -8547,6 +9151,8 @@ extern "C" fn json_array_func(ctx: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
 
+///* Report the wrong number of arguments for json_insert(), json_replace()
+///* or json_set().
 extern "C" fn json_wrong_num_args(p_ctx_1: *mut Sqlite3Context,
     z_func_name_1: *const i8) -> () {
     let z_msg: *mut i8 =
@@ -8558,6 +9164,21 @@ extern "C" fn json_wrong_num_args(p_ctx_1: *mut Sqlite3Context,
     unsafe { sqlite3_free(z_msg as *mut ()) };
 }
 
+///* pArg is a function argument that might be an SQL value or a JSON
+///* value.  Figure out what it is and encode it as a JSONB blob.
+///* Return the results in pParse.
+///*
+///* pParse is uninitialized upon entry.  This routine will handle the
+///* initialization of pParse.  The result will be contained in
+///* pParse->aBlob and pParse->nBlob.  pParse->aBlob might be dynamically
+///* allocated (if pParse->nBlobAlloc is greater than zero) in which case
+///* the caller is responsible for freeing the space allocated to pParse->aBlob
+///* when it has finished with it.  Or pParse->aBlob might be a static string
+///* or a value obtained from sqlite3_value_blob(pArg).
+///*
+///* If the argument is a BLOB that is clearly not a JSONB, then this
+///* function might set an error message in ctx and return non-zero.
+///* It might also set an error message and return non-zero on an OOM error.
 extern "C" fn json_function_arg_to_blob(ctx: *mut Sqlite3Context,
     p_arg_1: *mut Sqlite3Value, p_parse_1: *mut JsonParse) -> i32 {
     unsafe {
@@ -8858,6 +9479,13 @@ extern "C" fn json_function_arg_to_blob(ctx: *mut Sqlite3Context,
     }
 }
 
+/// argv[0] is a BLOB that seems likely to be a JSONB.  Subsequent
+///* arguments come in pairs where each pair contains a JSON path and
+///* content to insert or set at that patch.  Do the updates
+///* and return the result.
+///*
+///* The specific operation is determined by eEdit, which can be one
+///* of JEDIT_INS, JEDIT_REPL, JEDIT_SET, or JEDIT_AINS.
 extern "C" fn json_insert_into_blob(ctx: *mut Sqlite3Context, argc: i32,
     argv: *const *mut Sqlite3Value, e_edit_1: i32) -> () {
     let mut i: i32 = 0;
@@ -9000,6 +9628,16 @@ extern "C" fn json_insert_into_blob(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* json_set(JSON, PATH, VALUE, ...)
+///*
+///* Set the value at PATH to VALUE.  Create the PATH if it does not already
+///* exist.  Overwrite existing values that do exist.
+///* If JSON or PATH is malformed, throw an error.
+///*
+///* json_insert(JSON, PATH, VALUE, ...)
+///*
+///* Create PATH and initialize it to VALUE.  If PATH already exists, this
+///* routine is a no-op.  If JSON or PATH is malformed, throw an error.
 extern "C" fn json_set_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -9016,9 +9654,16 @@ extern "C" fn json_set_func(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* json_array_length(JSON)
+///* json_array_length(JSON, PATH)
+///*
+///* Return the number of elements in the top-level JSON array.
+///* Return 0 if the input is not a well-formed JSON array.
+#[allow(unused_doc_comments)]
 extern "C" fn json_array_length_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
+    /// The parse
     let mut cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut i: u32 = 0 as u32;
     let mut e_err: u8 = 0 as u8;
@@ -9051,9 +9696,23 @@ extern "C" fn json_array_length_func(ctx: *mut Sqlite3Context, argc: i32,
     json_parse_free(p);
 }
 
+///* json_error_position(JSON)
+///*
+///* If the argument is NULL, return NULL
+///*
+///* If the argument is BLOB, do a full validity check and return non-zero
+///* if the check fails.  The return value is the approximate 1-based offset
+///* to the byte of the element that contains the first error.
+///*
+///* Otherwise interpret the argument is TEXT (even if it is numeric) and
+///* return the 1-based character position for where the parser first recognized
+///* that the input was not valid JSON, or return 0 if the input text looks
+///* ok.  JSON-5 extensions are accepted.
+#[allow(unused_doc_comments)]
 extern "C" fn json_error_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i_err_pos: i64 = 0 as i64;
+    /// Error position to be returned
     let mut s: JsonParse = unsafe { core::mem::zeroed() };
     { let _ = 0; };
     { let _ = argc; };
@@ -9071,14 +9730,17 @@ extern "C" fn json_error_func(ctx: *mut Sqlite3Context, argc: i32,
             unsafe { sqlite3_value_text(unsafe { *argv.offset(0 as isize) }) }
                 as *mut i8;
         if s.z_json == core::ptr::null_mut() { return; }
-        s.n_json =
+
+        /// NULL input or OOM
+        (s.n_json =
             unsafe {
                 sqlite3_value_bytes(unsafe { *argv.offset(0 as isize) })
-            };
+            });
         if json_convert_text_to_blob(&mut s, core::ptr::null_mut()) != 0 {
             if s.oom != 0 {
                 i_err_pos = -1 as i64;
             } else {
+                /// Convert byte-offset s.iErr into a character offset
                 let mut k: u32 = 0 as u32;
                 { let _ = 0; };
                 {
@@ -9113,6 +9775,7 @@ extern "C" fn json_error_func(ctx: *mut Sqlite3Context, argc: i32,
     } else { unsafe { sqlite3_result_int64(ctx, i_err_pos) }; }
 }
 
+/// True if the string is all alphanumerics and underscores
 extern "C" fn json_all_alphanum(z: *const i8, n: i32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -9136,6 +9799,8 @@ extern "C" fn json_all_alphanum(z: *const i8, n: i32) -> i32 {
     }
 }
 
+///* Convert a JSON BLOB into text and make that text the return value
+///* of an SQL function.
 extern "C" fn json_return_text_json_from_blob(ctx: *mut Sqlite3Context,
     a_blob_1: *const u8, n_blob_1: u32) -> () {
     let mut x: JsonParse = unsafe { core::mem::zeroed() };
@@ -9152,6 +9817,20 @@ extern "C" fn json_return_text_json_from_blob(ctx: *mut Sqlite3Context,
     json_return_string(&mut s, core::ptr::null_mut(), core::ptr::null_mut());
 }
 
+///* Return the value of the BLOB node at index i.
+///*
+///* If the value is a primitive, return it as an SQL value.
+///* If the value is an array or object, return it as either
+///* JSON text or the BLOB encoding, depending on the eMode flag
+///* as follows:
+///*
+///*     eMode==0     JSONB if the JSON_B flag is set in userdata or
+///*                  text if the JSON_B flag is omitted from userdata.
+///*
+///*     eMode==1     Text
+///*
+///*     eMode==2     JSONB
+#[allow(unused_doc_comments)]
 extern "C" fn json_return_from_blob(p_parse_1: *const JsonParse, i: u32,
     p_ctx_1: *mut Sqlite3Context, mut e_mode_1: i32) -> () {
     let mut n: u32 = 0 as u32;
@@ -9162,9 +9841,16 @@ extern "C" fn json_return_from_blob(p_parse_1: *const JsonParse, i: u32,
     let mut z: *mut i8 = core::ptr::null_mut();
     let mut b_neg: i32 = 0;
     let mut x: i8 = 0 as i8;
+    /// A hexadecimal literal with 16 significant digits and with the
+    ///* high-order bit set is a negative integer in SQLite (and hence
+    ///* iRes comes back as negative) but should be interpreted as a
+    ///* positive value if it occurs within JSON.  The value is too
+    ///* large to appear as an SQLite integer so it must be converted
+    ///* into floating point.
     let mut r: f64 = 0.0;
     let mut r__1: f64 = 0.0;
     let mut z__1: *mut i8 = core::ptr::null_mut();
+    /// Translate JSON formatted string into raw text
     let mut i_in: u32 = 0 as u32;
     let mut i_out: u32 = 0 as u32;
     let mut z__2: *const i8 = core::ptr::null();
@@ -9708,12 +10394,36 @@ extern "C" fn json_return_from_blob(p_parse_1: *const JsonParse, i: u32,
     }
 }
 
+///* json_extract(JSON, PATH, ...)
+///* "->"(JSON,PATH)
+///* "->>"(JSON,PATH)
+///*
+///* Return the element described by PATH.  Return NULL if that PATH element
+///* is not found.
+///*
+///* If JSON_JSON is set or if more that one PATH argument is supplied then
+///* always return a JSON representation of the result.  If JSON_SQL is set,
+///* then always return an SQL representation of the result.  If neither flag
+///* is present and argc==2, then return JSON for objects and arrays and SQL
+///* for all other values.
+///*
+///* When multiple PATH arguments are supplied, the result is a JSON array
+///* containing the result of each PATH.
+///*
+///* Abbreviated JSON path expressions are allows if JSON_ABPATH, for
+///* compatibility with PG.
+#[allow(unused_doc_comments)]
 extern "C" fn json_extract_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
+    /// The parse
     let mut flags: i32 = 0;
+    /// Flags associated with the function
     let mut i: i32 = 0;
+    /// Loop counter
     let mut jx: JsonString = unsafe { core::mem::zeroed() };
+    /// String for array result
+    /// With a single PATH argument
     let mut z_path: *const i8 = core::ptr::null();
     let mut n_path: i32 = 0;
     let mut j: u32 = 0 as u32;
@@ -9968,6 +10678,9 @@ extern "C" fn json_extract_func(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the json_object(NAME,VALUE,...) function.  Return a JSON
+///* object that contains all name/value given in arguments.  Or if any name
+///* is not a string or if any value is a BLOB, throw an error.
 extern "C" fn json_object_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -10023,40 +10736,112 @@ extern "C" fn json_object_func(ctx: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
 
+///* RFC-7396 MergePatch for two JSONB blobs.
+///*
+///* pTarget is the target. pPatch is the patch.  The target is updated
+///* in place.  The patch is read-only.
+///*
+///* The original RFC-7396 algorithm is this:
+///*
+///*   define MergePatch(Target, Patch):
+///*     if Patch is an Object:
+///*       if Target is not an Object:
+///*         Target = {} # Ignore the contents and set it to an empty Object
+///*     for each Name/Value pair in Patch:
+///*         if Value is null:
+///*           if Name exists in Target:
+///*             remove the Name/Value pair from Target
+///*         else:
+///*           Target[Name] = MergePatch(Target[Name], Value)
+///*       return Target
+///*     else:
+///*       return Patch
+///*
+///* Here is an equivalent algorithm restructured to show the actual
+///* implementation:
+///*
+///* 01   define MergePatch(Target, Patch):
+///* 02      if Patch is not an Object:
+///* 03         return Patch
+///* 04      else: // if Patch is an Object
+///* 05         if Target is not an Object:
+///* 06            Target = {}
+///* 07      for each Name/Value pair in Patch:
+///* 08         if Name exists in Target:
+///* 09            if Value is null:
+///* 10               remove the Name/Value pair from Target
+///* 11            else
+///* 12               Target[name] = MergePatch(Target[Name], Value)
+///* 13         else if Value is not NULL:
+///* 14            if Value is not an Object:
+///* 15               Target[name] = Value
+///* 16            else:
+///* 17               Target[name] = MergePatch('{}',value)
+///* 18      return Target
+///*  |
+///*  ^---- Line numbers referenced in comments in the implementation
+#[allow(unused_doc_comments)]
 extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
     p_patch_1: *const JsonParse, i_patch_1: u32, i_depth_1: u32) -> i32 {
     let mut x: u8 = 0 as u8;
+    /// Type of a single node
     let mut n: u32 = 0 as u32;
     let mut sz: u32 = 0 as u32;
+    /// Return values from jsonbPayloadSize()
     let mut i_t_cursor: u32 = 0 as u32;
+    /// Cursor position while scanning the target object
     let mut i_t_start: u32 = 0 as u32;
+    /// First label in the target object
     let mut i_t_end_be: u32 = 0 as u32;
+    /// Original first byte past end of target, before edit
     let mut i_t_end: u32 = 0 as u32;
+    /// Current first byte past end of target
     let mut e_t_label: u8 = 0 as u8;
+    /// Node type of the target label
     let mut i_t_label: u32 = 0 as u32;
+    /// Index of the label
     let mut n_t_label: u32 = 0 as u32;
+    /// Header size in bytes for the target label
     let mut sz_t_label: u32 = 0 as u32;
+    /// Size of the target label payload
     let mut i_t_value: u32 = 0 as u32;
+    /// Index of the target value
     let mut n_t_value: u32 = 0 as u32;
+    /// Header size of the target value
     let mut sz_t_value: u32 = 0 as u32;
+    /// Payload size for the target value
     let mut i_p_cursor: u32 = 0 as u32;
+    /// Cursor position while scanning the patch
     let mut i_p_end: u32 = 0 as u32;
+    /// First byte past the end of the patch
     let mut e_p_label: u8 = 0 as u8;
+    /// Node type of the patch label
     let mut i_p_label: u32 = 0 as u32;
+    /// Start of patch label
     let mut n_p_label: u32 = 0 as u32;
+    /// Size of header on the patch label
     let mut sz_p_label: u32 = 0 as u32;
+    /// Payload size of the patch label
     let mut i_p_value: u32 = 0 as u32;
+    /// Start of patch value
     let mut n_p_value: u32 = 0 as u32;
+    /// Header size for the patch value
     let mut sz_p_value: u32 = 0 as u32;
+
+    /// Payload size of the patch value
     { let _ = 0; };
     { let _ = 0; };
     x =
         (unsafe { *unsafe { (*p_patch_1).a_blob.add(i_patch_1 as usize) } } as
                     i32 & 15) as u8;
     if x as i32 != 12 {
+        /// Algorithm line 02
         let mut sz_patch: u32 = 0 as u32;
+        /// Total size of the patch, header+payload
         let mut sz_target: u32 = 0 as u32;
-        n = jsonb_payload_size(unsafe { &*p_patch_1 }, i_patch_1, &mut sz);
+
+        /// Total size of the target, header+payload
+        (n = jsonb_payload_size(unsafe { &*p_patch_1 }, i_patch_1, &mut sz));
         sz_patch = n + sz;
         sz = 0 as u32;
         n = jsonb_payload_size(unsafe { &*p_target_1 }, i_target_1, &mut sz);
@@ -10070,7 +10855,10 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
         (unsafe { *unsafe { (*p_target_1).a_blob.add(i_target_1 as usize) } }
                     as i32 & 15) as u8;
     if x as i32 != 12 {
-        n = jsonb_payload_size(unsafe { &*p_target_1 }, i_target_1, &mut sz);
+
+        /// Algorithm line 05
+        (n =
+            jsonb_payload_size(unsafe { &*p_target_1 }, i_target_1, &mut sz));
         json_blob_edit(p_target_1, i_target_1 + n, sz, core::ptr::null(),
             0 as u32);
         x =
@@ -10091,7 +10879,9 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
     i_t_start = i_target_1 + n;
     i_t_end_be = i_t_start + sz;
     while i_p_cursor < i_p_end {
-        i_p_label = i_p_cursor;
+
+        /// Algorithm line 07
+        (i_p_label = i_p_cursor);
         e_p_label =
             (unsafe {
                             *unsafe { (*p_patch_1).a_blob.add(i_p_cursor as usize) }
@@ -10113,7 +10903,9 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
         i_t_end = i_t_end_be + unsafe { (*p_target_1).delta } as u32;
         while i_t_cursor < i_t_end {
             let mut is_equal: i32 = 0;
-            i_t_label = i_t_cursor;
+
+            /// true if the patch and target labels match
+            (i_t_label = i_t_cursor);
             e_t_label =
                 (unsafe {
                                 *unsafe { (*p_target_1).a_blob.add(i_t_cursor as usize) }
@@ -10152,11 +10944,14 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
                         } as i32 & 15) as u8;
         if i_t_cursor < i_t_end {
             if x as i32 == 0 {
+
+                /// Patch value is NULL.  Algorithm line 09
                 json_blob_edit(p_target_1, i_t_label,
                     n_t_label + sz_t_label + n_t_value + sz_t_value,
                     core::ptr::null(), 0 as u32);
                 if unsafe { (*p_target_1).oom } != 0 { return 3; }
             } else {
+                /// Algorithm line 12
                 let mut rc: i32 = 0;
                 let saved_delta: i32 = unsafe { (*p_target_1).delta };
                 unsafe { (*p_target_1).delta = 0 };
@@ -10168,10 +10963,14 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
                 unsafe { (*p_target_1).delta += saved_delta };
             }
         } else if x as i32 > 0 {
+            /// Algorithm line 13 */
+            ///      /* No match and patch value is not NULL
             let sz_new: u32 = sz_p_label + n_p_label;
             if unsafe {
                                 *unsafe { (*p_patch_1).a_blob.add(i_p_value as usize) }
                             } as i32 & 15 != 12 {
+
+                /// Line 14
                 json_blob_edit(p_target_1, i_t_end, 0 as u32,
                     core::ptr::null(), sz_p_value + n_p_value + sz_new);
                 if unsafe { (*p_target_1).oom } != 0 { return 3; }
@@ -10239,12 +11038,22 @@ extern "C" fn json_merge_patch(p_target_1: *mut JsonParse, i_target_1: u32,
     return if unsafe { (*p_target_1).oom } != 0 { 3 } else { 0 };
 }
 
+///* Implementation of the json_mergepatch(JSON1,JSON2) function.  Return a JSON
+///* object that is the result of running the RFC 7396 MergePatch() algorithm
+///* on the two arguments.
+#[allow(unused_doc_comments)]
 extern "C" fn json_patch_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_target: *mut JsonParse = core::ptr::null_mut();
+    /// The TARGET
     let mut p_patch: *mut JsonParse = core::ptr::null_mut();
+    /// The PATCH
     let mut rc: i32 = 0;
+
+    /// Result code
     { let _ = argc; };
+
+    /// Result code
     { let _ = 0; };
     p_target =
         json_parse_func_arg(ctx, unsafe { *argv.offset(0 as isize) },
@@ -10288,6 +11097,7 @@ struct JsonPretty {
     n_indent: u32,
 }
 
+/// Append indentation to the pretty JSON under construction
 extern "C" fn json_pretty_indent(p_pretty_1: &JsonPretty) -> () {
     let mut jj: u32 = 0 as u32;
     {
@@ -10304,6 +11114,21 @@ extern "C" fn json_pretty_indent(p_pretty_1: &JsonPretty) -> () {
     }
 }
 
+///* Translate the binary JSONB representation of JSON beginning at
+///* pParse->aBlob[i] into a JSON text string.  Append the JSON
+///* text onto the end of pOut.  Return the index in pParse->aBlob[]
+///* of the first byte past the end of the element that is translated.
+///*
+///* This is a variant of jsonTranslateBlobToText() that "pretty-prints"
+///* the output.  Extra whitespace is inserted to make the JSON easier
+///* for humans to read.
+///*
+///* If an error is detected in the BLOB input, the pOut->eErr flag
+///* might get set to JSTRING_MALFORMED.  But not all BLOB input errors
+///* are detected.  So a malformed JSONB input might either result
+///* in an error, or in incorrect JSON.
+///*
+///* The pOut->eErr JSTRING_OOM flag is set on a OOM.
 extern "C" fn json_translate_blob_to_pretty_text(p_pretty_1: *mut JsonPretty,
     mut i: u32) -> u32 {
     let mut sz: u32 = 0 as u32;
@@ -10471,10 +11296,22 @@ extern "C" fn json_translate_blob_to_pretty_text(p_pretty_1: *mut JsonPretty,
     return i;
 }
 
+///* json_pretty(JSON)
+///* json_pretty(JSON, INDENT)
+///*
+///* Return text that is a pretty-printed rendering of the input JSON.
+///* If the argument is not valid JSON, return NULL.
+///*
+///* The INDENT argument is text that is used for indentation.  If omitted,
+///* it defaults to four spaces (the same as PostgreSQL).
+#[allow(unused_doc_comments)]
 extern "C" fn json_pretty_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut s: JsonString = unsafe { core::mem::zeroed() };
+    /// The output string
     let mut x: JsonPretty = unsafe { core::mem::zeroed() };
+
+    /// Pretty printing context
     unsafe {
         memset(&raw mut x as *mut (), 0,
             core::mem::size_of::<JsonPretty>() as u64)
@@ -10501,6 +11338,10 @@ extern "C" fn json_pretty_func(ctx: *mut Sqlite3Context, argc: i32,
     json_parse_free(x.p_parse);
 }
 
+///* Implementation of the json_quote(VALUE) function.  Return a JSON value
+///* corresponding to the SQL value input.  Mostly this means putting
+///* double-quotes around strings and returning the unquoted string "null"
+///* when given a NULL input.
 extern "C" fn json_quote_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut jx: JsonString = unsafe { core::mem::zeroed() };
@@ -10511,6 +11352,10 @@ extern "C" fn json_quote_func(ctx: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_subtype(ctx, 74 as u32) };
 }
 
+///* json_replace(JSON, PATH, VALUE, ...)
+///*
+///* Replace the value at PATH with VALUE.  If PATH does not already exist,
+///* this routine is a no-op.  If JSON or PATH is malformed, throw an error.
 extern "C" fn json_replace_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if argc < 1 { return; }
@@ -10521,6 +11366,8 @@ extern "C" fn json_replace_func(ctx: *mut Sqlite3Context, argc: i32,
     json_insert_into_blob(ctx, argc, argv as *const *mut Sqlite3Value, 2);
 }
 
+/// Human-readable names for the JSONB values.  The index for each
+///* string must correspond to the JSONB_* integer above.
 static mut jsonb_type: [*const i8; 17] =
     [c"null".as_ptr() as *const i8, c"true".as_ptr() as *const i8,
             c"false".as_ptr() as *const i8, c"integer".as_ptr() as *const i8,
@@ -10532,12 +11379,19 @@ static mut jsonb_type: [*const i8; 17] =
             c"".as_ptr() as *const i8, c"".as_ptr() as *const i8,
             c"".as_ptr() as *const i8];
 
+///* json_type(JSON)
+///* json_type(JSON, PATH)
+///*
+///* Return the top-level "type" of a JSON string.  json_type() raises an
+///* error if either the JSON or PATH inputs are not well-formed.
+#[allow(unused_doc_comments)]
 extern "C" fn json_type_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
         let mut p: *mut JsonParse = core::ptr::null_mut();
         '__b61: loop {
             '__c61: loop {
+                /// The parse
                 let mut z_path: *const i8 = core::ptr::null();
                 let mut i: u32 = 0 as u32;
                 p =
@@ -10574,13 +11428,73 @@ extern "C" fn json_type_func(ctx: *mut Sqlite3Context, argc: i32,
             }
             if !(false) { break '__b61; }
         }
+
+        /// The parse
+        /// no-op
         json_parse_free(p);
     }
 }
 
+///* json_valid(JSON)
+///* json_valid(JSON, FLAGS)
+///*
+///* Check the JSON argument to see if it is well-formed.  The FLAGS argument
+///* encodes the various constraints on what is meant by "well-formed":
+///*
+///*     0x01      Canonical RFC-8259 JSON text
+///*     0x02      JSON text with optional JSON-5 extensions
+///*     0x04      Superficially appears to be JSONB
+///*     0x08      Strictly well-formed JSONB
+///*
+///* If the FLAGS argument is omitted, it defaults to 1.  Useful values for
+///* FLAGS include:
+///*
+///*    1          Strict canonical JSON text
+///*    2          JSON text perhaps with JSON-5 extensions
+///*    4          Superficially appears to be JSONB
+///*    5          Canonical JSON text or superficial JSONB
+///*    6          JSON-5 text or superficial JSONB
+///*    8          Strict JSONB
+///*    9          Canonical JSON text or strict JSONB
+///*    10         JSON-5 text or strict JSONB
+///*
+///* Other flag combinations are redundant.  For example, every canonical
+///* JSON text is also well-formed JSON-5 text, so FLAG values 2 and 3
+///* are the same.  Similarly, any input that passes a strict JSONB validation
+///* will also pass the superficial validation so 12 through 15 are the same
+///* as 8 through 11 respectively.
+///*
+///* This routine runs in linear time to validate text and when doing strict
+///* JSONB validation.  Superficial JSONB validation is constant time,
+///* assuming the BLOB is already in memory.  The performance advantage
+///* of superficial JSONB validation is why that option is provided.
+///* Application developers can choose to do fast superficial validation or
+///* slower strict validation, according to their specific needs.
+///*
+///* Only the lower four bits of the FLAGS argument are currently used.
+///* Higher bits are reserved for future expansion.   To facilitate
+///* compatibility, the current implementation raises an error if any bit
+///* in FLAGS is set other than the lower four bits.
+///*
+///* The original circa 2015 implementation of the JSON routines in
+///* SQLite only supported canonical RFC-8259 JSON text and the json_valid()
+///* function only accepted one argument.  That is why the default value
+///* for the FLAGS argument is 1, since FLAGS=1 causes this routine to only
+///* recognize canonical RFC-8259 JSON text as valid.  The extra FLAGS
+///* argument was added when the JSON routines were extended to support
+///* JSON5-like extensions and binary JSONB stored in BLOBs.
+///*
+///* Return Values:
+///*
+///*   *   Raise an error if FLAGS is outside the range of 1 to 15.
+///*   *   Return NULL if the input is NULL
+///*   *   Return 1 if the input is well-formed.
+///*   *   Return 0 if the input is not well-formed.
+#[allow(unused_doc_comments)]
 extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut JsonParse = core::ptr::null_mut();
+    /// The parse
     let mut flags: u8 = 1 as u8;
     let mut res: u8 = 0 as u8;
     if argc == 2 {
@@ -10614,12 +11528,18 @@ extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
                     if json_arg_is_jsonb(unsafe { *argv.offset(0 as isize) },
                                 &mut py) != 0 {
                         if flags as i32 & 4 != 0 {
-                            res = 1 as u8;
+
+                            /// Superficial checking only - accomplished by the
+                            ///* jsonArgIsJsonb() call above.
+                            (res = 1 as u8);
                         } else if flags as i32 & 8 != 0 {
-                            res =
+
+                            /// Strict checking.  Check by translating BLOB->TEXT->BLOB.  If
+                            ///* no errors occur, call that a "strict check".
+                            (res =
                                 (0 as u32 ==
                                         jsonb_validity_check(&raw mut py as *const JsonParse,
-                                            0 as u32, py.n_blob, 1 as u32)) as u8;
+                                            0 as u32, py.n_blob, 1 as u32)) as u8);
                         }
                         break '__s62;
                     }
@@ -10657,12 +11577,18 @@ extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
                     if json_arg_is_jsonb(unsafe { *argv.offset(0 as isize) },
                                 &mut py) != 0 {
                         if flags as i32 & 4 != 0 {
-                            res = 1 as u8;
+
+                            /// Superficial checking only - accomplished by the
+                            ///* jsonArgIsJsonb() call above.
+                            (res = 1 as u8);
                         } else if flags as i32 & 8 != 0 {
-                            res =
+
+                            /// Strict checking.  Check by translating BLOB->TEXT->BLOB.  If
+                            ///* no errors occur, call that a "strict check".
+                            (res =
                                 (0 as u32 ==
                                         jsonb_validity_check(&raw mut py as *const JsonParse,
-                                            0 as u32, py.n_blob, 1 as u32)) as u8;
+                                            0 as u32, py.n_blob, 1 as u32)) as u8);
                         }
                         break '__s62;
                     }
@@ -10719,6 +11645,13 @@ extern "C" fn json_valid_func(ctx: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int(ctx, res as i32) };
 }
 
+///*************************************************************************
+///* Aggregate SQL function implementations
+///***************************************************************************/
+////*
+///* json_group_array(VALUE)
+///*
+///* Return a JSON array composed of all values in the aggregate.
 extern "C" fn json_array_step(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10818,6 +11751,10 @@ extern "C" fn json_array_value(ctx: *mut Sqlite3Context) -> () {
     json_array_compute(ctx, 0);
 }
 
+///* This method works for both json_group_array() and json_group_object().
+///* It works by removing the first element of the group by searching forward
+///* to the first comma (",") that is not within a string and deleting all
+///* text through that comma.
 extern "C" fn json_group_inverse(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: u32 = 0 as u32;
@@ -10868,6 +11805,16 @@ extern "C" fn json_group_inverse(ctx: *mut Sqlite3Context, argc: i32,
     } else { unsafe { (*p_str).n_used = 1 as u64 }; }
 }
 
+///* json_group_obj(NAME,VALUE)
+///*
+///* Return a JSON object composed of all names and values in the aggregate.
+///*
+///* Rows for which NAME is NULL do not result in a new entry.  However, we
+///* do initially insert a "@" entry into the growing string for each null entry
+///* and change the first character of the string to "@" to signal that the
+///* string contains null entries.  The "@" markers are needed in order to
+///* correctly process xInverse() requests.  The initial "@" is converted
+///* back into "{" and the "@" null values are removed by jsonObjectCompute().
 extern "C" fn json_object_step(ctx: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -10910,6 +11857,7 @@ extern "C" fn json_object_step(ctx: *mut Sqlite3Context, argc: i32,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
     -> () {
     unsafe {
@@ -10922,7 +11870,11 @@ extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
             let mut tmp_str: JsonString = unsafe { core::mem::zeroed() };
             json_append_raw_nz(p_og_str,
                 c"}".as_ptr() as *mut i8 as *const i8, 2 as u32);
+
+            /// Ensure it is zero-terminated
             json_string_trim_one_char(unsafe { &mut *p_og_str });
+
+            /// Remove the zero terminator
             unsafe { (*p_str).p_ctx = ctx };
             if unsafe { (*p_str).e_err } != 0 {
                 json_return_string(p_str, core::ptr::null_mut(),
@@ -10931,10 +11883,14 @@ extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
             }
             if unsafe { *unsafe { (*p_str).z_buf.offset(0 as isize) } } as i32
                     != '{' as i32 {
+                /// The string contains null entries that need to be removed
                 let mut i: u64 = 0 as u64;
                 let mut j: u64 = 0 as u64;
                 let mut in_str: i32 = 0;
                 if (is_final_1 == 0) as i32 != 0 {
+
+                    /// Work with a temporary copy of the string if this is not the
+                    ///* final result
                     json_string_init(&mut tmp_str, ctx);
                     json_append_raw_nz(&mut tmp_str,
                         unsafe { (*p_str).z_buf } as *const i8,
@@ -10947,6 +11903,10 @@ extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
                     }
                     json_string_trim_one_char(unsafe { &mut *p_str });
                 }
+
+                /// Fix up the string by changing the initial "@" flag back to
+                ///* to "{" and removing all subsequence "@" entries, with their
+                ///* associated comma delimeters.
                 unsafe {
                     *unsafe { (*p_str).z_buf.offset(0 as isize) } =
                         '{' as i32 as i8
@@ -11029,6 +11989,8 @@ extern "C" fn json_object_compute(ctx: *mut Sqlite3Context, is_final_1: i32)
                 unsafe {
                     *unsafe { (*p_str).z_buf.add(j as usize) } = 0 as i8
                 };
+
+                /// Restore zero terminator
                 unsafe { (*p_str).n_used = j };
             }
             if flags & 16 != 0 {
@@ -11093,9 +12055,18 @@ extern "C" fn json_object_value(ctx: *mut Sqlite3Context) -> () {
     json_object_compute(ctx, 0);
 }
 
+///* Register JSON functions.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_register_json_functions() -> () {
     unsafe {
+
+        ///   sqlite3_result_subtype() ----,  ,--- sqlite3_value_subtype()       */
+        ///    /*                                |  |                                  */
+        ///    /*             Uses cache ------, |  | ,---- Returns JSONB              */
+        ///    /*                              | |  | |                                */
+        ///    /*     Number of arguments ---, | |  | | ,--- Flags                     */
+        ///    /*                            | | |  | | |
         unsafe {
             sqlite3_insert_builtin_funcs(&raw mut a_json_func[0 as usize] as
                     *mut FuncDef,
@@ -11114,21 +12085,48 @@ struct JsonEachConnection {
     b_recursive: u8,
 }
 
+/// Constructor for the json_each virtual table
+#[allow(unused_doc_comments)]
 extern "C" fn json_each_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut JsonEachConnection = core::ptr::null_mut();
     let mut rc: i32 = 0;
+
+    /// Column numbers
+    /// The xBestIndex method assumes that the JSON and ROOT columns are
+    ///* the last two columns in the table.  Should this ever changes, be
+    ///* sure to update the xBestIndex method.
     { let _ = pz_err_1; };
+
+    /// Column numbers
+    /// The xBestIndex method assumes that the JSON and ROOT columns are
+    ///* the last two columns in the table.  Should this ever changes, be
+    ///* sure to update the xBestIndex method.
     { let _ = argv; };
+
+    /// Column numbers
+    /// The xBestIndex method assumes that the JSON and ROOT columns are
+    ///* the last two columns in the table.  Should this ever changes, be
+    ///* sure to update the xBestIndex method.
     { let _ = argc; };
+
+    /// Column numbers
+    /// The xBestIndex method assumes that the JSON and ROOT columns are
+    ///* the last two columns in the table.  Should this ever changes, be
+    ///* sure to update the xBestIndex method.
     { let _ = p_aux_1; };
-    rc =
+
+    /// Column numbers
+    /// The xBestIndex method assumes that the JSON and ROOT columns are
+    ///* the last two columns in the table.  Should this ever changes, be
+    ///* sure to update the xBestIndex method.
+    (rc =
         unsafe {
             sqlite3_declare_vtab(db,
                 c"CREATE TABLE x(key,value,type,atom,id,parent,fullkey,path,json HIDDEN,root HIDDEN)".as_ptr()
                         as *mut i8 as *const i8)
-        };
+        });
     if rc == 0 {
         p_new =
             unsafe {
@@ -11161,13 +12159,25 @@ extern "C" fn json_each_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+/// The query strategy is to look for an equality constraint on the json
+///* column.  Without such a constraint, the table cannot operate.  idxNum is
+///* 1 if the constraint is found, 3 if the constraint and zRoot are found,
+///* and 0 otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn json_each_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop counter or computed array index
     let mut a_idx: [i32; 2] = [0; 2];
+    /// Index of constraints for JSON and ROOT
     let mut unusable_mask: i32 = 0;
+    /// Mask of unusable JSON and ROOT constraints
     let mut idx_mask: i32 = 0;
+    /// Mask of usable == constraints JSON and ROOT
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
+
+    /// This implementation assumes that JSON and ROOT are the last two
+    ///* columns in the table
     { let _ = 0; };
     { let _ = tab; };
     a_idx[0 as usize] = { a_idx[1 as usize] = -1; a_idx[1 as usize] };
@@ -11221,8 +12231,17 @@ extern "C" fn json_each_best_index(tab: *mut Sqlite3Vtab,
                     } as i32 == 0 {
         unsafe { (*p_idx_info_1).order_by_consumed = 1 };
     }
-    if unusable_mask & !idx_mask != 0 { return 19; }
+    if unusable_mask & !idx_mask != 0 {
+
+        /// If there are any unusable constraints on JSON or ROOT, then reject
+        ///* this entire plan
+        return 19;
+    }
     if a_idx[0 as usize] < 0 {
+
+        /// No JSON input.  Leave estimatedCost at the huge value that it was
+        ///* initialized to to discourage the query planner from selecting this
+        ///* plan.
         unsafe { (*p_idx_info_1).idx_num = 0 };
     } else {
         unsafe { (*p_idx_info_1).estimated_cost = 1.0 };
@@ -11257,6 +12276,7 @@ extern "C" fn json_each_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+/// destructor for json_each virtual table
 extern "C" fn json_each_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p: *const JsonEachConnection =
         p_vtab_1 as *mut JsonEachConnection as *const JsonEachConnection;
@@ -11283,6 +12303,9 @@ struct JsonEachCursor {
     s_parse: JsonParse,
 }
 
+///*************************************************************************
+///* The json_each virtual table
+///**************************************************************************
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct JsonParent {
@@ -11293,6 +12316,7 @@ struct JsonParent {
     i_key: i64,
 }
 
+/// constructor for a JsonEachCursor object for json_each()/json_tree().
 extern "C" fn json_each_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_vtab: *const JsonEachConnection =
@@ -11313,6 +12337,8 @@ extern "C" fn json_each_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+/// Reset a JsonEachCursor back to its original state.  Free any memory
+///* held.
 extern "C" fn json_each_cursor_reset(p: &mut JsonEachCursor) -> () {
     unsafe {
         json_parse_reset(&mut (*p).s_parse);
@@ -11328,6 +12354,7 @@ extern "C" fn json_each_cursor_reset(p: &mut JsonEachCursor) -> () {
     }
 }
 
+/// Destructor for a jsonEachCursor object
 extern "C" fn json_each_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p: *mut JsonEachCursor = cur as *mut JsonEachCursor;
     json_each_cursor_reset(unsafe { &mut *p });
@@ -11335,6 +12362,7 @@ extern "C" fn json_each_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+/// Report a "malformed JSON" or OOM error against the cursor.
 extern "C" fn json_each_malformed_input(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         unsafe {
@@ -11357,6 +12385,7 @@ extern "C" fn json_each_malformed_input(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+/// Start a search on a new JSON string
 extern "C" fn json_each_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     unsafe {
@@ -11517,6 +12546,9 @@ extern "C" fn json_each_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     }
 }
 
+///* If the cursor is currently pointing at the label of a object entry,
+///* then return the index of the value.  For all other cases, return the
+///* current pointer position, which is the value.
 extern "C" fn json_skip_label(p: &mut JsonEachCursor) -> i32 {
     unsafe {
         if (*p).e_type as i32 == 12 {
@@ -11527,6 +12559,7 @@ extern "C" fn json_skip_label(p: &mut JsonEachCursor) -> i32 {
     }
 }
 
+///* Append the path name for the current element.
 extern "C" fn json_append_path_name(p: &mut JsonEachCursor) -> () {
     unsafe {
         unsafe {
@@ -11595,6 +12628,7 @@ extern "C" fn json_append_path_name(p: &mut JsonEachCursor) -> () {
     }
 }
 
+/// Advance the cursor to the next element for json_tree()
 extern "C" fn json_each_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p: *mut JsonEachCursor = cur as *mut JsonEachCursor;
@@ -11731,6 +12765,8 @@ extern "C" fn json_each_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+/// Return TRUE if the jsonEachCursor object has been advanced off the end
+///* of the JSON object
 extern "C" fn json_each_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe {
         let p: *const JsonEachCursor =
@@ -11739,6 +12775,7 @@ extern "C" fn json_each_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     }
 }
 
+/// Length of the path for rowid==0 in bRecursive mode.
 extern "C" fn json_each_path_length(p: &mut JsonEachCursor) -> i32 {
     unsafe {
         let mut n: u32 = (*p).path.n_used as u32;
@@ -11770,6 +12807,7 @@ extern "C" fn json_each_path_length(p: &mut JsonEachCursor) -> i32 {
     }
 }
 
+/// Return the value of a column
 extern "C" fn json_each_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i_column_1: i32) -> i32 {
     unsafe {
@@ -12651,6 +13689,7 @@ extern "C" fn json_each_column(cur: *mut Sqlite3VtabCursor,
     }
 }
 
+/// Return the current rowid value
 extern "C" fn json_each_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p: *const JsonEachCursor =
@@ -12659,6 +13698,7 @@ extern "C" fn json_each_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// The methods of the json_each virtual table
 static mut json_each_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -12688,6 +13728,8 @@ static mut json_each_module: Sqlite3Module =
         x_integrity: None,
     };
 
+///* Register the JSON table-valued function named zName and return a
+///* pointer to its Module object.  Return NULL if something goes wrong.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_json_vtab_register(db: *mut Sqlite3,
     z_name: *const i8) -> *mut Module {

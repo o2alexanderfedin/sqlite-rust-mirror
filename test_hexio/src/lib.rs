@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab, SqliteInt64, SqliteUint64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -395,6 +410,9 @@ impl Parse {
     }
 }
 
+///* Convert binary to hex.  The input zBuf[] contains N bytes of
+///* binary data.  zBuf[] is 2*n+1 bytes long.  Overwrite zBuf[]
+///* with a hexadecimal representation of its original binary input.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_test_bin_to_hex(mut z_buf_1: &mut [u8]) -> () {
     let z_hex: [u8; 17] =
@@ -425,6 +443,10 @@ pub extern "C" fn sqlite3_test_bin_to_hex(mut z_buf_1: &mut [u8]) -> () {
     { let _ = 0; };
 }
 
+///* Convert hex to binary.  The input zIn[] contains N bytes of
+///* hexadecimal.  Convert this into binary and write aOut[] with
+///* the binary data.  Spaces in the original input are ignored.
+///* Return the number of bytes of binary rendered.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_test_hex_to_bin(z_in_1: &[u8], a_out_1: *mut u8)
     -> i32 {
@@ -502,6 +524,11 @@ pub extern "C" fn sqlite3_test_hex_to_bin(z_in_1: &[u8], a_out_1: *mut u8)
     return j;
 }
 
+///* Usage:   hexio_read  FILENAME  OFFSET  AMT
+///*
+///* Read AMT bytes from file FILENAME beginning at OFFSET from the
+///* beginning of the file.  Convert that information to hexadecimal
+///* and return the resulting HEX string.
 extern "C" fn hexio_read(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut offset: i32 = 0;
@@ -562,6 +589,10 @@ extern "C" fn hexio_read(client_data_1: *mut (), interp: *mut TclInterp,
     return 0;
 }
 
+///* Usage:   hexio_write  FILENAME  OFFSET  DATA
+///*
+///* Write DATA into file FILENAME beginning at OFFSET from the
+///* beginning of the file.  DATA is expressed in hexadecimal.
 extern "C" fn hexio_write(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut offset: i32 = 0;
@@ -629,6 +660,11 @@ extern "C" fn hexio_write(client_data_1: *mut (), interp: *mut TclInterp,
     return 0;
 }
 
+///* USAGE:   hexio_get_int [-littleendian] HEXDATA
+///*
+///* Interpret the HEXDATA argument as a big-endian integer.  Return
+///* the value of that integer.  HEXDATA can contain between 2 and 8
+///* hexadecimal digits.
 extern "C" fn hexio_get_int(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -710,6 +746,9 @@ extern "C" fn hexio_get_int(client_data_1: *mut (), interp: *mut TclInterp,
     return 0;
 }
 
+///* USAGE:   hexio_render_int16   INTEGER
+///*
+///* Render INTEGER has a 16-bit big-endian integer in hexadecimal.
 extern "C" fn hexio_render_int16(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -740,6 +779,9 @@ extern "C" fn hexio_render_int16(client_data_1: *mut (),
     return 0;
 }
 
+///* USAGE:   hexio_render_int32   INTEGER
+///*
+///* Render INTEGER has a 32-bit big-endian integer in hexadecimal.
 extern "C" fn hexio_render_int32(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut val: i32 = 0;
@@ -772,6 +814,11 @@ extern "C" fn hexio_render_int32(client_data_1: *mut (),
     return 0;
 }
 
+///* USAGE:  utf8_to_utf8  HEX
+///*
+///* The argument is a UTF8 string represented in hexadecimal.
+///* The UTF8 might not be well-formed.  Run this string through
+///* sqlite3Utf8to8() convert it back to hex and return the result.
 extern "C" fn utf8_to_utf8(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     unsafe {
@@ -813,6 +860,7 @@ extern "C" fn get_fts3_varint(p: *const i8, v: &mut SqliteInt64) -> i32 {
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn put_fts3_varint(p: *mut i8, v: SqliteInt64) -> i32 {
     let mut q: *mut u8 = p as *mut u8;
     let mut vu: SqliteUint64 = v as SqliteUint64;
@@ -832,10 +880,16 @@ extern "C" fn put_fts3_varint(p: *mut i8, v: SqliteInt64) -> i32 {
         if !(vu != 0 as u64) { break '__b3; }
     }
     unsafe { *q.offset(-1 as isize) &= 127 as u8 };
+
+    /// turn off high bit in final byte
     { let _ = 0; };
     return unsafe { q.offset_from(p as *mut u8) } as i64 as i32;
 }
 
+///* USAGE:  read_fts3varint BLOB VARNAME
+///*
+///* Read a varint from the start of BLOB. Set variable VARNAME to contain
+///* the interpreted value. Return the number of bytes of BLOB consumed.
 extern "C" fn read_fts3varint(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut n_blob: i32 = 0;
@@ -865,6 +919,7 @@ extern "C" fn read_fts3varint(client_data_1: *mut (), interp: *mut TclInterp,
     return 0;
 }
 
+///* USAGE:  make_fts3record ARGLIST
 extern "C" fn make_fts3record(client_data_1: *mut (), interp: *mut TclInterp,
     objc: i32, objv: *const *mut TclObj) -> i32 {
     let mut a_arg: *mut *mut TclObj = core::ptr::null_mut();

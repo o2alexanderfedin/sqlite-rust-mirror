@@ -1,8 +1,21 @@
+//!* This is a test interface for the ossfuzz.c module.  The ossfuzz.c module
+//!* is an adaptor for OSS-FUZZ.  (https://github.com/google/oss-fuzz)
+//!*
+//!* This program links against ossfuzz.c.  It reads files named on the
+//!* command line and passes them one by one into ossfuzz.c.
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
+///* Read files named on the command-line and invoke the fuzzer for
+///* each one.
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {

@@ -1,19 +1,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem, Ht};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -393,6 +408,7 @@ impl Parse {
     }
 }
 
+///* Access routines.  To delete, insert a NULL pointer.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_hash_init(p_new: &mut Hash) -> () {
     { let _ = 0; };
@@ -402,10 +418,20 @@ pub extern "C" fn sqlite3_hash_init(p_new: &mut Hash) -> () {
     (*p_new).ht = core::ptr::null_mut();
 }
 
+///* The hashing function.
+#[allow(unused_doc_comments)]
 extern "C" fn str_hash(mut z: *const i8) -> u32 {
     let mut h: u32 = 0 as u32;
     while unsafe { *z.offset(0 as isize) } != 0 {
-        h +=
+
+        ///OPTIMIZATION-IF-TRUE*/
+        ///    /* Knuth multiplicative hashing.  (Sorting & Searching, p. 510).
+        ///* 0x9e3779b1 is 2654435761 which is the closest prime number to
+        ///* (2**32)*golden_ratio, where golden_ratio = (sqrt(5) - 1)/2.
+        ///*
+        ///* Only bits 0xdf for ASCII and bits 0xbf for EBCDIC each octet are
+        ///* hashed since the omitted bits determine the upper/lower case difference.
+        (h +=
             (223 &
                     unsafe {
                                 *{
@@ -414,20 +440,28 @@ extern "C" fn str_hash(mut z: *const i8) -> u32 {
                                         *__p = unsafe { (*__p).offset(1) };
                                         __t
                                     }
-                            } as u8 as i32) as u32;
+                            } as u8 as i32) as u32);
         h *= 2654435761u32;
     }
     return h;
 }
 
+/// This function (for internal use only) locates an element in an
+///* hash table that matches the given key.  If no element is found,
+///* a pointer to a static null element with HashElem.data==0 is returned.
+///* If pH is not NULL, then the hash for this key is written to *pH.
+#[allow(unused_doc_comments)]
 extern "C" fn find_element_with_hash(p_h_1: &Hash, p_key_1: *const i8,
     p_hash_1: *mut u32) -> *mut HashElem {
     unsafe {
         let mut elem: *mut HashElem = core::ptr::null_mut();
+        /// Used to loop thru the element list
         let mut count: u32 = 0 as u32;
+        /// Number of elements left to test
         let mut h: u32 = 0 as u32;
         h = str_hash(p_key_1);
         if !((*p_h_1).ht).is_null() {
+            ///OPTIMIZATION-IF-TRUE
             let mut p_entry: *const Ht = core::ptr::null();
             p_entry =
                 unsafe {
@@ -452,9 +486,15 @@ extern "C" fn find_element_with_hash(p_h_1: &Hash, p_key_1: *const i8,
     }
 }
 
+/// Remove all entries from a hash table.  Reclaim all memory.
+///* Call this routine to delete a hash table or to reset a hash table
+///* to the empty state.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_hash_clear(p_h: &mut Hash) -> () {
     let mut elem: *mut HashElem = core::ptr::null_mut();
+
+    /// For looping over all elements of the table
     { let _ = 0; };
     elem = (*p_h).first;
     (*p_h).first = core::ptr::null_mut();
@@ -469,6 +509,8 @@ pub extern "C" fn sqlite3_hash_clear(p_h: &mut Hash) -> () {
     (*p_h).count = 0 as u32;
 }
 
+/// Remove a single entry from the hash table given a pointer to that
+///* element and a hash on the element's key.
 extern "C" fn remove_element(p_h_1: *mut Hash, elem: *mut HashElem) -> () {
     let mut p_entry: *mut Ht = core::ptr::null_mut();
     if !(unsafe { (*elem).prev }).is_null() {
@@ -510,6 +552,8 @@ extern "C" fn remove_element(p_h_1: *mut Hash, elem: *mut HashElem) -> () {
     }
 }
 
+/// Link pNew element into the hash table pH.  If pEntry!=0 then also
+///* insert pNew into the pEntry hash bucket.
 extern "C" fn insert_element(p_h_1: &mut Hash, p_entry_1: *mut Ht,
     p_new_1: *mut HashElem) -> () {
     let mut p_head: *mut HashElem = core::ptr::null_mut();
@@ -543,14 +587,29 @@ extern "C" fn insert_element(p_h_1: &mut Hash, p_entry_1: *mut Ht,
     }
 }
 
+/// Resize the hash table so that it contains "new_size" buckets.
+///*
+///* The hash table might fail to resize if sqlite3_malloc() fails or
+///* if the new size is the same as the prior size.
+///* Return TRUE if the resize occurs and false if not.
+#[allow(unused_doc_comments)]
 extern "C" fn rehash(p_h_1: *mut Hash, mut new_size: u32) -> i32 {
     let mut new_ht: *mut Ht = core::ptr::null_mut();
+    /// The new hash table
     let mut elem: *mut HashElem = core::ptr::null_mut();
     let mut next_elem: *mut HashElem = core::ptr::null_mut();
     if new_size as u64 * core::mem::size_of::<Ht>() as u64 > 1024 as u64 {
         new_size = (1024 as u64 / core::mem::size_of::<Ht>() as u64) as u32;
     }
     if new_size == unsafe { (*p_h_1).htsize } { return 0; }
+
+    /// The inability to allocates space for a larger hash table is
+    ///* a performance hit but it is not a fatal error.  So mark the
+    ///* allocation as a benign. Use sqlite3Malloc()/memset(0) instead of 
+    ///* sqlite3MallocZero() to make the allocation, as sqlite3MallocZero()
+    ///* only zeroes the requested number of bytes whereas this module will
+    ///* use the actual amount of space allocated for the hash table (which
+    ///* may be larger than the requested amount).
     unsafe { sqlite3_begin_benign_malloc() };
     new_ht =
         unsafe {
@@ -595,12 +654,30 @@ extern "C" fn rehash(p_h_1: *mut Hash, mut new_size: u32) -> i32 {
     return 1;
 }
 
+/// Insert an element into the hash table pH.  The key is pKey
+///* and the data is "data".
+///*
+///* If no element exists with a matching key, then a new
+///* element is created and NULL is returned.
+///*
+///* If another element already exists with the same key, then the
+///* new data replaces the old data and the old data is returned.
+///* The key is not copied in this instance.  If a malloc fails, then
+///* the new data is returned and the hash table is unchanged.
+///*
+///* If the "data" parameter to this function is NULL, then the
+///* element corresponding to "key" is removed from the hash table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_hash_insert(p_h: *mut Hash, p_key: *const i8,
     data: *mut ()) -> *mut () {
     let mut h: u32 = 0 as u32;
+    /// the hash of the key modulo hash table size
     let mut elem: *mut HashElem = core::ptr::null_mut();
+    /// Used to loop thru the element list
     let mut new_elem: *mut HashElem = core::ptr::null_mut();
+
+    /// New element added to the pH
     { let _ = 0; };
     { let _ = 0; };
     elem = find_element_with_hash(unsafe { &*p_h }, p_key, &mut h);
@@ -644,6 +721,9 @@ pub extern "C" fn sqlite3_hash_insert(p_h: *mut Hash, p_key: *const i8,
     return core::ptr::null_mut();
 }
 
+/// Attempt to locate an element of the hash table pH with a key
+///* that matches pKey.  Return the data for this element if it is
+///* found, or NULL if there is no match.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_hash_find(p_h: *const Hash, p_key: *const i8)
     -> *mut () {

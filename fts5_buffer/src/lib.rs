@@ -2,13 +2,23 @@
 #![allow(unused_imports, dead_code)]
 
 mod fts5_h;
-pub(crate) use crate::fts5_h::*;
 mod fts5_int_h;
-pub(crate) use crate::fts5_int_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::fts5_h::{Fts5Api, Fts5Tokenizer};
+use crate::fts5_int_h::{
+    Fts5Buffer, Fts5Colset, Fts5Config, Fts5Expr, Fts5ExprNearset,
+    Fts5ExprNode, Fts5ExprPhrase, Fts5Global, Fts5Hash, Fts5Index,
+    Fts5IndexIter, Fts5Parse, Fts5PoslistPopulator, Fts5PoslistReader,
+    Fts5PoslistWriter, Fts5Storage, Fts5Table, Fts5Token, Fts5TokenizerConfig,
+};
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
@@ -31,6 +41,8 @@ pub extern "C" fn sqlite3_fts5_buffer_size(p_rc: &mut i32,
     return 0;
 }
 
+///* Encode value iVal as an SQLite varint and append it to the buffer object
+///* pBuf. If an OOM error occurs, set the error code in p.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_varint(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, i_val: i64) -> () {
@@ -55,6 +67,9 @@ pub extern "C" fn sqlite3_fts5_buffer_append_varint(p_rc: *mut i32,
     };
 }
 
+///* Append buffer nData/pData to buffer pBuf. If an OOM error occurs, set 
+///* the error code in p. If an error has already occurred when this function
+///* is called, it is a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_blob(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, n_data: u32, p_data: *const u8) -> () {
@@ -89,6 +104,9 @@ pub extern "C" fn sqlite3_fts5_buffer_append_blob(p_rc: *mut i32,
     }
 }
 
+///* Append the nul-terminated string zStr to the buffer pBuf. This function
+///* ensures that the byte following the buffer data is set to 0x00, even 
+///* though this byte is not included in the pBuf->n count.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_append_string(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, z_str: *const i8) -> () {
@@ -98,6 +116,7 @@ pub extern "C" fn sqlite3_fts5_buffer_append_string(p_rc: *mut i32,
     { let __p = unsafe { &mut (*p_buf).n }; let __t = *__p; *__p -= 1; __t };
 }
 
+///* Free any buffer allocated by pBuf. Zero the structure before returning.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_free(p_buf: *mut Fts5Buffer) -> () {
     unsafe { sqlite3_free(unsafe { (*p_buf).p } as *mut ()) };
@@ -106,11 +125,16 @@ pub extern "C" fn sqlite3_fts5_buffer_free(p_buf: *mut Fts5Buffer) -> () {
     };
 }
 
+///* Zero the contents of the buffer object. But do not free the associated 
+///* memory allocation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_zero(p_buf: &mut Fts5Buffer) -> () {
     (*p_buf).n = 0;
 }
 
+///* Set the buffer to contain nData/pData. If an OOM error occurs, leave an
+///* the error code in p. If an error has already occurred when this function
+///* is called, it is a no-op.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_buffer_set(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, n_data: i32, p_data: *const u8) -> () {
@@ -118,6 +142,12 @@ pub extern "C" fn sqlite3_fts5_buffer_set(p_rc: *mut i32,
     sqlite3_fts5_buffer_append_blob(p_rc, p_buf, n_data as u32, p_data);
 }
 
+///* Argument zFmt is a printf() style format string. This function performs
+///* the printf() style processing, then appends the results to buffer pBuf.
+///*
+///* Like sqlite3Fts5BufferAppendString(), this function ensures that the byte 
+///* following the buffer data is set to 0x00, even though this byte is not
+///* included in the pBuf->n count.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_fts5_buffer_append_printf(p_rc: *mut i32,
     p_buf: *mut Fts5Buffer, z_fmt: *mut i8, mut __va0: ...) -> () {
@@ -151,6 +181,7 @@ pub unsafe extern "C" fn sqlite3_fts5_mprintf(p_rc: &mut i32,
     return z_ret;
 }
 
+/// Write and decode big-endian 32-bit integer values
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_put32(a_buf: *mut u8, i_val: i32) -> () {
     unsafe { *a_buf.offset(0 as isize) = (i_val >> 24 & 255) as u8 };
@@ -169,6 +200,7 @@ pub extern "C" fn sqlite3_fts5_get32(a_buf: *const u8) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
     pi: &mut i32, pi_off: &mut i64) -> i32 {
     let mut i: i32 = *pi;
@@ -180,7 +212,9 @@ pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
         }
     } else { { let _ = 0; } };
     if i >= n {
-        *pi_off = -1 as i64;
+
+        /// EOF
+        (*pi_off = -1 as i64);
         return 1;
     } else {
         let mut i_off: i64 = *pi_off;
@@ -261,7 +295,12 @@ pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
                         };
                 }
             }
-            if i_val < 2 as u32 { *pi_off = -1 as i64; return 1; }
+            if i_val < 2 as u32 {
+
+                /// This is a corrupt record. So stop parsing it here.
+                (*pi_off = -1 as i64);
+                return 1;
+            }
             *pi_off = i_off + (i_val - 2 as u32 & 2147483647 as u32) as i64;
         } else {
             *pi_off =
@@ -281,6 +320,8 @@ pub extern "C" fn sqlite3_fts5_poslist_next64(a: *const u8, n: i32,
     }
 }
 
+///* Advance the iterator object passed as the only argument. Return true
+///* if the iterator reaches EOF, or false otherwise.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_reader_next(p_iter:
         &mut Fts5PoslistReader) -> i32 {
@@ -304,6 +345,10 @@ pub extern "C" fn sqlite3_fts5_poslist_reader_init(a: *const u8, n: i32,
     return unsafe { (*p_iter).b_eof } as i32;
 }
 
+///* Append position iPos to the position list being accumulated in buffer
+///* pBuf, which must be already be large enough to hold the new data.
+///* The previous position written to this list is *piPrev. *piPrev is set
+///* to iPos before returning.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_poslist_safe_append(p_buf: &mut Fts5Buffer,
     pi_prev: &mut i64, i_pos: i64) -> () {
@@ -353,6 +398,7 @@ pub extern "C" fn sqlite3_fts5_poslist_writer_append(p_buf: *mut Fts5Buffer,
     return 0;
 }
 
+/// Malloc utility
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_malloc_zero(p_rc: &mut i32,
     n_byte: Sqlite3Int64) -> *mut () {
@@ -366,6 +412,12 @@ pub extern "C" fn sqlite3_fts5_malloc_zero(p_rc: &mut i32,
     return p_ret;
 }
 
+///* Return a nul-terminated copy of the string indicated by pIn. If nIn
+///* is non-negative, then it is the length of the string in bytes. Otherwise,
+///* the length of the string is determined using strlen().
+///*
+///* It is the responsibility of the caller to eventually free the returned
+///* buffer using sqlite3_free(). If an OOM error occurs, NULL is returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_strndup(p_rc: &mut i32, p_in: *const i8,
     mut n_in: i32) -> *mut i8 {
@@ -386,6 +438,7 @@ pub extern "C" fn sqlite3_fts5_strndup(p_rc: &mut i32, p_in: *const i8,
     return z_ret;
 }
 
+/// Character set tests (like isspace(), isalpha() etc.)
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_fts5_is_bareword(t: i8) -> i32 {
     let a_bareword: [u8; 128] =
@@ -417,6 +470,7 @@ struct Fts5Termset {
     ap_hash: [*mut Fts5TermsetEntry; 512],
 }
 
+///**********************************************************************
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Fts5TermsetEntry {

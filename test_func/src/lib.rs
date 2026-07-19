@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3MutexMethods, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Uint64, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Op, Sqlite3Context, Sqlite3Value, Vdbe, VdbeCursor, VdbeFrame,
+    VdbeSorter,
+};
 
 type DarwinSizeT = u64;
 
@@ -516,6 +534,9 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* Allocate nByte bytes of space using sqlite3_malloc(). If the
+///* allocation fails, call sqlite3_result_error_nomem() to notify
+///* the database handle that malloc() has failed.
 extern "C" fn test_context_malloc(context: *mut Sqlite3Context, n_byte_1: i32)
     -> *mut () {
     let z: *mut i8 = unsafe { sqlite3_malloc(n_byte_1) } as *mut i8;
@@ -525,6 +546,9 @@ extern "C" fn test_context_malloc(context: *mut Sqlite3Context, n_byte_1: i32)
     return z as *mut ();
 }
 
+///* This function generates a string of random characters.  Used for
+///* generating test data.
+#[allow(unused_doc_comments)]
 extern "C" fn rand_str(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i_min: i32 = 0;
@@ -533,6 +557,9 @@ extern "C" fn rand_str(context: *mut Sqlite3Context, argc: i32,
     let mut r: i32 = 0;
     let mut i: i32 = 0;
     let mut z_buf: [u8; 1000] = [0; 1000];
+
+    /// It used to be possible to call randstr() with any number of arguments,
+    ///* but now it is registered with SQLite as requiring exactly 2.
     { let _ = 0; };
     i_min = unsafe { sqlite3_value_int(unsafe { *argv.offset(0 as isize) }) };
     if i_min < 0 { i_min = 0; }
@@ -584,6 +611,15 @@ extern "C" fn rand_str(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* The following two SQL functions are used to test returning a text
+///* result with a destructor. Function 'test_destructor' takes one argument
+///* and returns the same argument interpreted as TEXT. A destructor is
+///* passed with the sqlite3_result_text() call.
+///*
+///* SQL function 'test_destructor_count' returns the number of outstanding 
+///* allocations made by 'test_destructor';
+///*
+///* WARNING: Not threadsafe.
 static mut test_destructor_count_var: i32 = 0;
 
 extern "C" fn destructor(p: *mut ()) -> () {
@@ -717,6 +753,15 @@ extern "C" fn test_agg_errmsg16_final(ctx: *mut Sqlite3Context) -> () {
     };
 }
 
+///* Routines for testing the sqlite3_get_auxdata() and sqlite3_set_auxdata()
+///* interface.
+///*
+///* The test_auxdata() SQL function attempts to register each of its arguments
+///* as auxiliary data.  If there are no prior registrations of aux data for
+///* that argument (meaning the argument is not a constant or this is its first
+///* call) then the result for that argument is 0.  If there is a prior
+///* registration, the result for that argument is 1.  The overall result
+///* is the individual argument results separated by spaces.
 extern "C" fn free_test_auxdata(p: *mut ()) -> () {
     unsafe { sqlite3_free(p) };
 }
@@ -776,6 +821,9 @@ extern "C" fn test_auxdata(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     };
 }
 
+///* A function to test error reporting from user functions. This function
+///* returns a copy of its first argument as the error message.  If the
+///* second argument exists, it becomes the error code.
 extern "C" fn test_error(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -793,6 +841,10 @@ extern "C" fn test_error(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     }
 }
 
+///* Implementation of the counter(X) function.  If X is an integer
+///* constant, then the first invocation will return X.  The second X+1.
+///* and so forth.  Can be used (for example) to provide a sequence number
+///* in a result set.
 extern "C" fn counter_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_counter: *mut i32 =
@@ -819,6 +871,16 @@ extern "C" fn counter_func(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     unsafe { sqlite3_result_int(p_ctx_1, unsafe { *p_counter }) };
 }
 
+///* This function takes two arguments.  It performance UTF-8/16 type
+///* conversions on the first argument then returns a copy of the second
+///* argument.
+///*
+///* This function is used in cases such as the following:
+///*
+///*      SELECT test_isolation(x,x) FROM t1;
+///*
+///* We want to verify that the type conversions that occur on the
+///* first argument do not invalidate the second argument.
 extern "C" fn test_isolation(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe { sqlite3_value_text16(unsafe { *argv.offset(0 as isize) }) };
@@ -830,6 +892,8 @@ extern "C" fn test_isolation(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     };
 }
 
+///* Invoke an SQL statement recursively.  The function result is the 
+///* first column of the first row of the result set.
 extern "C" fn test_eval(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -870,6 +934,7 @@ extern "C" fn test_eval(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     }
 }
 
+///* convert one character from hex to binary
 extern "C" fn test_hex_char(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -881,6 +946,7 @@ extern "C" fn test_hex_char(c: i8) -> i32 {
     return 0;
 }
 
+///* Convert hex to binary.
 extern "C" fn test_hex_to_bin(mut z_in_1: *const i8, mut z_out_1: *mut i8)
     -> () {
     while unsafe { *z_in_1.offset(0 as isize) } != 0 &&
@@ -925,6 +991,10 @@ extern "C" fn test_hex_to_utf16be(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     }
 }
 
+///*      hex_to_utf8(HEX)
+///*
+///* Convert the input string from HEX into binary.  Then return the
+///* result using sqlite3_result_text16le().
 extern "C" fn test_hex_to_utf8(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n: i32 = 0;
@@ -969,6 +1039,11 @@ extern "C" fn test_hex_to_utf16le(p_ctx_1: *mut Sqlite3Context, n_arg_1: i32,
     }
 }
 
+///* SQL function:   real2hex(X)
+///*
+///* If argument X is a real number, then convert it into a string which is
+///* the big-endian hexadecimal representation of the ieee754 encoding of
+///* that number.  If X is not a real number, return NULL.
 extern "C" fn real2hex(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1028,16 +1103,30 @@ extern "C" fn real2hex(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*     test_extract(record, field)
+///*
+///* This function implements an SQL user-function that accepts a blob
+///* containing a formatted database record as the first argument. The
+///* second argument is the index of the field within that record to
+///* extract and return.
+#[allow(unused_doc_comments)]
 extern "C" fn test_extract(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     let mut p_rec: *mut u8 = core::ptr::null_mut();
     let mut p_end_hdr: *mut u8 = core::ptr::null_mut();
+    /// Points to one byte past record header
     let mut p_hdr: *mut u8 = core::ptr::null_mut();
+    /// Current point in record header
     let mut p_body: *const u8 = core::ptr::null();
+    /// Current point in record data
     let mut n_hdr: u64 = 0 as u64;
+    /// Bytes in record header
     let mut i_idx: i32 = 0;
+    /// Required field
     let mut i_current: i32 = 0;
+
+    /// Current field
     { let _ = 0; };
     p_rec =
         unsafe { sqlite3_value_blob(unsafe { *argv.offset(0 as isize) }) } as
@@ -1099,16 +1188,29 @@ extern "C" fn test_extract(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*      test_decode(record)
+///*
+///* This function implements an SQL user-function that accepts a blob
+///* containing a formatted database record as its only argument. It returns
+///* a tcl list (type SQLITE_TEXT) containing each of the values stored
+///* in the record.
+#[allow(unused_doc_comments)]
 extern "C" fn test_decode(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     let mut p_rec: *mut u8 = core::ptr::null_mut();
     let mut p_end_hdr: *mut u8 = core::ptr::null_mut();
+    /// Points to one byte past record header
     let mut p_hdr: *mut u8 = core::ptr::null_mut();
+    /// Current point in record header
     let mut p_body: *const u8 = core::ptr::null();
+    /// Current point in record data
     let mut n_hdr: u64 = 0 as u64;
+    /// Bytes in record header
     let mut p_ret: *mut TclObj = core::ptr::null_mut();
-    p_ret = unsafe { Tcl_NewObj() };
+
+    /// Return value
+    (p_ret = unsafe { Tcl_NewObj() });
     { let __p = unsafe { &mut (*p_ret).refCount }; *__p += 1; *__p };
     { let _ = 0; };
     p_rec =
@@ -1276,6 +1378,12 @@ extern "C" fn test_decode(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///*       test_zeroblob(N)
+///*
+///* The implementation of scalar SQL function "test_zeroblob()". This is
+///* similar to the built-in zeroblob() function, except that it does not
+///* check that the integer parameter is within range before passing it
+///* to sqlite3_result_zeroblob().
 extern "C" fn test_zeroblob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let n_zero: i32 =
@@ -1283,6 +1391,9 @@ extern "C" fn test_zeroblob(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_zeroblob(context, n_zero) };
 }
 
+///         test_getsubtype(V)
+///*
+///* Return the subtype for value V.
 extern "C" fn test_getsubtype(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1293,6 +1404,10 @@ extern "C" fn test_getsubtype(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///         test_frombind(A,B,C,...)
+///*
+///* Return an integer bitmask that has a bit set for every argument
+///* (up to the first 63 arguments) that originates from a bind a parameter.
 extern "C" fn test_frombind(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut m: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -1315,6 +1430,9 @@ extern "C" fn test_frombind(context: *mut Sqlite3Context, argc: i32,
     unsafe { sqlite3_result_int64(context, m as Sqlite3Int64) };
 }
 
+///         test_setsubtype(V, T)
+///*
+///* Return the value V with its subtype changed to T
 extern "C" fn test_setsubtype(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -1327,10 +1445,12 @@ extern "C" fn test_setsubtype(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn register_test_functions(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_thunk_1: *const Sqlite3ApiRoutines)
     -> i32 {
     unsafe {
+        /// 1: UTF-16.  0: UTF-8
         let mut i: i32 = 0;
         {
             i = 0;
@@ -1364,15 +1484,70 @@ extern "C" fn register_test_functions(db: *mut Sqlite3,
     }
 }
 
+///* SQLite user defined function to use with matchinfo() to calculate the
+///* relevancy of an FTS match. The value returned is the relevancy score
+///* (a real value greater than or equal to zero). A larger value indicates 
+///* a more relevant document.
+///*
+///* The overall relevancy returned is the sum of the relevancies of each 
+///* column value in the FTS table. The relevancy of a column value is the
+///* sum of the following for each reportable phrase in the FTS query:
+///*
+///*   (<hit count> / <global hit count>) * <column weight>
+///*
+///* where <hit count> is the number of instances of the phrase in the
+///* column value of the current row and <global hit count> is the number
+///* of instances of the phrase in the same column of all rows in the FTS
+///* table. The <column weight> is a weighting factor assigned to each
+///* column by the caller (see below).
+///*
+///* The first argument to this function must be the return value of the FTS 
+///* matchinfo() function. Following this must be one argument for each column 
+///* of the FTS table containing a numeric weight factor for the corresponding 
+///* column. Example:
+///*
+///*     CREATE VIRTUAL TABLE documents USING fts3(title, content)
+///*
+///* The following query returns the docids of documents that match the full-text
+///* query <query> sorted from most to least relevant. When calculating
+///* relevance, query term instances in the 'title' column are given twice the
+///* weighting of those in the 'content' column.
+///*
+///*     SELECT docid FROM documents 
+///*     WHERE documents MATCH <query> 
+///*     ORDER BY rank(matchinfo(documents), 1.0, 0.5) DESC
+#[allow(unused_doc_comments)]
 extern "C" fn rankfunc(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut a_matchinfo: *mut i32 = core::ptr::null_mut();
+    /// Return value of matchinfo()
     let mut n_matchinfo: i32 = 0;
+    /// Number of elements in aMatchinfo[]
     let mut n_col: i32 = 0;
+    /// Number of columns in the table
     let mut n_phrase: i32 = 0;
+    /// Number of phrases in the query
     let mut i_phrase: i32 = 0;
+    /// Current phrase
     let mut score: f64 = 0.0;
+    /// Value to return
+    /// Check that the number of arguments passed to this function is correct.
+    ///* If not, jump to wrong_number_args. Set aMatchinfo to point to the array
+    ///* of unsigned integer values returned by FTS function matchinfo. Set
+    ///* nPhrase to contain the number of reportable phrases in the users full-text
+    ///* query, and nCol to the number of columns in the table. Then check that the
+    ///* size of the matchinfo blob is as expected. Return an error if it is not.
+    /// Iterate through each phrase in the users query.
     let mut i_col: i32 = 0;
+    /// Current column
+    /// Now iterate through each column in the users query. For each column,
+    ///* increment the relevancy score by:
+    ///*
+    ///*   (<hit count> / <global hit count>) * <column weight>
+    ///*
+    ///* aPhraseinfo[] points to the start of the data for phrase iPhrase. So
+    ///* the hit count and global hit counts for each column are found in 
+    ///* aPhraseinfo[iCol*3] and aPhraseinfo[iCol*3+1], respectively.
     let mut a_phraseinfo: *const i32 = core::ptr::null();
     let mut n_hit_count: i32 = 0;
     let mut n_global_hit_count: i32 = 0;
@@ -1537,11 +1712,17 @@ extern "C" fn install_fts3_rank_function(client_data_1: *mut (),
     return 0;
 }
 
+///* A bogus step function and finalizer function.
 extern "C" fn t_step(a: *mut Sqlite3Context, b: i32,
     c: *mut *mut Sqlite3Value) -> () {}
 
 extern "C" fn t_final(a: *mut Sqlite3Context) -> () {}
 
+///* tclcmd:  abuse_create_function
+///*
+///* Make various calls to sqlite3_create_function that do not have valid
+///* parameters.  Verify that the error condition is detected and reported.
+#[allow(unused_doc_comments)]
 extern "C" fn abuse_create_function(client_data_1: *mut (),
     interp: *mut TclInterp, objc: i32, objv: *const *mut TclObj) -> i32 {
     '__b13: loop {
@@ -1615,6 +1796,10 @@ extern "C" fn abuse_create_function(client_data_1: *mut (),
                         Some(t_step), None, None)
                 };
             if rc != 21 { break '__b13; }
+
+            /// This last function registration should actually work.  Generate
+            ///* a no-op function (that always returns NULL) and which has the
+            ///* maximum-length function name and the maximum number of parameters.
             unsafe { sqlite3_limit(db, 6, 1000000) };
             mx_arg = unsafe { sqlite3_limit(db, 6, -1) };
             rc =
@@ -1630,6 +1815,10 @@ extern "C" fn abuse_create_function(client_data_1: *mut (),
         }
         if !(false) { break '__b13; }
     }
+
+    /// This last function registration should actually work.  Generate
+    ///* a no-op function (that always returns NULL) and which has the
+    ///* maximum-length function name and the maximum number of parameters.
     unsafe {
         Tcl_AppendResult(interp,
             c"sqlite3_create_function abused test failed".as_ptr() as *mut i8,

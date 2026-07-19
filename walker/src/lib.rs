@@ -1,19 +1,65 @@
+//!* 2008 August 16
+//!*
+//!* The author disclaims copyright to this source code.  In place of
+//!* a legal notice, here is a blessing:
+//!*
+//!*    May you do good and not evil.
+//!*    May you find forgiveness for yourself and forgive others.
+//!*    May you share freely, never taking more than you give.
+//!*
+//!************************************************************************
+//!* This file contains routines used for walking the parser tree for
+//!* an SQL statement.
+//!* Walk all expressions linked into the list of Window objects passed
+//!* as the second argument.
+//!* Walk an expression tree.  Invoke the callback once for each node
+//!* of the expression, while descending.  (In other words, the callback
+//!* is invoked before visiting children.)
+//!*
+//!* The return value from the callback should be one of the WRC_*
+//!* constants to specify how to proceed with the walk.
+//!*
+//!*    WRC_Continue      Continue descending down the tree.
+//!*
+//!*    WRC_Prune         Do not descend into child nodes, but allow
+//!*                      the walk to continue with sibling nodes.
+//!*
+//!*    WRC_Abort         Do no more callbacks.  Unwind the stack and
+//!*                      return from the top-level walk call.
+//!*
+//!* The return value from this routine is WRC_Abort to abandon the tree walk
+//!* and WRC_Continue to continue.
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, DbFixer,
+    Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode, FuncDef,
+    FuncDefHash, FuncDestructor, IdList, Index, KeyInfo, LogEst, Module,
+    NameContext, OnOrUsing, Parse, RowSet, SQLiteThread, Schema, Select,
+    SelectDest, Sqlite3, Sqlite3Config, Sqlite3InitInfo, Sqlite3Str, SrcItem,
+    SrcItemS0, SrcList, StrAccum, Subquery, Table, Token, Trigger,
+    TriggerStep, UnpackedRecord, Upsert, VList, VTable, Walker, WhereInfo,
+    Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 impl Column {
     fn not_null(&self) -> i32 { ((self._bitfield_1 >> 0u32) & 0xfu32) as i32 }
@@ -391,6 +437,8 @@ impl Parse {
     }
 }
 
+///* Call sqlite3WalkExpr() for every expression in list p or until
+///* an abort request is seen.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr_list(p_walker: *mut Walker,
     p: *mut ExprList) -> i32 {
@@ -426,6 +474,8 @@ pub extern "C" fn sqlite3_walk_expr_list(p_walker: *mut Walker,
     return 0;
 }
 
+///* This is a no-op callback for Walker->xSelectCallback2.  If this
+///* callback is set, then the Select->pWinDefn list is traversed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_win_defn_dummy_callback(p_walker: *mut Walker,
     p: *mut Select) -> () {
@@ -433,6 +483,8 @@ pub extern "C" fn sqlite3_walk_win_defn_dummy_callback(p_walker: *mut Walker,
     { let _ = p; };
 }
 
+///* Walk all expressions linked into the list of Window objects passed
+///* as the second argument.
 extern "C" fn walk_window_list(p_walker_1: *mut Walker, p_list_1: *mut Window,
     b_one_only_1: i32) -> i32 {
     let mut p_win: *const Window = core::ptr::null();
@@ -467,7 +519,12 @@ extern "C" fn walk_window_list(p_walker_1: *mut Walker, p_list_1: *mut Window,
     return 0;
 }
 
+///* Walk all expressions associated with SELECT statement p.  Do
+///* not invoke the SELECT callback on p, but do (of course) invoke
+///* any expr callbacks and SELECT callbacks that come from subqueries.
+///* Return WRC_Abort or WRC_Continue.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_walk_select_expr(p_walker: *mut Walker, p: &Select)
     -> i32 {
     unsafe {
@@ -490,6 +547,8 @@ pub extern "C" fn sqlite3_walk_select_expr(p_walker: *mut Walker, p: &Select)
                             unsafe { (*p_parse).e_parse_mode } as i32 >= 2 ||
                     unsafe { (*p_walker).x_select_callback2 } ==
                         Some(sqlite3_select_pop_with) {
+                /// The following may return WRC_Abort if there are unresolvable
+                ///* symbols (e.g. a table that does not exist) in a window definition.
                 let rc: i32 = walk_window_list(p_walker, (*p).p_win_defn, 0);
                 return rc;
             }
@@ -498,6 +557,11 @@ pub extern "C" fn sqlite3_walk_select_expr(p_walker: *mut Walker, p: &Select)
     }
 }
 
+///* Walk the parse trees associated with all subqueries in the
+///* FROM clause of SELECT statement p.  Do not invoke the select
+///* callback on p, but do invoke it on each FROM clause subquery
+///* and on any subqueries further down in the tree.  Return 
+///* WRC_Abort or WRC_Continue;
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_select_from(p_walker: *mut Walker, p: &Select)
     -> i32 {
@@ -544,6 +608,21 @@ pub extern "C" fn sqlite3_walk_select_from(p_walker: *mut Walker, p: &Select)
     }
 }
 
+///* Call sqlite3WalkExpr() for every expression in Select statement p.
+///* Invoke sqlite3WalkSelect() for subqueries in the FROM clause and
+///* on the compound select chain, p->pPrior. 
+///*
+///* If it is not NULL, the xSelectCallback() callback is invoked before
+///* the walk of the expressions and FROM clause. The xSelectCallback2()
+///* method is invoked following the walk of the expressions and FROM clause,
+///* but only if both xSelectCallback and xSelectCallback2 are both non-NULL
+///* and if the expressions and FROM clause both return WRC_Continue;
+///*
+///* Return WRC_Continue under normal conditions.  Return WRC_Abort if
+///* there is an abort request.
+///*
+///* If the Walker does not have an xSelectCallback() then this routine
+///* is a no-op returning WRC_Continue.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_select(p_walker: *mut Walker,
     mut p: *mut Select) -> i32 {
@@ -580,6 +659,23 @@ pub extern "C" fn sqlite3_walk_select(p_walker: *mut Walker,
     return 0;
 }
 
+///* Walk an expression tree.  Invoke the callback once for each node
+///* of the expression, while descending.  (In other words, the callback
+///* is invoked before visiting children.)
+///*
+///* The return value from the callback should be one of the WRC_*
+///* constants to specify how to proceed with the walk.
+///*
+///*    WRC_Continue      Continue descending down the tree.
+///*
+///*    WRC_Prune         Do not descend into child nodes, but allow
+///*                      the walk to continue with sibling nodes.
+///*
+///*    WRC_Abort         Do no more callbacks.  Unwind the stack and
+///*                      return from the top-level walk call.
+///*
+///* The return value from this routine is WRC_Abort to abandon the tree walk
+///* and WRC_Continue to continue.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr_nn(p_walker: *mut Walker,
     mut p_expr: *mut Expr) -> i32 {
@@ -634,6 +730,7 @@ pub extern "C" fn sqlite3_walk_expr_nn(p_walker: *mut Walker,
     }
 }
 
+/// Forward declarations
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walk_expr(p_walker: *mut Walker, p_expr: *mut Expr)
     -> i32 {
@@ -642,6 +739,13 @@ pub extern "C" fn sqlite3_walk_expr(p_walker: *mut Walker, p_expr: *mut Expr)
         } else { 0 };
 }
 
+///* No-op routine for the parse-tree walker.
+///*
+///* When this routine is the Walker.xExprCallback then expression trees
+///* are walked without any actions being taken at each node.  Presumably,
+///* when this routine is used for Walker.xExprCallback then 
+///* Walker.xSelectCallback is set to do something useful for every 
+///* subquery in the parser tree.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expr_walk_noop(not_used: *mut Walker,
     not_used2: *mut Expr) -> i32 {
@@ -649,6 +753,8 @@ pub extern "C" fn sqlite3_expr_walk_noop(not_used: *mut Walker,
     return 0;
 }
 
+///* No-op routine for the parse-tree walker for SELECT statements.
+///* subquery in the parser tree.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_select_walk_noop(not_used: *mut Walker,
     not_used2: *mut Select) -> i32 {
@@ -656,6 +762,8 @@ pub extern "C" fn sqlite3_select_walk_noop(not_used: *mut Walker,
     return 0;
 }
 
+/// Increase the walkerDepth when entering a subquery, and
+///* decrease when leaving the subquery.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_walker_depth_increase(p_walker: &mut Walker,
     p_select: *mut Select) -> i32 {

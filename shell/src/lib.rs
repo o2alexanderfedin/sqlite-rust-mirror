@@ -2,7 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3ApiRoutines, Sqlite3Backup, Sqlite3Blob, Sqlite3Context,
+    Sqlite3File, Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo,
+    Sqlite3Int64, Sqlite3IoMethods, Sqlite3MemMethods, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3Pcache, Sqlite3PcacheMethods2, Sqlite3PcachePage,
+    Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt,
+    Sqlite3Str, Sqlite3Uint64, Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+    Sqlite3VtabCursor, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
@@ -293,6 +301,7 @@ struct QrfU0S1 {
     ai_indent: *mut i32,
 }
 
+///* Set an error code and error message.
 unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
     z_format_1: *const i8, mut __va0: ...) -> () {
     (*p).i_err = i_code_1;
@@ -310,6 +319,7 @@ unsafe extern "C" fn qrf_error(p: &mut Qrf, i_code_1: i32,
     }
 }
 
+///* Out-of-memory error.
 extern "C" fn qrf_oom(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 7,
@@ -317,10 +327,13 @@ extern "C" fn qrf_oom(p: *mut Qrf) -> () {
     };
 }
 
+///* Initialize the internal Qrf object.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_initialize(p: *mut Qrf, p_stmt_1: *mut Sqlite3Stmt,
     p_spec_1: *const Sqlite3QrfSpec, pz_err_1: *mut *mut i8) -> () {
     unsafe {
         let mut sz: u64 = 0 as u64;
+        /// Size of pSpec[], based on pSpec->iVersion
         let mut exp_mode: i32 = 0;
         let mut rc: i32 = 0;
         let mut exp_mode_1: i32 = 0;
@@ -922,6 +935,7 @@ struct QrfPerCol {
     b_num: u8,
 }
 
+///* Free all the memory allocates in the qrfColData object
 extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -948,6 +962,8 @@ extern "C" fn qrf_col_data_free(p: *mut QrfColData) -> () {
     };
 }
 
+///* Allocate space for more cells in the qrfColData object.
+///* Return non-zero if a memory allocation fails.
 extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     let mut az_data: *mut *mut i8 = core::ptr::null_mut();
     let mut ai_wth: *mut i32 = core::ptr::null_mut();
@@ -995,6 +1011,13 @@ extern "C" fn qrf_col_data_enlarge(p: *mut QrfColData) -> i32 {
     return 0;
 }
 
+///* Data for substitute ctype.h functions.  Used for x-platform
+///* consistency and so that '_' is counted as an alphabetic
+///* character.
+///*
+///*    0x01 -  space
+///*    0x02 -  digit
+///*    0x04 -  alphabetic, including '_'
 static qrf_c_type: [i8; 256] =
     [0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 0 as i8,
@@ -1034,6 +1057,15 @@ static qrf_c_type: [i8; 256] =
             0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8, 0 as i8,
             0 as i8, 0 as i8, 0 as i8];
 
+///* Determine if the string z[] can be shown as plain text.  Return true
+///* if z[] is unambiguously text.  Return false if z[] needs to be
+///* quoted.
+///*
+///* All of the following must be true in order for z[] to be relaxable:
+///*
+///*    (1) z[] does not begin or end with ' or whitespace
+///*    (2) z[] is not the same as the NULL rendering
+///*    (3) z[] does not looks like a numeric literal
 extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     let mut i: u64 = 0 as u64;
     let mut n: u64 = 0 as u64;
@@ -1106,6 +1138,8 @@ extern "C" fn qrf_relaxable(p: &Qrf, z: *const i8) -> i32 {
     return (unsafe { *z.add(i as usize) } as i32 != 0) as i32;
 }
 
+///* If a field contains any character identified by a 1 in the following
+///* array, then the string must be quoted for CSV.
 static qrf_csv_quote: [i8; 256] =
     [1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
@@ -1145,17 +1179,39 @@ static qrf_csv_quote: [i8; 256] =
             1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8, 1 as i8,
             1 as i8, 1 as i8, 1 as i8];
 
+///* Escape the text starting at byte iStart of pStr, if needed, using the
+///* escape encoding of eEsc, which is either QRF_ESC_Ascii or QRF_ESC_Symbol.
+///* The pStr string is modified appropriately.
+///*
+///* Escaping is needed if the string contains any control characters
+///* other than \t, \n, and \r\n
+///*
+///* If no escaping is needed (the common case) then pStr is unchanged.
+///* If escaping is required, then pStr is expanded and modified to hold
+///* an escaped representation of the text.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
     i_start_1: i32) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Loop counters
     let mut n_ctrl: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of control characters to escape
     let mut z_in: *mut u8 = core::ptr::null_mut();
+    /// Text to be escaped
     let mut n_in: u32 = 0 as u32;
+    /// Bytes of text to be escaped
     let mut c: u8 = 0 as u8;
+    /// A single character of the text
     let mut z_out: *mut u8 = core::ptr::null_mut();
-    z_in = unsafe { sqlite3_str_value(p_str_1) } as *mut u8;
-    n_in = unsafe { sqlite3_str_length(p_str_1) } as u32;
+
+    /// Where to write the results
+    /// Find the text to be escaped
+    (z_in = unsafe { sqlite3_str_value(p_str_1) } as *mut u8);
+
+    /// Where to write the results
+    /// Find the text to be escaped
+    (n_in = unsafe { sqlite3_str_length(p_str_1) } as u32);
     if z_in == core::ptr::null_mut() { return; }
     {
         let __n = i_start_1;
@@ -1270,6 +1326,7 @@ extern "C" fn qrf_escape(e_esc_1: i32, p_str_1: *mut Sqlite3Str,
     }
 }
 
+///* Encode text appropriately and append it to pOut.
 extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     z_txt_1: *const i8) -> () {
     let i_start: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -2329,6 +2386,7 @@ extern "C" fn qrf_encode_text(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Transfer any error in pStr over into p.
 extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
     let rc: i32 =
         if !(p_str_1).is_null() {
@@ -2341,6 +2399,11 @@ extern "C" fn qrf_str_err(p: *mut Qrf, p_str_1: *mut Sqlite3Str) -> () {
     }
 }
 
+///* Check to see if z[] is a valid VT100 escape.  If it is, then
+///* return the number of bytes in the escape sequence.  Return 0 if
+///* z[] is not a VT100 escape.
+///*
+///* This routine assumes that z[0] is \033 (ESC).
 extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     let mut i: i32 = 0;
     if unsafe { *z.offset(1 as isize) } as i32 != '[' as i32 { return 0; }
@@ -2360,6 +2423,11 @@ extern "C" fn qrf_is_vt100(z: *const u8) -> i32 {
     return i + 1;
 }
 
+///* Compute the value and length of a multi-byte UTF-8 character that
+///* begins at z[0]. Return the length.  Write the Unicode value into *pU.
+///*
+///* This routine only works for *multi-byte* UTF-8 characters.  It does
+///* not attempt to detect illegal characters.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     -> i32 {
@@ -2394,6 +2462,8 @@ pub extern "C" fn sqlite3_qrf_decode_utf8(z: *const u8, p_u_1: &mut i32)
     return 1;
 }
 
+/// Lookup table to estimate the number of columns consumed by a Unicode
+///* character.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS0 {
@@ -2705,12 +2775,27 @@ static a_qrf_u_width: [AnonS0; 303] =
             AnonS0 { w: 0 as u8, i_first: 917760 },
             AnonS0 { w: 1 as u8, i_first: 918000 }];
 
+///* Auxiliary routines contined within this module that might be useful
+///* in other contexts, and which are therefore exported.
+////
+////*
+///* Return an estimate of the width, in columns, for the single Unicode
+///* character c.  For normal characters, the answer is always 1.  But the
+///* estimate might be 0 or 2 for zero-width and double-width characters.
+///*
+///* Different devices display unicode using different widths.  So
+///* it is impossible to know that true display width with 100% accuracy.
+///* Inaccuracies in the width estimates might cause columns to be misaligned.
+///* Unfortunately, there is nothing we can do about that.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     let mut i_first: i32 = 0;
     let mut i_last: i32 = 0;
     if c < 768 { return 1; }
-    i_first = 0;
+
+    /// The general case
+    (i_first = 0);
     i_last =
         (core::mem::size_of::<[AnonS0; 303]>() as u64 / 8 - 1 as u64) as i32;
     while i_first < i_last - 1 {
@@ -2728,6 +2813,13 @@ pub extern "C" fn sqlite3_qrf_wcwidth(c: i32) -> i32 {
     return a_qrf_u_width[i_last as usize].w as i32;
 }
 
+///* Adjust the input string zIn[] such that it is no more than N display
+///* characters wide.  If it is wider than that, then truncate and add
+///* ellipsis.  Or if zIn[] contains a \r or \n, truncate at that point,
+///* adding ellipsis.  Embedded tabs in zIn[] are converted into ordinary
+///* spaces.
+///*
+///* Return this display width of the modified title string.
 extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     let mut z: *mut u8 = z_in_1 as *mut u8;
     let mut n: i32 = 0;
@@ -2798,6 +2890,15 @@ extern "C" fn qrf_title_limit(z_in_1: *mut i8, n_1: i32) -> i32 {
     return n;
 }
 
+///* Return the display width of the longest line of text
+///* in the (possibly) multi-line input string zIn[0..nByte].
+///* zIn[] is not necessarily zero-terminated.  Take
+///* into account tab characters, zero- and double-width
+///* characters, CR and NL, and VT100 escape codes.
+///*
+///* Write the number of newlines into *pnNL.  So, *pnNL will
+///* return 0 if everything fits on one line, or positive it
+///* it will need to be split.
 extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     pn_nl_1: *mut i32) -> i32 {
     let mut z: *const u8 = core::ptr::null();
@@ -2861,11 +2962,19 @@ extern "C" fn qrf_display_width(mut z_in_1: *const i8, n_byte_1: Sqlite3Int64,
     return n;
 }
 
+///* Do a quick sanity check to see aBlob[0..nBlob-1] is valid JSONB
+///* return true if it is and false if it is not.
+///*
+///* False positives are possible, but not false negatives.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
     -> i32 {
     let mut x: u8 = 0 as u8;
+    /// Payload size half-byte
     let mut i: i32 = 0;
+    /// Loop counter
     let mut n: i32 = 0;
+    /// Bytes in the payload size integer
     let mut sz: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     if n_blob_1 == 0 { return 0; }
     x = (unsafe { *a_blob_1.offset(0 as isize) } as i32 >> 4) as u8;
@@ -2891,6 +3000,15 @@ extern "C" fn qrf_jsonb_quick_check(a_blob_1: *const u8, n_blob_1: i32)
                 n_blob_1 as Sqlite3Uint64) as i32;
 }
 
+///* The current iCol-th column of p->pStmt is known to be a BLOB.  Check
+///* to see if that BLOB is really a JSONB blob.  If it is, then translate
+///* it into a text JSON representation and return a pointer to that text JSON.
+///* If the BLOB is not JSONB, then return a NULL pointer.
+///*
+///* The memory used to hold the JSON text is managed internally by the
+///* "p" object and is overwritten and/or deallocated upon the next call
+///* to this routine (with the same p argument) or when the p object is
+///* finailized.
 extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
     let mut n_byte: i32 = 0;
     let mut p_blob: *const () = core::ptr::null();
@@ -2931,6 +3049,8 @@ extern "C" fn qrf_jsonb_to_json(p: &mut Qrf, i_col_1: i32) -> *const i8 {
     } else { return core::ptr::null(); }
 }
 
+///* If xWrite is defined, send all content of pOut to xWrite and
+///* reset pOut.
 extern "C" fn qrf_write(p: *mut Qrf) -> () {
     let mut n: i32 = 0;
     if unsafe { (*p).spec.x_write.is_some() } &&
@@ -2955,6 +3075,7 @@ extern "C" fn qrf_write(p: *mut Qrf) -> () {
     }
 }
 
+///* Render value pVal into pOut
 extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     i_col_1: i32) -> () {
     let i_start_len: i32 = unsafe { sqlite3_str_length(p_out_1) };
@@ -5559,6 +5680,7 @@ extern "C" fn qrf_render_value(p: *mut Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Load into pData the default alignment for the body of a table.
 extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     {
@@ -5599,18 +5721,33 @@ extern "C" fn qrf_load_alignment(p_data_1: &QrfColData, p: &Qrf) -> () {
     }
 }
 
+///* If the single column in pData->a[] with pData->n entries can be
+///* laid out as nCol columns with a 2-space gap between each such
+///* that all columns fit within nSW, then return a pointer to an array
+///* of integers which is the width of each column from left to right.
+///*
+///* If the layout is not possible, return a NULL pointer.
+///*
+///* Space to hold the returned array is from sqlite_malloc64().
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     n_col_1: i32, n_sw_1: i32) -> *mut i32 {
     let mut i: i32 = 0;
+    /// Loop counter
     let mut nr: i32 = 0;
+    /// Number of rows
     let mut w: i32 = 0;
+    /// Width of the current column
     let mut t: i64 = 0 as i64;
+    /// Total width of all columns
     let mut aw: *mut i32 = core::ptr::null_mut();
-    aw =
+
+    /// Array of individual column widths
+    (aw =
         unsafe {
                 sqlite3_malloc64(core::mem::size_of::<i32>() as u64 *
                         n_col_1 as u64)
-            } as *mut i32;
+            } as *mut i32);
     if aw == core::ptr::null_mut() {
         qrf_oom(p);
         return core::ptr::null_mut();
@@ -5657,6 +5794,9 @@ extern "C" fn qrf_valid_layout(p_data_1: &QrfColData, p: *mut Qrf,
     return aw;
 }
 
+///* The output is single-column and the bSplitColumn flag is set.
+///* Check to see if the single-column output can be split into multiple
+///* columns that appear side-by-side.  Adjust pData appropriately.
 extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
     let mut n_col: i32 = 1;
     let mut aw: *mut i32 = core::ptr::null_mut();
@@ -5839,14 +5979,22 @@ extern "C" fn qrf_split_column(p_data_1: *mut QrfColData, p: *mut Qrf) -> () {
     }
 }
 
+///* Adjust the layout for the screen width restriction
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     -> () {
     let mut sep_w: i32 = 0;
+    /// Width of all box separators and margins
     let mut sum_w: i32 = 0;
+    /// Total width of data area over all columns
     let mut target_w: i32 = 0;
+    /// Desired total data area
     let mut i: i32 = 0;
+    /// Loop counters
     let mut n_col: i32 = 0;
-    (*p_data_1).n_margin = 2 as u8;
+
+    /// Number of columns
+    ((*p_data_1).n_margin = 2 as u8);
     if (*p).spec.n_screen_width as i32 == 0 { return; }
     if (*p).spec.e_style as i32 == 2 {
         sep_w = (*p_data_1).n_col * 2 - 2;
@@ -5874,7 +6022,9 @@ extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     if (*p).spec.n_screen_width as i64 >= sum_w as i64 + sep_w as i64 {
         return;
     }
-    (*p_data_1).n_margin = 0 as u8;
+
+    /// First thing to do is reduce the separation between columns
+    ((*p_data_1).n_margin = 0 as u8);
     if (*p).spec.e_style as i32 == 2 {
         sep_w = (*p_data_1).n_col - 1;
     } else {
@@ -5916,6 +6066,9 @@ extern "C" fn qrf_restrict_screen_width(p_data_1: &mut QrfColData, p: &Qrf)
     }
 }
 
+/// Draw horizontal line N characters long using unicode box
+///* characters
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
     -> () {
     let az_dash: [*const i8; 2] =
@@ -5923,6 +6076,7 @@ extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
                     as *const i8,
                 c"\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}\u{2550}".as_ptr()
                     as *const i8];
+    ///  0       1      2     3      4        5      6      7      8      9
     let n_dash: i32 = 30 as i32;
     let mut nn: i64 = 3 as i64 * n_1 as i64;
     while nn > n_dash as i64 {
@@ -5936,6 +6090,7 @@ extern "C" fn qrf_box_line(p_out_1: *mut Sqlite3Str, n_1: i32, b_dbl_1: i32)
     };
 }
 
+///* Draw a horizontal separator for a QRF_STYLE_Box table.
 extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     z_sep1_1: *const i8, z_sep2_1: *const i8, z_sep3_1: *const i8,
     b_dbl_1: i32) -> () {
@@ -5972,6 +6127,7 @@ extern "C" fn qrf_box_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     };
 }
 
+///* Print a markdown or table-style row separator using ascii-art
 extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     mut c_sep_1: i8) -> () {
     let mut i: i32 = 0;
@@ -6018,11 +6174,24 @@ extern "C" fn qrf_row_separator(p_out_1: *mut Sqlite3Str, p: &QrfColData,
     };
 }
 
+///* (*pz)[] is a line of text that is to be displayed the box or table or
+///* similar tabular formats.  z[] contain newlines or might be too wide
+///* to fit in the columns so will need to be split into multiple line.
+///*
+///* This routine determines:
+///*
+///*    *  How many bytes of z[] should be shown on the current line.
+///*    *  How many character positions those bytes will cover.
+///*    *  The byte offset to the start of the next line.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     pn_this_1: &mut i32, pn_wide_1: &mut i32, pi_next_1: &mut i32) -> () {
     let mut i: i32 = 0;
+    /// Input bytes consumed
     let mut k: i32 = 0;
+    /// Bytes in a VT100 code
     let mut n: i32 = 0;
+    /// Output column number
     let z: *const u8 = z_in_1 as *const u8;
     let mut c: u8 = 0 as u8;
     if unsafe { *z.offset(0 as isize) } as i32 == 0 {
@@ -6152,6 +6321,9 @@ extern "C" fn qrf_wrap_line(z_in_1: *const i8, w: i32, b_wrap_1: i32,
     *pi_next_1 = i;
 }
 
+///* Append nVal bytes of text from zVal onto the end of pOut.
+///* Convert tab characters in zVal to the appropriate number of
+///* spaces.
 extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     z_val_1: *const i8, mut n_val_1: i32) -> () {
     let mut i: i32 = 0;
@@ -6233,11 +6405,18 @@ extern "C" fn qrf_append_with_tabs(p_out_1: *mut Sqlite3Str,
     unsafe { sqlite3_str_append(p_out_1, z as *const i8, i) };
 }
 
+///* Output horizontally justified text into pOut.  The text is the
+///* first nVal bytes of zVal.  Include nWS bytes of whitespace, either
+///* split between both sides, or on the left, or on the right, depending
+///* on eAlign.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
     n_val_1: i32, n_ws_1: i32) -> () {
     let mut e_align: u8 = ((*p_col_1).e as i32 & 3) as u8;
     if e_align as i32 == 0 && (*p_col_1).b_num != 0 { e_align = 3 as u8; }
     if e_align as i32 == 2 {
+
+        /// Center the text
         unsafe {
             sqlite3_str_appendchar(p_out_1, n_ws_1 / 2, ' ' as i32 as i8)
         };
@@ -6247,14 +6426,19 @@ extern "C" fn qrf_print_aligned(p_out_1: *mut Sqlite3Str, p_col_1: &QrfPerCol,
                 ' ' as i32 as i8)
         };
     } else if e_align as i32 == 3 {
+
+        /// Right justify the text
         unsafe { sqlite3_str_appendchar(p_out_1, n_ws_1, ' ' as i32 as i8) };
         qrf_append_with_tabs(p_out_1, (*p_col_1).z as *const i8, n_val_1);
     } else {
+
+        /// Left justify the text
         qrf_append_with_tabs(p_out_1, (*p_col_1).z as *const i8, n_val_1);
         unsafe { sqlite3_str_appendchar(p_out_1, n_ws_1, ' ' as i32 as i8) };
     }
 }
 
+/// Trim spaces of the end if pOut
 extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     let mut n_byte: i32 = unsafe { sqlite3_str_length(p_out_1) };
     let z_out: *const i8 = unsafe { sqlite3_str_value(p_out_1) } as *const i8;
@@ -6266,23 +6450,41 @@ extern "C" fn qrf_r_trim(p_out_1: *mut Sqlite3Str) -> () {
     unsafe { sqlite3_str_truncate(p_out_1, n_byte) };
 }
 
+///* Columnar modes require that the entire query be evaluated first, with
+///* results written into memory, so that we can compute appropriate column
+///* widths.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Loop counters
     let mut col_sep: *const i8 = core::ptr::null();
+    /// Column separator text
     let mut row_sep: *const i8 = core::ptr::null();
+    /// Row terminator text
     let mut row_start: *const i8 = core::ptr::null();
+    /// Row start text
     let mut sz_col_sep: i32 = 0;
     let mut sz_row_sep: i32 = 0;
     let mut sz_row_start: i32 = 0;
+    /// Size in bytes of previous 3
     let mut rc: i32 = 0;
+    /// Result code
     let mut n_column: i32 = unsafe { (*p).n_col };
+    /// Number of columns
     let mut b_ww: i32 = 0;
+    /// True to do word-wrap
     let mut p_str: *mut Sqlite3Str = core::ptr::null_mut();
+    /// Temporary rendering
     let mut data: QrfColData = unsafe { core::mem::zeroed() };
+    /// Columnar layout data
     let mut b_r_trim: i32 = 0;
-    rc = unsafe { sqlite3_step(unsafe { (*p).p_stmt }) };
+
+    /// Trim trailing space
+    (rc = unsafe { sqlite3_step(unsafe { (*p).p_stmt }) });
     if rc != 100 || n_column == 0 { return; }
+
+    /// Initialize the data container
     unsafe {
         memset(&raw mut data as *mut (), 0,
             core::mem::size_of::<QrfColData>() as u64)
@@ -6501,7 +6703,12 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                 } else if (data.b_multi_row as i32 == 0 || w == 1) &&
                         unsafe { (*data.a.offset(i as isize)).mx_w } > w {
                     data.b_multi_row = 1 as u8;
-                    if w == 1 { w = 2; }
+                    if w == 1 {
+
+                        /// If aiWth[j] is 2 or more, then there might be a double-wide
+                        ///* character somewhere.  So make the column width at least 2.
+                        (w = 2);
+                    }
                 }
                 unsafe { (*data.a.offset(i as isize)).w = w };
                 break '__c58;
@@ -6515,9 +6722,17 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                 unsafe { (*p).spec.b_titles } as i32 == 1 &&
             unsafe { (*p).spec.n_screen_width } as i32 >
                 unsafe { (*data.a.offset(0 as isize)).w } + 3 {
+
+        /// Attempt to convert single-column tables into multi-column by
+        ///* verticle wrapping, if the screen is wide enough and if the
+        ///* bSplitColumn flag is set.
         qrf_split_column(&mut data, p);
         n_column = data.n_col;
-    } else { qrf_restrict_screen_width(&mut data, unsafe { &*p }); }
+    } else {
+
+        /// Adjust the column widths due to screen width restrictions
+        qrf_restrict_screen_width(&mut data, unsafe { &*p });
+    }
     '__s59:
         {
         match unsafe { (*p).spec.e_style } {
@@ -6710,6 +6925,8 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
                     }
                 }
                 if b_more != 0 {
+
+                    /// This row was terminated by nLineLimit.  Show ellipsis.
                     unsafe {
                         sqlite3_str_append(unsafe { (*p).p_out }, row_start,
                             sz_row_start)
@@ -7013,6 +7230,10 @@ extern "C" fn qrf_columnar(p: *mut Qrf) -> () {
     return;
 }
 
+///* Parameter azArray points to a zero-terminated array of strings. zStr
+///* points to a single nul-terminated string. Return non-zero if zStr
+///* is equal, according to strcmp(), to any of the strings in the array.
+///* Otherwise, return zero.
 extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     az_array_1: *const *const i8) -> i32 {
     let mut i: i32 = 0;
@@ -7038,6 +7259,10 @@ extern "C" fn qrf_string_in_array(z_str_1: *const i8,
     return 0;
 }
 
+///* Store string zUtf to pOut as w characters.  If w is negative,
+///* then right-justify the text.  W is the width in display characters, not
+///* in bytes.  Double-width unicode characters count as two characters.
+///* VT100 escape sequences count as zero.  And so forth.
 extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
     mut w: i32, z_utf_1: *const i8) -> () {
     let mut a: *const u8 = z_utf_1 as *const u8;
@@ -7090,6 +7315,10 @@ extern "C" fn qrf_width_print(p: *const Qrf, p_out_1: *mut Sqlite3Str,
     }
 }
 
+///* Return an estimate of the number of display columns used by the
+///* string in the argument.  The width of individual characters is
+///* determined as for sqlite3_qrf_wcwidth().  VT100 escape code sequences
+///* are assigned a width of zero.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     let mut z: *const u8 = z_in as *const u8;
@@ -7134,13 +7363,41 @@ pub extern "C" fn sqlite3_qrf_wcswidth(z_in: *const i8) -> u64 {
     return n;
 }
 
+///* Print out an EXPLAIN with indentation.  This is a two-pass algorithm.
+///*
+///* On the first pass, we compute aiIndent[iOp] which is the amount of
+///* indentation to apply to the iOp-th opcode.  The output actually occurs
+///* on the second pass.
+///*
+///* The indenting rules are:
+///*
+///*     * For each "Next", "Prev", "VNext" or "VPrev" instruction, indent
+///*       all opcodes that occur between the p2 jump destination and the opcode
+///*       itself by 2 spaces.
+///*
+///*     * Do the previous for "Return" instructions for when P2 is positive.
+///*       See tag-20220407a in wherecode.c and vdbe.c.
+///*
+///*     * For each "Goto", if the jump destination is earlier in the program
+///*       and ends on one of:
+///*          Yield  SeekGt  SeekLt  RowSetRead  Rewind
+///*       or if the P1 parameter is one instead of zero,
+///*       then indent all opcodes between the earlier instruction
+///*       and "Goto" by 2 spaces.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     let mut ab_yield: *mut i32 = core::ptr::null_mut();
+    /// abYield[iOp] is rue if opcode iOp is an OP_Yield
     let mut ai_indent: *mut i32 = core::ptr::null_mut();
+    /// Indent the iOp-th opcode by aiIndent[iOp]
     let mut n_alloc: i64 = 0 as i64;
+    /// Allocated size of aiIndent[], abYield
     let mut n_indent: i32 = 0;
+    /// Number of entries in aiIndent[]
     let mut i_op: i32 = 0;
+    /// Opcode number
     let mut i: i32 = 0;
+    /// Column loop counter
     let mut az_next: [*const i8; 7] =
         [c"Next".as_ptr() as *const i8, c"Prev".as_ptr() as *const i8,
                 c"VPrev".as_ptr() as *const i8,
@@ -7154,6 +7411,11 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
                 c"Rewind".as_ptr() as *const i8, core::ptr::null()];
     let mut az_goto: [*const i8; 2] =
         [c"Goto".as_ptr() as *const i8, core::ptr::null()];
+
+    /// The caller guarantees that the leftmost 4 columns of the statement
+    ///* passed to this function are equivalent to the leftmost 4 columns
+    ///* of EXPLAIN statement output. In practice the statement may be
+    ///* an EXPLAIN, or it may be a query on the bytecode() virtual table.
     if !(unsafe { sqlite3_column_count(unsafe { (*p).p_stmt }) } >= 4) as i32
                 as i64 != 0 {
         unsafe {
@@ -7232,6 +7494,10 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
                     unsafe { sqlite3_column_int(unsafe { (*p).p_stmt }, 2) };
                 let p2: i32 =
                     unsafe { sqlite3_column_int(unsafe { (*p).p_stmt }, 3) };
+                /// Assuming that p2 is an instruction address, set variable p2op to the
+                ///* index of that instruction in the aiIndent[] array. p2 and p2op may be
+                ///* different if the current instruction is part of a sub-program generated
+                ///* by an SQL trigger or foreign key.
                 let p2op: i32 = p2 + (i_op - i_addr);
                 if i_op as i64 >= n_alloc {
                     n_alloc += 100 as i64;
@@ -7299,6 +7565,8 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
         }
     }
     unsafe { sqlite3_free(ab_yield as *mut ()) };
+
+    /// Second pass.  Actually generate output
     unsafe { sqlite3_reset(unsafe { (*p).p_stmt }) };
     if unsafe { (*p).i_err } == 0 {
         let mut a_width: *const i32 =
@@ -7448,6 +7716,12 @@ extern "C" fn qrf_explain(p: *mut Qrf) -> () {
     unsafe { sqlite3_free(ai_indent as *mut ()) };
 }
 
+///* Do a "scanstatus vm" style EXPLAIN listing on p->pStmt.
+///*
+///* p->pStmt is probably not an EXPLAIN query.  Instead, construct a
+///* new query that is a bytecode() rendering of p->pStmt with extra
+///* columns for the "scanstatus vm" outputs, and run the results of
+///* that new query through the normal EXPLAIN formatting.
 extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
     unsafe {
         let p_orig_stmt: *mut Sqlite3Stmt = unsafe { (*p).p_stmt };
@@ -7479,6 +7753,7 @@ extern "C" fn qrf_scan_status_vm(p: *mut Qrf) -> () {
     }
 }
 
+///* Generate ".scanstatus est" style of EQP output.
 extern "C" fn qrf_eqp_stats(p: *mut Qrf) -> () {
     unsafe {
         qrf_error(unsafe { &mut *p }, 1,
@@ -7486,6 +7761,9 @@ extern "C" fn qrf_eqp_stats(p: *mut Qrf) -> () {
     };
 }
 
+///* Helper function for QRF_STYLE_Json and QRF_STYLE_JObject.
+///* The initial "{" for a JSON object that will contain row content
+///* has been output.  Now output all the content.
 extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     let mut i: i32 = 0;
     let mut n_item: i32 = 0;
@@ -7518,6 +7796,12 @@ extern "C" fn qrf_one_json_row(p: *mut Qrf) -> () {
     qrf_write(p);
 }
 
+///* Attempt to determine if identifier zName needs to be quoted, either
+///* because it contains non-alphanumeric characters, or because it is an
+///* SQLite keyword.  Be conservative in this estimate:  When in doubt assume
+///* that quoting is required.
+///*
+///* Return 1 if quoting is required.  Return 0 if no quoting is required.
 extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let z: *const u8 = z_name_1 as *const u8;
@@ -7543,6 +7827,8 @@ extern "C" fn qrf_need_quote(z_name_1: *const i8) -> i32 {
     return (unsafe { sqlite3_keyword_check(z_name_1, i) } != 0) as i32;
 }
 
+///* Free and reset the EXPLAIN QUERY PLAN data that has been collected
+///* in p->u.pGraph.
 extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7566,6 +7852,11 @@ extern "C" fn qrf_eqp_reset(p: &mut Qrf) -> () {
     }
 }
 
+///* Render the 64-bit value N in a more human-readable format into
+///* pOut.
+///*
+///*   +  Only show the first three significant digits.
+///*   +  Append suffixes K, M, G, T, P, and E for 1e3, 1e6, ... 1e18
 extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
     let mut i: i32 = 0;
     if n_1 < 0 as i64 {
@@ -7638,6 +7929,8 @@ extern "C" fn qrf_approx_int64(p_out_1: *mut Sqlite3Str, mut n_1: i64) -> () {
     }
 }
 
+/// Return the next EXPLAIN QUERY PLAN line with iEqpId that occurs after
+///* pOld, or return the first such line if pOld is NULL
 extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
     p_old_1: *const QrfEQPGraphRow) -> *mut QrfEQPGraphRow {
     unsafe {
@@ -7653,6 +7946,8 @@ extern "C" fn qrf_eqp_next_row(p: &Qrf, i_eqp_id_1: i32,
     }
 }
 
+/// Render a single level of the graph that has iEqpId as its parent.  Called
+///* recursively to render sublevels.
 extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7709,6 +8004,7 @@ extern "C" fn qrf_eqp_render_level(p: *mut Qrf, i_eqp_id_1: i32) -> () {
     }
 }
 
+///* Display and reset the EXPLAIN QUERY PLAN data
 extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
     unsafe {
         let mut p_row: *mut QrfEQPGraphRow = core::ptr::null_mut();
@@ -7805,6 +8101,7 @@ extern "C" fn qrf_eqp_render(p: *mut Qrf, n_cycle_1: i64) -> () {
     }
 }
 
+///* Add a new entry to the EXPLAIN QUERY PLAN data
 extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
     z_text_1: *const i8) -> () {
     unsafe {
@@ -7853,6 +8150,10 @@ extern "C" fn qrf_eqp_append(p: *mut Qrf, i_eqp_id_1: i32, p2: i32,
     }
 }
 
+///* Render a single row of output for non-columnar styles - any
+///* style that lets us render row by row as the content is received
+///* from the query.
+#[allow(unused_doc_comments)]
 extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -7860,7 +8161,11 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
             {
             match unsafe { (*p).spec.e_style } {
                 14 => {
-                    { break '__s85; }
+                    {
+
+                        /// No-op
+                        break '__s85;
+                    }
                     {
                         if unsafe { (*p).n_row } == 0 as i64 {
                             unsafe {
@@ -8273,7 +8578,11 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
                     }
                 }
                 3 => {
-                    { break '__s85; }
+                    {
+
+                        /// No-op
+                        break '__s85;
+                    }
                     {
                         if unsafe { (*p).n_row } == 0 as i64 {
                             unsafe {
@@ -10568,6 +10877,7 @@ extern "C" fn qrf_one_simple_row(p: *mut Qrf) -> () {
     }
 }
 
+///* Reset the prepared statement.
 extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
     let rc: i32 = unsafe { sqlite3_reset(unsafe { (*p).p_stmt }) };
     if rc != 0 && unsafe { (*p).i_err } == 0 {
@@ -10579,6 +10889,7 @@ extern "C" fn qrf_reset_stmt(p: *mut Qrf) -> () {
     }
 }
 
+///* Finish rendering the results
 extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
     unsafe {
         '__s95:
@@ -10935,7 +11246,9 @@ extern "C" fn qrf_finalize(p: *mut Qrf) -> () {
     }
 }
 
+///* Interfaces
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
     p_spec: *const Sqlite3QrfSpec, pz_err: *mut *mut i8) -> i32 {
     let mut qrf: Qrf = unsafe { core::mem::zeroed() };
@@ -10947,7 +11260,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
         {
         match qrf.spec.e_style {
             1 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10960,7 +11279,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             2 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10973,7 +11298,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             13 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -10986,7 +11317,13 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
                 }
             }
             19 => {
-                { qrf_columnar(&mut qrf); break '__s97; }
+                {
+
+                    /// Columnar modes require that the entire query be evaluated and the
+                    ///* results stored in memory, so that we can compute column widths
+                    qrf_columnar(&mut qrf);
+                    break '__s97;
+                }
                 { qrf_explain(&mut qrf); break '__s97; }
                 { qrf_scan_status_vm(&mut qrf); break '__s97; }
                 { qrf_eqp_stats(&mut qrf); break '__s97; }
@@ -11057,10 +11394,12 @@ pub extern "C" fn sqlite3_format_query_result(p_stmt: *mut Sqlite3Stmt,
     return qrf.i_err;
 }
 
+/// The original memory allocation routines
 static mut memtrace_base: Sqlite3MemMethods = unsafe { core::mem::zeroed() };
 
 static mut memtrace_out: *mut FILE = unsafe { core::mem::zeroed() };
 
+/// Methods that trace memory allocations
 extern "C" fn memtrace_malloc(n: i32) -> *mut () {
     unsafe {
         if !(memtrace_out).is_null() {
@@ -11120,6 +11459,7 @@ extern "C" fn memtrace_shutdown(p: *mut ()) -> () {
     unsafe { unsafe { memtrace_base.x_shutdown.unwrap()(p) }; }
 }
 
+/// The substitute memory allocator
 static mut ersazt_methods: Sqlite3MemMethods =
     Sqlite3MemMethods {
         x_malloc: Some(memtrace_malloc),
@@ -11132,6 +11472,7 @@ static mut ersazt_methods: Sqlite3MemMethods =
         p_app_data: core::ptr::null_mut(),
     };
 
+/// Begin tracing memory allocations to out.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
     unsafe {
@@ -11155,6 +11496,7 @@ pub extern "C" fn sqlite3_mem_trace_activate(out: *mut FILE) -> i32 {
     }
 }
 
+/// Deactivate memory tracing
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
     unsafe {
@@ -11177,11 +11519,13 @@ pub extern "C" fn sqlite3_mem_trace_deactivate() -> i32 {
     }
 }
 
+/// The original page cache routines
 static mut pcache_base: Sqlite3PcacheMethods2 =
     unsafe { core::mem::zeroed() };
 
 static mut pcachetrace_out: *mut FILE = unsafe { core::mem::zeroed() };
 
+/// Methods that trace pcache activity
 extern "C" fn pcachetrace_init(p_arg_1: *mut ()) -> i32 {
     unsafe {
         let mut n_res: i32 = 0;
@@ -11373,6 +11717,7 @@ extern "C" fn pcachetrace_shrink(p: *mut Sqlite3Pcache) -> () {
     }
 }
 
+/// The substitute pcache methods
 static mut ersazt_pcache_methods: Sqlite3PcacheMethods2 =
     Sqlite3PcacheMethods2 {
         i_version: 0,
@@ -11390,6 +11735,7 @@ static mut ersazt_pcache_methods: Sqlite3PcacheMethods2 =
         x_shrink: Some(pcachetrace_shrink),
     };
 
+/// Begin tracing memory allocations to out.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_trace_activate(out: *mut FILE) -> i32 {
     unsafe {
@@ -11414,6 +11760,7 @@ pub extern "C" fn sqlite3_pcache_trace_activate(out: *mut FILE) -> i32 {
     }
 }
 
+/// Deactivate memory tracing
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_pcache_trace_deactivate() -> i32 {
     unsafe {
@@ -11453,6 +11800,7 @@ union SHA3ContextU0 {
     x: [u8; 1600],
 }
 
+///* A single step of the Keccak mixing function for a 1600-bit state
 extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -11980,6 +12328,10 @@ extern "C" fn keccak_f1600_step(p: &mut SHA3Context) -> () {
     }
 }
 
+///* Initialize a new hash.  iSize determines the size of the hash
+///* in bits and should be one of 224, 256, 384, or 512.  Or iSize
+///* can be zero to use the default hash size of 256 bits.
+#[allow(unused_doc_comments)]
 extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
     unsafe {
         unsafe {
@@ -11994,12 +12346,20 @@ extern "C" fn sha3_init(p: *mut SHA3Context, i_size_1: i32) -> () {
         } else { unsafe { (*p).n_rate = ((1600 - 2 * 256) / 8) as u32 }; }
         {
             if 1 == unsafe { *(&raw mut one_1 as *mut u8) } as i32 {
+
+                /// Little endian.  No byte swapping.
                 unsafe { (*p).ix_mask = 0 as u32 };
-            } else { unsafe { (*p).ix_mask = 7 as u32 }; }
+            } else {
+
+                /// Big endian.  Byte swap.
+                unsafe { (*p).ix_mask = 7 as u32 };
+            }
         }
     }
 }
 
+///* Make consecutive calls to the SHA3Update function to add new content
+///* to the hash
 extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
     n_data_1: u32) -> () {
     unsafe {
@@ -12032,6 +12392,9 @@ extern "C" fn sha3_update(p: *mut SHA3Context, a_data_1: *const u8,
     }
 }
 
+///* After all content has been added, invoke SHA3Final() to compute
+///* the final hash.  The function returns a pointer to the binary
+///* hash value.
 extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     unsafe {
         let mut i: u32 = 0 as u32;
@@ -12063,6 +12426,13 @@ extern "C" fn sha3_final(p: *mut SHA3Context) -> *mut u8 {
     }
 }
 
+///* Implementation of the sha3(X,SIZE) function.
+///*
+///* Return a BLOB which is the SIZE-bit SHA3 hash of X.  The default
+///* size is 256.  If X is a BLOB, it is hashed as is.  
+///* For all other non-NULL types of input, X is converted into a UTF-8 string
+///* and the string is hashed without the trailing 0x00 terminator.  The hash
+///* of a NULL value is NULL.
 extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA3Context = unsafe { core::mem::zeroed() };
@@ -12108,6 +12478,8 @@ extern "C" fn sha3_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+/// Compute a string using sqlite3_vsnprintf() with a maximum length
+///* of 50 bytes and add it to the hash.
 unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -12126,6 +12498,7 @@ unsafe extern "C" fn sha3_step_vformat(p: *mut SHA3Context,
         n as u32);
 }
 
+///* Update a SHA3Context using a single sqlite3_value.
 extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
     p_val_1: *mut Sqlite3Value) -> () {
     '__s102:
@@ -12377,6 +12750,37 @@ extern "C" fn sha3_update_from_value(p: *mut SHA3Context,
     }
 }
 
+///* Implementation of the sha3_query(SQL,SIZE) function.
+///*
+///* This function compiles and runs the SQL statement(s) given in the
+///* argument. The results are hashed using a SIZE-bit SHA3.  The default
+///* size is 256.
+///*
+///* The format of the byte stream that is hashed is summarized as follows:
+///*
+///*       S<n>:<sql>
+///*       R
+///*       N
+///*       I<int>
+///*       F<ieee-float>
+///*       B<size>:<bytes>
+///*       T<size>:<text>
+///*
+///* <sql> is the original SQL text for each statement run and <n> is
+///* the size of that text.  The SQL text is UTF-8.  A single R character
+///* occurs before the start of each row.  N means a NULL value.
+///* I mean an 8-byte little-endian integer <int>.  F is a floating point
+///* number with an 8-byte little-endian IEEE floating point value <ieee-float>.
+///* B means blobs of <size> bytes.  T means text rendered as <size>
+///* bytes of UTF-8.  The <n> and <size> values are expressed as an ASCII
+///* text integers.
+///*
+///* For each SQL statement in the X input, there is one S segment.  Each
+///* S segment is followed by zero or more R segments, one for each row in the
+///* result set.  After each R, there are one or more N, I, F, B, or T segments,
+///* one for each column in the result set.  Segments are concatentated directly
+///* with no delimiters of any kind.
+#[allow(unused_doc_comments)]
 extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -12385,7 +12789,9 @@ extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
             *const i8;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_col: i32 = 0;
+    /// Number of columns in the result set
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: i32 = 0;
     let mut n: i32 = 0;
     let mut z: *const i8 = core::ptr::null();
@@ -12474,6 +12880,7 @@ extern "C" fn sha3_query_func(context: *mut Sqlite3Context, argc: i32,
     };
 }
 
+///* xStep function for sha3_agg().
 extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
@@ -12497,6 +12904,7 @@ extern "C" fn sha3_agg_step(context: *mut Sqlite3Context, argc: i32,
     sha3_update_from_value(p, unsafe { *argv.offset(0 as isize) });
 }
 
+///* xFinal function for sha3_agg().
 extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
     let mut p: *mut SHA3Context = core::ptr::null_mut();
     p =
@@ -12519,18 +12927,21 @@ extern "C" fn sha3_agg_final(context: *mut Sqlite3Context) -> () {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_shathree_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"sha3".as_ptr() as *mut i8 as *const i8, 1,
                 1 | 2097152 | 2048, core::ptr::null_mut(), Some(sha3_func),
                 None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -12587,6 +12998,8 @@ struct SHA1Context {
     buffer: [u8; 64],
 }
 
+///Hash a single 512-bit block. This is the core of the algorithm.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -13939,6 +14352,8 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
                         } + 3395469782u32 +
                 (qq[1 as usize] << 5 | qq[1 as usize] >> 32 - 5);
         qq[2 as usize] = qq[2 as usize] << 32 - 2 | qq[2 as usize] >> 2;
+
+        /// Add the working vars back into context.state[]
         unsafe { *state.offset(0 as isize) += qq[0 as usize] };
         unsafe { *state.offset(1 as isize) += qq[1 as usize] };
         unsafe { *state.offset(2 as isize) += qq[2 as usize] };
@@ -13947,8 +14362,12 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     }
 }
 
+/// Initialize a SHA1 context
+#[allow(unused_doc_comments)]
 extern "C" fn hash_init(p: &mut SHA1Context) -> () {
-    (*p).state[0 as usize] = 1732584193 as u32;
+
+    /// SHA1 initialization constants
+    ((*p).state[0 as usize] = 1732584193 as u32);
     (*p).state[1 as usize] = 4023233417u32;
     (*p).state[2 as usize] = 2562383102u32;
     (*p).state[3 as usize] = 271733878 as u32;
@@ -13957,6 +14376,7 @@ extern "C" fn hash_init(p: &mut SHA1Context) -> () {
         { (*p).count[1 as usize] = 0 as u32; (*p).count[1 as usize] };
 }
 
+/// Add new content to the SHA1 hash
 extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
     -> () {
     let mut i: u32 = 0 as u32;
@@ -14001,6 +14421,7 @@ extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
     }
 }
 
+/// Compute a string using sqlite3_vsnprintf() and hash it
 unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -14019,6 +14440,9 @@ unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
         &raw mut z_buf[0 as usize] as *mut u8 as *const u8, n as u32);
 }
 
+/// Add padding and compute the message digest.  Render the
+///* message digest as lower-case hexadecimal and put it into
+///* zOut[].  zOut[] must be at least 41 bytes long.
 extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
     b_as_binary_1: i32) -> () {
     let mut i: u32 = 0 as u32;
@@ -14090,6 +14514,17 @@ extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
     }
 }
 
+///* Two SQL functions:  sha1(X) and sha1b(X).
+///*
+///* sha1(X) returns a lower-case hexadecimal rendering of the SHA1 hash
+///* of the argument X.  If X is a BLOB, it is hashed as is.  For all other
+///* types of input, X is converted into a UTF-8 string and the string
+///* is hashed without the trailing 0x00 terminator.  The hash of a NULL
+///* value is NULL.
+///*
+///* sha1b(X) is the same except that it returns a 20-byte BLOB containing
+///* the binary hash instead of a hexadecimal string.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA1Context = unsafe { core::mem::zeroed() };
@@ -14120,6 +14555,8 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     if p_data == core::ptr::null() { return; }
     hash_step(&mut cx, p_data, n_byte as u32);
     if unsafe { sqlite3_user_data(context) } != core::ptr::null_mut() {
+
+        /// sha1b() - binary result
         hash_finish(&mut cx, &raw mut z_out[0 as usize] as *mut i8, 1);
         unsafe {
             sqlite3_result_blob(context,
@@ -14131,6 +14568,8 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
                     }))
         };
     } else {
+
+        /// sha1() - hexadecimal text result
         hash_finish(&mut cx, &raw mut z_out[0 as usize] as *mut i8, 0);
         unsafe {
             sqlite3_result_text(context,
@@ -14144,6 +14583,17 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the sha1_query(SQL) function.
+///*
+///* This function compiles and runs the SQL statement(s) given in the
+///* argument. The results are hashed using SHA1 and that hash is returned.
+///*
+///* The original SQL text is included as part of the hash.
+///*
+///* The hash is not just a concatenation of the outputs.  Each query
+///* is delimited and each row and value within the query is delimited,
+///* with all values being marked with their datatypes.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -14152,7 +14602,9 @@ extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
             *const i8;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_col: i32 = 0;
+    /// Number of columns in the result set
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: i32 = 0;
     let mut n: i32 = 0;
     let mut z: *const i8 = core::ptr::null();
@@ -14489,19 +14941,22 @@ extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_sha_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         { let _ = p_api_1; };
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Unused parameter
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"sha1".as_ptr() as *mut i8 as *const i8, 1,
                     1 | 2097152 | 2048, core::ptr::null_mut(), Some(sha1_func),
                     None, None)
-            };
+            });
         if rc == 0 {
             rc =
                 unsafe {
@@ -14524,6 +14979,8 @@ pub extern "C" fn sqlite3_sha_init(db: *mut Sqlite3,
     }
 }
 
+///* Compare text in lexicographic order, except strings of digits
+///* compare in numeric order.
 extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -14592,10 +15049,13 @@ extern "C" fn uint_coll_func(not_used_1: *mut (), n_key1_1: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_uint_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
+
+    /// Unused parameter
     return unsafe {
             sqlite3_create_collation(db,
                 c"uint".as_ptr() as *mut i8 as *const i8, 1,
@@ -14615,10 +15075,12 @@ struct Decimal {
     a: *mut i8,
 }
 
+///* Release memory held by a Decimal, but do not free the object itself.
 extern "C" fn decimal_clear(p: &Decimal) -> () {
     unsafe { sqlite3_free((*p).a as *mut ()) };
 }
 
+///* Destroy a Decimal object
 extern "C" fn decimal_free(p: *mut Decimal) -> () {
     if !(p).is_null() {
         decimal_clear(unsafe { &*p });
@@ -14626,6 +15088,11 @@ extern "C" fn decimal_free(p: *mut Decimal) -> () {
     }
 }
 
+///* Allocate a new Decimal object initialized to the text in zIn[].
+///* Return NULL if any kind of error occurs.
+///*
+///* Note that zIn[] is not necessarily zero-terminated.  Always
+///* respect the boundary imposed by the n argument.
 extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -14993,6 +15460,12 @@ extern "C" fn decimal_new_from_text(z_in_1: *const i8, n: i32)
     unreachable!();
 }
 
+///* Multiply A by B.   A := A * B
+///*
+///* All significant digits after the decimal point are retained.
+///* Trailing zeros after the decimal point are omitted as long as
+///* the number of digits after the decimal point is no less than
+///* either the number of digits in either input.
 extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
     let mut acc: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -15175,8 +15648,11 @@ extern "C" fn decimal_mul(p_a_1: *mut Decimal, p_b_1: *const Decimal) -> () {
     }
 }
 
+///* Create a new Decimal object that contains an integer power of 2.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
+    /// The result to be returned
     let mut p_x: *mut Decimal = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -15259,9 +15735,15 @@ extern "C" fn decimal_pow2(mut n_1: i32) -> *mut Decimal {
             }
         }
     }
+
+    /// The result to be returned
+    /// Multiplier
+    /// Exit by break
     unreachable!();
 }
 
+/// Forward reference
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     let mut m: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut a: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -15292,6 +15774,8 @@ extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
         e = e - 1075;
         if e > 971 { return core::ptr::null_mut(); }
     }
+
+    /// At this point m is the integer significand and e is the exponent
     unsafe {
         sqlite3_snprintf(core::mem::size_of::<[i8; 100]>() as i32,
             &raw mut z_num[0 as usize] as *mut i8,
@@ -15309,6 +15793,15 @@ extern "C" fn decimal_from_double(mut r: f64) -> *mut Decimal {
     return p_a;
 }
 
+///* Allocate a new Decimal object from an sqlite3_value.  Return a pointer
+///* to the new object, or NULL if there is an error.  If the pCtx argument
+///* is not NULL, then errors are reported on it as well.
+///*
+///* If the pIn argument is SQLITE_TEXT or SQLITE_INTEGER, it is converted
+///* directly into a Decimal.  For SQLITE_FLOAT or for SQLITE_BLOB of length
+///* 8 bytes, the resulting double value is expanded into its decimal equivalent.
+///* If pIn is NULL or if it is a BLOB that is not exactly 8 bytes in length,
+///* then NULL is returned.
 extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     p_in_1: *mut Sqlite3Value, b_text_only_1: i32) -> *mut Decimal {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -15438,6 +15931,7 @@ extern "C" fn decimal_new(p_ctx_1: *mut Sqlite3Context,
     unreachable!();
 }
 
+///* Make the given Decimal the result.
 extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
     -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -15523,6 +16017,7 @@ extern "C" fn decimal_result(p_ctx_1: *mut Sqlite3Context, p: *mut Decimal)
     };
 }
 
+/// Forward declaration
 extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
     -> () {
     let mut n_add_sig: i32 = 0;
@@ -15567,6 +16062,8 @@ extern "C" fn decimal_expand(p: *mut Decimal, n_digit: i32, n_frac: i32)
     }
 }
 
+///* Round a decimal value to N significant digits.  N must be positive.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
     let mut i: i32 = 0;
     let mut n_zero: i32 = 0;
@@ -15605,6 +16102,8 @@ extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
                 unsafe { (*p).n_frac });
             if unsafe { (*p).oom } != 0 { return; }
         }
+
+        /// Do the rounding
         {
             let __p =
                 unsafe { &mut *unsafe { (*p).a.offset((n_1 - 1) as isize) } };
@@ -15649,15 +16148,26 @@ extern "C" fn decimal_round(p: *mut Decimal, mut n_1: i32) -> () {
     };
 }
 
+///* Make the given Decimal the result in an format similar to  '%+#e'.
+///* In other words, show exponential notation with leading and trailing
+///* zeros omitted.
+#[allow(unused_doc_comments)]
 extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
     p: *const Decimal, mut n_1: i32) -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// The output buffer
     let mut i: i32 = 0;
+    /// Loop counter
     let mut n_zero: i32 = 0;
+    /// Number of leading zeros
     let mut n_digit: i32 = 0;
+    /// Number of digits not counting trailing zeros
     let mut n_frac: i32 = 0;
+    /// Digits to the right of the decimal point
     let mut exp: i32 = 0;
+    /// Exponent value
     let mut zero: i8 = 0 as i8;
+    /// Zero value
     let mut a: *const i8 = core::ptr::null();
     if p == core::ptr::null_mut() || unsafe { (*p).oom } != 0 {
         unsafe { sqlite3_result_error_nomem(p_ctx_1) };
@@ -15748,6 +16258,15 @@ extern "C" fn decimal_result_sci(p_ctx_1: *mut Sqlite3Context,
     };
 }
 
+///* Compare to Decimal objects.  Return negative, 0, or positive if the
+///* first object is less than, equal to, or greater than the second.
+///*
+///* Preconditions for this routine:
+///*
+///*    pA!=0
+///*    pA->isNull==0
+///*    pB!=0
+///*    pB->isNull==0
 extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     -> i32 {
     let mut n_a_sig: i32 = 0;
@@ -15818,6 +16337,10 @@ extern "C" fn decimal_cmp(mut p_a_1: *mut Decimal, mut p_b_1: *mut Decimal)
     return rc;
 }
 
+///* SQL Function:   decimal_cmp(X, Y)
+///*
+///* Return negative, zero, or positive if X is less then, equal to, or
+///* greater than Y.
 extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_a: *mut Decimal = core::ptr::null_mut();
@@ -15849,6 +16372,9 @@ extern "C" fn decimal_cmp_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+///* Add the value pB into pA.   A := A + B.
+///*
+///* Both pA and pB might become denormalized by this routine.
 extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
     let mut n_sig: i32 = 0;
     let mut n_frac: i32 = 0;
@@ -15959,6 +16485,17 @@ extern "C" fn decimal_add(p_a_1: *mut Decimal, p_b_1: *mut Decimal) -> () {
     }
 }
 
+///* SQL Function:   decimal(X)
+///* OR:             decimal_exp(X)
+///*
+///* Convert input X into decimal and then back into text.
+///*
+///* If X is originally a float, then a full decimal expansion of that floating
+///* point value is done.  Or if X is an 8-byte blob, it is interpreted
+///* as a float and similarly expanded.
+///*
+///* The decimal_exp(X) function returns the result in exponential notation.
+///* decimal(X) returns a complete decimal, without the e+NNN at the end.
 extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut Decimal =
@@ -15976,6 +16513,7 @@ extern "C" fn decimal_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Compare text in decimal order.
 extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     p_key1_1: *const (), n_key2_1: i32, p_key2_1: *const ()) -> i32 {
     let z_a: *const u8 = p_key1_1 as *const u8;
@@ -15992,6 +16530,10 @@ extern "C" fn decimal_coll_func(not_used_1: *mut (), n_key1_1: i32,
     return rc;
 }
 
+///* SQL Function:   decimal_add(X, Y)
+///*                 decimal_sub(X, Y)
+///*
+///* Return the sum or difference of X and Y.
 extern "C" fn decimal_add_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -16021,6 +16563,10 @@ extern "C" fn decimal_sub_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+/// Aggregate function:   decimal_sum(X)
+///*
+///* Works like sum() except that it uses decimal arithmetic for unlimited
+///* precision.
 extern "C" fn decimal_sum_step(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut Decimal = core::ptr::null_mut();
@@ -16093,6 +16639,9 @@ extern "C" fn decimal_sum_finalize(context: *mut Sqlite3Context) -> () {
     decimal_clear(unsafe { &*p });
 }
 
+///* SQL Function:   decimal_mul(X, Y)
+///*
+///* Return the product of X and Y.
 extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p_a: *mut Decimal =
@@ -16119,6 +16668,9 @@ extern "C" fn decimal_mul_func(context: *mut Sqlite3Context, argc: i32,
     decimal_free(p_b);
 }
 
+///* SQL Function:   decimal_pow2(N)
+///*
+///* Return the N-th power of 2.  N must be an integer.
 extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -16134,12 +16686,15 @@ extern "C" fn decimal_pow2_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_decimal_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut i: u32 = 0 as u32;
         { let _ = pz_err_msg_1; };
+
+        /// Unused parameter
         { let _ = p_api_1; };
         {
             i = 0 as u32;
@@ -16187,6 +16742,7 @@ pub extern "C" fn sqlite3_decimal_init(db: *mut Sqlite3,
     }
 }
 
+/// Decoding table, ASCII (7-bit) value to base 64 digit value or other
 static b64_digit_values: [u8; 128] =
     [130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8, 130 as u8,
             130 as u8, 130 as u8, 130 as u8, 129 as u8, 129 as u8, 129 as u8,
@@ -16224,10 +16780,15 @@ static b64_numerals: [i8; 65] =
             51 as i8, 52 as i8, 53 as i8, 54 as i8, 55 as i8, 56 as i8,
             57 as i8, 43 as i8, 47 as i8, 0 as i8];
 
+/// Encode a byte buffer into base64 text with linefeeds appended to limit
+///* encoded group lengths to B64_DARK_MAX or to terminate the last group.
+#[allow(unused_doc_comments)]
 extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
     while nb_in_1 >= 3 {
+
+        /// Do the bit-shuffle, exploiting unsigned input to avoid masking.
         unsafe {
             *p_out_1.offset(0 as isize) =
                 b64_numerals[(unsafe { *p_in_1.offset(0 as isize) } as i32 >>
@@ -16342,6 +16903,7 @@ extern "C" fn to_base64(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Skip over text which is not base64 numeral(s).
 extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut nc; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -16354,6 +16916,7 @@ extern "C" fn skip_non_b64(mut s: *mut i8, mut nc: i32) -> *mut i8 {
     return s;
 }
 
+/// Decode base64 text into a byte buffer.
 extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -16463,6 +17026,7 @@ extern "C" fn from_base64(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// This function does the work for the SQLite base64(x) UDF.
 extern "C" fn base64(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -16722,6 +17286,7 @@ pub extern "C" fn sqlite3_base64_init(db: *mut Sqlite3,
         };
 }
 
+/// Provide digitValue to b85Numeral offset as a function of above class.
 static mut b85_c_offset: [u8; 5] =
     [0 as u8, '#' as i32 as u8, 0 as u8, ('*' as i32 - 4) as u8, 0 as u8];
 
@@ -16763,6 +17328,9 @@ extern "C" fn putcs(mut pc: *mut i8, mut s: *const i8) -> *mut i8 {
     return pc;
 }
 
+/// Encode a byte buffer into base85 text. If pSep!=0, it's a C string
+///* to be appended to encoded groups to limit their length to B85_DARK_MAX
+///* or to terminate the last group (to aid concatenation.)
 extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     mut p_out_1: *mut i8, p_sep_1: *mut i8) -> *mut i8 {
     let mut n_col: i32 = 0;
@@ -16852,6 +17420,7 @@ extern "C" fn to_base85(mut p_in_1: *const u8, mut nb_in_1: i32,
     return p_out_1;
 }
 
+/// Decode base85 text into a byte buffer.
 extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     mut p_out_1: *mut u8) -> *mut u8 {
     unsafe {
@@ -16991,6 +17560,7 @@ extern "C" fn from_base85(mut p_in_1: *mut i8, mut nc_in_1: i32,
     }
 }
 
+/// Say whether input char sequence is all (base85 and/or whitespace).
 extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     let mut c: i8 = 0 as i8;
     while { let __p = &mut len; let __t = *__p; *__p -= 1; __t } > 0 &&
@@ -17016,6 +17586,7 @@ extern "C" fn all_base85(mut p: *const i8, mut len: i32) -> i32 {
     return 1;
 }
 
+/// This function does the work for the SQLite is_base85(t) UDF.
 extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     if !(na == 1) as i32 as i64 != 0 {
@@ -17054,6 +17625,7 @@ extern "C" fn is_base85(context: *mut Sqlite3Context, na: i32,
     }
 }
 
+/// This function does the work for the SQLite base85(x) UDF.
 extern "C" fn base85(context: *mut Sqlite3Context, na: i32,
     av: *mut *mut Sqlite3Value) -> () {
     let mut nb: Sqlite3Int64 = 0 as Sqlite3Int64;
@@ -17316,6 +17888,7 @@ pub extern "C" fn sqlite3_base85_init(db: *mut Sqlite3,
         };
 }
 
+///* Implementation of the ieee754() function
 extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if argc == 1 {
@@ -17472,6 +18045,7 @@ extern "C" fn ieee754func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Functions to convert between blobs and floats.
 extern "C" fn ieee754func_from_blob(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -17553,6 +18127,9 @@ extern "C" fn ieee754func_to_blob(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Functions to convert between 64-bit integers and floats.
+///*
+///* The bit patterns are copied.  The numeric values are different.
 extern "C" fn ieee754func_from_int(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     { let _ = argc; };
@@ -17589,6 +18166,17 @@ extern "C" fn ieee754func_to_int(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL Function:   ieee754_inc(r,N)
+///*
+///* Move the floating point value r by N quantums and return the new
+///* values.
+///*
+///* Behind the scenes: this routine merely casts r into a 64-bit unsigned
+///* integer, adds N, then casts the value back into float.
+///*
+///* Example:  To find the smallest positive number:
+///*
+///*     SELECT ieee754_inc(0.0,+1);
 extern "C" fn ieee754inc(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut r: f64 = 0.0;
@@ -17658,6 +18246,9 @@ struct SeriesCursor {
     b_done: u8,
 }
 
+///* Computed the difference between two 64-bit signed integers using a
+///* convoluted computation designed to work around the silly restriction
+///* against signed integer overflow in C.
 extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
     -> Sqlite3Uint64 {
     if !(a >= b) as i32 as i64 != 0 {
@@ -17671,6 +18262,8 @@ extern "C" fn span64(mut a: Sqlite3Int64, mut b: Sqlite3Int64)
             unsafe { *(&raw mut b as *mut Sqlite3Uint64) };
 }
 
+///* Add or substract an unsigned 64-bit integer from a signed 64-bit integer
+///* and return the new signed 64-bit integer.
 extern "C" fn add64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     let mut x: Sqlite3Uint64 =
         unsafe { core::ptr::read(&raw mut a as *mut Sqlite3Uint64) };
@@ -17685,21 +18278,43 @@ extern "C" fn sub64(mut a: Sqlite3Int64, b: Sqlite3Uint64) -> Sqlite3Int64 {
     return unsafe { *(&raw mut x as *mut Sqlite3Int64) };
 }
 
+///* The seriesConnect() method is invoked to create a new
+///* series_vtab that describes the generate_series virtual table.
+///*
+///* Think of this routine as the constructor for series_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the series_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against generate_series will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     argc_unused_1: i32, argv_unused_1: *const *const i8,
     pp_vtab_1: *mut *mut Sqlite3Vtab, pz_err_unused_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut Sqlite3Vtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
+
+    /// Column numbers
     { let _ = p_unused_1; };
+
+    /// Column numbers
     { let _ = argc_unused_1; };
+
+    /// Column numbers
     { let _ = argv_unused_1; };
+
+    /// Column numbers
     { let _ = pz_err_unused_1; };
-    rc =
+
+    /// Column numbers
+    (rc =
         unsafe {
             sqlite3_declare_vtab(db,
                 c"CREATE TABLE x(value,start hidden,stop hidden,step hidden)".as_ptr()
                         as *mut i8 as *const i8)
-        };
+        });
     if rc == 0 {
         p_new =
             {
@@ -17722,11 +18337,13 @@ extern "C" fn series_connect(db: *mut Sqlite3, p_unused_1: *mut (),
     return rc;
 }
 
+///* This method is the destructor for series_cursor objects.
 extern "C" fn series_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new series_cursor object.
 extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
@@ -17745,11 +18362,13 @@ extern "C" fn series_open(p_unused_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Destructor for a series_cursor.
 extern "C" fn series_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a series_cursor to its next row of output.
 extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut SeriesCursor = cur as *mut SeriesCursor;
     if unsafe { (*p_cur).i_value } == unsafe { (*p_cur).i_term } {
@@ -17786,6 +18405,8 @@ extern "C" fn series_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
 extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -17804,6 +18425,7 @@ extern "C" fn series_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* The rowid is the same as the value.
 extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const SeriesCursor =
@@ -17812,12 +18434,16 @@ extern "C" fn series_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn series_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const SeriesCursor =
         cur as *mut SeriesCursor as *const SeriesCursor;
     return unsafe { (*p_cur).b_done } as i32;
 }
 
+///* Return the number of steps between pCur->iBase and pCur->iTerm if
+///* the step width is pCur->iStep.
 extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
     if (*p_cur_1).b_desc != 0 {
         if !((*p_cur_1).i_base >= (*p_cur_1).i_term) as i32 as i64 != 0 {
@@ -17844,10 +18470,15 @@ extern "C" fn series_steps(p_cur_1: &SeriesCursor) -> Sqlite3Uint64 {
     }
 }
 
+///* Case 1 (the most common case):
+///* The standard math library is available so use ceil() and floor() from there.
 extern "C" fn series_ceil(r: f64) -> f64 { return unsafe { ceil(r) }; }
 
 extern "C" fn series_floor(r: f64) -> f64 { return unsafe { floor(r) }; }
 
+/// Convert a floating point value to its closest integer.  Do so in
+///* a way that avoids 'outside the range of representable values' warnings
+///* from UBSAN.
 extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     if r < -9.223372036854775e18 {
         return 9223372036854775808u64 as Sqlite3Int64;
@@ -17858,21 +18489,74 @@ extern "C" fn series_real_to_i64(r: f64) -> Sqlite3Int64 {
     return r as Sqlite3Int64;
 }
 
+///* This method is called to "rewind" the series_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to seriesColumn() or seriesRowid() or
+///* seriesEof().
+///*
+///* The query plan selected by seriesBestIndex is passed in the idxNum
+///* parameter.  (idxStr is not used in this implementation.)  idxNum
+///* is a bitmask showing which constraints are available:
+///*
+///*   0x0001:    start=VALUE
+///*   0x0002:    stop=VALUE
+///*   0x0004:    step=VALUE
+///*   0x0008:    descending order
+///*   0x0010:    ascending order
+///*   0x0020:    LIMIT  VALUE
+///*   0x0040:    OFFSET  VALUE
+///*   0x0080:    value=VALUE
+///*   0x0100:    value>=VALUE
+///*   0x0200:    value>VALUE
+///*   0x1000:    value<=VALUE
+///*   0x2000:    value<VALUE
+///*
+///* This routine should initialize the cursor and position it so that it
+///* is pointing at the first row, or pointing off the end of the table
+///* (so that seriesEof() will return true) if the table is empty.
+#[allow(unused_doc_comments)]
 extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_unused_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
     let mut p_cur: *mut SeriesCursor = core::ptr::null_mut();
     let mut i_arg: i32 = 0;
+    /// Arguments used so far
     let mut i: i32 = 0;
+    /// Loop counter
     let mut i_min: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Smallest allowed output value
     let mut i_max: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Largest allowed output value
     let mut i_limit: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// if >0, the value of the LIMIT
     let mut i_offset: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// if >0, the value of the OFFSET
+    /// If any constraints have a NULL value, then return no rows.
+    ///* See ticket https://sqlite.org/src/info/fac496b61722daf2
+    /// Capture the three HIDDEN parameters to the virtual table and insert
+    ///* default values for any parameters that are omitted.
+    /// If there are constraints on the value column but there are
+    ///* no constraints on  the start, stop, and step columns, then
+    ///* initialize the default range to be the entire range of 64-bit signed
+    ///* integers.  This range will contracted by the value column constraints
+    ///* further below.
+    /// Extract the LIMIT and OFFSET values, but do not apply them yet.
+    ///* The range must first be constrained by the limits on value.
+    /// Narrow the range of iMin and iMax (the minimum and maximum outputs)
+    ///* based on equality and inequality constraints on the "value" column.
+    /// value=X
     let mut r: f64 = 0.0;
+    /// value>X (0x200) or value>=X (0x100)
     let mut r__1: f64 = 0.0;
+    /// value<X (0x2000) or value<=X (0x1000)
     let mut r__2: f64 = 0.0;
+    /// Try to reduce the range of values to be generated based on
+    ///* constraints on the "value" column.
     let mut span: Sqlite3Uint64 = 0 as Sqlite3Uint64;
     let mut span__1: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+    /// Adjust iTerm so that it is exactly the last value of the series.
+    /// Transform the series generator to output values in the requested
+    ///* order.
     let mut tmp: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut __state: i32 = 0;
     loop {
@@ -18627,19 +19311,99 @@ extern "C" fn series_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
             }
         }
     }
+
+    /// Arguments used so far
+    /// Loop counter
+    /// Smallest allowed output value
+    /// Largest allowed output value
+    /// if >0, the value of the LIMIT
+    /// if >0, the value of the OFFSET
+    /// If any constraints have a NULL value, then return no rows.
+    ///* See ticket https://sqlite.org/src/info/fac496b61722daf2
+    /// Capture the three HIDDEN parameters to the virtual table and insert
+    ///* default values for any parameters that are omitted.
+    /// If there are constraints on the value column but there are
+    ///* no constraints on  the start, stop, and step columns, then
+    ///* initialize the default range to be the entire range of 64-bit signed
+    ///* integers.  This range will contracted by the value column constraints
+    ///* further below.
+    /// Extract the LIMIT and OFFSET values, but do not apply them yet.
+    ///* The range must first be constrained by the limits on value.
+    /// Narrow the range of iMin and iMax (the minimum and maximum outputs)
+    ///* based on equality and inequality constraints on the "value" column.
+    /// value=X
+    /// value>X (0x200) or value>=X (0x100)
+    /// value<X (0x2000) or value<=X (0x1000)
+    /// Try to reduce the range of values to be generated based on
+    ///* constraints on the "value" column.
+    /// Adjust iTerm so that it is exactly the last value of the series.
+    /// Transform the series generator to output values in the requested
+    ///* order.
+    /// Apply LIMIT and OFFSET constraints, if any
     unreachable!();
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the generate_series virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* In this implementation idxNum is used to represent the
+///* query plan.  idxStr is unused.
+///*
+///* The query plan is represented by bits in idxNum:
+///*
+///*   0x0001  start = $num
+///*   0x0002  stop = $num
+///*   0x0004  step = $num
+///*   0x0008  output is in descending order
+///*   0x0010  output is in ascending order
+///*   0x0020  LIMIT $num
+///*   0x0040  OFFSET $num
+///*   0x0080  value = $num
+///*   0x0100  value >= $num
+///*   0x0200  value > $num
+///*   0x1000  value <= $num
+///*   0x2000  value < $num
+///*
+///* Only one of 0x0100 or 0x0200 will be returned.  Similarly, only
+///* one of 0x1000 or 0x2000 will be returned.  If the 0x0080 is set, then
+///* none of the 0xff00 bits will be set.
+///*
+///* The order of parameters passed to xFilter is as follows:
+///*
+///*    * The argument to start= if bit 0x0001 is in the idxNum mask
+///*    * The argument to stop= if bit 0x0002 is in the idxNum mask
+///*    * The argument to step= if bit 0x0004 is in the idxNum mask
+///*    * The argument to LIMIT if bit 0x0020 is in the idxNum mask
+///*    * The argument to OFFSET if bit 0x0040 is in the idxNum mask
+///*    * The argument to value=, or value>= or value> if any of
+///*      bits 0x0380 are in the idxNum mask
+///*    * The argument to value<= or value< if either of bits 0x3000
+///*      are in the mask
+///*
+#[allow(unused_doc_comments)]
 extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    /// Loop over constraints
     let mut idx_num: i32 = 0;
+    /// The query plan bitmask
     let mut b_start_seen: i32 = 0;
+    /// EQ constraint seen on the START column
     let mut unusable_mask: i32 = 0;
+    /// Mask of unusable constraints
     let mut n_arg: i32 = 0;
+    /// Number of arguments that seriesFilter() expects
     let mut a_idx: [i32; 7] = [0; 7];
+    /// Constraints on start, stop, step, LIMIT, OFFSET,
+    ///* and value.  aIdx[5] covers value=, value>=, and
+    ///* value>,  aIdx[6] covers value<= and value<
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
+
+    /// This implementation assumes that the start, stop, and step columns
+    ///* are the last three columns in the virtual table.
     if !(2 == 1 + 1) as i32 as i64 != 0 {
         unsafe {
             __assert_rtn(c"seriesBestIndex".as_ptr() as *const i8,
@@ -18689,7 +19453,9 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             }
             '__c185: loop {
                 let mut i_col: i32 = 0;
+                /// 0 for start, 1 for stop, 2 for step
                 let mut i_mask: i32 = 0;
+                /// bitmask for those column
                 let op: i32 = unsafe { (*p_constraint).op } as i32;
                 if op >= 73 && op <= 74 {
                     if unsafe { (*p_constraint).usable } as i32 == 0
@@ -18914,7 +19680,12 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             };
         }
     }
-    if a_idx[3 as usize] == 0 { idx_num &= !96; a_idx[4 as usize] = 0; }
+    if a_idx[3 as usize] == 0 {
+
+        /// Ignore OFFSET if LIMIT is omitted
+        (idx_num &= !96);
+        a_idx[4 as usize] = 0;
+    }
     {
         i = 0;
         '__b187: loop {
@@ -18948,12 +19719,24 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
         };
         return 1;
     }
-    if unusable_mask & !idx_num != 0 { return 19; }
+    if unusable_mask & !idx_num != 0 {
+
+        /// The start, stop, and step columns are inputs.  Therefore if there
+        ///* are unusable constraints on any of start, stop, or step then
+        ///* this plan is unusable
+        return 19;
+    }
     if idx_num & 3 == 3 {
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe {
             (*p_idx_info_1).estimated_cost =
                 (2 - (idx_num & 4 != 0) as i32) as f64
         };
+
+        /// Both start= and stop= boundaries are available.  This is the 
+        ///* the preferred case
         unsafe { (*p_idx_info_1).estimated_rows = 1000 as Sqlite3Int64 };
         if unsafe { (*p_idx_info_1).n_order_by } >= 1 &&
                 unsafe {
@@ -18971,8 +19754,14 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
             unsafe { (*p_idx_info_1).order_by_consumed = 1 };
         }
     } else if idx_num & 33 == 33 {
+
+        /// We have start= and LIMIT
         unsafe { (*p_idx_info_1).estimated_rows = 2500 as Sqlite3Int64 };
     } else {
+
+        /// If either boundary is missing, we have to generate a huge span
+        ///* of numbers.  Make this case very expensive so that the query
+        ///* planner will work hard to avoid it.
         unsafe {
             (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64
         };
@@ -18982,6 +19771,8 @@ extern "C" fn series_best_index(p_v_tab_1: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* generate_series virtual table.
 static mut series_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -19039,8 +19830,13 @@ pub extern "C" fn sqlite3_series_init(db: *mut Sqlite3,
     }
 }
 
+/// Each opcode is a "state" in the NFA
 type ReStateNumber = u16;
 
+/// Because this is an NFA and not a DFA, multiple states can be active at
+///* once.  An instance of the following object records all active states in
+///* the NFA.  The implementation is optimized for the common case where the
+///* number of actives states is small.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ReStateSet {
@@ -19071,6 +19867,7 @@ struct ReCompiled {
     mx_alloc: u32,
 }
 
+/// Add a state to the given state set if it is not already there
 extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
     let mut i: u32 = 0 as u32;
     {
@@ -19097,6 +19894,10 @@ extern "C" fn re_add_state(p_set_1: &mut ReStateSet, new_state_1: i32) -> () {
     };
 }
 
+/// Extract the next unicode character from *pzIn and return it.  Advance
+///* *pzIn to the first byte past the end of the character returned.  To
+///* be clear:  this routine converts utf8 to unicode.  This routine is 
+///* optimized for the common case where the next character is a single byte.
 extern "C" fn re_next_char(p: *mut ReInput) -> u32 {
     let mut c: u32 = 0 as u32;
     if unsafe { (*p).i } >= unsafe { (*p).mx } { return 0 as u32; }
@@ -19187,6 +19988,7 @@ extern "C" fn re_next_char_nocase(p: *mut ReInput) -> u32 {
     return c;
 }
 
+/// Return true if c is a perl "word" character:  [A-Za-z0-9_]
 extern "C" fn re_word_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32 ||
                         c >= 'a' as i32 && c <= 'z' as i32 ||
@@ -19194,16 +19996,21 @@ extern "C" fn re_word_char(c: i32) -> i32 {
             i32;
 }
 
+/// Return true if c is a "digit" character:  [0-9]
 extern "C" fn re_digit_char(c: i32) -> i32 {
     return (c >= '0' as i32 && c <= '9' as i32) as i32;
 }
 
+/// Return true if c is a perl "space" character:  [ \t\r\n\v\f]
 extern "C" fn re_space_char(c: i32) -> i32 {
     return (c == ' ' as i32 || c == '\t' as i32 || c == '\n' as i32 ||
                         c == '\r' as i32 || c == '\u{b}' as i32 ||
                 c == '\u{c}' as i32) as i32;
 }
 
+/// Run a compiled regular expression on the zero-terminated input
+///* string zIn[].  Return true on a match and false if there is no match.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     n_in_1: i32) -> i32 {
     let mut a_state_set: [ReStateSet; 2] = unsafe { core::mem::zeroed() };
@@ -19217,8 +20024,10 @@ extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
     let mut c_prev: i32 = 0;
     let mut rc: i32 = 0;
     let mut in_: ReInput = unsafe { core::mem::zeroed() };
+    /// Look for the initial prefix match, if there is one.
     let mut x: u8 = 0 as u8;
     let mut x__1: i32 = 0;
+    /// fall-through
     let mut j: i32 = 0;
     let mut n: i32 = 0;
     let mut hit: i32 = 0;
@@ -19630,9 +20439,13 @@ extern "C" fn sqlite3re_match(p_re_1: &ReCompiled, z_in_1: *const u8,
             }
         }
     }
+
+    /// Look for the initial prefix match, if there is one.
+    /// fall-through
     unreachable!();
 }
 
+/// Resize the opcode and argument arrays for an RE under construction.
 extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     let mut a_op: *mut i8 = core::ptr::null_mut();
     let mut a_arg: *mut i32 = core::ptr::null_mut();
@@ -19665,6 +20478,8 @@ extern "C" fn re_resize(p: &mut ReCompiled, n_1: u32) -> i32 {
     return 0;
 }
 
+/// Insert a new opcode and argument into an RE under construction.  The
+///* insertion point is just prior to existing opcode iBefore.
 extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     arg: i32) -> i32 {
     let mut i: i32 = 0;
@@ -19702,10 +20517,13 @@ extern "C" fn re_insert(p: *mut ReCompiled, i_before_1: i32, op: i32,
     return i_before_1;
 }
 
+/// Append a new opcode and argument to the end of the RE under construction.
 extern "C" fn re_append(p: *mut ReCompiled, op: i32, arg: i32) -> i32 {
     return re_insert(p, unsafe { (*p).n_state } as i32, op, arg);
 }
 
+/// Make a copy of N opcodes starting at iStart onto the end of the RE
+///* under construction.
 extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     if unsafe { (*p).n_state } + n_1 >= unsafe { (*p).n_alloc } &&
             re_resize(unsafe { &mut *p },
@@ -19737,6 +20555,9 @@ extern "C" fn re_copy(p: *mut ReCompiled, i_start_1: i32, n_1: u32) -> () {
     unsafe { (*p).n_state += n_1 };
 }
 
+/// Return true if c is a hexadecimal digit character:  [0-9a-fA-F]
+///* If c is a hex digit, also set *pV = (*pV)*16 + valueof(c).  If
+///* c is not a hex digit *pV is unchanged.
 extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     if c >= '0' as i32 && c <= '9' as i32 {
         c -= '0' as i32;
@@ -19749,6 +20570,8 @@ extern "C" fn re_hex(mut c: i32, p_v_1: &mut i32) -> i32 {
     return 1;
 }
 
+/// A backslash character has been seen, read the next character and
+///* return its interpretation.
 extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     let mut i: i32 = 0;
     let mut v: i32 = 0;
@@ -19800,12 +20623,16 @@ extern "C" fn re_esc_char(p: &mut ReCompiled) -> u32 {
     return c as u32;
 }
 
+/// Peek at the next byte of input
 extern "C" fn re_peek(p: &ReCompiled) -> u8 {
     return if (*p).s_in.i < (*p).s_in.mx {
                 (unsafe { *(*p).s_in.z.offset((*p).s_in.i as isize) }) as i32
             } else { 0 } as u8;
 }
 
+/// Compile RE text into a sequence of opcodes.  Continue up to the
+///* first unmatched ")" character, then return.  If an error is found,
+///* return a pointer to the error message string.
 extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     let mut z_err: *const i8 = core::ptr::null();
     let mut i_start: i32 = 0;
@@ -19834,6 +20661,7 @@ extern "C" fn re_subcompile_re(p: *mut ReCompiled) -> *const i8 {
     return core::ptr::null();
 }
 
+/// Forward declaration
 extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     let mut i_prev: i32 = -1;
     let mut i_start: i32 = 0;
@@ -22266,6 +23094,9 @@ extern "C" fn re_subcompile_string(p: *mut ReCompiled) -> *const i8 {
     return core::ptr::null();
 }
 
+/// Free and reclaim all the memory used by a previously compiled
+///* regular expression.  Applications should invoke this routine once
+///* for every call to re_compile() to avoid memory leaks.
 extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
     if !(p_re_1).is_null() {
         unsafe { sqlite3_free(unsafe { (*p_re_1).a_op } as *mut ()) };
@@ -22274,10 +23105,17 @@ extern "C" fn sqlite3re_free(p_re_1: *mut ReCompiled) -> () {
     }
 }
 
+///* Version of re_free() that accepts a pointer of type (void*). Required
+///* to satisfy sanitizers when the re_free() function is called via a
+///* function pointer.
 extern "C" fn re_free_voidptr(p: *mut ()) -> () {
     sqlite3re_free(p as *mut ReCompiled);
 }
 
+///* Compile a textual regular expression in zIn[] into a compiled regular
+///* expression suitable for us by re_match() and return a pointer to the
+///* compiled regular expression in *ppRe.  Return NULL on success or an
+///* error message if something goes wrong.
 extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     mut z_in_1: *const i8, mx_re_1: i32, no_case_1: i32) -> *const i8 {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
@@ -22407,22 +23245,41 @@ extern "C" fn sqlite3re_compile(pp_re_1: &mut *mut ReCompiled,
     return unsafe { (*p_re).z_err };
 }
 
+///* The value of LIMIT_MAX_PATTERN_LENGTH.
 extern "C" fn re_maxlen(context: *mut Sqlite3Context) -> i32 {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
     return unsafe { sqlite3_limit(db, 8, -1) };
 }
 
+///* Maximum NFA size given a maximum pattern length.
 extern "C" fn re_maxnfa(mxlen: i32) -> i32 { return 75 + mxlen / 2; }
 
+///* Implementation of the regexp() SQL function.  This function implements
+///* the build-in REGEXP operator.  The first argument to the function is the
+///* pattern and the second argument is the string.  So, the SQL statements:
+///*
+///*       A REGEXP B
+///*
+///* is implemented as regexp(B,A).
+#[allow(unused_doc_comments)]
 extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut p_re: *mut ReCompiled = core::ptr::null_mut();
+    /// Compiled regular expression
     let mut z_pattern: *const i8 = core::ptr::null();
+    /// The regular expression
     let mut z_str: *const u8 = core::ptr::null();
+    /// String being searched
     let mut z_err: *const i8 = core::ptr::null();
+    /// Compile error message
     let mut set_aux: i32 = 0;
+
+    /// True to invoke sqlite3_set_auxdata()
     { let _ = argc; };
-    p_re = unsafe { sqlite3_get_auxdata(context, 0) } as *mut ReCompiled;
+
+    /// True to invoke sqlite3_set_auxdata()
+    /// Unused
+    (p_re = unsafe { sqlite3_get_auxdata(context, 0) } as *mut ReCompiled);
     if p_re == core::ptr::null_mut() {
         let mx_len: i32 = re_maxlen(context);
         let mut n_pattern: i32 = 0;
@@ -22472,30 +23329,46 @@ extern "C" fn re_sql_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_regexp_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"regexp".as_ptr() as *mut i8 as *const i8, 2,
                 1 | 2097152 | 2048, core::ptr::null_mut(), Some(re_sql_func),
                 None, None)
-        };
+        });
     if rc == 0 {
-        rc =
+
+        /// The regexpi(PATTERN,STRING) function is a case-insensitive version
+        ///* of regexp(PATTERN,STRING).
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"regexpi".as_ptr() as *mut i8 as *const i8, 2,
                     1 | 2097152 | 2048, db as *mut (), Some(re_sql_func), None,
                     None)
-            };
+            });
     }
     return rc;
 }
 
+///* Set the result stored by context ctx to a blob containing the 
+///* contents of file zName.  Or, leave the result unchanged (NULL)
+///* if the file does not exist or is unreadable.
+///*
+///* If the file exceeds the SQLite blob size limit, through an
+///* SQLITE_TOOBIG error.
+///*
+///* Throw an SQLITE_IOERR if there are difficulties pulling the file
+///* off of disk.
+#[allow(unused_doc_comments)]
 extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     z_name_1: *const i8) -> () {
     let mut in_: *mut FILE = core::ptr::null_mut();
@@ -22504,7 +23377,11 @@ extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
     let mut mx_blob: i32 = 0;
     in_ = unsafe { fopen(z_name_1, c"rb".as_ptr() as *mut i8 as *const i8) };
-    if in_ == core::ptr::null_mut() { return; }
+    if in_ == core::ptr::null_mut() {
+
+        /// File does not exist or is unreadable. Leave the result set to NULL.
+        return;
+    }
     unsafe { fseek(in_, 0 as i64, 2) };
     n_in = unsafe { ftell(in_) } as Sqlite3Int64;
     unsafe { rewind(in_) };
@@ -22539,17 +23416,25 @@ extern "C" fn read_file_contents(ctx: *mut Sqlite3Context,
     unsafe { fclose(in_) };
 }
 
+///* Implementation of the "readfile(X)" SQL function.  The entire content
+///* of the file named X is read and returned as a BLOB.  NULL is returned
+///* if the file does not exist or is unreadable.
+#[allow(unused_doc_comments)]
 extern "C" fn readfile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
     { let _ = argc; };
-    z_name =
+
+    /// Unused parameter
+    (z_name =
         unsafe { sqlite3_value_text(unsafe { *argv.offset(0 as isize) }) } as
-            *const i8;
+            *const i8);
     if z_name == core::ptr::null() { return; }
     read_file_contents(context, z_name);
 }
 
+///* Set the error message contained in context ctx to the results of
+///* vprintf(zFmt, ...).
 unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -22561,15 +23446,30 @@ unsafe extern "C" fn ctx_error_msg(ctx: *mut Sqlite3Context,
     ();
 }
 
+///* This function is used in place of stat().  On Windows, special handling
+///* is required in order for the included time to be returned as UTC.  On all
+///* other systems, this function simply calls stat().
 extern "C" fn file_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat) -> i32 {
     return unsafe { stat(z_path_1, p_stat_buf_1) };
 }
 
+///* This function is used in place of lstat().  On Windows, special handling
+///* is required in order for the included time to be returned as UTC.  On all
+///* other systems, this function simply calls lstat().
 extern "C" fn file_link_stat(z_path_1: *const i8, p_stat_buf_1: *mut Stat)
     -> i32 {
     return unsafe { lstat(z_path_1, p_stat_buf_1) };
 }
 
+///* Argument zFile is the name of a file that will be created and/or written
+///* by SQL function writefile(). This function ensures that the directory
+///* zFile will be written to exists, creating it if required. The permissions
+///* for any path components created by this function are set in accordance
+///* with the current umask.
+///*
+///* If an OOM condition is encountered, SQLITE_NOMEM is returned. Otherwise,
+///* SQLITE_OK is returned if the directory is successfully created, or
+///* SQLITE_ERROR otherwise.
 extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     let z_copy: *mut i8 =
         unsafe {
@@ -22614,6 +23514,9 @@ extern "C" fn make_directory(z_file_1: *const i8) -> i32 {
     return rc;
 }
 
+///* This function does the work for the writefile() UDF. Refer to 
+///* header comments at the top of this file for details.
+#[allow(unused_doc_comments)]
 extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     p_data_1: *mut Sqlite3Value, mode: ModeT, mtime: Sqlite3Int64) -> i32 {
     if z_file_1 == core::ptr::null() { return 1; }
@@ -22626,6 +23529,10 @@ extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     } else {
         if mode as i32 & 61440 == 16384 {
             if unsafe { mkdir(z_file_1, mode) } != 0 {
+                /// The mkdir() call to create the directory failed. This might not
+                ///* be an error though - if there is already a directory at the same
+                ///* path and either the permissions already match or can be changed
+                ///* to do so using chmod(), it is not an error.
                 let mut s_stat: Stat = unsafe { core::mem::zeroed() };
                 if unsafe { *unsafe { __error() } } != 17 ||
                                 0 != file_stat(z_file_1, &mut s_stat) ||
@@ -22685,6 +23592,8 @@ extern "C" fn write_file(p_ctx_1: *mut Sqlite3Context, z_file_1: *const i8,
     return 0;
 }
 
+///* Implementation of the "writefile(W,X[,Y[,Z]]])" SQL function.  
+///* Refer to header comments at the top of this file for details.
 extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_file: *const i8 = core::ptr::null();
@@ -22747,6 +23656,10 @@ extern "C" fn writefile_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* SQL function:   lsmode(MODE)
+///*
+///* Given a numberic st_mode from stat(), convert it into a human-readable
+///* text string in the style of "ls -l".
 extern "C" fn ls_mode_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut i: i32 = 0;
@@ -22825,6 +23738,7 @@ struct FsdirTab {
     base: Sqlite3Vtab,
 }
 
+///* Construct a new fsdir virtual table object.
 extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -22857,11 +23771,13 @@ extern "C" fn fsdir_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* This method is the destructor for fsdir vtab objects.
 extern "C" fn fsdir_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new fsdir_cursor object.
 extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut FsdirCursor = core::ptr::null_mut();
@@ -22881,6 +23797,8 @@ extern "C" fn fsdir_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset a cursor back to the state it was in when first returned
+///* by fsdirOpen().
 extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     let mut i: i32 = 0;
     {
@@ -22911,6 +23829,7 @@ extern "C" fn fsdir_reset_cursor(p_cur_1: &mut FsdirCursor) -> () {
     (*p_cur_1).i_rowid = 1 as Sqlite3Int64;
 }
 
+///* Destructor for an fsdir_cursor.
 extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     fsdir_reset_cursor(unsafe { &mut *p_cur });
@@ -22918,6 +23837,8 @@ extern "C" fn fsdir_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Set the error message for the virtual table associated with cursor
+///* pCur to the results of vprintf(zFmt, ...).
 unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -22929,6 +23850,8 @@ unsafe extern "C" fn fsdir_set_errmsg(p_cur_1: &FsdirCursor,
     ();
 }
 
+///* Advance an fsdir_cursor to its next row of output.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut FsdirCursor = cur as *mut FsdirCursor;
     let m: ModeT = unsafe { (*p_cur).s_stat.st_mode };
@@ -22940,6 +23863,7 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     };
     if m as i32 & 61440 == 16384 &&
             unsafe { (*p_cur).i_lvl } + 3 < unsafe { (*p_cur).mx_lvl } {
+        /// Descend into this directory
         let i_new: i32 = unsafe { (*p_cur).i_lvl } + 1;
         let mut p_lvl: *mut FsdirLevel = core::ptr::null_mut();
         if i_new >= unsafe { (*p_cur).n_lvl } {
@@ -23037,11 +23961,16 @@ extern "C" fn fsdir_next(cur: *mut Sqlite3VtabCursor) -> i32 {
             __t
         };
     }
+
+    /// EOF
     unsafe { sqlite3_free(unsafe { (*p_cur).z_path } as *mut ()) };
     unsafe { (*p_cur).z_path = core::ptr::null_mut() };
     return 0;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -23139,13 +24068,30 @@ extern "C" fn fsdir_column(cur: *mut Sqlite3VtabCursor,
                     sqlite3_result_int(ctx, unsafe { (*p_cur).i_lvl } + 2)
                 };
             }
-            5 => { { break '__s209; } }
-            _ => { { break '__s209; } }
+            5 => {
+                {
+
+                    /// The FSDIR_COLUMN_PATH and FSDIR_COLUMN_DIR are input parameters.
+                    ///* always return their values as NULL
+                    break '__s209;
+                }
+            }
+            _ => {
+                {
+
+                    /// The FSDIR_COLUMN_PATH and FSDIR_COLUMN_DIR are input parameters.
+                    ///* always return their values as NULL
+                    break '__s209;
+                }
+            }
         }
     }
     return 0;
 }
 
+///* Return the rowid for the current row. In this implementation, the
+///* first row returned is assigned rowid value 1, and each subsequent
+///* row a value 1 more than that of the previous.
 extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const FsdirCursor =
@@ -23154,12 +24100,21 @@ extern "C" fn fsdir_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn fsdir_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const FsdirCursor =
         cur as *mut FsdirCursor as *const FsdirCursor;
     return (unsafe { (*p_cur).z_path } == core::ptr::null_mut()) as i32;
 }
 
+///* xFilter callback.
+///*
+///* idxNum bit      Meaning
+///*     0x01         PATH=N
+///*     0x02         DIR=N
+///*     0x04         LEVEL<N
+///*     0x08         LEVEL<=N
 extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let mut z_dir: *const i8 = core::ptr::null();
@@ -23284,16 +24239,38 @@ extern "C" fn fsdir_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return 0;
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the generate_series virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* In this implementation idxNum is used to represent the
+///* query plan.  idxStr is unused.
+///*
+///* The query plan is represented by bits in idxNum:
+///*
+///*  0x01  The path value is supplied by argv[0]
+///*  0x02  dir is in argv[1]
+///*  0x04  maxdepth is in argv[1] or [2]
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop over constraints
     let mut idx_path: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of PATH=
     let mut idx_dir: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of DIR=
     let mut idx_level: i32 = -1;
+    /// Index in pIdxInfo->aConstraint of LEVEL< or <=
     let mut idx_level_eq: i32 = 0;
+    /// 0x08 for LEVEL<= or LEVEL=.  0x04 for LEVEL<
     let mut omit_level: i32 = 0;
+    /// omit the LEVEL constraint
     let mut seen_path: i32 = 0;
+    /// True if an unusable PATH= constraint is seen
     let mut seen_dir: i32 = 0;
+    /// True if an unusable DIR= constraint is seen
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
     { let _ = tab; };
     p_constraint =
@@ -23389,9 +24366,16 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
             };
         }
     }
-    if seen_path != 0 || seen_dir != 0 { return 19; }
+    if seen_path != 0 || seen_dir != 0 {
+
+        /// If input parameters are unusable, disallow this plan
+        return 19;
+    }
     if idx_path < 0 {
         unsafe { (*p_idx_info_1).idx_num = 0 };
+
+        /// The pIdxInfo->estimatedCost should have been initialized to a huge
+        ///* number.  Leave it unchanged.
         unsafe {
             (*p_idx_info_1).estimated_rows = 2147483647 as Sqlite3Int64
         };
@@ -23445,8 +24429,35 @@ extern "C" fn fsdir_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Register the "fsdir" virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         let rc: i32 =
             unsafe {
                 sqlite3_create_module(db,
@@ -23458,9 +24469,16 @@ extern "C" fn fsdir_register(db: *mut Sqlite3) -> i32 {
     }
 }
 
+///* This version of realpath() works on any system.  The string
+///* returned is held in memory allocated using sqlite3_malloc64().
+///* The caller is responsible for calling sqlite3_free().
+#[allow(unused_doc_comments)]
 extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
+    /// BEGIN unix
     let mut z_out: *mut i8 = core::ptr::null_mut();
+    /// Result
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// Temporary buffer
     let mut z_buf: [i8; 1025] = [0; 1025];
     if z_path_1 == core::ptr::null() { return core::ptr::null_mut(); }
     z = unsafe { realpath(z_path_1, &raw mut z_buf[0 as usize] as *mut i8) };
@@ -23472,7 +24490,9 @@ extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
             };
     }
     if z_out == core::ptr::null_mut() {
-        z = unsafe { realpath(z_path_1, 0 as *mut () as *mut i8) };
+
+        /// Try POSIX.1-2008 malloc behavior
+        (z = unsafe { realpath(z_path_1, 0 as *mut () as *mut i8) });
         if !(z).is_null() {
             z_out =
                 unsafe {
@@ -23484,13 +24504,30 @@ extern "C" fn portable_realpath(z_path_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* SQL function:   realpath(X)
+///*
+///* Try to convert file or pathname X into its real, absolute pathname.
+///* Return NULL if unable.
+///*
+///* The file or directory X is not required to exist.  The answer is formed
+///* by calling system realpath() on the prefix of X that does exist and
+///* appending the tail of X that does not (yet) exist.
+///*
+///* FIXME:  This routine sometimes returns NULL rather than raising
+///* an SQLITE_NOMEM error if an OOM is encountered.
+#[allow(unused_doc_comments)]
 extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_path: *const i8 = core::ptr::null();
+    /// Original input path
     let mut z_copy: *mut i8 = core::ptr::null_mut();
+    /// An editable copy of zPath
     let mut z_out: *mut i8 = core::ptr::null_mut();
+    /// The result
     let mut c_sep: i8 = 0 as i8;
+    /// Separator turned into \000
     let mut len: u64 = 0 as u64;
+    /// Prefix length before cSep
     let is_win: i32 = 0 as i32;
     { let _ = argc; };
     z_path =
@@ -23563,6 +24600,10 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
     }
     unsafe { sqlite3_free(z_copy as *mut ()) };
     if !(z_out).is_null() {
+        /// Simplify any "/./" or "/../" that might have snuck into the
+        ///* pathname due to appending of zCopy.  We only have to consider
+        ///* unix "/" separators, because the _wfilepath() system call on
+        ///* Windows will have already done this simplification for us.
         let mut i: u64 = 0 as u64;
         let mut j: u64 = 0 as u64;
         let mut n: u64 = 0 as u64;
@@ -23616,6 +24657,8 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
             }
         }
         unsafe { *z_out.add(j as usize) = 0 as i8 };
+
+        /// Return the result
         unsafe {
             sqlite3_result_text(context, z_out as *const i8, -1,
                 Some(sqlite3_free))
@@ -23624,17 +24667,20 @@ extern "C" fn realpath_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_fileio_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"readfile".as_ptr() as *mut i8 as *const i8, 1, 1 | 524288,
                 core::ptr::null_mut(), Some(readfile_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -23688,15 +24734,46 @@ struct CompletionCursor {
     j: i32,
 }
 
+///* The completionConnect() method is invoked to create a new
+///* completion_vtab that describes the completion virtual table.
+///*
+///* Think of this routine as the constructor for completion_vtab objects.
+///*
+///* All this routine needs to do is:
+///*
+///*    (1) Allocate the completion_vtab object and initialize all fields.
+///*
+///*    (2) Tell SQLite (via the sqlite3_declare_vtab() interface) what the
+///*        result set of queries against completion will look like.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     argc: i32, argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut p_new: *mut CompletionVtab = core::ptr::null_mut();
     let mut rc: i32 = 0;
     { let _ = p_aux_1; };
+
+    /// Unused parameter
     { let _ = argc; };
+
+    /// Unused parameter
+    /// Unused parameter
     { let _ = argv; };
+
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
     { let _ = pz_err_1; };
+
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
+    /// Unused parameter
+    /// Column numbers
+    /// Suggested completion of the input
+    /// Prefix of the word to be completed
+    /// Entire line seen so far
+    /// ePhase - used for debugging only
     unsafe { sqlite3_vtab_config(db, 2) };
     rc =
         unsafe {
@@ -23721,11 +24798,13 @@ extern "C" fn completion_connect(db: *mut Sqlite3, p_aux_1: *mut (),
     return rc;
 }
 
+///* This method is the destructor for completion_cursor objects.
 extern "C" fn completion_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     unsafe { sqlite3_free(p_vtab_1 as *mut ()) };
     return 0;
 }
 
+///* Constructor for a new completion_cursor object.
 extern "C" fn completion_open(p: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut p_cur: *mut CompletionCursor = core::ptr::null_mut();
@@ -23744,6 +24823,7 @@ extern "C" fn completion_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset the completion_cursor.
 extern "C" fn completion_cursor_reset(p_cur_1: &mut CompletionCursor) -> () {
     unsafe { sqlite3_free((*p_cur_1).z_prefix as *mut ()) };
     (*p_cur_1).z_prefix = core::ptr::null_mut();
@@ -23756,16 +24836,32 @@ extern "C" fn completion_cursor_reset(p_cur_1: &mut CompletionCursor) -> () {
     (*p_cur_1).j = 0;
 }
 
+///* Destructor for a completion_cursor.
 extern "C" fn completion_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     completion_cursor_reset(unsafe { &mut *(cur as *mut CompletionCursor) });
     unsafe { sqlite3_free(cur as *mut ()) };
     return 0;
 }
 
+///* Advance a completion_cursor to its next row of output.
+///*
+///* The ->ePhase, ->j, and ->pStmt fields of the completion_cursor object
+///* record the current state of the scan.  This routine sets ->zCurrentRow
+///* to the current row of output and then returns.  If no more rows remain,
+///* then ->ePhase is set to COMPLETION_EOF which will signal the virtual
+///* table that has reached the end of its scan.
+///*
+///* The current implementation just lists potential identifiers and
+///* keywords and filters them by zPrefix.  Future enhancements should
+///* take zLine into account to try to restrict the set of identifiers and
+///* keywords based on what would be legal at the current point of input.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *mut CompletionCursor = cur as *mut CompletionCursor;
     let mut e_next_phase: i32 = 0;
+    /// Next phase to try if current phase reaches end
     let mut i_col: i32 = -1;
+    /// If >=0, step pCur->pStmt and use the i-th column
     let mut rc: i32 = 0;
     {
         let __p = unsafe { &mut (*p_cur).i_rowid };
@@ -24117,12 +25213,16 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
             }
         } else {
             if unsafe { sqlite3_step(unsafe { (*p_cur).p_stmt }) } == 100 {
+
+                /// Extract the next row of content
                 unsafe {
                     (*p_cur).z_current_row =
                         unsafe {
                                 sqlite3_column_text(unsafe { (*p_cur).p_stmt }, i_col)
                             } as *const i8
                 };
+
+                /// Extract the next row of content
                 unsafe {
                     (*p_cur).sz_row =
                         unsafe {
@@ -24130,7 +25230,10 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
                         }
                 };
             } else {
-                rc = unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) };
+
+                /// When all rows are finished, advance to the next phase
+                (rc =
+                    unsafe { sqlite3_finalize(unsafe { (*p_cur).p_stmt }) });
                 unsafe { (*p_cur).p_stmt = core::ptr::null_mut() };
                 unsafe { (*p_cur).e_phase = e_next_phase };
                 if rc != 0 { return rc; }
@@ -24150,6 +25253,8 @@ extern "C" fn completion_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Return values of columns for the row at which the completion_cursor
+///* is currently pointing.
 extern "C" fn completion_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_cur: *const CompletionCursor =
@@ -24267,6 +25372,8 @@ extern "C" fn completion_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return the rowid for the current row.  In this implementation, the
+///* rowid is the same as the output value.
 extern "C" fn completion_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     let p_cur: *const CompletionCursor =
@@ -24275,12 +25382,19 @@ extern "C" fn completion_rowid(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+///* Return TRUE if the cursor has been moved off of the last
+///* row of output.
 extern "C" fn completion_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_cur: *const CompletionCursor =
         cur as *mut CompletionCursor as *const CompletionCursor;
     return (unsafe { (*p_cur).e_phase } >= 11) as i32;
 }
 
+///* This method is called to "rewind" the completion_cursor object back
+///* to the first row of output.  This method is always called at least
+///* once prior to any call to completionColumn() or completionRowid() or 
+///* completionEof().
+#[allow(unused_doc_comments)]
 extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     idx_num_1: i32, idx_str_1: *const i8, argc: i32,
     argv: *mut *mut Sqlite3Value) -> i32 {
@@ -24288,7 +25402,12 @@ extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
         p_vtab_cursor_1 as *mut CompletionCursor;
     let mut i_arg: i32 = 0;
     { let _ = idx_str_1; };
+
+    /// Unused parameter
     { let _ = argc; };
+
+    /// Unused parameter
+    /// Unused parameter
     completion_cursor_reset(unsafe { &mut *p_cur });
     if idx_num_1 & 1 != 0 {
         unsafe {
@@ -24384,18 +25503,34 @@ extern "C" fn completion_filter(p_vtab_cursor_1: *mut Sqlite3VtabCursor,
     return completion_next(p_vtab_cursor_1);
 }
 
+///* SQLite will invoke this method one or more times while planning a query
+///* that uses the completion virtual table.  This routine needs to create
+///* a query plan for each invocation and compute an estimated cost for that
+///* plan.
+///*
+///* There are two hidden parameters that act as arguments to the table-valued
+///* function:  "prefix" and "wholeline".  Bit 0 of idxNum is set if "prefix"
+///* is available and bit 1 is set if "wholeline" is available.
+#[allow(unused_doc_comments)]
 extern "C" fn completion_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
+    /// Loop over constraints
     let mut idx_num: i32 = 0;
+    /// The query plan bitmask
     let mut prefix_idx: i32 = -1;
+    /// Index of the start= constraint, or -1 if none
     let mut wholeline_idx: i32 = -1;
+    /// Index of the stop= constraint, or -1 if none
     let mut n_arg: i32 = 0;
+    /// Number of arguments that completeFilter() expects
     let mut p_constraint: *const Sqlite3IndexConstraint = core::ptr::null();
     { let _ = tab; };
-    p_constraint =
+
+    /// Unused parameter
+    (p_constraint =
         unsafe { (*p_idx_info_1).a_constraint } as
-            *const Sqlite3IndexConstraint;
+            *const Sqlite3IndexConstraint);
     {
         i = 0;
         '__b224: loop {
@@ -24468,6 +25603,8 @@ extern "C" fn completion_best_index(tab: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* This following structure defines all the methods for the 
+///* completion virtual table.
 static mut completion_module: Sqlite3Module =
     Sqlite3Module {
         i_version: 0,
@@ -24513,17 +25650,54 @@ pub extern "C" fn sqlite3_completion_vtab_init(db: *mut Sqlite3) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_completion_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc = sqlite3_completion_vtab_init(db);
+
+    /// Unused parameter
+    (rc = sqlite3_completion_vtab_init(db));
     return rc;
 }
 
+///* Forward declaration of objects used by this utility
 type ApndVfs = Sqlite3Vfs;
 
+/// An open appendvfs file
+///*
+///* An instance of this structure describes the appended database file.
+///* A separate sqlite3_file object is always appended. The appended
+///* sqlite3_file object (which can be accessed using ORIGFILE()) describes
+///* the entire file, including the prefix, the database, and the
+///* append-mark.
+///*
+///* The structure of an AppendVFS database is like this:
+///*
+///*   +-------------+---------+----------+-------------+
+///*   | prefix-file | padding | database | append-mark |
+///*   +-------------+---------+----------+-------------+
+///*                           ^          ^
+///*                           |          |
+///*                         iPgOne      iMark
+///*
+///*
+///* "prefix file" -  file onto which the database has been appended.
+///* "padding"     -  zero or more bytes inserted so that "database"
+///*                  starts on an APND_ROUNDUP boundary
+///* "database"    -  The SQLite database file
+///* "append-mark" -  The 25-byte "Start-Of-SQLite3-NNNNNNNN" that indicates
+///*                  the offset from the start of prefix-file to the start
+///*                  of "database".
+///*
+///* The size of the database is iMark - iPgOne.
+///*
+///* The NNNNNNNN in the "Start-Of-SQLite3-NNNNNNNN" suffix is the value
+///* of iPgOne stored as a big-ending 64-bit integer.
+///*
+///* iMark will be the size of the underlying file minus 25 (APND_MARKSIZE).
+///* Or, iMark is -1 to indicate that it has not yet been written.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ApndFile {
@@ -24532,6 +25706,7 @@ struct ApndFile {
     i_mark: Sqlite3Int64,
 }
 
+///* Methods for ApndFile
 extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24543,6 +25718,7 @@ extern "C" fn apnd_close(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Read data from an apnd-file.
 extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -24556,6 +25732,9 @@ extern "C" fn apnd_read(mut p_file: *mut Sqlite3File, z_buf: *mut (),
         };
 }
 
+///* Add the append-mark onto what should become the end of the file.
+/// If and only if this succeeds, internal ApndFile.iMark is updated.
+/// Parameter iWriteEnd is the appendvfs-relative offset of the new mark.
 extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     mut i_write_end_1: SqliteInt64) -> i32 {
     let mut i_pg_one: SqliteInt64 = unsafe { (*paf).i_pg_one };
@@ -24596,6 +25775,7 @@ extern "C" fn apnd_write_mark(paf: *mut ApndFile, p_file_1: *mut Sqlite3File,
     return rc;
 }
 
+///* Write data to an apnd-file.
 extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -24617,6 +25797,8 @@ extern "C" fn apnd_write(mut p_file: *mut Sqlite3File, z_buf: *const (),
         };
 }
 
+///* Truncate an apnd-file.
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let paf: *mut ApndFile = p_file as *mut ApndFile;
@@ -24624,6 +25806,8 @@ extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
             *mut Sqlite3File;
     if 0 != apnd_write_mark(paf, p_file, size) { return 10; }
+
+    /// Truncate underlying file just past append mark
     return unsafe {
             (unsafe {
                     (*unsafe { (*p_file).p_methods }).x_truncate.unwrap()
@@ -24632,6 +25816,7 @@ extern "C" fn apnd_truncate(mut p_file: *mut Sqlite3File, size: Sqlite3Int64)
         };
 }
 
+///* Sync an apnd-file.
 extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24643,6 +25828,8 @@ extern "C" fn apnd_sync(mut p_file: *mut Sqlite3File, flags: i32) -> i32 {
         };
 }
 
+///* Return the current file-size of an apnd-file.
+///* If the append mark is not yet there, the file-size is 0.
 extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -24655,6 +25842,7 @@ extern "C" fn apnd_file_size(p_file: *mut Sqlite3File,
     return 0;
 }
 
+///* Lock an apnd-file.
 extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24666,6 +25854,7 @@ extern "C" fn apnd_lock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Unlock an apnd-file.
 extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24677,6 +25866,7 @@ extern "C" fn apnd_unlock(mut p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
         };
 }
 
+///* Check if another file-handle holds a RESERVED lock on an apnd-file.
 extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     p_file =
@@ -24691,6 +25881,7 @@ extern "C" fn apnd_check_reserved_lock(mut p_file: *mut Sqlite3File,
         };
 }
 
+///* File control method. For custom operations on an apnd-file.
 extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     let paf: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -24722,6 +25913,7 @@ extern "C" fn apnd_file_control(mut p_file: *mut Sqlite3File, op: i32,
     return rc;
 }
 
+///* Return the sector-size in bytes for an apnd-file.
 extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24733,6 +25925,7 @@ extern "C" fn apnd_sector_size(mut p_file: *mut Sqlite3File) -> i32 {
         };
 }
 
+///* Return the device characteristic flags supported by an apnd-file.
 extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
     -> i32 {
     p_file =
@@ -24747,6 +25940,7 @@ extern "C" fn apnd_device_characteristics(mut p_file: *mut Sqlite3File)
         };
 }
 
+/// Create a shared memory file mapping
 extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
     b_extend: i32, pp: *mut *mut ()) -> i32 {
     p_file =
@@ -24759,6 +25953,7 @@ extern "C" fn apnd_shm_map(mut p_file: *mut Sqlite3File, i_pg: i32, pgsz: i32,
         };
 }
 
+/// Perform locking on a shared-memory segment
 extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
     flags: i32) -> i32 {
     p_file =
@@ -24771,6 +25966,7 @@ extern "C" fn apnd_shm_lock(mut p_file: *mut Sqlite3File, offset: i32, n: i32,
         };
 }
 
+/// Memory barrier operation on shared memory
 extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     p_file =
         unsafe { (p_file as *mut ApndFile).offset(1 as isize) } as
@@ -24782,6 +25978,7 @@ extern "C" fn apnd_shm_barrier(mut p_file: *mut Sqlite3File) -> () {
     };
 }
 
+/// Unmap a shared memory segment
 extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
     -> i32 {
     p_file =
@@ -24794,6 +25991,7 @@ extern "C" fn apnd_shm_unmap(mut p_file: *mut Sqlite3File, delete_flag: i32)
         };
 }
 
+/// Fetch a page of a memory-mapped file
 extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     i_amt: i32, pp: *mut *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -24811,6 +26009,7 @@ extern "C" fn apnd_fetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
         };
 }
 
+/// Release a memory-mapped page
 extern "C" fn apnd_unfetch(mut p_file: *mut Sqlite3File, i_ofst: Sqlite3Int64,
     p_page: *mut ()) -> i32 {
     let p: *const ApndFile = p_file as *mut ApndFile as *const ApndFile;
@@ -24847,6 +26046,13 @@ static apnd_io_methods: Sqlite3IoMethods =
         x_unfetch: Some(apnd_unfetch),
     };
 
+///* Try to read the append-mark off the end of a file.  Return the
+///* start of the appended database if the append-mark is present.
+///* If there is no valid append-mark, return -1;
+///*
+///* An append-mark is only valid if the NNNNNNNN start-of-database offset
+///* indicates that the appended database contains at least one page.  The
+///* start-of-database value must be a multiple of 512.
 extern "C" fn apnd_read_mark(sz: Sqlite3Int64, p_file_1: *mut Sqlite3File)
     -> Sqlite3Int64 {
     let mut rc: i32 = 0;
@@ -24897,20 +26103,27 @@ static apvfs_sqlite_hdr: [i8; 16] =
             102 as i8, 111 as i8, 114 as i8, 109 as i8, 97 as i8, 116 as i8,
             32 as i8, 51 as i8, 0 as i8];
 
+///* Check to see if the file is an appendvfs SQLite database file.
+///* Return true iff it is such. Parameter sz is the file's size.
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut rc: i32 = 0;
     let mut z_hdr: [i8; 16] = [0; 16];
     let i_mark: Sqlite3Int64 = apnd_read_mark(sz, p_file_1);
     if i_mark >= 0 as i64 {
-        rc =
+
+        /// If file has the correct end-marker, the expected odd size, and the
+        ///* SQLite DB type marker where the end-marker puts it, then it
+        ///* is an appendvfs database.
+        (rc =
             unsafe {
                 (unsafe {
                         (*unsafe { (*p_file_1).p_methods }).x_read.unwrap()
                     })(p_file_1,
                     &raw mut z_hdr[0 as usize] as *mut i8 as *mut (),
                     core::mem::size_of::<[i8; 16]>() as i32, i_mark)
-            };
+            });
         if 0 == rc &&
                         unsafe {
                                 memcmp(&raw mut z_hdr[0 as usize] as *mut i8 as *const (),
@@ -24924,6 +26137,8 @@ extern "C" fn apnd_is_appendvfs_database(sz: Sqlite3Int64,
     return 0;
 }
 
+///* Check to see if the file is an ordinary SQLite database file.
+///* Return true iff so. Parameter sz is the file's size.
 extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
     p_file_1: *mut Sqlite3File) -> i32 {
     let mut z_hdr: [i8; 16] = [0; 16];
@@ -24946,6 +26161,8 @@ extern "C" fn apnd_is_ordinary_database_file(sz: Sqlite3Int64,
     } else { return 1; }
 }
 
+///* Methods for ApndVfs
+#[allow(unused_doc_comments)]
 extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let p_apnd_file: *mut ApndFile = p_file as *mut ApndFile;
@@ -24957,6 +26174,10 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     let mut rc: i32 = 0;
     let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
     if flags & 256 == 0 {
+
+        /// The appendvfs is not to be used for transient or temporary databases.
+        ///* Just use the base VFS open to initialize the given file object and
+        ///* open the underlying file. (Appendvfs is then unused for this file.)
         return unsafe {
                 (unsafe {
                         (*p_base_vfs).x_open.unwrap()
@@ -24969,12 +26190,14 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     };
     unsafe { (*p_file).p_methods = &apnd_io_methods };
     unsafe { (*p_apnd_file).i_mark = -1 as Sqlite3Int64 };
-    rc =
+
+    /// Append mark not yet written
+    (rc =
         unsafe {
             (unsafe {
                     (*p_base_vfs).x_open.unwrap()
                 })(p_base_vfs, z_name, p_base_file, flags, p_out_flags)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -24995,6 +26218,9 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         return rc;
     }
     if apnd_is_ordinary_database_file(sz, p_base_file) != 0 {
+
+        /// The file being opened appears to be just an ordinary DB. Copy
+        ///* the base dispatch-table so this instance mimics the base VFS.
         unsafe {
             memmove(p_apnd_file as *mut (), p_base_file as *const (),
                 unsafe { (*p_base_vfs).sz_os_file } as u64)
@@ -25004,6 +26230,8 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     unsafe { (*p_apnd_file).i_pg_one = apnd_read_mark(sz, p_file) };
     if unsafe { (*p_apnd_file).i_pg_one } >= 0 as i64 {
         unsafe { (*p_apnd_file).i_mark = sz - (17 + 8) as Sqlite3Int64 };
+
+        /// Append mark found
         return 0;
     }
     if flags & 4 == 0 {
@@ -25015,6 +26243,11 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
         rc = 14;
         unsafe { (*p_file).p_methods = core::ptr::null() };
     } else {
+
+        /// Round newly added appendvfs location to #define'd page boundary. 
+        ///* Note that nothing has yet been written to the underlying file.
+        ///* The append mark will be written along with first content write.
+        ///* Until then, paf->iMark value indicates it is not yet written.
         unsafe {
             (*p_apnd_file).i_pg_one =
                 sz + (4096 - 1) as Sqlite3Int64 &
@@ -25024,6 +26257,10 @@ extern "C" fn apnd_open(p_apnd_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     return rc;
 }
 
+///* Delete an apnd file.
+///* For an appendvfs, this could mean delete the appendvfs portion,
+///* leaving the appendee as it was before it gained an appendvfs.
+///* For now, this code deletes the underlying file too.
 extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     return unsafe {
@@ -25035,6 +26272,7 @@ extern "C" fn apnd_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
         };
 }
 
+///* All other VFS methods are pass-thrus.
 extern "C" fn apnd_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     return unsafe {
@@ -25206,6 +26444,9 @@ static mut apnd_vfs: Sqlite3Vfs =
         x_next_system_call: Some(apnd_next_system_call),
     };
 
+/// 
+///* This routine is called when the extension is loaded.
+///* Register the new VFS.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_appendvfs_init(db: *const Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
@@ -25335,6 +26576,8 @@ struct ZipfileTab {
     sz_orig: i64,
 }
 
+///* Set the error message contained in context ctx to the results of
+///* vprintf(zFmt, ...).
 unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut z_msg: *mut i8 = core::ptr::null_mut();
@@ -25346,6 +26589,8 @@ unsafe extern "C" fn zipfile_ctx_error_msg(ctx: *mut Sqlite3Context,
     ();
 }
 
+///* If string zIn is quoted, dequote it in place. Otherwise, if the string
+///* is not quoted, do nothing.
 extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
     let mut q: i8 = unsafe { *z_in_1.offset(0 as isize) };
     if q as i32 == '\"' as i32 || q as i32 == '\'' as i32 ||
@@ -25400,6 +26645,13 @@ extern "C" fn zipfile_dequote(z_in_1: *mut i8) -> () {
     }
 }
 
+///* Construct a new ZipfileTab virtual table object.
+///* 
+///*   argv[0]   -> module name  ("zipfile")
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> "column name" and other module argument fields.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -25411,6 +26663,15 @@ extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     let mut p_new: *mut ZipfileTab = core::ptr::null_mut();
     let mut rc: i32 = 0;
     { let _ = p_aux_1; };
+
+    /// If the table name is not "zipfile", require that the argument be
+    ///* specified. This stops zipfile tables from being created as:
+    ///*
+    ///*   CREATE VIRTUAL TABLE zzz USING zipfile();
+    ///*
+    ///* It does not prevent:
+    ///*
+    ///*   CREATE VIRTUAL TABLE zipfile USING zipfile();
     if !(0 ==
                             unsafe {
                                 sqlite3_stricmp(unsafe { *argv.offset(0 as isize) },
@@ -25480,6 +26741,7 @@ extern "C" fn zipfile_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Free the ZipfileEntry structure indicated by the only argument.
 extern "C" fn zipfile_entry_free(p: *mut ZipfileEntry) -> () {
     if !(p).is_null() {
         unsafe { sqlite3_free(unsafe { (*p).cds.z_file } as *mut ()) };
@@ -25487,6 +26749,8 @@ extern "C" fn zipfile_entry_free(p: *mut ZipfileEntry) -> () {
     }
 }
 
+///* Release resources that should be freed at the end of a write 
+///* transaction.
 extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     let mut p_entry: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -25512,6 +26776,7 @@ extern "C" fn zipfile_cleanup_transaction(p_tab_1: &mut ZipfileTab) -> () {
     (*p_tab_1).sz_orig = 0 as i64;
 }
 
+///* This method is the destructor for zipfile vtab objects.
 extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     zipfile_cleanup_transaction(unsafe {
             &mut *(p_vtab_1 as *mut ZipfileTab)
@@ -25520,6 +26785,7 @@ extern "C" fn zipfile_disconnect(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return 0;
 }
 
+///* Constructor for a new ZipfileCsr object.
 extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     pp_csr_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let p_tab: *mut ZipfileTab = p as *mut ZipfileTab;
@@ -25547,6 +26813,8 @@ extern "C" fn zipfile_open(p: *mut Sqlite3Vtab,
     return 0;
 }
 
+///* Reset a cursor back to the state it was in when first returned
+///* by zipfileOpen().
 extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     let mut p: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_next: *mut ZipfileEntry = core::ptr::null_mut();
@@ -25572,6 +26840,7 @@ extern "C" fn zipfile_reset_cursor(p_csr_1: &mut ZipfileCsr) -> () {
     (*p_csr_1).p_free_entry = core::ptr::null_mut();
 }
 
+///* Destructor for an ZipfileCsr.
 extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let p_tab: *mut ZipfileTab =
@@ -25591,6 +26860,8 @@ extern "C" fn zipfile_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+///* Set the error message for the virtual table associated with cursor
+///* pCsr to the results of vprintf(zFmt, ...).
 unsafe extern "C" fn zipfile_table_err(p_tab_1: &mut ZipfileTab,
     z_fmt_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -25615,6 +26886,14 @@ unsafe extern "C" fn zipfile_cursor_err(p_csr_1: &ZipfileCsr,
     ();
 }
 
+///* Read nRead bytes of data from offset iOff of file pFile into buffer
+///* aRead[]. Return SQLITE_OK if successful, or an SQLite error code
+///* otherwise. 
+///*
+///* If an error does occur, output variable (*pzErrmsg) may be set to point
+///* to an English language error message. It is the responsibility of the
+///* caller to eventually free this buffer using
+///* sqlite3_free().
 extern "C" fn zipfile_read_data(p_file_1: *mut FILE, a_read_1: *mut u8,
     n_read_1: i64, i_off_1: i64, pz_errmsg_1: &mut *mut i8) -> i32 {
     let mut n: u64 = 0 as u64;
@@ -25661,11 +26940,13 @@ extern "C" fn zipfile_append_data(p_tab_1: *mut ZipfileTab,
     return 0;
 }
 
+///* Read and return a 16-bit little-endian unsigned integer from buffer aBuf.
 extern "C" fn zipfile_get_u16(a_buf_1: *const u8) -> u16 {
     return (((unsafe { *a_buf_1.offset(1 as isize) } as i32) << 8) +
                 unsafe { *a_buf_1.offset(0 as isize) } as i32) as u16;
 }
 
+///* Read and return a 32-bit little-endian unsigned integer from buffer aBuf.
 extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
     if a_buf_1 == core::ptr::null() { return 0 as u32; }
     return ((unsafe { *a_buf_1.offset(3 as isize) } as u32) << 24) +
@@ -25674,11 +26955,13 @@ extern "C" fn zipfile_get_u32(a_buf_1: *const u8) -> u32 {
             ((unsafe { *a_buf_1.offset(0 as isize) } as u32) << 0);
 }
 
+///* Write a 16-bit little endiate integer into buffer aBuf.
 extern "C" fn zipfile_put_u16(a_buf_1: *mut u8, val: u16) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val as i32 & 255) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val as i32 >> 8 & 255) as u8 };
 }
 
+///* Write a 32-bit little endiate integer into buffer aBuf.
 extern "C" fn zipfile_put_u32(a_buf_1: *mut u8, val: u32) -> () {
     unsafe { *a_buf_1.offset(0 as isize) = (val & 255 as u32) as u8 };
     unsafe { *a_buf_1.offset(1 as isize) = (val >> 8 & 255 as u32) as u8 };
@@ -25686,6 +26969,8 @@ extern "C" fn zipfile_put_u32(a_buf_1: *mut u8, val: u32) -> () {
     unsafe { *a_buf_1.offset(3 as isize) = (val >> 24 & 255 as u32) as u8 };
 }
 
+///* Decode the CDS record in buffer aBuf into (*pCDS). Return SQLITE_ERROR
+///* if the record is not well-formed, or SQLITE_OK otherwise.
 extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     -> i32 {
     let mut a_read: *mut u8 = a_buf_1;
@@ -25885,6 +27170,8 @@ extern "C" fn zipfile_read_cds(a_buf_1: *mut u8, p_cds_1: &mut ZipfileCDS)
     return rc;
 }
 
+///* Decode the LFH record in buffer aBuf into (*pLFH). Return SQLITE_ERROR
+///* if the record is not well-formed, or SQLITE_OK otherwise.
 extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     -> i32 {
     let mut a_read: *const u8 = a_buffer_1 as *const u8;
@@ -26007,6 +27294,20 @@ extern "C" fn zipfile_read_lfh(a_buffer_1: *mut u8, p_lfh_1: &mut ZipfileLFH)
     return rc;
 }
 
+///* Buffer aExtra (size nExtra bytes) contains zip archive "extra" fields.
+///* Scan through this buffer to find an "extra-timestamp" field. If one
+///* exists, extract the 32-bit modification-timestamp from it and store
+///* the value in output parameter *pmTime.
+///*
+///* Zero is returned if no extra-timestamp record could be found (and so
+///* *pmTime is left unchanged), or non-zero otherwise.
+///*
+///* The general format of an extra field is:
+///*
+///*   Header ID    2 bytes
+///*   Data Size    2 bytes
+///*   Data         N bytes
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     pm_time_1: &mut u32) -> i32 {
     let mut ret: i32 = 0;
@@ -26044,9 +27345,11 @@ extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
                     {
                         let b: u8 = unsafe { *p.offset(0 as isize) };
                         if b as i32 & 1 != 0 {
-                            *pm_time_1 =
+
+                            /// 0x01 -> modtime is present
+                            (*pm_time_1 =
                                 zipfile_get_u32(unsafe { &raw mut *p.offset(1 as isize) } as
-                                        *const u8);
+                                        *const u8));
                             ret = 1;
                         }
                         break '__s233;
@@ -26064,6 +27367,22 @@ extern "C" fn zipfile_scan_extra(a_extra_1: *mut u8, n_extra_1: i32,
     return ret;
 }
 
+///* Convert the standard MS-DOS timestamp stored in the mTime and mDate
+///* fields of the CDS structure passed as the only argument to a 32-bit
+///* UNIX seconds-since-the-epoch timestamp. Return the result.
+///*
+///* "Standard" MS-DOS time format:
+///*
+///*   File modification time:
+///*     Bits 00-04: seconds divided by 2
+///*     Bits 05-10: minute
+///*     Bits 11-15: hour
+///*   File modification date:
+///*     Bits 00-04: day
+///*     Bits 05-08: month (1-12)
+///*     Bits 09-15: years from 1980 
+///*
+///* https://msdn.microsoft.com/en-us/library/9kkf9tah.aspx
 extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
     let mut y: i32 = 0;
     let mut m: i32 = 0;
@@ -26096,8 +27415,13 @@ extern "C" fn zipfile_mtime(p_cds_1: &ZipfileCDS) -> u32 {
     return (j_dsec - 24405875 as i64 * 8640 as i64) as u32;
 }
 
+///* The opposite of zipfileMtime(). This function populates the mTime and
+///* mDate fields of the CDS structure passed as the first argument according
+///* to the UNIX timestamp value passed as the second.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
     m_unix_time_1: u32) -> () {
+    /// Convert unix timestamp to JD (2440588 is noon on 1/1/1970)
     let jd: i64 =
         2440588 as i64 + (m_unix_time_1 / (24 * 60 * 60) as u32) as i64;
     let mut a: i32 = 0;
@@ -26153,6 +27477,8 @@ extern "C" fn zipfile_mtime_to_dos(p_cds_1: *mut ZipfileCDS,
     } else { { let _ = 0; } };
 }
 
+///* Set (*pzErr) to point to a buffer from sqlite3_malloc() containing a 
+///* generic corruption message and return SQLITE_CORRUPT;
 extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
     unsafe { sqlite3_free(*pz_err_1 as *mut ()) };
     *pz_err_1 =
@@ -26163,6 +27489,16 @@ extern "C" fn zipfile_corrupt(pz_err_1: &mut *mut i8) -> i32 {
     return 11;
 }
 
+///* If aBlob is not NULL, then it is a pointer to a buffer (nBlob bytes in
+///* size) containing an entire zip archive image. Or, if aBlob is NULL,
+///* then pFile is a file-handle open on a zip file. In either case, this
+///* function creates a ZipfileEntry object based on the zip archive entry
+///* for which the CDS record is at offset iOff.
+///*
+///* If successful, SQLITE_OK is returned and (*ppEntry) set to point to
+///* the new object. Otherwise, an SQLite error code is returned and the
+///* final value of (*ppEntry) undefined.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, i_off_1: i64,
     pp_entry_1: &mut *mut ZipfileEntry) -> i32 {
@@ -26176,6 +27512,8 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
                 unsafe { &mut *pz_err });
     } else {
         if i_off_1 + 46 as i64 > n_blob_1 {
+
+            /// Not enough data for the CDS structure. Corruption.
             return zipfile_corrupt(unsafe { &mut *pz_err });
         }
         a_read =
@@ -26241,9 +27579,12 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
         if rc == 0 {
             let pt: *mut u32 = unsafe { &mut (*p_new).m_unix_time };
             unsafe {
-                (*p_new).cds.z_file =
+
+                /// aRead[0..nFile-1] might contain embedded \000 characters
+                ///* See Bug 2026-05-31T11:43:05Z
+                ((*p_new).cds.z_file =
                     unsafe { sqlite3_malloc64((n_file + 1) as Sqlite3Uint64) }
-                        as *mut i8
+                        as *mut i8)
             };
             if unsafe { (*p_new).cds.z_file } != core::ptr::null_mut() {
                 unsafe {
@@ -26346,6 +27687,7 @@ extern "C" fn zipfile_get_entry(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     return rc;
 }
 
+///* Advance an ZipfileCsr to its next row of output.
 extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let mut rc: i32 = 0;
@@ -26393,6 +27735,11 @@ extern "C" fn zipfile_next(cur: *mut Sqlite3VtabCursor) -> i32 {
 
 extern "C" fn zipfile_free(p: *mut ()) -> () { unsafe { sqlite3_free(p) }; }
 
+///* Buffer aIn (size nIn bytes) contains compressed data. Uncompressed, the
+///* size is nOut bytes. This function uncompresses the data and sets the
+///* return value in context pCtx to the result (a blob).
+///*
+///* If an error occurs, an error code is left in pCtx instead.
 extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
     n_in_1: i32, n_out_1: i32) -> () {
     let mut a_res: *mut u8 =
@@ -26443,6 +27790,16 @@ extern "C" fn zipfile_inflate(p_ctx_1: *mut Sqlite3Context, a_in_1: *const u8,
     }
 }
 
+///* Buffer aIn (size nIn bytes) contains uncompressed data. This function
+///* compresses it and sets (*ppOut) to point to a buffer containing the
+///* compressed data. The caller is responsible for eventually calling
+///* sqlite3_free() to release buffer (*ppOut). Before returning, (*pnOut) 
+///* is set to the size of buffer (*ppOut) in bytes.
+///*
+///* If no error occurs, SQLITE_OK is returned. Otherwise, an SQLite error
+///* code is returned and an error message left in virtual-table handle
+///* pTab. The values of (*ppOut) and (*pnOut) are left unchanged in this
+///* case.
 extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     pp_out_1: &mut *mut u8, pn_out_1: &mut i32, pz_err_1: &mut *mut i8)
     -> i32 {
@@ -26488,6 +27845,9 @@ extern "C" fn zipfile_deflate(a_in_1: *const u8, n_in_1: i32,
     return rc;
 }
 
+///* Return values of columns for the row at which the series_cursor
+///* is currently pointing.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
@@ -26517,6 +27877,8 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
             }
             2 => {
                 {
+
+                    /// mtime
                     unsafe {
                         sqlite3_result_int64(ctx,
                             unsafe { (*unsafe { (*p_csr).p_current }).m_unix_time } as
@@ -26591,6 +27953,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -26682,6 +28047,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -26764,6 +28132,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -26843,6 +28214,9 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
                             }
                             unsafe { sqlite3_free(a_free as *mut ()) };
                         } else {
+                            /// Figure out if this is a directory or a zero-sized file. Consider
+                            ///* it to be a directory either if the mode suggests so, or if
+                            ///* the final character in the name is '/'.
                             let mode: u32 = unsafe { (*p_cds).i_external_attr } >> 16;
                             if (mode & 16384 as u32 == 0) as i32 != 0 &&
                                         unsafe { (*p_cds).n_file } as i32 >= 1 &&
@@ -26889,16 +28263,28 @@ extern "C" fn zipfile_column(cur: *mut Sqlite3VtabCursor,
     return rc;
 }
 
+///* Return TRUE if the cursor is at EOF.
 extern "C" fn zipfile_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ZipfileCsr =
         cur as *mut ZipfileCsr as *const ZipfileCsr;
     return unsafe { (*p_csr).b_eof } as i32;
 }
 
+///* If aBlob is not NULL, then it points to a buffer nBlob bytes in size
+///* containing an entire zip archive image. Or, if aBlob is NULL, then pFile
+///* is guaranteed to be a file-handle open on a zip file.
+///*
+///* This function attempts to locate the EOCD record within the zip archive
+///* and populate *pEOCD with the results of decoding it. SQLITE_OK is
+///* returned if successful. Otherwise, an SQLite error code is returned and
+///* an English language error message may be left in virtual-table pTab.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     n_blob_1: i64, p_file_1: *mut FILE, p_eocd_1: *mut ZipfileEOCD) -> i32 {
     let mut a_read: *mut u8 = unsafe { (*p_tab_1).a_buffer };
+    /// Temporary buffer
     let mut n_read: i64 = 0 as i64;
+    /// Bytes to read from file
     let mut rc: i32 = 0;
     unsafe {
         memset(p_eocd_1 as *mut (), 0,
@@ -26906,7 +28292,10 @@ extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     };
     if a_blob_1 == core::ptr::null() {
         let mut i_off: i64 = 0 as i64;
+        /// Offset to read from
         let mut sz_file: i64 = 0 as i64;
+
+        /// Total size of file in bytes
         unsafe { fseek(p_file_1, 0 as i64, 2) };
         sz_file = unsafe { ftell(p_file_1) } as i64;
         if sz_file == 0 as i64 { return 0; }
@@ -27038,6 +28427,10 @@ extern "C" fn zipfile_read_eocd(p_tab_1: *mut ZipfileTab, a_blob_1: *const u8,
     return rc;
 }
 
+///* Add object pNew to the linked list that begins at ZipfileTab.pFirstEntry 
+///* and ends with pLastEntry. If argument pBefore is NULL, then pNew is added
+///* to the end of the list. Otherwise, it is added to the list immediately
+///* before pBefore (which is guaranteed to be a part of said list).
 extern "C" fn zipfile_add_entry(p_tab_1: &mut ZipfileTab,
     p_before_1: *mut ZipfileEntry, p_new_1: *mut ZipfileEntry) -> () {
     if !(((*p_tab_1).p_first_entry == core::ptr::null_mut()) as i32 ==
@@ -27129,15 +28522,25 @@ extern "C" fn zipfile_load_directory(p_tab_1: *mut ZipfileTab,
     return rc;
 }
 
+///* xFilter callback.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_tab: *mut ZipfileTab = unsafe { (*cur).p_vtab } as *mut ZipfileTab;
     let p_csr: *mut ZipfileCsr = cur as *mut ZipfileCsr;
     let mut z_file: *const i8 = core::ptr::null();
+    /// Zip file to scan
     let mut rc: i32 = 0;
+    /// Return Code
     let mut b_in_memory: i32 = 0;
+
+    /// True for an in-memory zipfile
     { let _ = idx_str_1; };
+
+    /// True for an in-memory zipfile
     { let _ = argc; };
+
+    /// True for an in-memory zipfile
     zipfile_reset_cursor(unsafe { &mut *p_csr });
     if !(unsafe { (*p_tab).z_file }).is_null() {
         z_file = unsafe { (*p_tab).z_file } as *const i8;
@@ -27232,6 +28635,7 @@ extern "C" fn zipfile_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+///* xBestIndex callback.
 extern "C" fn zipfile_best_index(tab: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let mut i: i32 = 0;
@@ -27306,6 +28710,7 @@ extern "C" fn zipfile_new_entry(z_path_1: *const i8) -> *mut ZipfileEntry {
     return p_new;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let p_cds: *mut ZipfileCDS = &mut (*p_entry_1).cds;
@@ -27407,6 +28812,8 @@ extern "C" fn zipfile_serialize_lfh(p_entry_1: &mut ZipfileEntry,
                     *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// Add the file name
     unsafe {
         memcpy(a as *mut (), unsafe { (*p_cds).z_file } as *const (),
             unsafe { (*p_cds).n_file } as i32 as u64)
@@ -27465,6 +28872,7 @@ extern "C" fn zipfile_append_entry(p_tab_1: *mut ZipfileTab,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
     p_mode_1: &mut u32, pz_err_1: &mut *mut i8) -> i32 {
     let mut z: *const i8 = core::ptr::null();
@@ -27584,9 +28992,15 @@ extern "C" fn zipfile_get_mode(p_val_1: *mut Sqlite3Value, b_is_dir_1: i32,
             }
         }
     }
+
+    /// The "mode" attribute is a directory, but data has been specified.
+    ///* Or vice-versa - no data but "mode" is a file or symlink.
     unreachable!();
 }
 
+///* Both (const char*) arguments point to nul-terminated strings. Argument
+///* nB is the value of strlen(zB). This function returns 0 if the strings are
+///* identical, ignoring any trailing '/' character in either path.
 extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     mut n_b_1: i32) -> i32 {
     let mut n_a: i32 = unsafe { strlen(z_a_1) } as i32;
@@ -27609,6 +29023,7 @@ extern "C" fn zipfile_compare_path(z_a_1: *const i8, z_b_1: *const i8,
     return 1;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -27629,6 +29044,11 @@ extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
         };
         return 1;
     }
+
+    /// Open a write fd on the file. Also load the entire central directory
+    ///* structure into memory. During the transaction any new file data is 
+    ///* appended to the archive file, but the central directory is accumulated
+    ///* in main-memory until the transaction is committed.
     unsafe {
         (*p_tab).p_write_fd =
             unsafe {
@@ -27661,6 +29081,8 @@ extern "C" fn zipfile_begin(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     return rc;
 }
 
+///* Return the current time as a 32-bit timestamp in UNIX epoch format (like
+///* time(2)).
 extern "C" fn zipfile_time() -> u32 {
     let p_vfs: *mut Sqlite3Vfs =
         unsafe { sqlite3_vfs_find(core::ptr::null()) };
@@ -27685,6 +29107,11 @@ extern "C" fn zipfile_time() -> u32 {
     return ret;
 }
 
+///* Return a 32-bit timestamp in UNIX epoch format.
+///*
+///* If the value passed as the only argument is either NULL or an SQL NULL,
+///* return the current time. Otherwise, return the value stored in (*pVal)
+///* cast to a 32-bit unsigned integer.
 extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     if p_val_1 == core::ptr::null_mut() ||
             unsafe { sqlite3_value_type(p_val_1) } == 5 {
@@ -27693,6 +29120,8 @@ extern "C" fn zipfile_get_time(p_val_1: *mut Sqlite3Value) -> u32 {
     return unsafe { sqlite3_value_int64(p_val_1) } as u32;
 }
 
+///* Unless it is NULL, entry pOld is currently part of the pTab->pFirstEntry
+///* linked list.  Remove it from the list and free the object.
 extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
     p_old_1: *mut ZipfileEntry) -> () {
     if !(p_old_1).is_null() {
@@ -27725,34 +29154,61 @@ extern "C" fn zipfile_remove_entry_from_list(p_tab_1: &mut ZipfileTab,
     }
 }
 
+///* xUpdate method.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value, p_rowid_1: *mut SqliteInt64) -> i32 {
     let mut p_tab: *mut ZipfileTab = core::ptr::null_mut();
     let mut rc: i32 = 0;
+    /// Return Code
     let mut p_new: *mut ZipfileEntry = core::ptr::null_mut();
+    /// New in-memory CDS entry
     let mut mode: u32 = 0 as u32;
+    /// Mode for new entry
     let mut m_time: u32 = 0 as u32;
+    /// Modification time for new entry
     let mut sz: i64 = 0 as i64;
+    /// Uncompressed size
     let mut z_path: *const i8 = core::ptr::null();
+    /// Path for new entry
     let mut n_path: i32 = 0;
+    /// strlen(zPath)
     let mut p_data: *const u8 = core::ptr::null();
+    /// Pointer to buffer containing content
     let mut n_data: i32 = 0;
+    /// Size of pData buffer in bytes
     let mut i_method: i32 = 0;
+    /// Compression method for new entry
     let mut p_free: *mut u8 = core::ptr::null_mut();
+    /// Free this
     let mut z_free: *mut i8 = core::ptr::null_mut();
+    /// Also free this
     let mut p_old: *mut ZipfileEntry = core::ptr::null_mut();
     let mut p_old2: *mut ZipfileEntry = core::ptr::null_mut();
     let mut b_update: i32 = 0;
+    /// True for an update that modifies "name"
     let mut b_is_dir: i32 = 0;
     let mut i_crc32: u32 = 0 as u32;
+    /// If this is a DELETE or UPDATE, find the archive entry to delete.
     let mut z_delete: *const i8 = core::ptr::null();
     let mut n_delete: i32 = 0;
     let mut z_update: *const i8 = core::ptr::null();
+    /// Check that "sz" and "rawdata" are both NULL:
+    /// data=NULL. A directory
+    /// Value specified for "data", and possibly "method". This must be
+    ///* a regular file or a symlink.
     let mut a_in: *const u8 = core::ptr::null();
     let mut n_in: i32 = 0;
     let mut b_auto: i32 = 0;
     let mut n_cmp: i32 = 0;
+    /// For a directory, check that the last character in the path is a
+    ///* '/'. This appears to be required for compatibility with info-zip
+    ///* (the unzip command on unix). It does not create directories
+    ///* otherwise.
+    /// Check that we're not inserting a duplicate entry -OR- updating an
+    ///* entry with a path, thereby making it into a duplicate.
     let mut p: *mut ZipfileEntry = core::ptr::null_mut();
+    /// Create the new CDS record.
     let mut p_csr: *mut ZipfileCsr = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -28214,9 +29670,36 @@ extern "C" fn zipfile_update(p_vtab_1: *mut Sqlite3Vtab, n_val_1: i32,
             }
         }
     }
+
+    /// Return Code
+    /// New in-memory CDS entry
+    /// Mode for new entry
+    /// Modification time for new entry
+    /// Uncompressed size
+    /// Path for new entry
+    /// strlen(zPath)
+    /// Pointer to buffer containing content
+    /// Size of pData buffer in bytes
+    /// Compression method for new entry
+    /// Free this
+    /// Also free this
+    /// True for an update that modifies "name"
+    /// If this is a DELETE or UPDATE, find the archive entry to delete.
+    /// Check that "sz" and "rawdata" are both NULL:
+    /// data=NULL. A directory
+    /// Value specified for "data", and possibly "method". This must be
+    ///* a regular file or a symlink.
+    /// For a directory, check that the last character in the path is a
+    ///* '/'. This appears to be required for compatibility with info-zip
+    ///* (the unzip command on unix). It does not create directories
+    ///* otherwise.
+    /// Check that we're not inserting a duplicate entry -OR- updating an
+    ///* entry with a path, thereby making it into a duplicate.
+    /// Create the new CDS record.
     unreachable!();
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
     -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -28284,6 +29767,8 @@ extern "C" fn zipfile_serialize_eocd(p: &ZipfileEOCD, a_buf_1: *mut u8)
             *__p = unsafe { (*__p).offset(__n as isize) };
         };
     }
+
+    /// Size of trailing comment in bytes
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
 
@@ -28304,6 +29789,8 @@ extern "C" fn zipfile_append_eocd(p_tab_1: *mut ZipfileTab,
             unsafe { (*p_tab_1).a_buffer } as *const u8, n_buf);
 }
 
+///* Serialize the CDS structure into buffer aBuf[]. Return the number
+///* of bytes written.
 extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     a_buf_1: *mut u8) -> i32 {
     let mut a: *mut u8 = a_buf_1;
@@ -28520,6 +30007,7 @@ extern "C" fn zipfile_serialize_cds(p_entry_1: &mut ZipfileEntry,
     return unsafe { a.offset_from(a_buf_1) } as i64 as i32;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
     let p_tab: *mut ZipfileTab = p_vtab_1 as *mut ZipfileTab;
     let mut rc: i32 = 0;
@@ -28545,7 +30033,9 @@ extern "C" fn zipfile_commit(p_vtab_1: *mut Sqlite3Vtab) -> i32 {
                 p = unsafe { (*p).p_next };
             }
         }
-        eocd.i_disk = 0 as u16;
+
+        /// Write out the EOCD record
+        (eocd.i_disk = 0 as u16);
         eocd.i_first_disk = 0 as u16;
         eocd.n_entry = n_entry as u16;
         eocd.n_entry_total = n_entry as u16;
@@ -28635,6 +30125,7 @@ extern "C" fn zipfile_function_cds(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* xFindFunction method.
 extern "C" fn zipfile_find_function(p_vtab_1: *mut Sqlite3Vtab, n_arg_1: i32,
     z_name_1: *const i8,
     px_func_1:
@@ -28690,10 +30181,19 @@ extern "C" fn zipfile_buffer_grow(p_buf_1: &mut ZipfileBuffer, n_byte_1: i64)
     return 0;
 }
 
+///* xStep() callback for the zipfile() aggregate. This can be called in
+///* any of the following ways:
+///*
+///*   SELECT zipfile(name,data) ...
+///*   SELECT zipfile(name,mode,mtime,data) ...
+///*   SELECT zipfile(name,mode,mtime,data,method) ...
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut p: *mut ZipfileCtx = core::ptr::null_mut();
+    /// Aggregate function context
     let mut e: ZipfileEntry = unsafe { core::mem::zeroed() };
+    /// New entry to add to zip archive
     let mut p_name: *mut Sqlite3Value = core::ptr::null_mut();
     let mut p_mode: *mut Sqlite3Value = core::ptr::null_mut();
     let mut p_mtime: *mut Sqlite3Value = core::ptr::null_mut();
@@ -28704,15 +30204,31 @@ extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     let mut rc: i32 = 0;
     let mut z_err: *mut i8 = core::ptr::null_mut();
     let mut i_method: i32 = 0;
+    /// Compression method to use (0 or 8)
     let mut a_data: *const u8 = core::ptr::null();
+    /// Possibly compressed data for new entry
     let mut n_data: i32 = 0;
+    /// Size of aData[] in bytes
     let mut sz_uncompressed: i32 = 0;
+    /// Size of data before compression
     let mut a_free: *mut u8 = core::ptr::null_mut();
+    /// Free this before returning
     let mut i_crc32: u32 = 0 as u32;
+    /// crc32 of uncompressed data
     let mut z_name: *mut i8 = core::ptr::null_mut();
+    /// Path (name) of new entry
     let mut n_name: i32 = 0;
+    /// Size of zName in bytes
     let mut z_free: *mut i8 = core::ptr::null_mut();
+    /// Free this before returning
     let mut n_byte: i64 = 0 as i64;
+    /// Martial the arguments into stack variables
+    /// Check that the 'name' parameter looks ok.
+    /// Inspect the 'method' parameter. This must be either 0 (store), 8 (use
+    ///* deflate compression) or NULL (choose automatically).
+    /// Now inspect the data. If this is NULL, then the new entry must be a
+    ///* directory.  Otherwise, figure out whether or not the data should
+    ///* be deflated or simply stored in the zip archive.
     let mut n_out: i32 = 0;
     let mut __state: i32 = 0;
     loop {
@@ -29129,6 +30645,7 @@ extern "C" fn zipfile_step(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     }
 }
 
+///* xFinalize() callback for zipfile aggregate function.
 extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     let mut p: *const ZipfileCtx = core::ptr::null();
     let mut eocd: ZipfileEOCD = unsafe { core::mem::zeroed() };
@@ -29182,8 +30699,35 @@ extern "C" fn zipfile_final(p_ctx_1: *mut Sqlite3Context) -> () {
     unsafe { sqlite3_free(unsafe { (*p).cds.a } as *mut ()) };
 }
 
+///* Register the "zipfile" virtual table.
+#[allow(unused_doc_comments)]
 extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
     unsafe {
+        /// iVersion
+        /// xCreate
+        /// xConnect
+        /// xBestIndex
+        /// xDisconnect
+        /// xDestroy
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof - check for end of scan
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate
+        /// xBegin
+        /// xSync
+        /// xCommit
+        /// xRollback
+        /// xFindMethod
+        /// xRename
+        /// xSavepoint
+        /// xRelease
+        /// xRollback
+        /// xShadowName
+        /// xIntegrity
         let mut rc: i32 =
             unsafe {
                 sqlite3_create_module(db,
@@ -29244,13 +30788,29 @@ extern "C" fn zipfile_register(db: *mut Sqlite3) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_zipfile_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
+
+    /// Unused parameter
     return zipfile_register(db);
 }
 
+///* Implementation of the "sqlar_compress(X)" SQL function.
+///*
+///* If the type of X is SQLITE_BLOB, and compressing that blob using
+///* zlib utility function compress() yields a smaller blob, return the
+///* compressed blob. Otherwise, return a copy of X.
+///*
+///* SQLar uses the "zlib format" for compressed content.  The zlib format
+///* contains a two-byte identification header and a four-byte checksum at
+///* the end.  This is different from ZIP which uses the raw deflate format.
+///*
+///* Future enhancements to SQLar might add support for new compression formats.
+///* If so, those new formats will be identified by alternative headers in the
+///* compressed data.
 extern "C" fn sqlar_compress_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     if !(argc == 1) as i32 as i64 != 0 {
@@ -29306,6 +30866,14 @@ extern "C" fn sqlar_compress_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the "sqlar_uncompress(X,SZ)" SQL function
+///*
+///* Parameter SZ is interpreted as an integer. If it is less than or
+///* equal to zero, then this function returns a copy of X. Or, if
+///* SZ is equal to the size of X when interpreted as a blob, also
+///* return a copy of X. Otherwise, decompress blob X using zlib
+///* utility function uncompress() and return the results (another
+///* blob).
 extern "C" fn sqlar_uncompress_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut n_data: ULong = 0 as ULong;
@@ -29361,18 +30929,21 @@ extern "C" fn sqlar_uncompress_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_sqlar_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"sqlar_compress".as_ptr() as *mut i8 as *const i8, 1,
                 1 | 2097152, core::ptr::null_mut(), Some(sqlar_compress_func),
                 None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -29385,6 +30956,7 @@ pub extern "C" fn sqlite3_sqlar_init(db: *mut Sqlite3,
     return rc;
 }
 
+///* sqlite3expert object.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3expert {
@@ -29412,6 +30984,8 @@ struct IdxTable {
     p_next: *mut IdxTable,
 }
 
+///* Information regarding a single database table. Extracted from 
+///* "PRAGMA table_info" by function idxGetTableInfo().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxColumn {
@@ -29420,6 +30994,7 @@ struct IdxColumn {
     i_pk: i32,
 }
 
+///* A single scan of a single table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxScan {
@@ -29432,6 +31007,12 @@ struct IdxScan {
     p_next_scan: *mut IdxScan,
 }
 
+///* A single constraint. Equivalent to either "col = ?" or "col < ?" (or
+///* any other type of single-ended range constraint on a column).
+///*
+///* pLink:
+///*   Used to temporarily link IdxConstraint objects into lists while
+///*   creating candidate indexes.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxConstraint {
@@ -29444,6 +31025,9 @@ struct IdxConstraint {
     p_link: *mut IdxConstraint,
 }
 
+///* An object of the following type is created for each unique table/write-op
+///* seen. The objects are stored in a singly-linked list beginning at
+///* sqlite3expert.pWrite.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxWrite {
@@ -29452,6 +31036,8 @@ struct IdxWrite {
     p_next: *mut IdxWrite,
 }
 
+///* Each statement being analyzed is represented by an instance of this
+///* structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxStatement {
@@ -29479,6 +31065,8 @@ struct IdxHashEntry {
     p_next: *mut IdxHashEntry,
 }
 
+///* Allocate and return nByte bytes of zeroed memory using sqlite3_malloc(). 
+///* If the allocation fails, set *pRc to SQLITE_NOMEM and return NULL.
 extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
     if !(*p_rc_1 == 0) as i32 as i64 != 0 {
@@ -29502,7 +31090,10 @@ extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     return p_ret;
 }
 
+///* Define and possibly pretend to use a useless collation sequence.
+///* This pretense allows expert to accept SQL using custom collations.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
     up4: i32, up5: *const ()) -> i32 {
     { let _ = up1; };
@@ -29517,9 +31108,12 @@ pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
                 c"0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// VDBE should never be run.
     return 0;
 }
 
+/// And a callback to register above upon actual need
 #[unsafe(no_mangle)]
 pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
     z_name_1: *const i8) -> () {
@@ -29530,6 +31124,7 @@ pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
     };
 }
 
+///* dummy functions for no-op implementation of UDFs during expert's work
 #[unsafe(no_mangle)]
 pub extern "C" fn dummy_udf(up1: *mut Sqlite3Context, up2: i32,
     up3: *mut *mut Sqlite3Value) -> () {
@@ -29557,6 +31152,7 @@ pub extern "C" fn dummy_ud_fvalue(up1: *mut Sqlite3Context) -> () {
     } else { { let _ = 0; } };
 }
 
+///* Register UDFs from user database with another.
 #[unsafe(no_mangle)]
 pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     db_dst_1: *mut Sqlite3) -> i32 {
@@ -29632,6 +31228,8 @@ pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     return rc;
 }
 
+///* An error associated with database handle db has just occurred. Pass
+///* the error message to callback function xOut.
 extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
     -> () {
     *pz_errmsg_1 =
@@ -29641,6 +31239,7 @@ extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
         };
 }
 
+///* Prepare an SQL statement.
 extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_sql_1: *const i8) -> i32 {
@@ -29656,6 +31255,7 @@ extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     return rc;
 }
 
+///* Prepare an SQL statement using the results of a printf() formatting.
 unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> i32 {
@@ -29674,6 +31274,12 @@ unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     return rc;
 }
 
+///* This function tests if the schema of the main database of database handle
+///* db contains an object named zTab. Assuming no error occurs, output parameter
+///* (*pbContains) is set to true if zTab exists, or false if it does not.
+///*
+///* Or, if an error occurs, an SQLite error code is returned. The final value
+///* of (*pbContains) is undefined in this case.
 extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     pb_contains_1: &mut i32) -> i32 {
     let z_sql: *const i8 =
@@ -29696,6 +31302,16 @@ extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     return rc;
 }
 
+///* Execute SQL command zSql using database handle db. If no error occurs,
+///* set (*pzErr) to NULL and return SQLITE_OK. 
+///*
+///* If an error does occur, return an SQLite error code and set (*pzErr) to
+///* point to a buffer containing an English language error message. Except,
+///* if the error message begins with "no such module:", then ignore the
+///* error and return as if the SQL statement had succeeded.
+///*
+///* This is used to copy as much of the database schema as possible while 
+///* ignoring any errors related to missing virtual table modules.
 extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     pz_err_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -29721,12 +31337,20 @@ extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     return rc;
 }
 
+///* End of virtual table implementation.
+///************************************************************************/
+////*
+///* Finalize SQL statement pStmt. If (*pRc) is SQLITE_OK when this function
+///* is called, set it to the return value of sqlite3_finalize() before
+///* returning. Otherwise, discard the sqlite3_finalize() return value.
 extern "C" fn idx_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
     if *p_rc_1 == 0 { *p_rc_1 = rc; }
 }
 
+///**********************************************************************
+///* Beginning of virtual table implementation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ExpertVtab {
@@ -29793,6 +31417,14 @@ extern "C" fn expert_dequote(z_in_1: *const i8) -> *mut i8 {
     return z_ret;
 }
 
+/// 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the r-tree virtual table.
+///*
+///*   argv[0]   -> module name
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> column names...
 extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -29844,6 +31476,8 @@ extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Allocate and return a new IdxConstraint object. Set the IdxConstraint.zColl
+///* variable to point to a copy of nul-terminated string zColl.
 extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     -> *mut IdxConstraint {
     let mut p_new: *mut IdxConstraint = core::ptr::null_mut();
@@ -29872,6 +31506,7 @@ extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     return p_new;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p: *const ExpertVtab =
@@ -29885,6 +31520,8 @@ extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
             *mut IdxScan;
     if !(p_scan).is_null() {
         let mut i: i32 = 0;
+
+        /// Link the new scan object into the list
         unsafe { (*p_scan).p_tab = unsafe { (*p).p_tab } };
         unsafe {
             (*p_scan).p_next_scan =
@@ -29999,6 +31636,8 @@ struct ExpertCsr {
     p_data: *mut Sqlite3Stmt,
 }
 
+/// 
+///* Virtual table module xOpen method.
 extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
@@ -30011,6 +31650,8 @@ extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     return rc;
 }
 
+/// 
+///* Virtual table module xClose method.
 extern "C" fn expert_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_data }) };
@@ -30018,6 +31659,8 @@ extern "C" fn expert_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+/// 
+///* Virtual table module xNext method.
 extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     let mut rc: i32 = 0;
@@ -30036,6 +31679,8 @@ extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+/// 
+///* Virtual table module xFilter method.
 extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
@@ -30064,11 +31709,17 @@ extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+///* Virtual table module xEof method.
+///*
+///* Return non-zero if the cursor does not currently point to a valid 
+///* record (i.e if the scan has finished), or zero otherwise.
 extern "C" fn expert_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
     return (unsafe { (*p_csr).p_data } == core::ptr::null_mut()) as i32;
 }
 
+/// 
+///* Virtual table module xColumn method.
 extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
@@ -30078,6 +31729,8 @@ extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// 
+///* Virtual table module xRowid method.
 extern "C" fn expert_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     { let _ = cur; };
@@ -30094,8 +31747,35 @@ extern "C" fn expert_update(p_vtab_1: *mut Sqlite3Vtab, n_data_1: i32,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
     unsafe {
+
+        /// iVersion
+        /// xCreate - create a table
+        /// xConnect - connect to an existing table
+        /// xBestIndex - Determine search strategy
+        /// xDisconnect - Disconnect from a table
+        /// xDestroy - Drop a table
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate - write data
+        /// xBegin - begin transaction
+        /// xSync - sync transaction
+        /// xCommit - commit transaction
+        /// xRollback - rollback transaction
+        /// xFindFunction - function overloading
+        /// xRename - rename the table
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         return unsafe {
                 sqlite3_create_module(unsafe { (*p).dbv },
                     c"expert".as_ptr() as *mut i8 as *const i8,
@@ -30105,6 +31785,14 @@ extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
     }
 }
 
+///* Attempt to allocate an IdxTable structure corresponding to table zTab
+///* in the main database of connection db. If successful, set (*ppOut) to
+///* point to the new object and return SQLITE_OK. Otherwise, return an
+///* SQLite error code and set (*ppOut) to NULL. In this case *pzErrmsg may be
+///* set to point to an error string.
+///*
+///* It is the responsibility of the caller to eventually free either the
+///* IdxTable object or error message using sqlite3_free().
 extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     pp_out_1: &mut *mut IdxTable, pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut p1: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -30263,6 +31951,13 @@ extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     return rc;
 }
 
+///* This function is a no-op if *pRc is set to anything other than 
+///* SQLITE_OK when it is called.
+///*
+///* If *pRc is initially set to SQLITE_OK, then the text specified by
+///* the printf() style arguments is appended to zIn and the result returned
+///* in a buffer allocated by sqlite3_malloc(). sqlite3_free() is called on
+///* zIn before returning.
 unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -30307,14 +32002,20 @@ unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     return z_ret;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
     pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = idx_register_vtab(p);
     let mut p_schema: *mut Sqlite3Stmt = core::ptr::null_mut();
-    rc =
+
+    /// For each table in the main db schema:
+    ///*
+    ///*   1) Add an entry to the p->pTable list, and
+    ///*   2) Create the equivalent virtual table in dbv.
+    (rc =
         idx_prepare_stmt(unsafe { (*p).db }, &mut p_schema, pz_errmsg_1,
             c"SELECT type, name, sql, 1,        substr(sql,1,14)==\'create virtual\' COLLATE nocase FROM sqlite_schema WHERE type IN (\'table\',\'view\') AND       substr(name,1,7)!=\'sqlite_\' COLLATE nocase  UNION ALL SELECT type, name, sql, 2, 0 FROM sqlite_schema WHERE type = \'trigger\'  AND tbl_name IN(SELECT name FROM sqlite_schema WHERE type = \'view\') ORDER BY 4, 5 DESC, 1".as_ptr()
-                    as *mut i8 as *const i8);
+                    as *mut i8 as *const i8));
     while rc == 0 && 100 == unsafe { sqlite3_step(p_schema) } {
         let z_type: *const i8 =
             unsafe { sqlite3_column_text(p_schema, 0) } as *const i8;
@@ -30364,11 +32065,13 @@ extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
                 let mut z_outer: *mut i8 = core::ptr::null_mut();
                 unsafe { (*p_tab).p_next = unsafe { (*p).p_table } };
                 unsafe { (*p).p_table = p_tab };
-                z_inner =
+
+                /// The statement the vtab will pass to sqlite3_declare_vtab()
+                (z_inner =
                     unsafe {
                         idx_append_text(&mut rc, core::ptr::null_mut(),
                             c"CREATE TABLE x(".as_ptr() as *mut i8 as *const i8)
-                    };
+                    });
                 {
                     i = 0;
                     '__b258: loop {
@@ -30398,12 +32101,14 @@ extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
                         idx_append_text(&mut rc, z_inner,
                             c")".as_ptr() as *mut i8 as *const i8)
                     };
-                z_outer =
+
+                /// The CVT statement to create the vtab
+                (z_outer =
                     unsafe {
                         idx_append_text(&mut rc, core::ptr::null_mut(),
                             c"CREATE VIRTUAL TABLE %Q USING expert(%Q)".as_ptr() as
                                     *mut i8 as *const i8, z_name, z_inner)
-                    };
+                    });
                 if rc == 0 {
                     rc =
                         unsafe {
@@ -30481,6 +32186,7 @@ extern "C" fn idx_auth_callback(p_ctx_1: *mut (), e_op_1: i32, z3: *const i8,
     return rc;
 }
 
+///* Free all elements of the linked list starting at pConstraint.
 extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
     let mut p_next: *mut IdxConstraint = core::ptr::null_mut();
     let mut p: *mut IdxConstraint = core::ptr::null_mut();
@@ -30498,6 +32204,8 @@ extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
     }
 }
 
+///* Free all elements of the linked list starting from pScan up until pLast
+///* (pLast is not freed).
 extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
     -> () {
     let mut p: *mut IdxScan = core::ptr::null_mut();
@@ -30519,6 +32227,8 @@ extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
     }
 }
 
+///* Free all elements of the linked list starting from pStatement up 
+///* until pLast (pLast is not freed).
 extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
     p_last_1: *mut IdxStatement) -> () {
     let mut p: *mut IdxStatement = core::ptr::null_mut();
@@ -30539,6 +32249,7 @@ extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
     }
 }
 
+///* Free the linked list of IdxTable objects starting at pTab.
 extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
     let mut p_iter: *mut IdxTable = core::ptr::null_mut();
     let mut p_next: *mut IdxTable = core::ptr::null_mut();
@@ -30556,6 +32267,7 @@ extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
     }
 }
 
+///* Free the linked list of IdxWrite objects starting at pTab.
 extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
     let mut p_iter: *mut IdxWrite = core::ptr::null_mut();
     let mut p_next: *mut IdxWrite = core::ptr::null_mut();
@@ -30573,6 +32285,7 @@ extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
     }
 }
 
+///* Reset an IdxHash hash table.
 extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
     let mut i: i32 = 0;
     {
@@ -30607,6 +32320,9 @@ extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
     };
 }
 
+///* Free an (sqlite3expert*) handle and all associated resources. There 
+///* should be one call to this function for each successful call to 
+///* sqlite3-expert_new().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
     if !(p).is_null() {
@@ -30623,6 +32339,13 @@ pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
     }
 }
 
+///* Create a new sqlite3expert object.
+///*
+///* If successful, a pointer to the new object is returned and (*pzErr) set
+///* to NULL. Or, if an error occurs, NULL is returned and (*pzErr) set to
+///* an English-language error message. In this case it is the responsibility
+///* of the caller to eventually free the error message buffer using
+///* sqlite3_free().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     pz_errmsg_1: *mut *mut i8) -> *mut Sqlite3expert {
@@ -30713,6 +32436,32 @@ pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     return p_new;
 }
 
+///* Configure an sqlite3expert object.
+///*
+///* EXPERT_CONFIG_SAMPLE:
+///*   By default, sqlite3_expert_analyze() generates sqlite_stat1 data for
+///*   each candidate index. This involves scanning and sorting the entire
+///*   contents of each user database table once for each candidate index
+///*   associated with the table. For large databases, this can be 
+///*   prohibitively slow. This option allows the sqlite3expert object to
+///*   be configured so that sqlite_stat1 data is instead generated based on a
+///*   subset of each table, or so that no sqlite_stat1 data is used at all.
+///*
+///*   A single integer argument is passed to this option. If the value is less
+///*   than or equal to zero, then no sqlite_stat1 data is generated or used by
+///*   the analysis - indexes are recommended based on the database schema only.
+///*   Or, if the value is 100 or greater, complete sqlite_stat1 data is
+///*   generated for each candidate index (this is the default). Finally, if the
+///*   value falls between 0 and 100, then it represents the percentage of user
+///*   table rows that should be considered when generating sqlite_stat1 data.
+///*
+///*   Examples:
+///*
+///*     // Do not generate any sqlite_stat1 data
+///*     sqlite3_expert_config(pExpert, EXPERT_CONFIG_SAMPLE, 0);
+///*
+///*     // Generate sqlite_stat1 data based on 10% of the rows in each table.
+///*     sqlite3_expert_config(pExpert, EXPERT_CONFIG_SAMPLE, 10);
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     mut __va0: ...) -> i32 {
@@ -30745,7 +32494,27 @@ pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     return rc;
 }
 
+///* Specify zero or more SQL statements to be included in the analysis.
+///*
+///* Buffer zSql must contain zero or more complete SQL statements. This
+///* function parses all statements contained in the buffer and adds them
+///* to the internal list of statements to analyze. If successful, SQLITE_OK
+///* is returned and (*pzErr) set to NULL. Or, if an error occurs - for example
+///* due to a error in the SQL - an SQLite error code is returned and (*pzErr)
+///* may be set to point to an English language error message. In this case
+///* the caller is responsible for eventually freeing the error message buffer
+///* using sqlite3_free().
+///*
+///* If an error does occur while processing one of the statements in the
+///* buffer passed as the second argument, none of the statements in the
+///* buffer are added to the analysis.
+///*
+///* This function must be called before sqlite3_expert_analyze(). If a call
+///* to this function is made on an sqlite3expert object that has already
+///* been passed to sqlite3_expert_analyze() SQLITE_MISUSE is returned
+///* immediately and no statements are added to the analysis.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     z_sql_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
     let p_scan_orig: *mut IdxScan = (*p).p_scan;
@@ -30756,7 +32525,9 @@ pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     while rc == 0 && !(z_stmt).is_null() &&
             unsafe { *z_stmt.offset(0 as isize) } != 0 {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
-        rc = idx_prepare_stmt((*p).db, &mut p_stmt, pz_err_1, z_stmt);
+
+        /// Ensure that the provided statement compiles against user's DB.
+        (rc = idx_prepare_stmt((*p).db, &mut p_stmt, pz_err_1, z_stmt));
         if rc != 0 { break; }
         unsafe { sqlite3_finalize(p_stmt) };
         rc =
@@ -30803,6 +32574,7 @@ pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
     pz_err_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -30814,11 +32586,13 @@ extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
         let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut rc: i32 = 0;
         let mut z_write: *mut i8 = core::ptr::null_mut();
-        rc =
+
+        /// Create the table and its triggers in the temp schema
+        (rc =
             unsafe {
                 idx_printf_prepare_stmt((*p).db, &mut p_select, pz_err_1,
                     z_sql, z_tab, z_tab)
-            };
+            });
         while rc == 0 && 100 == unsafe { sqlite3_step(p_select) } {
             let z_create: *const i8 =
                 unsafe { sqlite3_column_text(p_select, 0) } as *const i8;
@@ -31055,6 +32829,8 @@ extern "C" fn idx_process_triggers(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Return true if list pList (linked by IdxConstraint.pLink) contains
+///* a constraint compatible with *p. Otherwise return false.
 extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     p: &IdxConstraint) -> i32 {
     let mut p_cmp: *const IdxConstraint = core::ptr::null();
@@ -31072,6 +32848,13 @@ extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     return 0;
 }
 
+///* Search database dbm for an index compatible with the one idxCreateFromCons()
+///* would create from arguments pScan, pEq and pTail. If no error occurs and 
+///* such an index is found, return non-zero. Or, if no such index is found,
+///* return zero.
+///*
+///* If an error occurs, set *pRc to an SQLite error code and return zero.
+#[allow(unused_doc_comments)]
 extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     p_scan_1: &IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -31080,6 +32863,7 @@ extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     let mut p_idx_list: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut p_iter: *mut IdxConstraint = core::ptr::null_mut();
     let mut n_eq: i32 = 0;
+    /// Number of elements in pEq
     let mut rc: i32 = 0;
     {
         p_iter = p_eq_1;
@@ -31176,6 +32960,8 @@ extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     return 0;
 }
 
+///* Return true if zId must be quoted in order to use it as an SQL
+///* identifier, or false otherwise.
 extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let n_id: i32 = unsafe { strlen(z_id_1) } as i32;
@@ -31211,6 +32997,8 @@ extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     return 0;
 }
 
+///* This function appends an index column definition suitable for constraint
+///* pCons to the string passed as zIn and returns the result.
 extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     p_tab_1: &IdxTable, p_cons_1: &IdxConstraint) -> *mut i8 {
     let mut z_ret: *mut i8 = z_in_1;
@@ -31272,6 +33060,9 @@ extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     return z_ret;
 }
 
+/// Callback for sqlite3_exec() with query with leading count(*) column.
+///The first argument is expected to be an int*, referent to be incremented
+///if that leading column is not exactly '0'.
 extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     az_results_1: *mut *mut i8, az_columns_1: *mut *mut i8) -> i32 {
     { let _ = az_columns_1; };
@@ -31291,6 +33082,8 @@ extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     return 0;
 }
 
+///* Return the index of the hash bucket that the string specified by the
+///* arguments to this function belongs.
 extern "C" fn idx_hash_string(z: *const i8, n: i32) -> i32 {
     let mut ret: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -31309,6 +33102,9 @@ extern "C" fn idx_hash_string(z: *const i8, n: i32) -> i32 {
     return (ret % 1023 as u32) as i32;
 }
 
+///* If zKey is already present in the hash table, return non-zero and do
+///* nothing. Otherwise, add an entry with key zKey and payload string zVal to
+///* the hash table passed as the second argument.
 extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     z_key_1: *const i8, z_val_1: *const i8) -> i32 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -31380,6 +33176,7 @@ extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -31422,11 +33219,13 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
             }
         }
         if rc == 0 {
+            /// Hash the list of columns to come up with a name for the index
             let z_table: *const i8 =
                 unsafe { (*unsafe { (*p_scan_1).p_tab }).z_name } as
                     *const i8;
             let quote_table: i32 = idx_identifier_requires_quotes(z_table);
             let mut z_name: *mut i8 = core::ptr::null_mut();
+            /// Index name
             let mut collisions: i32 = 0;
             '__b288: loop {
                 '__c288: loop {
@@ -31453,9 +33252,11 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
                                     *const i8, z_table, h)
                         };
                     if z_name == core::ptr::null_mut() { break '__b288; }
-                    z_fmt =
+
+                    /// Is is unique among table, view and index names?
+                    (z_fmt =
                         c"SELECT count(*) FROM sqlite_schema WHERE name=%Q AND type in (\'index\',\'table\',\'view\')".as_ptr()
-                                as *mut i8 as *const i8;
+                                as *mut i8 as *const i8);
                     z_find = unsafe { sqlite3_mprintf(z_fmt, z_name) };
                     i = 0;
                     rc =
@@ -31480,7 +33281,9 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
                 }
             }
             if collisions != 0 {
-                rc = 5 | 3 << 8;
+
+                /// This return means "Gave up trying to find a unique index name."
+                (rc = 5 | 3 << 8);
             } else if z_name == core::ptr::null_mut() {
                 rc = 7;
             } else {
@@ -31519,6 +33322,7 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_tail_1: *mut IdxConstraint) -> i32 {
     let mut p1: *mut IdxConstraint = core::ptr::null_mut();
@@ -31541,7 +33345,10 @@ extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
             p_con = unsafe { (*p_con).p_next };
         }
     }
-    rc = idx_create_from_cons(unsafe { &mut *p }, p_scan_1, p1, p_tail_1);
+
+    /// Create an index using the == constraints collected above. And the
+    ///* range constraint/ORDER BY terms passed in by the caller, if any.
+    (rc = idx_create_from_cons(unsafe { &mut *p }, p_scan_1, p1, p_tail_1));
     if p_tail_1 == core::ptr::null_mut() {
         {
             p_con = unsafe { (*p_scan_1).p_range };
@@ -31573,6 +33380,8 @@ extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Create candidate indexes in database [dbm] based on the data in 
+///* linked-list pScan.
 extern "C" fn idx_create_candidates(p: *mut Sqlite3expert) -> i32 {
     let mut rc: i32 = 0;
     let mut p_iter: *mut IdxScan = core::ptr::null_mut();
@@ -31638,6 +33447,7 @@ extern "C" fn idx_largest_index(db: *mut Sqlite3, pn_max_1: &mut i32,
     return rc;
 }
 
+///* Implementation of scalar function sqlite_expert_rem().
 extern "C" fn idx_rem_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut IdxRemCtx =
@@ -31894,6 +33704,8 @@ extern "C" fn idx_build_sample_table(p: &Sqlite3expert, z_tab_1: *const i8)
     return rc;
 }
 
+///* If zKey/nKey is present in the hash table, return a pointer to the 
+///* hash-entry object.
 extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     mut n_key_1: i32) -> *mut IdxHashEntry {
     let mut i_hash: i32 = 0;
@@ -31929,6 +33741,7 @@ extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     return core::ptr::null_mut();
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     p_index_x_info_1: *mut Sqlite3Stmt, p_write_stat_1: *mut Sqlite3Stmt,
     z_tab_1: *const i8, z_idx_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
@@ -31947,6 +33760,8 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
                 c"p->iSample>0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// Formulate the query text
     unsafe { sqlite3_bind_text(p_index_x_info_1, 1, z_idx_1, -1, None) };
     while 0 == rc && 100 == unsafe { sqlite3_step(p_index_x_info_1) } {
         let z_comma: *const i8 =
@@ -31958,6 +33773,8 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
         let z_coll: *const i8 =
             unsafe { sqlite3_column_text(p_index_x_info_1, 1) } as *const i8;
         if z_name == core::ptr::null() {
+
+            /// This index contains an expression. Ignore it.
             unsafe { sqlite3_free(z_cols as *mut ()) };
             unsafe { sqlite3_free(z_order as *mut ()) };
             return unsafe { sqlite3_reset(p_index_x_info_1) };
@@ -32118,6 +33935,11 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     return rc;
 }
 
+///* This function is called as part of sqlite3_expert_analyze(). Candidate
+///* indexes have already been created in database sqlite3expert.dbm, this
+///* function populates sqlite_stat1 table in the same database.
+///*
+///* The stat1 data is generated by querying the
 extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -32270,12 +34092,17 @@ extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Initialize an IdxHash hash table.
 extern "C" fn idx_hash_init(p_hash_1: *mut IdxHash) -> () {
     unsafe {
         memset(p_hash_1 as *mut (), 0, core::mem::size_of::<IdxHash>() as u64)
     };
 }
 
+///* If the hash table contains an entry with a key equal to the string
+///* passed as the final two arguments to this function, return a pointer
+///* to the payload string. Otherwise, if zKey/nKey is not present in the
+///* hash table, return NULL.
 extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     n_key_1: i32) -> *const i8 {
     let p_entry: *const IdxHashEntry =
@@ -32287,6 +34114,10 @@ extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     return core::ptr::null();
 }
 
+///* This function is called after candidate indexes have been created. It
+///* runs all the queries to see which indexes they prefer, and populates
+///* IdxStatement.zIdx and IdxStatement.zEQP with the results.
+#[allow(unused_doc_comments)]
 extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     -> i32 {
     let mut p_stmt: *mut IdxStatement = core::ptr::null_mut();
@@ -32295,6 +34126,9 @@ extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     let mut h_idx: IdxHash = unsafe { core::mem::zeroed() };
     let mut p_entry: *const IdxHashEntry = core::ptr::null();
     let mut p_explain: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// int iId = sqlite3_column_int(pExplain, 0); */
+    ///      /* int iParent = sqlite3_column_int(pExplain, 1); */
+    ///      /* int iNotUsed = sqlite3_column_int(pExplain, 2);
     let mut z_detail: *const i8 = core::ptr::null();
     let mut n_detail: i32 = 0;
     let mut i: i32 = 0;
@@ -32474,15 +34308,38 @@ extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
             }
         }
     }
+
+    /// int iId = sqlite3_column_int(pExplain, 0); */
+    ///      /* int iParent = sqlite3_column_int(pExplain, 1); */
+    ///      /* int iNotUsed = sqlite3_column_int(pExplain, 2);
     unreachable!();
 }
 
+///* This function is called after the sqlite3expert object has been configured
+///* with all SQL statements using sqlite3_expert_sql() to actually perform
+///* the analysis. Once this function has been called, it is not possible to
+///* add further SQL statements to the analysis.
+///*
+///* If successful, SQLITE_OK is returned and (*pzErr) is set to NULL. Or, if
+///* an error occurs, an SQLite error code is returned and (*pzErr) set to 
+///* point to a buffer containing an English language error message. In this
+///* case it is the responsibility of the caller to eventually free the buffer
+///* using sqlite3_free().
+///*
+///* If an error does occur within this function, the sqlite3expert object
+///* is no longer useful for any purpose. At that point it is no longer
+///* possible to add further SQL statements to the object or to re-attempt
+///* the analysis. The sqlite3expert object must still be freed using a call
+///* sqlite3_expert_destroy().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
     let mut p_entry: *const IdxHashEntry = core::ptr::null();
-    rc = idx_process_triggers(p, pz_err_1);
+
+    /// Do trigger processing to collect any extra IdxScan structures
+    (rc = idx_process_triggers(p, pz_err_1));
     if rc == 0 {
         rc = idx_create_candidates(p);
     } else if rc == 5 | 3 << 8 {
@@ -32525,6 +34382,9 @@ pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Return the total number of statements loaded using sqlite3_expert_sql().
+///* The total number of SQL statements may be different from the total number
+///* to calls to sqlite3_expert_sql().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     let mut n_ret: i32 = 0;
@@ -32534,6 +34394,38 @@ pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     return n_ret;
 }
 
+///* Return a component of the report.
+///*
+///* This function is called after sqlite3_expert_analyze() to extract the
+///* results of the analysis. Each call to this function returns either a
+///* NULL pointer or a pointer to a buffer containing a nul-terminated string.
+///* The value passed as the third argument must be one of the EXPERT_REPORT_*
+///* #define constants defined below.
+///*
+///* For some EXPERT_REPORT_* parameters, the buffer returned contains 
+///* information relating to a specific SQL statement. In these cases that
+///* SQL statement is identified by the value passed as the second argument.
+///* SQL statements are numbered from 0 in the order in which they are parsed.
+///* If an out-of-range value (less than zero or equal to or greater than the
+///* value returned by sqlite3_expert_count()) is passed as the second argument
+///* along with such an EXPERT_REPORT_* parameter, NULL is always returned.
+///*
+///* EXPERT_REPORT_SQL:
+///*   Return the text of SQL statement iStmt.
+///*
+///* EXPERT_REPORT_INDEXES:
+///*   Return a buffer containing the CREATE INDEX statements for all recommended
+///*   indexes for statement iStmt. If there are no new recommeded indexes, NULL 
+///*   is returned.
+///*
+///* EXPERT_REPORT_PLAN:
+///*   Return a buffer containing the EXPLAIN QUERY PLAN output for SQL query
+///*   iStmt after the proposed indexes have been added to the database schema.
+///*
+///* EXPERT_REPORT_CANDIDATES:
+///*   Return a pointer to a buffer containing the CREATE INDEX statements 
+///*   for all indexes that were tested (for all SQL statements). The iStmt
+///*   parameter is ignored for EXPERT_REPORT_CANDIDATES calls.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_report(p: &Sqlite3expert, i_stmt_1: i32,
     e_report_1: i32) -> *const i8 {
@@ -32576,6 +34468,23 @@ pub extern "C" fn sqlite3_expert_report(p: &Sqlite3expert, i_stmt_1: i32,
     return z_ret;
 }
 
+///* nKeyVal:
+///*   The number of values that make up the 'key' for the current pCheck
+///*   statement.
+///*
+///* rc:
+///*   Error code returned by most recent sqlite3_intck_step() or 
+///*   sqlite3_intck_unlock() call. This is set to SQLITE_DONE when
+///*   the integrity-check operation is finished.
+///*
+///* zErr:
+///*   If the object has entered the error state, this is the error message.
+///*   Is freed using sqlite3_free() when the object is deleted.
+///*
+///* zTestSql:
+///*   The value returned by the most recent call to sqlite3_intck_testsql().
+///*   Each call to testsql() frees the previous zTestSql value (using
+///*   sqlite3_free()) and replaces it with the new value it will return.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3Intck {
@@ -32592,6 +34501,12 @@ struct Sqlite3Intck {
     z_test_sql: *mut i8,
 }
 
+///* Return the size in bytes of the first token in nul-terminated buffer z.
+///* For the purposes of this call, a token is either:
+///*
+///*   *  a quoted SQL string,
+///   *  a contiguous series of ascii alphabet characters, or
+///   *  any other single byte.
 extern "C" fn intck_get_token(z: *const i8) -> i32 {
     let c: i8 = unsafe { *z.offset(0 as isize) } as i8;
     let mut i_ret: i32 = 1;
@@ -32628,11 +34543,25 @@ extern "C" fn intck_get_token(z: *const i8) -> i32 {
     return i_ret;
 }
 
+///* Return true if argument c is an ascii whitespace character.
 extern "C" fn intck_is_space(c: i8) -> i32 {
     return (c as i32 == ' ' as i32 || c as i32 == '\t' as i32 ||
                     c as i32 == '\n' as i32 || c as i32 == '\r' as i32) as i32;
 }
 
+///* Argument z points to the text of a CREATE INDEX statement. This function
+///* identifies the part of the text that contains either the index WHERE 
+///* clause (if iCol<0) or the iCol'th column of the index.
+///*
+///* If (iCol<0), the identified fragment does not include the "WHERE" keyword,
+///* only the expression that follows it. If (iCol>=0) then the identified
+///* fragment does not include any trailing sort-order keywords - "ASC" or 
+///* "DESC".
+///*
+///* If the CREATE INDEX statement does not contain the requested field or
+///* clause, NULL is returned and (*pnByte) is set to 0. Otherwise, a pointer to
+///* the identified fragment is returned and output parameter (*pnByte) set
+///* to its size in bytes.
 extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     pn_byte_1: &mut i32) -> *const i8 {
     let mut i_off: i32 = 0;
@@ -32743,6 +34672,9 @@ extern "C" fn intck_parse_create_index(z: *const i8, i_col_1: i32,
     return z_ret;
 }
 
+///* User-defined SQL function wrapper for intckParseCreateIndex():
+///*
+///*     SELECT parse_create_index(<sql>, <icol>);
 extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
     n_val_1: i32, ap_val_1: *mut *mut Sqlite3Value) -> () {
     let z_sql: *const i8 =
@@ -32772,6 +34704,10 @@ extern "C" fn intck_parse_create_index_func(p_ctx_1: *mut Sqlite3Context,
     };
 }
 
+///* Close and release all resources associated with a handle opened by an
+///* earlier call to sqlite3_intck_open(). The results of using an
+///* integrity-check handle after it has been passed to this function are
+///* undefined.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
     if !(p).is_null() {
@@ -32790,6 +34726,16 @@ pub extern "C" fn sqlite3_intck_close(p: *mut Sqlite3Intck) -> () {
     }
 }
 
+///* Open a new incremental integrity-check object. If successful, populate
+///* output variable (*ppOut) with the new object handle and return SQLITE_OK.
+///* Or, if an error occurs, set (*ppOut) to NULL and return an SQLite error
+///* code (e.g. SQLITE_NOMEM).
+///*
+///* The integrity-check will be conducted on database zDb (which must be "main",
+///* "temp", or the name of an attached database) of database handle db. Once
+///* this function has been called successfully, the caller should not use 
+///* database handle db until the integrity-check object has been destroyed
+///* using sqlite3_intck_close().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     pp_out: &mut *mut Sqlite3Intck) -> i32 {
@@ -32837,6 +34783,8 @@ pub extern "C" fn sqlite3_intck_open(db: *mut Sqlite3, z_db_arg: *const i8,
     return rc;
 }
 
+///* Some error has occurred while using database p->db. Save the error message
+///* and error code currently held by the database handle in p->rc and p->zErr.
 extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
     (*p).rc = unsafe { sqlite3_errcode((*p).db) };
     unsafe { sqlite3_free((*p).z_err as *mut ()) };
@@ -32847,6 +34795,12 @@ extern "C" fn intck_save_errmsg(p: &mut Sqlite3Intck) -> () {
         };
 }
 
+///* If the handle passed as the first argument is already in the error state,
+///* then this function is a no-op (returns NULL immediately). Otherwise, if an
+///* error occurs within this function, it leaves an error in said handle.
+///*
+///* Otherwise, this function attempts to prepare SQL statement zSql and
+///* return the resulting statement handle to the user.
 extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -32872,6 +34826,14 @@ extern "C" fn intck_prepare(p: *mut Sqlite3Intck, z_sql_1: *const i8)
     return p_ret;
 }
 
+///* If the handle passed as the first argument is already in the error state,
+///* then this function is a no-op (returns NULL immediately). Otherwise, if an
+///* error occurs within this function, it leaves an error in said handle.
+///*
+///* Otherwise, this function treats argument zFmt as a printf() style format
+///* string. It formats it according to the trailing arguments and then 
+///* attempts to prepare the results and return the resulting prepared
+///* statement.
 unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut Sqlite3Stmt {
     let mut p_ret: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -32888,6 +34850,8 @@ unsafe extern "C" fn intck_prepare_fmt(p: *mut Sqlite3Intck,
     return p_ret;
 }
 
+///* A wrapper around sqlite3_mprintf() that uses the sqlite3_intck error
+///* code convention.
 unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -32904,6 +34868,9 @@ unsafe extern "C" fn intck_mprintf(p: &mut Sqlite3Intck, z_fmt_1: *const i8,
     return z_ret;
 }
 
+///* Finalize SQL statement pStmt. If an error occurs and the handle passed
+///* as the first argument does not already contain an error, store the
+///* error in the handle.
 extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
@@ -32912,6 +34879,9 @@ extern "C" fn intck_finalize(p: *mut Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     }
 }
 
+///* Find the next database object (table or index) to check. If successful,
+///* set sqlite3_intck.zObj to point to a nul-terminated buffer containing
+///* the object's name before returning.
 extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let z_prev: *mut i8 = unsafe { (*p).z_obj };
@@ -32971,12 +34941,16 @@ extern "C" fn intck_find_object(p: *mut Sqlite3Intck) -> () {
     unsafe { sqlite3_free(z_prev as *mut ()) };
 }
 
+///* If there is already an error in handle p, return it. Otherwise, call
+///* sqlite3_step() on the statement handle and return that value.
 extern "C" fn intck_step(p: &Sqlite3Intck, p_stmt_1: *mut Sqlite3Stmt)
     -> i32 {
     if (*p).rc != 0 { return (*p).rc; }
     return unsafe { sqlite3_step(p_stmt_1) };
 }
 
+///* Return true if sqlite3_intck.db has automatic indexes enabled, false
+///* otherwise.
 extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     let mut b_ret: i32 = 0;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -32990,6 +34964,9 @@ extern "C" fn intck_get_auto_index(p: *mut Sqlite3Intck) -> i32 {
     return b_ret;
 }
 
+///* Execute SQL statement zSql. There is no way to obtain any results 
+///* returned by the statement. This function uses the sqlite3_intck error
+///* code convention.
 extern "C" fn intck_exec(p: *mut Sqlite3Intck, z_sql_1: *const i8) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     p_stmt = intck_prepare(p, z_sql_1);
@@ -32997,6 +34974,7 @@ extern "C" fn intck_exec(p: *mut Sqlite3Intck, z_sql_1: *const i8) -> () {
     intck_finalize(p, p_stmt);
 }
 
+///* Return true if zObj is an index, or false otherwise.
 extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     -> i32 {
     let mut b_ret: i32 = 0;
@@ -33014,6 +34992,14 @@ extern "C" fn intck_is_index(p: *mut Sqlite3Intck, z_obj_1: *const i8)
     return b_ret;
 }
 
+///* Return a pointer to a nul-terminated buffer containing the SQL statement
+///* used to check database object zObj (a table or index) for corruption.
+///* If parameter zPrev is not NULL, then it must be a string containing the
+///* vector key required to restart the check where it left off last time.
+///* If pnKeyVal is not NULL, then (*pnKeyVal) is set to the number of
+///* columns in the vector key value for the specified object.
+///*
+///* This function uses the sqlite3_intck error code convention.
 extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     z_prev_1: *const i8, pn_key_val_1: *mut i32) -> *mut i8 {
     let mut z_ret: *mut i8 = core::ptr::null_mut();
@@ -33071,6 +35057,23 @@ extern "C" fn intck_check_object_sql(p: *mut Sqlite3Intck, z_obj_1: *const i8,
     return z_ret;
 }
 
+///* Do the next step of the integrity-check operation specified by the handle
+///* passed as the only argument. This function returns SQLITE_DONE if the 
+///* integrity-check operation is finished, or an SQLite error code if
+///* an error occurs, or SQLITE_OK if no error occurs but the integrity-check
+///* is not finished. It is not considered an error if database corruption
+///* is encountered.
+///*
+///* Following a successful call to sqlite3_intck_step() (one that returns
+///* SQLITE_OK), sqlite3_intck_message() returns a non-NULL value if 
+///* corruption was detected in the db.
+///*
+///* If an error occurs and a value other than SQLITE_OK or SQLITE_DONE is
+///* returned, then the integrity-check handle is placed in an error state.
+///* In this state all subsequent calls to sqlite3_intck_step() or 
+///* sqlite3_intck_unlock() will immediately return the same error. The 
+///* sqlite3_intck_error() method may be used to obtain an English language 
+///* error message in this case.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 {
@@ -33141,6 +35144,12 @@ pub extern "C" fn sqlite3_intck_step(p: *mut Sqlite3Intck) -> i32 {
     return unsafe { (*p).rc };
 }
 
+///* If the previous call to sqlite3_intck_step() encountered corruption 
+///* within the database, then this function returns a pointer to a buffer
+///* containing a nul-terminated string describing the corruption in 
+///* English. If the previous call to sqlite3_intck_step() did not encounter
+///* corruption, or if there was no previous call, this function returns 
+///* NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     if !((*p).p_check == core::ptr::null_mut() ||
@@ -33160,6 +35169,10 @@ pub extern "C" fn sqlite3_intck_message(p: &Sqlite3Intck) -> *const i8 {
     return core::ptr::null();
 }
 
+///* This is used by sqlite3_intck_unlock() to save the vector key value 
+///* required to restart the current pCheck query as a nul-terminated string 
+///* in p->zKey.
+#[allow(unused_doc_comments)]
 extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     let mut ii: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -33192,6 +35205,8 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
         z_dir = unsafe { sqlite3_column_text(p_xinfo, 0) } as *const i8;
     }
     if z_dir == core::ptr::null() {
+        /// Object is a table, not an index. This is the easy case,as there are 
+        ///* no DESC columns or NULL values in a primary key.
         let mut z_sep: *const i8 =
             c"SELECT \'(\' || ".as_ptr() as *mut i8 as *const i8;
         {
@@ -33217,6 +35232,8 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
                     c"%z || \')\'".as_ptr() as *mut i8 as *const i8, z_sql)
             };
     } else {
+
+        /// Object is an index.
         if !(unsafe { (*p).n_key_val } > 1) as i32 as i64 != 0 {
             unsafe {
                 __assert_rtn(c"intckSaveKey".as_ptr() as *const i8,
@@ -33363,6 +35380,16 @@ extern "C" fn intck_save_key(p: *mut Sqlite3Intck) -> () {
     intck_finalize(p, p_xinfo);
 }
 
+///* Close any read-transaction opened by an earlier call to 
+///* sqlite3_intck_step(). Any subsequent call to sqlite3_intck_step() will
+///* open a new transaction. Return SQLITE_OK if successful, or an SQLite error
+///* code otherwise.
+///*
+///* If an error occurs, then the integrity-check handle is placed in an error
+///* state. In this state all subsequent calls to sqlite3_intck_step() or 
+///* sqlite3_intck_unlock() will immediately return the same error. The 
+///* sqlite3_intck_error() method may be used to obtain an English language 
+///* error message in this case.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     if unsafe { (*p).rc } == 0 && !(unsafe { (*p).p_check }).is_null() {
@@ -33382,6 +35409,16 @@ pub extern "C" fn sqlite3_intck_unlock(p: *mut Sqlite3Intck) -> i32 {
     return unsafe { (*p).rc };
 }
 
+///* If an error has occurred in an earlier call to sqlite3_intck_step()
+///* or sqlite3_intck_unlock(), then this method returns the associated 
+///* SQLite error code. Additionally, if pzErr is not NULL, then (*pzErr)
+///* may be set to point to a nul-terminated string containing an English
+///* language error message. Or, if no error message is available, to
+///* NULL.
+///*
+///* If no error has occurred within sqlite3_intck_step() or
+///* sqlite_intck_unlock() calls on the handle passed as the first argument, 
+///* then SQLITE_OK is returned and (*pzErr) set to NULL.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_error(p: &Sqlite3Intck,
     pz_err: *mut *const i8) -> i32 {
@@ -33389,6 +35426,10 @@ pub extern "C" fn sqlite3_intck_error(p: &Sqlite3Intck,
     return if (*p).rc == 101 { 0 } else { (*p).rc };
 }
 
+///* This API is used for testing only. It returns the full-text of an SQL
+///* statement used to test object zObj, which may be a table or index.
+///* The returned buffer is valid until the next call to either this function
+///* or sqlite3_intck_close() on the same sqlite3_intck handle.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_intck_test_sql(p: *mut Sqlite3Intck,
     z_obj: *const i8) -> *const i8 {
@@ -33415,6 +35456,7 @@ pub extern "C" fn sqlite3_intck_test_sql(p: *mut Sqlite3Intck,
     return unsafe { (*p).z_test_sql } as *const i8;
 }
 
+/// State of the pseudo-random number generator
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Stmtrand {
@@ -33422,6 +35464,9 @@ struct Stmtrand {
     y: u32,
 }
 
+///* Function:     stmtrand(SEED)
+///*
+///* Return a pseudo-random number.
 extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -33477,17 +35522,20 @@ extern "C" fn stmtrand_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_stmtrand_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"stmtrand".as_ptr() as *mut i8 as *const i8, 1, 1,
                 core::ptr::null_mut(), Some(stmtrand_func), None, None)
-        };
+        });
     if rc == 0 {
         rc =
             unsafe {
@@ -33520,11 +35568,13 @@ struct VfstraceFile {
     p_real: *mut Sqlite3File,
 }
 
+///* Turn tracing output on or off according to mMask.
 extern "C" fn vfstrace_on_off(p_info_1: &mut VfstraceInfo, m_mask_1: u32)
     -> () {
     (*p_info_1).b_on = ((*p_info_1).m_trace & m_mask_1 != 0 as u32) as u8;
 }
 
+///* Send trace output defined by zFormat and subsequent arguments.
 unsafe extern "C" fn vfstrace_printf(p_info_1: &VfstraceInfo,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -33541,6 +35591,7 @@ unsafe extern "C" fn vfstrace_printf(p_info_1: &VfstraceInfo,
     }
 }
 
+///* Try to convert an error code into a symbolic name for that error code.
 extern "C" fn vfstrace_errcode_name(rc: i32) -> *const i8 {
     let mut z_val: *const i8 = core::ptr::null();
     '__s323:
@@ -33720,6 +35771,8 @@ extern "C" fn vfstrace_errcode_name(rc: i32) -> *const i8 {
     return z_val;
 }
 
+///* Convert value rc into a string and print it using zFormat.  zFormat
+///* should have exactly one %s
 extern "C" fn vfstrace_print_errcode(p_info_1: *mut VfstraceInfo,
     z_format_1: *const i8, rc: i32) -> () {
     let mut z_val: *const i8 = core::ptr::null();
@@ -33746,6 +35799,7 @@ extern "C" fn vfstrace_print_errcode(p_info_1: *mut VfstraceInfo,
     unsafe { vfstrace_printf(unsafe { &*p_info_1 }, z_format_1, z_val) };
 }
 
+///* Method declarations for vfstrace_file.
 extern "C" fn vfstrace_close(p_file: *mut Sqlite3File) -> i32 {
     let p: *mut VfstraceFile = p_file as *mut VfstraceFile;
     let p_info: *mut VfstraceInfo = unsafe { (*p).p_info };
@@ -33773,6 +35827,7 @@ extern "C" fn vfstrace_close(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Read data from an vfstrace-file.
 extern "C" fn vfstrace_read(p_file: *mut Sqlite3File, z_buf: *mut (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let p: *const VfstraceFile =
@@ -33799,6 +35854,7 @@ extern "C" fn vfstrace_read(p_file: *mut Sqlite3File, z_buf: *mut (),
     return rc;
 }
 
+///* Write data to an vfstrace-file.
 extern "C" fn vfstrace_write(p_file: *mut Sqlite3File, z_buf: *const (),
     i_amt: i32, i_ofst: Sqlite3Int64) -> i32 {
     let p: *const VfstraceFile =
@@ -33825,6 +35881,7 @@ extern "C" fn vfstrace_write(p_file: *mut Sqlite3File, z_buf: *const (),
     return rc;
 }
 
+///* Truncate an vfstrace-file.
 extern "C" fn vfstrace_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     -> i32 {
     let p: *const VfstraceFile =
@@ -33852,6 +35909,7 @@ extern "C" fn vfstrace_truncate(p_file: *mut Sqlite3File, size: Sqlite3Int64)
     return rc;
 }
 
+///* Append to a buffer.
 extern "C" fn strappend(z: *mut i8, p_i_1: &mut i32,
     mut z_append_1: *const i8) -> () {
     let mut i: i32 = *p_i_1;
@@ -33873,6 +35931,7 @@ extern "C" fn strappend(z: *mut i8, p_i_1: &mut i32,
     *p_i_1 = i;
 }
 
+///* Sync an vfstrace-file.
 extern "C" fn vfstrace_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     let p: *const VfstraceFile =
         p_file as *mut VfstraceFile as *const VfstraceFile;
@@ -33925,6 +35984,7 @@ extern "C" fn vfstrace_sync(p_file: *mut Sqlite3File, flags: i32) -> i32 {
     return rc;
 }
 
+///* Return the current file-size of an vfstrace-file.
 extern "C" fn vfstrace_file_size(p_file: *mut Sqlite3File,
     p_size: *mut Sqlite3Int64) -> i32 {
     let p: *const VfstraceFile =
@@ -33955,6 +36015,7 @@ extern "C" fn vfstrace_file_size(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* Return the name of a lock.
 extern "C" fn lock_name(e_lock_1: i32) -> *const i8 {
     let az_lock_names: [*const i8; 5] =
         [c"NONE".as_ptr() as *const i8, c"SHARED".as_ptr() as *const i8,
@@ -33969,6 +36030,7 @@ extern "C" fn lock_name(e_lock_1: i32) -> *const i8 {
     } else { return az_lock_names[e_lock_1 as usize]; }
 }
 
+///* Lock an vfstrace-file.
 extern "C" fn vfstrace_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p: *const VfstraceFile =
         p_file as *mut VfstraceFile as *const VfstraceFile;
@@ -33994,6 +36056,7 @@ extern "C" fn vfstrace_lock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Unlock an vfstrace-file.
 extern "C" fn vfstrace_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     let p: *const VfstraceFile =
         p_file as *mut VfstraceFile as *const VfstraceFile;
@@ -34019,6 +36082,7 @@ extern "C" fn vfstrace_unlock(p_file: *mut Sqlite3File, e_lock: i32) -> i32 {
     return rc;
 }
 
+///* Check if another file-handle holds a RESERVED lock on an vfstrace-file.
 extern "C" fn vfstrace_check_reserved_lock(p_file: *mut Sqlite3File,
     p_res_out: *mut i32) -> i32 {
     let p: *const VfstraceFile =
@@ -34049,6 +36113,7 @@ extern "C" fn vfstrace_check_reserved_lock(p_file: *mut Sqlite3File,
     return rc;
 }
 
+///* File control method. For custom operations on an vfstrace-file.
 extern "C" fn vfstrace_file_control(p_file: *mut Sqlite3File, op: i32,
     p_arg: *mut ()) -> i32 {
     unsafe {
@@ -34490,6 +36555,7 @@ extern "C" fn vfstrace_file_control(p_file: *mut Sqlite3File, op: i32,
     }
 }
 
+///* Return the sector-size in bytes for an vfstrace-file.
 extern "C" fn vfstrace_sector_size(p_file: *mut Sqlite3File) -> i32 {
     let p: *const VfstraceFile =
         p_file as *mut VfstraceFile as *const VfstraceFile;
@@ -34516,6 +36582,7 @@ extern "C" fn vfstrace_sector_size(p_file: *mut Sqlite3File) -> i32 {
     return rc;
 }
 
+///* Return the device characteristic flags supported by an vfstrace-file.
 extern "C" fn vfstrace_device_characteristics(p_file: *mut Sqlite3File)
     -> i32 {
     let p: *const VfstraceFile =
@@ -34543,6 +36610,7 @@ extern "C" fn vfstrace_device_characteristics(p_file: *mut Sqlite3File)
     return rc;
 }
 
+///* Shared-memory operations.
 extern "C" fn vfstrace_shm_lock(p_file: *mut Sqlite3File, ofst: i32, n: i32,
     flags: i32) -> i32 {
     unsafe {
@@ -34685,6 +36753,10 @@ extern "C" fn vfstrace_shm_unmap(p_file: *mut Sqlite3File, del_flag: i32)
     return rc;
 }
 
+///* Return a pointer to the tail of the pathname.  Examples:
+///*
+///*     /home/drh/xyzzy.txt -> xyzzy.txt
+///*     xyzzy.txt           -> xyzzy.txt
 extern "C" fn file_tail(z: *const i8) -> *const i8 {
     let mut i: u64 = 0 as u64;
     if z == core::ptr::null() { return core::ptr::null(); }
@@ -34748,6 +36820,7 @@ extern "C" fn vfstrace_unfetch(p_file_1: *mut Sqlite3File, i_off_1: i64,
     return rc;
 }
 
+///* Method declarations for vfstrace_vfs.
 extern "C" fn vfstrace_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     p_file: *mut Sqlite3File, flags: i32, p_out_flags: *mut i32) -> i32 {
     let mut rc: i32 = 0;
@@ -34868,6 +36941,9 @@ extern "C" fn vfstrace_open(p_vfs: *mut Sqlite3Vfs, z_name: *const i8,
     return rc;
 }
 
+///* Delete the file located at zPath. If the dirSync argument is true,
+///* ensure the file-system modifications are synced to disk before
+///* returning.
 extern "C" fn vfstrace_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     dir_sync: i32) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -34889,6 +36965,8 @@ extern "C" fn vfstrace_delete(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Test for access permissions. Return true if the requested permission
+///* is available, or false otherwise.
 extern "C" fn vfstrace_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     flags: i32, p_res_out: *mut i32) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -34917,6 +36995,9 @@ extern "C" fn vfstrace_access(p_vfs: *mut Sqlite3Vfs, z_path: *const i8,
     return rc;
 }
 
+///* Populate buffer zOut with the full canonical pathname corresponding
+///* to the pathname in zPath. zOut is guaranteed to point to a buffer
+///* of at least (DEVSYM_MAX_PATHNAME+1) bytes.
 extern "C" fn vfstrace_full_pathname(p_vfs: *mut Sqlite3Vfs,
     z_path: *const i8, n_out: i32, z_out: *mut i8) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -34945,6 +37026,7 @@ extern "C" fn vfstrace_full_pathname(p_vfs: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* Open the dynamic library located at zPath and return a handle.
 extern "C" fn vfstrace_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
     -> *mut () {
     let p_info: *mut VfstraceInfo =
@@ -34961,6 +37043,9 @@ extern "C" fn vfstrace_dl_open(p_vfs: *mut Sqlite3Vfs, z_path: *const i8)
         };
 }
 
+///* Populate the buffer zErrMsg (size nByte bytes) with a human readable
+///* utf-8 string describing the most recent error encountered associated 
+///* with dynamic libraries.
 extern "C" fn vfstrace_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_err_msg: *mut i8) -> () {
     let p_info: *mut VfstraceInfo =
@@ -34981,6 +37066,7 @@ extern "C" fn vfstrace_dl_error(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     };
 }
 
+///* Return a pointer to the symbol zSymbol in the dynamic library pHandle.
 extern "C" fn vfstrace_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
     z_sym: *const i8) -> unsafe extern "C" fn() -> () {
     let p_info: *mut VfstraceInfo =
@@ -34996,6 +37082,7 @@ extern "C" fn vfstrace_dl_sym(p_vfs: *mut Sqlite3Vfs, p: *mut (),
         };
 }
 
+///* Close the dynamic library handle pHandle.
 extern "C" fn vfstrace_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     -> () {
     let p_info: *mut VfstraceInfo =
@@ -35010,6 +37097,8 @@ extern "C" fn vfstrace_dl_close(p_vfs: *mut Sqlite3Vfs, p_handle: *mut ())
     unsafe { (unsafe { (*p_root).x_dl_close.unwrap() })(p_root, p_handle) };
 }
 
+///* Populate the buffer pointed to by zBufOut with nByte bytes of 
+///* random data.
 extern "C" fn vfstrace_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
     z_buf_out: *mut i8) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -35028,6 +37117,8 @@ extern "C" fn vfstrace_randomness(p_vfs: *mut Sqlite3Vfs, n_byte: i32,
         };
 }
 
+///* Sleep for nMicro microseconds. Return the number of microseconds 
+///* actually slept.
 extern "C" fn vfstrace_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
     let p_info: *mut VfstraceInfo =
         unsafe { (*p_vfs).p_app_data } as *mut VfstraceInfo;
@@ -35043,6 +37134,7 @@ extern "C" fn vfstrace_sleep(p_vfs: *mut Sqlite3Vfs, n_micro: i32) -> i32 {
         };
 }
 
+///* Return the current time as a Julian Day number in *pTimeOut.
 extern "C" fn vfstrace_current_time(p_vfs: *mut Sqlite3Vfs,
     p_time_out: *mut f64) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -35067,6 +37159,7 @@ extern "C" fn vfstrace_current_time(p_vfs: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* Return the most recent error code and message
 extern "C" fn vfstrace_get_last_error(p_vfs: *mut Sqlite3Vfs, n_err: i32,
     z_err: *mut i8) -> i32 {
     let p_info: *mut VfstraceInfo =
@@ -35121,6 +37214,7 @@ extern "C" fn vfstrace_current_time_int64(p_vfs: *mut Sqlite3Vfs,
     return rc;
 }
 
+///* Override system calls.
 extern "C" fn vfstrace_set_system_call(p_vfs: *mut Sqlite3Vfs,
     z_name: *const i8, p_func: unsafe extern "C" fn() -> ()) -> i32 {
     let p_info: *const VfstraceInfo =
@@ -35156,6 +37250,12 @@ extern "C" fn vfstrace_next_system_call(p_vfs: *mut Sqlite3Vfs,
         };
 }
 
+///* Clients invoke this routine to construct a new trace-vfs shim.
+///*
+///* Return SQLITE_OK on success.  
+///*
+///* SQLITE_NOMEM is returned in the case of a memory allocation error.
+///* SQLITE_NOTFOUND is returned if zOldVfsName does not exist.
 #[unsafe(no_mangle)]
 pub extern "C" fn vfstrace_register(z_trace_name_1: *const i8,
     z_old_vfs_name_1: *const i8,
@@ -35279,6 +37379,8 @@ pub extern "C" fn vfstrace_register(z_trace_name_1: *const i8,
     return unsafe { sqlite3_vfs_register(p_new, make_default_1) };
 }
 
+///* Look for the named VFS.  If it is a TRACEVFS, then unregister it
+///* and delete it.
 #[unsafe(no_mangle)]
 pub extern "C" fn vfstrace_unregister(z_trace_name_1: *const i8) -> () {
     let p_vfs: *mut Sqlite3Vfs = unsafe { sqlite3_vfs_find(z_trace_name_1) };
@@ -35298,6 +37400,12 @@ struct DiskUsed {
     z_schema: *const i8,
 }
 
+///* Free all resources that the DiskUsed object references and
+///* reset the DiskUsed object.
+///*
+///* Call this routine multiple times on the same DiskUsed object
+///* is a harmless no-op, as long as the memory for the object itself
+///* has not been freed.
 extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
     if !(unsafe { (*p).z_su }).is_null() {
         let z_sql: *mut i8 =
@@ -35320,6 +37428,8 @@ extern "C" fn diskused_reset(p: *mut DiskUsed) -> () {
     };
 }
 
+///* Report an error using formatted text.  If zFormat==NULL then report
+///* an OOM error.
 unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -35341,6 +37451,7 @@ unsafe extern "C" fn diskused_error(p: *mut DiskUsed, z_format_1: *const i8,
     diskused_reset(p);
 }
 
+///* Prepare and return an SQL statement.
 extern "C" fn diskused_v_prep(p: *mut DiskUsed, z_fmt_1: *const i8,
     ap: *mut i8) -> *mut Sqlite3Stmt {
     let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -35381,6 +37492,12 @@ unsafe extern "C" fn diskused_prepare(p: *mut DiskUsed, z_format_1: *const i8,
     return p_stmt;
 }
 
+///* If rc is something other than SQLITE_DONE or SQLITE_OK, then report
+///* an error and return true.
+///*
+///* If rc is SQLITE_DONE or SQLITE_OK, then return false.
+///*
+///* The prepared statement is closed in either case.
 extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     p_stmt_1: *mut Sqlite3Stmt) -> i32 {
     if rc == 101 { rc = 0; }
@@ -35398,6 +37515,7 @@ extern "C" fn diskused_stmt_finish(p: *mut DiskUsed, mut rc: i32,
     return rc;
 }
 
+///* Run SQL.  Return the number of errors.
 unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> i32 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -35424,6 +37542,9 @@ unsafe extern "C" fn diskused_sql(p: *mut DiskUsed, z_format_1: *const i8,
     return rc;
 }
 
+///* Run an SQL query that returns an integer.  Write that integer
+///* into *piRes.  Return the number of errors.
+#[allow(unused_doc_comments)]
 unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     pi_res_1: &mut Sqlite3Int64, z_format_1: *const i8, mut __va0: ...)
     -> i32 {
@@ -35442,6 +37563,8 @@ unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
         rc = 0;
     } else {
         if !(unsafe { (*p).db }).is_null() {
+
+            /// p->db is NULL if there was some prior error
             unsafe {
                 diskused_error(p,
                     c"SQL run-time error: %s\nOriginal SQL: %s".as_ptr() as
@@ -35456,6 +37579,11 @@ unsafe extern "C" fn diskused_sql_int(p: *mut DiskUsed,
     return rc;
 }
 
+///* Add to the output a title line that contains the text determined
+///* by the format string.  If the output is initially empty, begin
+///* the title line with "/" so that it forms the beginning of a C-style
+///* comment.  Otherwise begin with a new-line.  Always finish with a
+///* newline.
 unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
     mut __va0: ...) -> () {
     let mut z_first: *mut i8 = core::ptr::null_mut();
@@ -35490,6 +37618,9 @@ unsafe extern "C" fn diskused_title(p: *mut DiskUsed, z_format_1: *const i8,
     }
 }
 
+///* Add an output line that begins with the zDesc text extended out to
+///* 50 columns with "." characters, and followed by whatever text is
+///* described by zFormat.
 unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut z_txt: *mut i8 = core::ptr::null_mut();
@@ -35521,6 +37652,9 @@ unsafe extern "C" fn diskused_line(p: *mut DiskUsed, z_desc_1: *const i8,
     }
 }
 
+///* Write a percentage into the output.  The number written should show
+///* two or three significant digits, with the decimal point being the fourth
+///* character.
 extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
     let mut z_num: [i8; 100] = [0; 100];
     let mut z_dp: *const i8 = core::ptr::null();
@@ -35571,27 +37705,52 @@ extern "C" fn diskused_percent(p: &DiskUsed, r: f64) -> () {
     };
 }
 
+///* Create a subreport on a subset of tables and/or indexes.
+///*
+///* The title if the subreport is given by zTitle.  zWhere is
+///* a boolean expression that can go in the WHERE clause to select
+///* the relevant rows of the s.zSU table.
+#[allow(unused_doc_comments)]
 extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     z_where_1: *mut i8, pgsz: Sqlite3Int64, n_page_1: Sqlite3Int64) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// Statement to query p->zSU
     let mut nentry: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of btree entires
     let mut payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Payload in bytes
     let mut ovfl_payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// overflow payload in bytes
     let mut mx_payload: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// largest individual payload
     let mut ovfl_cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number entries using overflow
     let mut leaf_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Leaf pages
     let mut int_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// internal pages
     let mut ovfl_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// overflow pages
     let mut leaf_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on leaf pages
     let mut int_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on internal pages
     let mut ovfl_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// unused bytes on overflow pages
     let mut int_cell: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// B-tree entries on internal pages
     let mut depth: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// btree depth
     let mut cnt: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Number of s.zSU entries that match
     let mut storage: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total bytes
     let mut total_pages: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total page count
     let mut total_unused: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total unused bytes
     let mut total_meta: Sqlite3Int64 = 0 as Sqlite3Int64;
+    /// Total metadata
     let mut rc: i32 = 0;
     if z_title_1 == core::ptr::null_mut() ||
             z_where_1 == core::ptr::null_mut() {
@@ -35778,6 +37937,11 @@ extern "C" fn diskused_subreport(p: *mut DiskUsed, z_title_1: *mut i8,
     return diskused_stmt_finish(p, rc, p_stmt);
 }
 
+///* SQL Function:   diskused(SCHEMA)
+///*
+///* Analyze the database schema named in the argument.  Return text
+///* containing the space utilization stats.
+#[allow(unused_doc_comments)]
 extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut rc: i32 = 0;
@@ -35850,20 +38014,26 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         unsafe { diskused_error(&mut s, core::ptr::null()) };
         return;
     }
-    rc =
+
+    /// The s.zSU table contains the data used for the analysis.
+    ///* The table name contains 128-bits of randomness to avoid
+    ///* collisions with preexisting tables in temp.
+    (rc =
         unsafe {
             diskused_sql(&mut s,
                 c"CREATE TABLE temp.%s(\n   name text,                -- A table or index\n   tblname text,             -- Table that owns name\n   is_index boolean,         -- TRUE if it is an index\n   is_without_rowid boolean, -- TRUE if WITHOUT ROWID table\n   nentry int,               -- Number of entries in the BTree\n   leaf_entries int,         -- Number of leaf entries\n   depth int,                -- Depth of the b-tree\n   payload int,              -- Total data stored in this table/index\n   ovfl_payload int,         -- Total data stored on overflow pages\n   ovfl_cnt int,             -- Number of entries that use overflow\n   mx_payload int,           -- Maximum payload size\n   int_pages int,            -- Interior pages used\n   leaf_pages int,           -- Leaf pages used\n   ovfl_pages int,           -- Overflow pages used\n   int_unused int,           -- Unused bytes on interior pages\n   leaf_unused int,          -- Unused bytes on primary pages\n   ovfl_unused int,          -- Unused bytes on overflow pages\n   int_entries int           -- Btree cells on internal pages\n);".as_ptr()
                         as *mut i8 as *const i8, s.z_su)
-        };
+        });
     if rc != 0 { return; }
-    rc =
+
+    /// Populate the s.zSU table
+    (rc =
         unsafe {
             diskused_sql(&mut s,
                 c"WITH\n  allidx(idxname) AS (\n    SELECT name FROM \"%w\".sqlite_schema WHERE type=\'index\'\n  ),\n  allobj(allname,tblname,isidx,isworowid) AS (\n    SELECT \'sqlite_schema\',\n           \'sqlite_schema\',\n           0,\n           0\n    UNION ALL\n    SELECT name,\n           tbl_name,\n           type=\'index\',\n           EXISTS(SELECT 1\n                    FROM pragma_index_list(sqlite_schema.name,%Q)\n                   WHERE pragma_index_list.origin=\'pk\'\n                     AND pragma_index_list.name NOT IN allidx)\n      FROM \"%w\".sqlite_schema\n  )\nINSERT INTO temp.%s\n  SELECT\n    allname,\n    tblname,\n    isidx,\n    isworowid,\n    sum(ncell),\n    sum((pagetype=\'leaf\')*ncell),\n    max((length(if(path GLOB \'*+*\',\'\',path))+3)/4),\n    sum(payload),\n    sum((pagetype=\'overflow\')*payload),\n    sum(path GLOB \'*+000000\'),\n    max(mx_payload),\n    sum(pagetype=\'internal\'),\n    sum(pagetype=\'leaf\'),\n    sum(pagetype=\'overflow\'),\n    sum((pagetype=\'internal\')*unused),\n    sum((pagetype=\'leaf\')*unused),\n    sum((pagetype=\'overflow\')*unused),\n    sum(if(pagetype=\'internal\',ncell))\n  FROM allobj CROSS JOIN dbstat(%Q) \n  WHERE dbstat.name=allobj.allname\n  GROUP BY allname;\n".as_ptr()
                         as *mut i8 as *const i8, s.z_schema, s.z_schema, s.z_schema,
                 s.z_su, s.z_schema)
-        };
+        });
     if rc != 0 { return; }
     n_page = 0 as Sqlite3Int64;
     rc =
@@ -35874,6 +38044,8 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         };
     if rc != 0 { return; }
     if n_page <= 0 as i64 {
+
+        /// Very brief reply for an empty database
         diskused_reset(&mut s);
         unsafe {
             sqlite3_result_text(context,
@@ -35881,6 +38053,8 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         };
         return;
     }
+
+    /// Begin generating the report
     unsafe {
         diskused_title(&mut s,
             c"Database storage utilization report".as_ptr() as *mut i8 as
@@ -36221,6 +38395,9 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
         }
     }
     if diskused_stmt_finish(&mut s, rc, p_stmt) != 0 { return; }
+
+    /// Append SQL statements that will recreate the raw data used for
+    ///* the analysis.
     unsafe {
         diskused_title(&mut s,
             c"Raw data used to generate this report".as_ptr() as *mut i8 as
@@ -36302,17 +38479,20 @@ extern "C" fn diskused_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_diskused_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     let mut rc: i32 = 0;
     { let _ = p_api_1; };
     { let _ = pz_err_msg_1; };
-    rc =
+
+    /// Unused parameter
+    (rc =
         unsafe {
             sqlite3_create_function(db,
                 c"diskused".as_ptr() as *mut i8 as *const i8, 1, 1 | 524288,
                 core::ptr::null_mut(), Some(diskused_func), None, None)
-        };
+        });
     return rc;
 }
 
@@ -36323,6 +38503,7 @@ struct ExpertInfo {
     b_verbose: i32,
 }
 
+/// All the parameters that determine how to render query results.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Mode {
@@ -36336,6 +38517,7 @@ struct Mode {
     spec: Sqlite3QrfSpec,
 }
 
+/// A file that needs to be deleted, but only after a delay.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Unlink {
@@ -36429,6 +38611,7 @@ struct DotCmdLine {
     ab_quot: *mut i8,
 }
 
+/// Names of values for Mode.spec.eEsc and Mode.spec.eText
 static mut qrf_esc_names: [*const i8; 4] =
     [c"auto".as_ptr() as *const i8, c"off".as_ptr() as *const i8,
             c"ascii".as_ptr() as *const i8, c"symbol".as_ptr() as *const i8];
@@ -36455,6 +38638,7 @@ struct ModeInfo {
     m_flg: u8,
 }
 
+/// String constants used by built-in modes
 static mut a_mode_str: [*const i8; 14] =
     [core::ptr::null(), c"\n".as_ptr() as *const i8,
             c"|".as_ptr() as *const i8, c" ".as_ptr() as *const i8,
@@ -36464,6 +38648,7 @@ static mut a_mode_str: [*const i8; 14] =
             c"NULL".as_ptr() as *const i8, c"null".as_ptr() as *const i8,
             c"\"\"".as_ptr() as *const i8, c": ".as_ptr() as *const i8];
 
+/// 9    10      11      12      13
 static a_mode_info: [ModeInfo; 23] =
     [ModeInfo {
                 z_name: [97 as i8, 115 as i8, 99 as i8, 105 as i8, 105 as i8,
@@ -36788,22 +38973,56 @@ static a_mode_info: [ModeInfo; 23] =
                 m_flg: 0 as u8,
             }];
 
+///* If the following flag is set, then command execution stops
+///* at an error if we are not interactive.
 static mut bail_on_error: i32 = 0;
 
+///* Treat stdin as an interactive input if the following variable
+///* is true.  Otherwise, assume stdin is connected to a file or pipe.
 static mut stdin_is_interactive: i32 = 1;
 
+///* Treat stdout like a TTY if true.
 static mut stdout_is_console: i32 = 1;
 
+///* Use this value as the width of the output device.  Or, figure it
+///* out at runtime if the value is negative.  Or use a default width
+///* if this value is zero.
 static mut stdout_tty_width: i32 = -1;
 
+///* The following is the open SQLite database.  We make a pointer
+///* to this database a static variable so that it can be accessed
+///* by the SIGINT handler to interrupt database processing.
 static mut global_db: *mut Sqlite3 = core::ptr::null_mut();
 
+///* This is a global pointer to the main ShellState variable.  This
+///* exists so that the atexit() callback can access the ShellState
+///* object to do some cleanup.
 static mut global_shell_state: *mut ShellState = core::ptr::null_mut();
 
+///* True if an interrupt (Control-C) has been received.
 static mut seen_interrupt: i32 = 0 as i32;
 
+///* This is the name of our program. It is set in main(), used
+///* in a number of other places, mostly for error messages.
 static mut argv0: *mut i8 = unsafe { core::mem::zeroed() };
 
+///* Output routines that are able to redirect to memory rather than
+///* doing actually I/O.
+///*                                                Works like.
+///*                                                --------------
+///*   cli_printf(FILE*, const char*, ...);         fprintf()
+///*   cli_write(FILE*, const char*, int);          write()
+///*   cli_puts(const char*, FILE*);                fputs()
+///*   cli_vprintf(FILE*, const char*, va_list);    vfprintf()
+///*
+///* These are just thin wrappers with the following added semantics:
+///* If the file-scope variable cli_output_capture is not NULL, and
+///* if the FILE* argument is stdout or stderr, then rather than
+///* writing to stdout/stdout, append the text to the cli_output_capture
+///* variable.
+///*
+///* The cli_exit(int) routine works like exit() except that it
+///* first dumps any capture output to stdout.
 static mut cli_output_capture: *mut Sqlite3Str = core::ptr::null_mut();
 
 unsafe extern "C" fn cli_printf(out: *mut FILE, z_format_1: *const i8,
@@ -36867,6 +39086,7 @@ extern "C" fn cli_exit(rc: i32) -> () {
     }
 }
 
+/// A version of strcmp() that works with NULL values
 extern "C" fn cli_strcmp(mut a: *const i8, mut b: *const i8) -> i32 {
     if a == core::ptr::null() { a = c"".as_ptr() as *mut i8 as *const i8; }
     if b == core::ptr::null() { b = c"".as_ptr() as *mut i8 as *const i8; }
@@ -36879,12 +39099,15 @@ extern "C" fn cli_strncmp(mut a: *const i8, mut b: *const i8, n: u64) -> i32 {
     return unsafe { strncmp(a, b, n) };
 }
 
+/// Return the current wall-clock time in microseconds since the
+///* Unix epoch (1970-01-01T00:00:00Z)
 extern "C" fn time_of_day() -> Sqlite3Int64 {
     let mut s_now: Timeval = unsafe { core::mem::zeroed() };
     { let _ = unsafe { gettimeofday(&mut s_now, core::ptr::null_mut()) }; };
     return s_now.tv_sec as i64 * 1000000 as i64 + s_now.tv_usec as i64;
 }
 
+/// Indicate out-of-memory and exit.
 extern "C" fn shell_out_of_memory() -> () {
     unsafe {
         cli_puts(c"Error: out of memory\n".as_ptr() as *mut i8 as *const i8,
@@ -36893,10 +39116,14 @@ extern "C" fn shell_out_of_memory() -> () {
     }
 }
 
+/// Check a pointer to see if it is NULL.  If it is NULL, exit with an
+///* out-of-memory error.
 extern "C" fn shell_check_oom(p: *const ()) -> () {
     if p == core::ptr::null() { shell_out_of_memory(); }
 }
 
+///* Compute a string length that is limited to what can be stored in
+///* lower 30 bits of a 32-bit signed integer.
 extern "C" fn strlen30(z: *const i8) -> i32 {
     let mut n: u64 = 0 as u64;
     if z == core::ptr::null() { return 0; }
@@ -36904,6 +39131,9 @@ extern "C" fn strlen30(z: *const i8) -> i32 {
     return if n > 1073741823 as u64 { 1073741823 } else { n as i32 };
 }
 
+///* Return open FILE * if zFile exists, can be opened for read
+///* and is an ordinary file or a character stream source.
+///* Otherwise return 0.
 extern "C" fn open_chr_source(z_file_1: *const i8) -> *mut FILE {
     let mut x: Stat =
         Stat {
@@ -36936,6 +39166,13 @@ extern "C" fn open_chr_source(z_file_1: *const i8) -> *mut FILE {
     } else { return core::ptr::null_mut(); }
 }
 
+///* This routine reads a line of text from FILE in, stores
+///* the text in memory obtained from malloc() and returns a pointer
+///* to the text.  NULL is returned at end of file, or if malloc()
+///* fails, or if the length of the line is longer than about a gigabyte.
+///*
+///* If zLine is not NULL then it is a malloced buffer returned from
+///* a previous call to this routine that may be reused.
 extern "C" fn local_getline(mut z_line_1: *mut i8, in__1: *mut FILE)
     -> *mut i8 {
     let mut n_line: i32 =
@@ -36983,6 +39220,8 @@ extern "C" fn local_getline(mut z_line_1: *mut i8, in__1: *mut FILE)
     return z_line_1;
 }
 
+///* Return true if either the SQLITE_NO_COLOR compile-time option is used
+///* or if the NO_COLOR environment variable exists
 extern "C" fn shell_no_color() -> i32 {
     return (unsafe { getenv(c"NO_COLOR".as_ptr() as *mut i8 as *const i8) } !=
                 core::ptr::null_mut()) as i32;
@@ -37051,6 +39290,15 @@ extern "C" fn shell_prompt_app_def(c: i32) -> *const i8 {
     }
 }
 
+///* Return the raw (unexpanded) prompt string.  This will be the
+///* first of the following that exist:
+///*
+///*    *  The prompt string specified by the ".prompt" command.
+///*    *  The value of the SQLITE_PS1 (or SQLITE_PS2) environment variable.
+///*    *  The default prompt string.
+///*
+///* The main prompt is returned if the argument is zero and the
+///* continuation prompt is returned if the argument is 1.
 extern "C" fn prompt_string(p: &ShellState, b_continue_1: i32) -> *const i8 {
     let mut z_ps: *const i8 = core::ptr::null();
     if !(b_continue_1 == 0 || b_continue_1 == 1) as i32 as i64 != 0 {
@@ -37071,6 +39319,8 @@ extern "C" fn prompt_string(p: &ShellState, b_continue_1: i32) -> *const i8 {
     return shell_prompt_app_def(1 + b_continue_1);
 }
 
+///* Return the name of the open database file, to be used for prompt
+///* expansion purposes.
 extern "C" fn prompt_filename(p: &ShellState, z_memory_name_1: *const i8)
     -> *const i8 {
     let mut p_fn: Sqlite3Filename = core::ptr::null();
@@ -37098,6 +39348,7 @@ extern "C" fn prompt_filename(p: &ShellState, z_memory_name_1: *const i8)
     return z_fn;
 }
 
+///* Return the name of the computer on which we are running.
 extern "C" fn prompt_hostname(b_full_1: i32) -> *const i8 {
     unsafe {
         if unsafe {
@@ -37119,6 +39370,8 @@ extern "C" fn prompt_hostname(b_full_1: i32) -> *const i8 {
     }
 }
 
+///* Return the username.  This is taken from an environment variable
+///* and can thus be forged.  Do not depend on it.
 extern "C" fn prompt_user() -> *const i8 {
     let mut z: *const i8 = core::ptr::null();
     z =
@@ -37137,6 +39390,9 @@ extern "C" fn prompt_user() -> *const i8 {
     return z;
 }
 
+/// If z[] begins with one or more ANSI X3.64 (VT100) escape sequences
+///* return the number of bytes in all such escape sequences.  Return
+///* zero if there are no valid escape sequences.
 extern "C" fn n_ansi_escape(z: *const i8) -> i32 {
     let mut i: i32 = 0;
     while unsafe { *z.offset(i as isize) } as i32 == '\u{1b}' as i32 &&
@@ -37159,6 +39415,18 @@ extern "C" fn n_ansi_escape(z: *const i8) -> i32 {
     return i;
 }
 
+///* Expand escapes in the given input prompt string.  Return the
+///* expanded prompt in memory obtained from sqlite3_malloc().  The
+///* caller is responsible for freeing the memory.
+///*
+///* Early prototypes use U+005c '\\' as the escape character.  But
+///* that is an escape character for shells and C and many other languages,
+///* which can lead to nested quoting problems and confusion.  The
+///* U+0025 '%' character was also tried, and that works pretty well on
+///* unix, but % is special to many formats on Windows.  So now we
+///* use a forward-slash, U+002f '/', which seems to pass through
+///* every shell and "make" without issue.
+#[allow(unused_doc_comments)]
 extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
     mut z_prompt_1: *const i8) -> *mut i8 {
     let mut p_out: *mut Sqlite3Str =
@@ -37166,6 +39434,7 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
     let mut i: i32 = 0;
     let mut c: i8 = 0 as i8;
     let mut m_off: u32 = 0 as u32;
+    /// Bitmask of FALSE for if/then/else
     let mut idx_space: i32 = -1;
     let mut i_date: i32 = -1;
     {
@@ -37190,9 +39459,19 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     };
                     i = 0;
                 }
-                c = unsafe { *z_prompt_1.offset(1 as isize) } as i8;
-                if c as i32 == 0 { break '__b345; }
+
+                /// At this point zPrompt[0] is a / character and all prior
+                ///* characters have already been loaded into pOut.  Process the
+                ///* escape sequence that zPrompt points to.
+                (c = unsafe { *z_prompt_1.offset(1 as isize) } as i8);
+                if c as i32 == 0 {
+
+                    /// / at the end of a line is silently ignored
+                    break '__b345;
+                }
                 if c as i32 == '/' as i32 {
+
+                    /// // maps into a single /
                     {
                         let __p = &mut z_prompt_1;
                         let __t = *__p;
@@ -37202,6 +39481,7 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 >= '0' as i32 && c as i32 <= '7' as i32 {
+                    /// /nnn becomes a single byte given by octal nnn
                     let mut v: i32 = c as i32 - '0' as i32;
                     { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                     while i <= 2 &&
@@ -37258,7 +39538,9 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 == ':' as i32 {
-                    m_off ^= 1 as u32;
+
+                    /// ELSE: toggle display on/off
+                    (m_off ^= 1 as u32);
                     {
                         let __n = 2;
                         let __p = &mut z_prompt_1;
@@ -37268,7 +39550,9 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 == ';' as i32 {
-                    m_off >>= 1 as u32;
+
+                    /// ENDIF: Turn display on
+                    (m_off >>= 1 as u32);
                     {
                         let __n = 2;
                         let __p = &mut z_prompt_1;
@@ -37278,11 +39562,13 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 == 'x' as i32 {
-                    m_off =
+
+                    /// /x turns display off not in a transaction, on if in txn
+                    (m_off =
                         m_off << 1 |
                             (unsafe { (*p).db } == core::ptr::null_mut() ||
                                     unsafe { sqlite3_get_autocommit(unsafe { (*p).db }) } != 0)
-                                as u32;
+                                as u32);
                     {
                         let __n = 2;
                         let __p = &mut z_prompt_1;
@@ -37292,12 +39578,14 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 == 'r' as i32 {
-                    m_off =
+
+                    /// /r turns display off if database is read/write, on if read-only
+                    (m_off =
                         m_off << 1 |
                             (unsafe { (*p).db } == core::ptr::null_mut() ||
                                     unsafe {
                                             sqlite3_db_readonly(unsafe { (*p).db }, core::ptr::null())
-                                        } == 0) as u32;
+                                        } == 0) as u32);
                     {
                         let __n = 2;
                         let __p = &mut z_prompt_1;
@@ -37307,11 +39595,13 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     break '__c345;
                 }
                 if c as i32 == 'm' as i32 {
-                    m_off =
+
+                    /// /m turns display on for an in-memory database and off for persistent
+                    (m_off =
                         m_off << 1 |
                             (!(unsafe { (*p).db }).is_null() &&
                                     prompt_filename(unsafe { &*p }, core::ptr::null()) !=
-                                        core::ptr::null()) as u32;
+                                        core::ptr::null()) as u32);
                     {
                         let __n = 2;
                         let __p = &mut z_prompt_1;
@@ -37496,6 +39786,10 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
                     i = -1;
                     break '__c345;
                 }
+
+                /// No match to a known escape.  Generate an error. The mOff flag
+                ///* is ignored for this output, so that errors appear even if they
+                ///* are in an unused branch.
                 unsafe {
                     sqlite3_str_appendf(p_out,
                         c"UNKNOWN(\"/%c\")".as_ptr() as *mut i8 as *const i8,
@@ -37559,6 +39853,8 @@ extern "C" fn expand_prompt(p: *mut ShellState, z_prior_1: *const i8,
         }
     }
     if 0 == unsafe { sqlite3_str_length(p_out) } {
+
+        /// Avoid a bogus OOM
         unsafe { sqlite3_str_appendchar(p_out, 1, '\u{0}' as i32 as i8) };
     }
     if unsafe { (*p).b_delimit_nonprint } != 0 &&
@@ -37642,6 +39938,8 @@ extern "C" fn one_input_line(p: *mut ShellState, mut z_prior_1: *mut i8,
     }
 }
 
+///* Return the value of a hexadecimal digit.  Return -1 if the input
+///* is not a hex digit.
 extern "C" fn hex_digit_value(c: i8) -> i32 {
     if c as i32 >= '0' as i32 && c as i32 <= '9' as i32 {
         return c as i32 - '0' as i32;
@@ -37655,6 +39953,11 @@ extern "C" fn hex_digit_value(c: i8) -> i32 {
     return -1;
 }
 
+///* Interpret zArg as an integer value, possibly with suffixes.
+///*
+///* If the value specified by zArg is outside the range of values that
+///* can be represented using a 64-bit twos-complement integer, then return
+///* the nearest representable value.
 extern "C" fn integer_value(mut z_arg_1: *const i8) -> Sqlite3Int64 {
     unsafe {
         let mut v: Sqlite3Uint64 = 0 as Sqlite3Uint64;
@@ -37844,6 +40147,7 @@ struct ShellText {
     n_alloc: i64,
 }
 
+///* Initialize and destroy a ShellText object
 extern "C" fn init_text(p: *mut ShellText) -> () {
     unsafe {
         memset(p as *mut (), 0, core::mem::size_of::<ShellText>() as u64)
@@ -37855,6 +40159,13 @@ extern "C" fn free_text(p: *mut ShellText) -> () {
     init_text(p);
 }
 
+/// zIn is either a pointer to a NULL-terminated string in memory obtained
+///* from malloc(), or a NULL pointer. The string pointed to by zAppend is
+///* added to zIn, and the result returned in memory obtained from malloc().
+///* zIn, if it was not NULL, is freed.
+///*
+///* If the third argument, quote, is not '\0', then it is used as a
+///* quote character for zAppend.
 extern "C" fn append_text(p: &mut ShellText, z_append_1: *const i8, quote: i8)
     -> () {
     let mut len: i64 = 0 as i64;
@@ -37947,6 +40258,12 @@ extern "C" fn append_text(p: &mut ShellText, z_append_1: *const i8, quote: i8)
     }
 }
 
+///* Attempt to determine if identifier zName needs to be quoted, either
+///* because it contains non-alphanumeric characters, or because it is an
+///* SQLite keyword.  Be conservative in this estimate:  When in doubt assume
+///* that quoting is required.
+///*
+///* Return '"' if quoting is required.  Return 0 if no quoting is required.
 extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
     let mut i: i32 = 0;
     if z_name_1 == core::ptr::null() { return '\"' as i32 as i8; }
@@ -37982,6 +40299,11 @@ extern "C" fn quote_char(z_name_1: *const i8) -> i8 {
             } else { 0 } as i8;
 }
 
+///* Construct a fake object name and column list to describe the structure
+///* of the view, virtual table, or table valued function zSchema.zName.
+///*
+///* The returned string comes from sqlite3_mprintf() and should be freed
+///* by the caller using sqlite3_free().
 extern "C" fn shell_fake_schema(db: *mut Sqlite3, z_schema_1: *const i8,
     z_name_1: *const i8) -> *mut i8 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -38037,6 +40359,11 @@ extern "C" fn shell_fake_schema(db: *mut Sqlite3, z_schema_1: *const i8,
     return s.z_txt;
 }
 
+///* SQL function:  strtod(X)
+///*
+///* Use the C-library strtod() function to convert string X into a double.
+///* Used for comparing the accuracy of SQLite's internal text-to-float conversion
+///* routines against the C-library.
 extern "C" fn shell_strtod(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let z: *const i8 =
@@ -38050,6 +40377,11 @@ extern "C" fn shell_strtod(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     };
 }
 
+///* SQL function:  dtostr(X)
+///*
+///* Use the C-library printf() function to convert real value X into a string.
+///* Used for comparing the accuracy of SQLite's internal float-to-text conversion
+///* routines against the C-library.
 extern "C" fn shell_dtostr(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let r: f64 =
@@ -38080,6 +40412,23 @@ extern "C" fn shell_dtostr(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     };
 }
 
+///* SQL function:  shell_add_schema(S,X)
+///*
+///* Add the schema name X to the CREATE statement in S and return the result.
+///* Examples:
+///*
+///*    CREATE TABLE t1(x)   ->   CREATE TABLE xyz.t1(x);
+///*
+///* Also works on
+///*
+///*    CREATE INDEX
+///*    CREATE UNIQUE INDEX
+///*    CREATE VIEW
+///*    CREATE TRIGGER
+///*    CREATE VIRTUAL TABLE
+///*
+///* This UDF is used by the .schema command to insert the schema name of
+///* attached databases into the middle of the sqlite_schema.sql field.
 extern "C" fn shell_add_schema_name(p_ctx_1: *mut Sqlite3Context,
     n_val_1: i32, ap_val_1: *mut *mut Sqlite3Value) -> () {
     unsafe {
@@ -38184,6 +40533,23 @@ extern "C" fn shell_add_schema_name(p_ctx_1: *mut Sqlite3Context,
     }
 }
 
+///* SQL function:  shell_prompt_test(PROMPT,PRIOR,FILENAME,FLAGS)
+///*
+///* Return the shell prompt, with escapes expanded, for testing purposes.
+///* The first argument is the raw (unexpanded) prompt string.  Or if the
+///* first argument is NULL, then use whatever prompt string is currently
+///* configured.  If the second argument exists and is not NULL, then the
+///* second argument is understood to be prior incomplete text and a
+///* continuation prompt is generated.  If a third argument is provided,
+///* it is assumed to be the full pathname of the database file.  The
+///* fourth argument, if provided, is an integer of flags:
+///*
+///*      0x0001       Always insert \001..\002 delimiters around ANSI escapes
+///*      0x0002       Never insert \001..\002 delimiters
+///*
+///* This function is for testing purposes only.  The interface may change.
+///* The function itself might be renamed or removed in future releases.  Do
+///* not use this function in applications.
 extern "C" fn shell_expand_prompt(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let p: *mut ShellState =
@@ -38255,10 +40621,13 @@ extern "C" fn shell_expand_prompt(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     unsafe { sqlite3_free(z_res as *mut ()) };
 }
 
+/// CPU time at start
 static mut s_begin: Rusage = unsafe { core::mem::zeroed() };
 
+/// Wall-clock time at start
 static mut i_begin: Sqlite3Int64 = unsafe { core::mem::zeroed() };
 
+///* Begin timing an operation
 extern "C" fn begin_timer(p: &ShellState) -> () {
     unsafe {
         if (*p).enable_timer != 0 || (*p).flg_progress & 8 as u32 != 0 as u32
@@ -38269,11 +40638,14 @@ extern "C" fn begin_timer(p: &ShellState) -> () {
     }
 }
 
+/// Return the difference of two time_structs in seconds
 extern "C" fn time_diff(p_start_1: &Timeval, p_end_1: &Timeval) -> f64 {
     return ((*p_end_1).tv_usec - (*p_start_1).tv_usec) as f64 * 1e-6 +
             ((*p_end_1).tv_sec - (*p_start_1).tv_sec) as f64;
 }
 
+/// Return the time since the start of the timer in
+///* seconds.
 extern "C" fn elapse_time(not_used_1: *const ShellState) -> f64 {
     unsafe {
         { let _ = not_used_1; };
@@ -38282,6 +40654,7 @@ extern "C" fn elapse_time(not_used_1: *const ShellState) -> f64 {
     }
 }
 
+///* Print the timing results.
 extern "C" fn end_timer(p: &mut ShellState) -> () {
     unsafe {
         if (*p).enable_timer != 0 {
@@ -38302,6 +40675,8 @@ extern "C" fn end_timer(p: &mut ShellState) -> () {
     }
 }
 
+///* Clear a display mode, freeing any allocated memory that it
+///* contains.
 extern "C" fn mode_free(p: *mut Mode) -> () {
     let auto_explain: u8 = unsafe { (*p).auto_explain };
     unsafe { free(unsafe { (*p).spec.a_width } as *mut ()) };
@@ -38315,6 +40690,8 @@ extern "C" fn mode_free(p: *mut Mode) -> () {
     unsafe { (*p).auto_explain = auto_explain };
 }
 
+///* Duplicate Mode pSrc into pDest.  pDest is assumed to be
+///* uninitialized prior to invoking this routine.
 extern "C" fn mode_dup(p_dest_1: *mut Mode, p_src_1: *const Mode) -> () {
     unsafe {
         memcpy(p_dest_1 as *mut (), p_src_1 as *const (),
@@ -38382,6 +40759,8 @@ extern "C" fn mode_dup(p_dest_1: *mut Mode, p_src_1: *const Mode) -> () {
     }
 }
 
+///* Set a string value to a copy of the zNew string in memory
+///* obtained from system malloc().
 extern "C" fn mode_set_str(az: &mut *mut i8, z_new_1: *const i8) -> () {
     unsafe { free(*az as *mut ()) };
     if z_new_1 == core::ptr::null() {
@@ -38397,6 +40776,7 @@ extern "C" fn mode_set_str(az: &mut *mut i8, z_new_1: *const i8) -> () {
     }
 }
 
+/// Forward reference
 unsafe extern "C" fn pick_str(z_arg: *const i8, pz_err: *mut *mut i8,
     mut __va0: ...) -> i32 {
     let mut i: i32 = 0;
@@ -38465,6 +40845,17 @@ unsafe extern "C" fn pick_str(z_arg: *const i8, pz_err: *mut *mut i8,
     return -1;
 }
 
+///* Change the limits on the display mode.  Return 0 on
+///* success.  Return non-zero if zArg is mis-formatted.
+///*
+///* Valid arguments:
+///*
+///*    "on"             Default limits
+///*    "off"            All limits turned off
+///*    L,C              Line and Characters limits set
+///*    L,C,T            Line, Character, and Title limits set
+///*
+///* Anything else returns non-zero
 extern "C" fn mode_set_limit(p: &mut ShellState, z_arg_1: *const i8) -> i32 {
     let k: i32 =
         if z_arg_1 == core::ptr::null() {
@@ -38502,6 +40893,7 @@ extern "C" fn mode_set_limit(p: &mut ShellState, z_arg_1: *const i8) -> i32 {
     return 0;
 }
 
+///* Change the mode to eMode
 extern "C" fn mode_change(p: *mut ShellState, e_mode_1: u8) -> () {
     unsafe {
         let mut p_i: *const ModeInfo = core::ptr::null();
@@ -38570,6 +40962,8 @@ extern "C" fn mode_change(p: *mut ShellState, e_mode_1: u8) -> () {
     }
 }
 
+///* Set the mode to the default.  It assumed that the mode has
+///* already been freed and zeroed prior to calling this routine.
 extern "C" fn mode_default(p: *mut ShellState) -> () {
     unsafe {
         unsafe { (*p).mode.spec.i_version = 1 as u8 };
@@ -38580,6 +40974,16 @@ extern "C" fn mode_default(p: *mut ShellState) -> () {
     }
 }
 
+///* Find the number of a display mode given its name.  Return -1 if
+///* the name does not match any mode.
+///*
+///* Saved modes are also searched if p!=NULL.  The number returned
+///* for a saved mode is the index into the p->aSavedModes[] array 
+///* plus MODE_USER.
+///*
+///* Two special mode names are also available: "batch" and "tty".
+///* evaluate to the default mode for batch operation and interactive
+///* operation on a TTY, respectively.
 extern "C" fn mode_find(p: &ShellState, z_name_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -38626,6 +41030,7 @@ extern "C" fn mode_find(p: &ShellState, z_name_1: *const i8) -> i32 {
     return -1;
 }
 
+///* Save or restore the current output mode
 extern "C" fn mode_push(p: &mut ShellState) -> () {
     (*p).a_mode_stack =
         unsafe {
@@ -38658,6 +41063,7 @@ extern "C" fn mode_pop(p: &mut ShellState) -> () {
     }
 }
 
+///* A callback for the sqlite3_log() interface.
 extern "C" fn shell_log(p_arg_1: *mut (), i_err_code_1: i32,
     z_msg_1: *const i8) -> () {
     let p: *const ShellState =
@@ -38671,6 +41077,10 @@ extern "C" fn shell_log(p_arg_1: *mut (), i_err_code_1: i32,
     unsafe { fflush(unsafe { (*p).p_log }) };
 }
 
+///* SQL function:  shell_putsnl(X)
+///*
+///* Write the text X to the screen (or whatever output is being directed)
+///* adding a newline at the end, and then return X.
 extern "C" fn shell_puts_func(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let p: *const ShellState =
@@ -38689,6 +41099,8 @@ extern "C" fn shell_puts_func(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     };
 }
 
+///* Compute the name of the location of an input error in memory
+///* obtained from sqlite3_malloc().
 extern "C" fn shell_error_location(p: &ShellState) -> *mut i8 {
     let mut z_loc: *mut i8 = core::ptr::null_mut();
     if !((*p).z_err_prefix).is_null() {
@@ -38717,6 +41129,8 @@ extern "C" fn shell_error_location(p: &ShellState) -> *mut i8 {
     return z_loc;
 }
 
+///* If in safe mode, print an error message described by the arguments
+///* and exit immediately.
 unsafe extern "C" fn fail_if_safe_mode(p: *mut ShellState,
     z_err_msg_1: *const i8, mut __va0: ...) -> () {
     unsafe {
@@ -38736,6 +41150,7 @@ unsafe extern "C" fn fail_if_safe_mode(p: *mut ShellState,
     }
 }
 
+///* Issue an error message from a dot-command.
 unsafe extern "C" fn dot_cmd_error(p: *mut ShellState, i_arg_1: i32,
     z_brief_1: *const i8, z_detail_1: *const i8, mut __va0: ...) -> () {
     unsafe {
@@ -38782,6 +41197,7 @@ unsafe extern "C" fn dot_cmd_error(p: *mut ShellState, i_arg_1: i32,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn edit_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut z_editor: *const i8 = core::ptr::null();
@@ -38796,7 +41212,10 @@ extern "C" fn edit_func(context: *mut Sqlite3Context, argc: i32,
     let mut x: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut p: *mut u8 = core::ptr::null_mut();
     let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+    /// When writing the file to be edited, do \n to \r\n conversions on systems
+    ///* that want \r\n line endings
     let mut z: *const i8 = core::ptr::null();
+    /// Remember whether or not the value originally contained \r\n
     let mut i: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut j: Sqlite3Int64 = 0 as Sqlite3Int64;
     let mut __state: i32 = 0;
@@ -39172,8 +41591,11 @@ extern "C" fn edit_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Set output mode to text or binary for Windows.
 extern "C" fn set_crlf_mode(p: *const ShellState) -> () { { let _ = p; }; }
 
+///* Find earliest of chars within s specified in zAny.
+///* With ns == ~0, is like strpbrk(s,zAny) and s must be 0-terminated.
 extern "C" fn any_of_in_str(s: *const i8, mut z_any_1: *const i8, mut ns: u64)
     -> *const i8 {
     let mut pc_first: *const i8 = core::ptr::null();
@@ -39192,7 +41614,13 @@ extern "C" fn any_of_in_str(s: *const i8, mut z_any_1: *const i8, mut ns: u64)
     return pc_first;
 }
 
+/// Skip over as much z[] input char sequence as is valid UTF-8,
+///* limited per nAccept char's or whole characters and containing
+///* no char cn such that ((1<<cn) & ccm)!=0. On return, the
+///* sequence z:return (inclusive:exclusive) is validated UTF-8.
+///* Limit: nAccept>=0 => char count, nAccept<0 => character
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn z_skip_valid_utf8(mut z: *const i8, n_accept_1: i32,
     ccm: i64) -> *const i8 {
     let mut ng: i32 = if n_accept_1 < 0 { -n_accept_1 } else { 0 };
@@ -39240,6 +41668,8 @@ pub extern "C" fn z_skip_valid_utf8(mut z: *const i8, n_accept_1: i32,
                         if ct as i32 == 0 ||
                                     unsafe { zt.offset_from(z) } as i64 > 4 as i64 ||
                                 ct as i32 & 192 != 128 {
+
+                            /// Trailing bytes are too few, too many, or invalid.
                             return z;
                         }
                     }
@@ -39247,15 +41677,20 @@ pub extern "C" fn z_skip_valid_utf8(mut z: *const i8, n_accept_1: i32,
                 }
                 if !({ c <<= 1; c } as i32 & 64 == 64) { break '__b364; }
             }
-            z = zt;
+
+            /// Eat lead byte's count.
+            (z = zt);
         }
     }
     return z;
 }
 
+///* Output the given string as a quoted according to C or TCL quoting rules.
+#[allow(unused_doc_comments)]
 extern "C" fn output_c_string(out: *mut FILE, mut z: *const i8) -> () {
     unsafe {
         let mut c: i8 = 0 as i8;
+        /// double-quote, backslash, rubout
         let mut ace: [i8; 3] = [92 as i8, 63 as i8, 0 as i8];
         let mut cbs_say: i8 = 0 as i8;
         cli_puts(zq_1, out);
@@ -39316,9 +41751,13 @@ extern "C" fn output_c_string(out: *mut FILE, mut z: *const i8) -> () {
     }
 }
 
+/// Encode input string z[] as a C-language string literal and
+///* append it to the sqlite3_str.  If z is NULL render and empty string.
+#[allow(unused_doc_comments)]
 extern "C" fn append_c_string(out: *mut Sqlite3Str, mut z: *const i8) -> () {
     unsafe {
         let mut c: i8 = 0 as i8;
+        /// double-quote, backslash, rubout
         let mut ace: [i8; 3] = [92 as i8, 63 as i8, 0 as i8];
         let mut cbs_say: i8 = 0 as i8;
         if z == core::ptr::null() {
@@ -39385,6 +41824,7 @@ extern "C" fn append_c_string(out: *mut Sqlite3Str, mut z: *const i8) -> () {
     }
 }
 
+///* This routine runs when the user presses Ctrl-C
 extern "C" fn interrupt_handler(not_used_1: i32) -> () {
     unsafe {
         { let _ = not_used_1; };
@@ -39395,11 +41835,13 @@ extern "C" fn interrupt_handler(not_used_1: i32) -> () {
     }
 }
 
+/// No-masking interrupts (SIGTERM or SIGHUP)
 extern "C" fn sigterm_handler(not_used_1: i32) -> () {
     { let _ = not_used_1; };
     cli_exit(1);
 }
 
+/// Try to determine the screen width.  Use the default if unable.
 #[unsafe(no_mangle)]
 pub extern "C" fn shell_screen_width() -> i32 {
     unsafe {
@@ -39435,6 +41877,8 @@ pub extern "C" fn shell_screen_width() -> i32 {
     }
 }
 
+///* This authorizer runs in safe mode.
+#[allow(unused_doc_comments)]
 extern "C" fn safe_mode_auth(p_client_data_1: *mut (), op: i32,
     z_a1_1: *const i8, z_a2_1: *const i8, z_a3_1: *const i8,
     z_a4_1: *const i8) -> i32 {
@@ -39448,6 +41892,9 @@ extern "C" fn safe_mode_auth(p_client_data_1: *mut (), op: i32,
             match op {
                 24 => {
                     {
+
+                        /// In WASM builds the filesystem is a virtual sandbox, so
+                        ///* there's no harm in using ATTACH.
                         unsafe {
                             fail_if_safe_mode(p,
                                 c"cannot run ATTACH in safe mode".as_ptr() as *mut i8 as
@@ -39519,6 +41966,8 @@ extern "C" fn safe_mode_auth(p_client_data_1: *mut (), op: i32,
     }
 }
 
+///* When the ".auth ON" is set, the following authorizer callback is
+///* invoked.  It always returns SQLITE_OK.
 extern "C" fn shell_auth(p_client_data_1: *mut (), op: i32, z_a1_1: *const i8,
     z_a2_1: *const i8, z_a3_1: *const i8, z_a4_1: *const i8) -> i32 {
     unsafe {
@@ -39565,6 +42014,14 @@ extern "C" fn shell_auth(p_client_data_1: *mut (), op: i32, z_a1_1: *const i8,
     }
 }
 
+///* Print a schema statement.  This is a helper routine to dump_callback().
+///*
+///* This routine converts some CREATE TABLE statements for shadow tables
+///* in FTS3/4/5 into CREATE TABLE IF NOT EXISTS statements.
+///*
+///* If the schema statement in z[] contains a start-of-comment and if
+///* sqlite3_complete() returns false, try to terminate the comment before
+///* printing the result.  https://sqlite.org/forum/forumpost/d7be961c5c
 extern "C" fn print_schema_line(out: *mut FILE, mut z: *const i8,
     z_tail_1: *const i8) -> () {
     unsafe {
@@ -39626,6 +42083,8 @@ extern "C" fn print_schema_line(out: *mut FILE, mut z: *const i8,
     }
 }
 
+///* Return true if string z[] has nothing but whitespace and comments to the
+///* end of the first line.
 extern "C" fn ws_to_eol(z: *const i8) -> i32 {
     let mut i: i32 = 0;
     {
@@ -39655,15 +42114,33 @@ extern "C" fn ws_to_eol(z: *const i8) -> i32 {
     return 1;
 }
 
+///* SQL Function:  shell_format_schema(SQL,FLAGS)
+///*
+///* This function is internally by the CLI to assist with the
+///* ".schema", ".fullschema", and ".dump" commands.  The first
+///* argument is the value from sqlite_schema.sql.  The value returned
+///* is a modification of the input that can actually be run as SQL
+///* to recreate the schema object.
+///*
+///* When FLAGS is zero, the only changes is to append ";".  If the
+///* 0x01 bit of FLAGS is set, then transformations are made to implement
+///* ".schema --indent".
+#[allow(unused_doc_comments)]
 extern "C" fn shell_format_schema(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut flags: i32 = 0;
+    /// Value of 2nd parameter
     let mut z_sql: *const i8 = core::ptr::null();
+    /// Value of 1st parameter
     let mut n_sql: i32 = 0;
+    /// Bytes of text in zSql[]
     let mut p_out: *mut Sqlite3Str = core::ptr::null_mut();
+    /// Output buffer
     let mut z: *mut i8 = core::ptr::null_mut();
+    /// Writable copy of zSql
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    /// Loop counters
     let mut n_paren: i32 = 0;
     let mut c_end: i8 = 0 as i8;
     let mut c: i8 = 0 as i8;
@@ -40111,6 +42588,7 @@ extern "C" fn shell_format_schema(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     }
 }
 
+///* Progress handler callback.
 extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     let p: *mut ShellState = p_client_data_1 as *mut ShellState;
     {
@@ -40154,6 +42632,8 @@ extern "C" fn progress_handler(p_client_data_1: *mut ()) -> i32 {
     return 0;
 }
 
+///* This is the callback routine from sqlite3_exec() that appends all
+///* output onto the end of a ShellText object.
 extern "C" fn capture_output_callback(p_arg_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az: *mut *mut i8) -> i32 {
     let p: *mut ShellText = p_arg_1 as *mut ShellText;
@@ -40186,6 +42666,7 @@ extern "C" fn capture_output_callback(p_arg_1: *mut (), n_arg_1: i32,
     return 0;
 }
 
+///* Generate an appropriate SELFTEST table in the main database.
 extern "C" fn create_selftest_table(p: &ShellState) -> () {
     unsafe {
         let mut z_err_msg: *mut i8 = core::ptr::null_mut();
@@ -40211,6 +42692,9 @@ extern "C" fn create_selftest_table(p: &ShellState) -> () {
     }
 }
 
+///* Set the destination table field of the ShellState structure to
+///* the name of the table given.  Escape any quote characters in the
+///* table name.
 extern "C" fn set_table_name(p: &mut ShellState, z_name_1: *const i8) -> () {
     if !((*p).z_dest_table).is_null() {
         unsafe { sqlite3_free((*p).z_dest_table as *mut ()) };
@@ -40224,6 +42708,13 @@ extern "C" fn set_table_name(p: &mut ShellState, z_name_1: *const i8) -> () {
     shell_check_oom((*p).z_dest_table as *const ());
 }
 
+///* Maybe construct two lines of text that point out the position of a
+///* syntax error.  Return a pointer to the text, in memory obtained from
+///* sqlite3_malloc().  Or, if the most recent error does not involve a
+///* specific token that we can point to, return an empty string.
+///*
+///* In all cases, the memory returned is obtained from sqlite3_malloc64()
+///* and should be released by the caller invoking sqlite3_free().
 extern "C" fn shell_error_context(mut z_sql_1: *const i8, db: *mut Sqlite3)
     -> *mut i8 {
     let mut i_offset: i32 = 0;
@@ -40305,6 +42796,14 @@ extern "C" fn shell_error_context(mut z_sql_1: *const i8, db: *mut Sqlite3)
     return z_msg;
 }
 
+///* Execute a query statement that will generate SQL output.  Print
+///* the result columns, comma-separated, on a line and then add a
+///* semicolon terminator to the end of that line.
+///*
+///* If the number of columns is 1 and that column contains text "--"
+///* then write the semicolon on a separate line.  That way, if a
+///* "--" comment occurs at the end of the statement, the comment
+///* won't consume the semicolon terminator.
 extern "C" fn run_table_dump_query(p: &mut ShellState, z_select_1: *const i8)
     -> i32 {
     let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -40387,6 +42886,7 @@ extern "C" fn run_table_dump_query(p: &mut ShellState, z_select_1: *const i8)
     return rc;
 }
 
+///* Allocate space and save off string indicating current error.
 extern "C" fn save_err_msg(db: *mut Sqlite3, z_phase_1: *const i8, rc: i32,
     z_sql_1: *const i8) -> *mut i8 {
     let mut z_err: *mut i8 = core::ptr::null_mut();
@@ -40413,6 +42913,7 @@ extern "C" fn save_err_msg(db: *mut Sqlite3, z_phase_1: *const i8, rc: i32,
     return z_err;
 }
 
+///* Display a single line of status using 64-bit values.
 extern "C" fn display_stat_line(out: *mut FILE, z_label_1: *mut i8,
     z_format_1: *const i8, i_status_ctrl_1: i32, b_reset_1: i32) -> () {
     let mut i_cur: Sqlite3Int64 = -1 as Sqlite3Int64;
@@ -40463,6 +42964,8 @@ extern "C" fn display_stat_line(out: *mut FILE, z_label_1: *mut i8,
     };
 }
 
+///* Display memory stats.
+#[allow(unused_doc_comments)]
 extern "C" fn display_stats(db: *mut Sqlite3, p_arg_1: *const ShellState,
     b_reset_1: i32) -> i32 {
     let mut i_cur: i32 = 0;
@@ -40751,9 +43254,12 @@ extern "C" fn display_stats(db: *mut Sqlite3, p_arg_1: *const ShellState,
                         *mut i8 as *const i8, i_cur)
         };
     }
+
+    /// Do not remove this machine readable comment: extra-stats-output-here
     return 0;
 }
 
+///* Disable and restore .wheretrace and .treetrace/.selecttrace settings.
 static mut saved_select_trace: u32 = unsafe { core::mem::zeroed() };
 
 static mut saved_where_trace: u32 = unsafe { core::mem::zeroed() };
@@ -40787,6 +43293,7 @@ extern "C" fn restore_debug_trace_modes() -> () {
     }
 }
 
+/// Create the TEMP table used to store parameter bindings
 extern "C" fn bind_table_init(p: &ShellState) -> () {
     let mut wr_schema: i32 = 0;
     let mut defensive_mode: i32 = 0;
@@ -40809,6 +43316,16 @@ extern "C" fn bind_table_init(p: &ShellState) -> () {
     unsafe { sqlite3_db_config((*p).db, 1010, defensive_mode, 0) };
 }
 
+///* Bind parameters on a prepared statement.
+///*
+///* Parameter bindings are taken from a TEMP table of the form:
+///*
+///*    CREATE TEMP TABLE sqlite_parameters(key TEXT PRIMARY KEY, value)
+///*    WITHOUT ROWID;
+///*
+///* No bindings occur if this table does not exist.  The name of the table
+///* begins with "sqlite_" so that it will not collide with ordinary application
+///* tables.  The table must be in the TEMP schema.
 extern "C" fn bind_prepared_stmt(p_arg_1: &ShellState,
     p_stmt_1: *mut Sqlite3Stmt) -> () {
     let mut n_var: i32 = 0;
@@ -40917,6 +43434,14 @@ extern "C" fn bind_prepared_stmt(p_arg_1: &ShellState,
     unsafe { sqlite3_finalize(p_q) };
 }
 
+///* This function is called to process SQL if the previous shell command
+///* was ".expert". It passes the SQL in the second argument directly to
+///* the sqlite3expert object.
+///*
+///* If successful, SQLITE_OK is returned. Otherwise, an SQLite error
+///* code. In this case, (*pzErr) may be set to point to a buffer containing
+///* an English language error message. It is the responsibility of the
+///* caller to eventually free this buffer using sqlite3_free().
 extern "C" fn expert_handle_sql(p_state_1: &ShellState, z_sql_1: *const i8,
     pz_err_1: *mut *mut i8) -> i32 {
     if ((*p_state_1).expert.p_expert).is_null() as i32 as i64 != 0 {
@@ -40939,6 +43464,14 @@ extern "C" fn expert_handle_sql(p_state_1: &ShellState, z_sql_1: *const i8,
             z_sql_1, pz_err_1);
 }
 
+///* This function is called either to silently clean up the object
+///* created by the ".expert" command (if bCancel==1), or to generate a
+///* report from it and then clean it up (if bCancel==0).
+///*
+///* If successful, SQLITE_OK is returned. Otherwise, an SQLite error
+///* code. In this case, (*pzErr) may be set to point to a buffer containing
+///* an English language error message. It is the responsibility of the
+///* caller to eventually free this buffer using sqlite3_free().
 extern "C" fn expert_finish(p_state_1: &mut ShellState, b_cancel_1: i32,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -41015,6 +43548,7 @@ extern "C" fn expert_finish(p_state_1: &mut ShellState, b_cancel_1: i32,
     return rc;
 }
 
+///* Implementation of ".expert" dot command.
 extern "C" fn expert_dot_command(p_state_1: &mut ShellState,
     az_arg_1: *const *mut i8, n_arg_1: i32) -> i32 {
     unsafe {
@@ -41122,6 +43656,7 @@ extern "C" fn expert_dot_command(p_state_1: &mut ShellState,
     }
 }
 
+///* QRF write callback
 extern "C" fn shell_write_qr(p_x_1: *mut (), z: *const i8, n: Sqlite3Int64)
     -> i32 {
     let p_arg: *const ShellState =
@@ -41130,13 +43665,24 @@ extern "C" fn shell_write_qr(p_x_1: *mut (), z: *const i8, n: Sqlite3Int64)
     return 0;
 }
 
+///* Execute a statement or set of statements.  Print
+///* any result rows/columns depending on the current mode
+///* set via the supplied callback.
+///*
+///* This is very similar to SQLite's built-in sqlite3_exec()
+///* function except it takes a slightly different callback
+///* and callback data argument.
+#[allow(unused_doc_comments)]
 extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
     pz_err_msg_1: *mut *mut i8) -> i32 {
     unsafe {
         let mut p_stmt: *mut Sqlite3Stmt = 0 as *mut () as *mut Sqlite3Stmt;
+        /// Statement to execute.
         let mut rc: i32 = 0;
+        /// Return Code
         let mut rc2: i32 = 0;
         let mut z_leftover: *const i8 = core::ptr::null();
+        /// Tail of unprocessed SQL
         let db: *mut Sqlite3 = unsafe { (*p_arg_1).db };
         let mut e_style: u8 = 0 as u8;
         let mut spec: Sqlite3QrfSpec = unsafe { core::mem::zeroed() };
@@ -41154,6 +43700,9 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
                 unsafe { (*p_arg_1).shell_flgs } & 8 as u32 != 0 as u32 {
             spec.b_titles = 2 as u8;
         }
+
+        ///                        ,- This is true, but it is omitted
+        ///* vvvvvvvvvvvvvvvvvvv ----- to avoid compiler warnings.
         if !((unsafe { (*p_arg_1).mode.e_mode } as i32) <
                                 (core::mem::size_of::<[ModeInfo; 23]>() as u64 /
                                         core::mem::size_of::<ModeInfo>() as u64) as i32) as i32 as
@@ -41165,9 +43714,11 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
                         as *const i8)
             }
         } else { { let _ = 0; } };
-        e_style =
+
+        ///pArg->mode.eMode>=0 &&
+        (e_style =
             a_mode_info[unsafe { (*p_arg_1).mode.e_mode } as usize].e_style as
-                u8;
+                u8);
         if unsafe { (*p_arg_1).mode.b_auto_screen_width } != 0 {
             spec.n_screen_width = shell_screen_width() as i16;
         }
@@ -41207,7 +43758,9 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
             } else {
                 let mut is_explain: i32 = 0;
                 if (p_stmt).is_null() as i32 != 0 {
-                    z_sql_1 = z_leftover;
+
+                    /// this happens for a comment or white-space
+                    (z_sql_1 = z_leftover);
                     while unsafe {
                                 isspace(unsafe { *z_sql_1.offset(0 as isize) } as u8 as i32)
                             } != 0 {
@@ -41238,7 +43791,9 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
                 if !(p_arg_1).is_null() {
                     unsafe { (*p_arg_1).p_stmt = p_stmt };
                 }
-                is_explain = unsafe { sqlite3_stmt_isexplain(p_stmt) };
+
+                /// Show the EXPLAIN QUERY PLAN if .eqp is on
+                (is_explain = unsafe { sqlite3_stmt_isexplain(p_stmt) });
                 if !(p_arg_1).is_null() &&
                                 unsafe { (*p_arg_1).mode.auto_eqp } != 0 && is_explain == 0
                         && unsafe { (*p_arg_1).dot.n_arg } == 0 {
@@ -41328,7 +43883,11 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
                         unsafe { sqlite3_free(z_err as *mut ()) };
                     }
                 }
-                rc2 = unsafe { sqlite3_finalize(p_stmt) };
+
+                /// Finalize the statement just executed. If this fails, save a
+                ///* copy of the error message. Otherwise, set zSql to point to the
+                ///* next statement to execute.
+                (rc2 = unsafe { sqlite3_finalize(p_stmt) });
                 if rc != 7 { rc = rc2; }
                 if rc == 0 {
                     z_sql_1 = z_leftover;
@@ -41357,10 +43916,14 @@ extern "C" fn shell_exec(p_arg_1: *mut ShellState, mut z_sql_1: *const i8,
                 }
             }
         }
+
+        /// end while
         return rc;
     }
 }
 
+///* Release memory previously allocated by tableColumnList().
+#[allow(unused_doc_comments)]
 extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
     let mut i: i32 = 0;
     {
@@ -41379,9 +43942,23 @@ extern "C" fn free_column_list(az_col_1: *mut *mut i8) -> () {
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
+
+    /// azCol[0] is a static string
     unsafe { sqlite3_free(az_col_1 as *mut ()) };
 }
 
+///* Return a list of pointers to strings which are the names of all
+///* columns in table zTab.   The memory to hold the names is dynamically
+///* allocated and must be released by the caller using a subsequent call
+///* to freeColumnList().
+///*
+///* The azCol[0] entry is usually NULL.  However, if zTab contains a rowid
+///* value that needs to be preserved, then azCol[0] is filled in with the
+///* name of the rowid column.
+///*
+///* The first regular column in the table is azCol[1].  The list is terminated
+///* by an entry with azCol[i]==0.
+#[allow(unused_doc_comments)]
 extern "C" fn table_column_list(p: &ShellState, z_tab_1: *const i8)
     -> *mut *mut i8 {
     unsafe {
@@ -41391,7 +43968,9 @@ extern "C" fn table_column_list(p: &ShellState, z_tab_1: *const i8)
         let mut n_col: i32 = 0;
         let mut n_alloc: i64 = 0 as i64;
         let mut n_pk: i32 = 0;
+        /// Number of PRIMARY KEY columns seen
         let mut is_ipk: i32 = 0;
+        /// True if one PRIMARY KEY column of type INTEGER
         let mut preserve_rowid: i32 =
             ((*p).shell_flgs & 8 as u32 != 0 as u32) as i32;
         let mut rc: i32 = 0;
@@ -41446,11 +44025,18 @@ extern "C" fn table_column_list(p: &ShellState, z_tab_1: *const i8)
             *az_col.offset((n_col + 1) as isize) = core::ptr::null_mut()
         };
         if preserve_rowid != 0 && is_ipk != 0 {
-            z_sql =
+
+            /// If a single PRIMARY KEY column with type INTEGER was seen, then it
+            ///* might be an alias for the ROWID.  But it might also be a WITHOUT ROWID
+            ///* table or a INTEGER PRIMARY KEY DESC column, neither of which are
+            ///* ROWID aliases.  To distinguish these cases, check to see if
+            ///* there is a "pk" entry in "PRAGMA index_list".  There will be
+            ///* no "pk" index if the PRIMARY KEY really is an alias for the ROWID.
+            (z_sql =
                 unsafe {
                     sqlite3_mprintf(c"SELECT 1 FROM pragma_index_list(%Q) WHERE origin=\'pk\'".as_ptr()
                                 as *mut i8 as *const i8, z_tab_1)
-                };
+                });
             shell_check_oom(z_sql as *const ());
             rc =
                 unsafe {
@@ -41491,14 +44077,19 @@ extern "C" fn table_column_list(p: &ShellState, z_tab_1: *const i8)
                             }
                         }
                         if i > n_col {
-                            rc =
+
+                            /// At this point, we know that azRowid[j] is not the name of any
+                            ///* ordinary column in the table.  Verify that azRowid[j] is a valid
+                            ///* name for the rowid before adding it to azCol[0].  WITHOUT ROWID
+                            ///* tables will fail this last check
+                            (rc =
                                 unsafe {
                                     sqlite3_table_column_metadata((*p).db, core::ptr::null(),
                                         z_tab_1, az_rowid[j as usize] as *const i8,
                                         core::ptr::null_mut(), core::ptr::null_mut(),
                                         core::ptr::null_mut(), core::ptr::null_mut(),
                                         core::ptr::null_mut())
-                                };
+                                });
                             if rc == 0 {
                                 unsafe {
                                     *az_col.offset(0 as isize) = az_rowid[j as usize]
@@ -41516,6 +44107,7 @@ extern "C" fn table_column_list(p: &ShellState, z_tab_1: *const i8)
     }
 }
 
+///* Toggle the reverse_unordered_selects setting.
 extern "C" fn toggle_select_order(db: *mut Sqlite3) -> () {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut i_setting: i32 = 0;
@@ -41541,6 +44133,7 @@ extern "C" fn toggle_select_order(db: *mut Sqlite3) -> () {
     };
 }
 
+/// Forward reference
 unsafe extern "C" fn db_int(db: *mut Sqlite3, z_sql: *const i8,
     mut __va0: ...) -> i32 {
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -41562,6 +44155,11 @@ unsafe extern "C" fn db_int(db: *mut Sqlite3, z_sql: *const i8,
     return res;
 }
 
+///* This is a different callback routine used for dumping the database.
+///* Each row received by this callback consists of a table name,
+///* the table type ("index" or "table") and SQL to create the table.
+///* This routine should print text sufficient to recreate the table.
+#[allow(unused_doc_comments)]
 extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     az_arg_1: *mut *mut i8, az_not_used_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -41649,6 +44247,9 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
             };
             return 0;
         }
+
+        /// Always quote the table name, even if it appears to be pure ascii,
+        ///* in case it is a keyword. Ex:  INSERT INTO "table" ...
         init_text(&mut s_table);
         append_text(&mut s_table, z_table, quote_char(z_table));
         if !(unsafe { *az_col.offset(0 as isize) }).is_null() {
@@ -41677,6 +44278,8 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
             append_text(&mut s_table, c")".as_ptr() as *mut i8 as *const i8,
                 0 as i8);
         }
+
+        /// Build an appropriate SELECT statement
         init_text(&mut s_select);
         append_text(&mut s_select,
             c"SELECT ".as_ptr() as *mut i8 as *const i8, 0 as i8);
@@ -41742,6 +44345,11 @@ extern "C" fn dump_callback(p_arg_1: *mut (), n_arg_1: i32,
     return 0;
 }
 
+///* Run zQuery.  Use dump_callback() as the callback routine so that
+///* the contents of the query are output as SQL statements.
+///*
+///* If we get a SQLITE_CORRUPT error, rerun the query after appending
+///* "ORDER BY rowid DESC" to the end.
 extern "C" fn run_schema_dump_query(p: *mut ShellState, z_query_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -41790,6 +44398,13 @@ extern "C" fn run_schema_dump_query(p: *mut ShellState, z_query_1: *const i8)
     return rc;
 }
 
+///* Text of help messages.
+///*
+///* The help text for each individual command begins with a line that starts
+///* with ".".  Subsequent lines are supplemental information.
+///*
+///* There must be two or more spaces between the end of the command and the
+///* start of the description of what that command does.
 static mut az_help: [*const i8; 166] =
     [c".archive ...             Manage SQL archives".as_ptr() as *const i8,
             c"   Each command must have exactly one of the following options:".as_ptr()
@@ -42099,6 +44714,8 @@ static mut az_help: [*const i8; 166] =
             c"    --plain                 Show results as text/plain, not as HTML".as_ptr()
                 as *const i8];
 
+///***********************************************************
+///* "Usage" help text automatically generated from comments
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS1 {
@@ -42138,6 +44755,7 @@ static mut a_usage: [AnonS1; 6] =
                     as *const i8,
             }];
 
+///* Return a pointer to usage text for zCmd, or NULL if none exists.
 extern "C" fn find_usage(z_cmd_1: *const i8) -> *const i8 {
     unsafe {
         let mut i: i32 = 0;
@@ -42163,6 +44781,29 @@ extern "C" fn find_usage(z_cmd_1: *const i8) -> *const i8 {
     }
 }
 
+///* Output help text for commands that match zPattern.
+///*
+///*    *   If zPattern is NULL, then show all documented commands, but
+///*        only give a one-line summary of each.
+///*
+///*    *   If zPattern is "-a" or "-all" or "--all" then show all help text
+///*        for all commands except undocumented commands.
+///*
+///*    *   If zPattern is "0" then show all help for undocumented commands.
+///*        Undocumented commands begin with "," instead of "." in the azHelp[]
+///*        array.
+///*
+///*    *   If zPattern is a prefix for one or more documented commands, then
+///*        show help for those commands.  If only a single command matches the
+///*        prefix, show the full text of the help.  If multiple commands match,
+///*        Only show just the first line of each.
+///*
+///*    *   Otherwise, show the complete text of any documented command for which
+///*        zPattern is a LIKE match for any text within that command help
+///*        text.
+///*
+///* Return the number commands that match zPattern.
+#[allow(unused_doc_comments)]
 extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -42171,16 +44812,21 @@ extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
         let mut z_pat: *mut i8 = core::ptr::null_mut();
         let mut z_hit: *const i8 = core::ptr::null();
         if z_pattern_1 == core::ptr::null() {
-            z_pattern_1 = c"[a-z]".as_ptr() as *mut i8 as *const i8;
+
+            /// Show just the first line for all help topics
+            (z_pattern_1 = c"[a-z]".as_ptr() as *mut i8 as *const i8);
         } else if cli_strcmp(z_pattern_1,
                             c"-a".as_ptr() as *mut i8 as *const i8) == 0 ||
                     cli_strcmp(z_pattern_1,
                             c"-all".as_ptr() as *mut i8 as *const i8) == 0 ||
                 cli_strcmp(z_pattern_1,
                         c"--all".as_ptr() as *mut i8 as *const i8) == 0 {
-            z_pattern_1 = c".".as_ptr() as *mut i8 as *const i8;
+
+            /// Show everything except undocumented commands
+            (z_pattern_1 = c".".as_ptr() as *mut i8 as *const i8);
         } else if cli_strcmp(z_pattern_1,
                     c"0".as_ptr() as *mut i8 as *const i8) == 0 {
+            /// Show complete help text of undocumented commands
             let mut show: i32 = 0;
             {
                 i = 0;
@@ -42217,14 +44863,16 @@ extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
             }
             return n;
         }
-        z_pat =
+
+        /// Seek documented commands for which zPattern is an exact prefix
+        (z_pat =
             unsafe {
                 sqlite3_mprintf(c".%s*".as_ptr() as *mut i8 as *const i8,
                     if unsafe { *z_pattern_1.offset(0 as isize) } as i32 ==
                             '.' as i32 {
                         unsafe { &*z_pattern_1.offset(1 as isize) }
                     } else { z_pattern_1 })
-            };
+            });
         shell_check_oom(z_pat as *const ());
         {
             i = 0;
@@ -42259,6 +44907,9 @@ extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
                 if !(z_usage).is_null() {
                     cli_puts(z_usage, out);
                 } else {
+
+                    /// when zPattern is a prefix of exactly one command, then include
+                    ///* the details of that command, which should begin at offset j
                     unsafe {
                         cli_printf(out, c"%s\n".as_ptr() as *mut i8 as *const i8,
                             z_hit)
@@ -42284,11 +44935,14 @@ extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
         }
         unsafe { sqlite3_free(z_pat as *mut ()) };
         if n != 0 { return n; }
-        z_pat =
+
+        /// Look for documented commands that contain zPattern anywhere.
+        ///* Show complete text of all documented commands that match.
+        (z_pat =
             unsafe {
                 sqlite3_mprintf(c"%%%s%%".as_ptr() as *mut i8 as *const i8,
                     z_pattern_1)
-            };
+            });
         shell_check_oom(z_pat as *const ());
         {
             i = 0;
@@ -42346,6 +45000,7 @@ extern "C" fn show_help(out: *mut FILE, mut z_pattern_1: *const i8) -> i32 {
     }
 }
 
+///* Test to see if a line consists entirely of whitespace.
 extern "C" fn line_is_all_whitespace(mut z: *const i8) -> i32 {
     {
         '__b408: loop {
@@ -42425,6 +45080,8 @@ extern "C" fn echo_group_input(p: &ShellState, z_do_1: *const i8) -> () {
     }
 }
 
+///* Enlarge the space allocated in p->dot so that it can hold more
+///* than nArg parsed command-line arguments.
 extern "C" fn parse_dot_realloc(p: &mut ShellState, n_arg_1: i32) -> () {
     (*p).dot.n_alloc = n_arg_1 + 22;
     (*p).dot.az_arg =
@@ -42448,6 +45105,21 @@ extern "C" fn parse_dot_realloc(p: &mut ShellState, n_arg_1: i32) -> () {
     shell_check_oom((*p).dot.ab_quot as *const ());
 }
 
+///* Do C-language style dequoting.
+///*
+///*    \a    -> alarm
+///*    \b    -> backspace
+///*    \t    -> tab
+///*    \n    -> newline
+///*    \v    -> vertical tab
+///*    \f    -> form feed
+///*    \r    -> carriage return
+///*    \s    -> space
+///*    \"    -> "
+///*    \'    -> '
+///*    \\    -> backslash
+///*    \NNN  -> ascii character NNN in octal
+///*    \xHH  -> ascii character HH in hexadecimal
 extern "C" fn resolve_backslashes(mut z: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -42539,6 +45211,8 @@ extern "C" fn resolve_backslashes(mut z: *mut i8) -> () {
     if j < i { unsafe { *z.offset(j as isize) = 0 as i8 }; }
 }
 
+///* Parse input line zLine up into individual arguments.  Retain the
+///* parse in the p->dot substructure.
 extern "C" fn parse_dot_cmd_args(z_line_1: *const i8, p: *mut ShellState)
     -> () {
     let mut z: *mut i8 = core::ptr::null_mut();
@@ -42667,6 +45341,15 @@ extern "C" fn parse_dot_cmd_args(z_line_1: *const i8, p: *mut ShellState)
     };
 }
 
+///* Delete a file.
+///*
+///* If unsuccessful on the first attempt and if pRetry!=NULL and pRetry[0]
+///* is positive, then delay for pRetry[0] milliseconds and try again.  On
+///* a retry, pRetry[0] is set to zero.  Unsuccessful unlinks usually only
+///* happen on Windows.  It is possible (in theory) for unlink() to fail
+///* on Unix, but it rarely happens.
+///*
+///* Return 0 on success and non-zero if unable.
 #[unsafe(no_mangle)]
 pub extern "C" fn shell_delete_file(z_filename_1: *const i8,
     p_retry_1: *mut i32) -> i32 {
@@ -42694,6 +45377,37 @@ pub extern "C" fn shell_delete_file(z_filename_1: *const i8,
     return rc;
 }
 
+///* This routine does two things:
+///*
+///*    (1)  Delete (unlink) temporary files that are no longer needed.
+///*    (2)  Free memory used to hold the names of those temporary files.
+///*
+///* Temp filenames are stored in p->zTempName and in the p->aUnlink[]
+///* array.  The p->zTempFile is always subject to immediate deletion.  The
+///* temp files named in p->aUnlink[] are usually not deleted until after
+///* the timestamp stored in the p->aUnlink[].tm field, except if
+///* bForce is true, the p->aUnlink[] files will be deleted even if they
+///* have not reached their expiration, as long as a delay of at least
+///* nDelay milliseconds occurs first.
+///*
+///* If nDelay is non-zero and a deletion attempt is not successful,
+///* wait for nDelay milliseconds and try again before giving up.  Only
+///* a single wait occurs, even if problems are encountered with multiple
+///* temp files.  Only the first problem seen takes the delay.  Thus
+///* the total delay never exceeds nDelay milliseconds.  When nDelay
+///* is non-zero, memory used to hold the filename is reclaimed regardless
+///* of whether or not the temporary files were successfully deleted.
+///*
+///* If bForce is true, deletion is attempted on p->aUnlink[] files
+///* even if their time has not expired.  However, there is a pause
+///* of up to nDelay milliseconds before doing the deletion.
+///*
+///* When nDelay is zero and the deletion attempt fails, memory used to
+///* store temporary filesnames is not reclaimed.
+///*
+///* The bForce flag is used only when the process is about to exit.  When
+///* bForce is set, that indicates that this is our last opportunity to
+///* clean up temporary files.
 extern "C" fn clear_temp_file(p: &mut ShellState, mut n_delay_1: i32,
     b_force_1: i32) -> () {
     let always_free: i32 = (n_delay_1 > 0 || b_force_1 != 0) as i32;
@@ -42769,6 +45483,7 @@ extern "C" fn clear_temp_file(p: &mut ShellState, mut n_delay_1: i32,
     }
 }
 
+///* Close an output file, assuming it is not stderr or stdout
 extern "C" fn output_file_close(f: *mut FILE) -> () {
     unsafe {
         if !(f).is_null() && f != __stdoutp && f != __stderrp {
@@ -42777,6 +45492,12 @@ extern "C" fn output_file_close(f: *mut FILE) -> () {
     }
 }
 
+///* Change the output file back to stdout.
+///*
+///* If the p->doXdgOpen flag is set, that means the output was being
+///* redirected to a temporary file named by p->zTempFile.  In that case,
+///* launch start/open/xdg-open on that temporary file.
+#[allow(unused_doc_comments)]
 extern "C" fn output_reset(p: *mut ShellState) -> () {
     unsafe {
         if unsafe { (*p).outfile[0 as usize] } as i32 == '|' as i32 {
@@ -42802,6 +45523,10 @@ extern "C" fn output_reset(p: *mut ShellState) -> () {
                             c"Failed: [%s]\n".as_ptr() as *mut i8 as *const i8, z_cmd)
                     };
                 } else {
+
+                    /// Give the start/open/xdg-open command some time to get
+                    ///* going before we continue and potentially delete the
+                    ///* p->zTempFile data file out from under it
                     unsafe {
                         (*p).a_unlink =
                             unsafe {
@@ -42844,12 +45569,22 @@ extern "C" fn output_reset(p: *mut ShellState) -> () {
     }
 }
 
+///* Return the size of the named file in bytes.  Or return a negative
+///* number if the file does not exist.
 extern "C" fn file_size(z_file_1: *const i8) -> Sqlite3Int64 {
     let mut x: Stat = unsafe { core::mem::zeroed() };
     if unsafe { stat(z_file_1, &mut x) } != 0 { return -1 as Sqlite3Int64; }
     return x.st_size as Sqlite3Int64;
 }
 
+///* Return true if zFile is an SQLite database.
+///*
+///* Algorithm:
+///*    * If the file does not exist -> return false
+///*    * If the size of the file is not a multiple of 512 -> return false
+///*    * If sqlite3_open() fails -> return false
+///*    * if sqlite3_prepare() or sqlite3_step() fails -> return false
+///*    * Otherwise -> return true
 extern "C" fn is_database_file(z_file_1: *const i8, open_flags_1: i32)
     -> i32 {
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -42873,6 +45608,13 @@ extern "C" fn is_database_file(z_file_1: *const i8, open_flags_1: i32)
     return rc;
 }
 
+///* Try to deduce the type of file for zName based on its content.  Return
+///* one of the SHELL_OPEN_* constants.
+///*
+///* If the file does not exist or is empty but its name looks like a ZIP
+///* archive and the dfltZip flag is true, then assume it is a ZIP archive.
+///* Otherwise, assume an ordinary database regardless of the filename if
+///* the type cannot be determined from content.
 #[unsafe(no_mangle)]
 pub extern "C" fn deduce_database_type(z_name_1: *const i8, dflt_zip_1: i32,
     open_flags_1: i32) -> i32 {
@@ -42953,6 +45695,11 @@ pub extern "C" fn deduce_database_type(z_name_1: *const i8, dflt_zip_1: i32,
     return rc;
 }
 
+///* SQL function:  shell_module_schema(X)
+///*
+///* Return a fake schema for the table-valued function or eponymous virtual
+///* table X.
+#[allow(unused_doc_comments)]
 extern "C" fn shell_module_schema(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     ap_val_1: *mut *mut Sqlite3Value) -> () {
     let mut z_name: *const i8 = core::ptr::null();
@@ -42964,6 +45711,11 @@ extern "C" fn shell_module_schema(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     z_name =
         unsafe { sqlite3_value_text(unsafe { *ap_val_1.offset(0 as isize) }) }
             as *const i8;
+
+    /// Temporarily disable the ".log" when calling shellFakeSchema() because
+    ///* shellFakeSchema() might generate failures for some ephemeral virtual
+    ///* tables due to missing arguments.  Example: fts4aux.
+    ///* https://sqlite.org/forum/forumpost/42fe6520b803be51
     unsafe { (*p).p_log = core::ptr::null_mut() };
     z_fake =
         if !(z_name).is_null() {
@@ -42983,6 +45735,7 @@ extern "C" fn shell_module_schema(p_ctx_1: *mut Sqlite3Context, n_val_1: i32,
     }
 }
 
+///* Scalar function "usleep(X)" invokes sqlite3_sleep(X) and returns X.
 extern "C" fn shell_u_sleep_func(context: *mut Sqlite3Context,
     argc_unused_1: i32, argv: *mut *mut Sqlite3Value) -> () {
     let sleep: i32 =
@@ -42992,6 +45745,7 @@ extern "C" fn shell_u_sleep_func(context: *mut Sqlite3Context,
     unsafe { sqlite3_result_int(context, sleep) };
 }
 
+/// Forward reference
 extern "C" fn find_home_dir(clear_flag: i32) -> *mut i8 {
     unsafe {
         if clear_flag != 0 {
@@ -43028,11 +45782,21 @@ extern "C" fn find_home_dir(clear_flag: i32) -> *mut i8 {
     }
 }
 
+///* Create a new temp file name with the given suffix.
+///*
+///* Because the classic temp folders like /tmp are no longer
+///* accessible to web browsers, for security reasons, create the
+///* temp file in the user's home directory.
+#[allow(unused_doc_comments)]
 extern "C" fn new_temp_file(p: *mut ShellState, z_suffix_1: *const i8) -> () {
     let mut z_home: *mut i8 = core::ptr::null_mut();
+    /// Home directory
     let mut i: i32 = 0;
+    /// Loop counter
     let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+    /// Integer with 64 bits of randomness
     let mut z_rand: [i8; 32] = [0; 32];
+    /// Text string with 160 bits of randomness
     let c_dir_sep: i8 = '/' as i32 as i8;
     {
         i = 0;
@@ -43072,6 +45836,7 @@ extern "C" fn new_temp_file(p: *mut ShellState, z_suffix_1: *const i8) -> () {
     shell_check_oom(unsafe { (*p).z_temp_file } as *const ());
 }
 
+/// Forward reference
 extern "C" fn shell_temp_filename_func(p_ctx: *mut Sqlite3Context, n_val: i32,
     ap_val: *mut *mut Sqlite3Value) -> () {
     let p: *mut ShellState =
@@ -43097,6 +45862,19 @@ extern "C" fn shell_temp_filename_func(p_ctx: *mut Sqlite3Context, n_val: i32,
     unsafe { (*p).z_temp_file = core::ptr::null_mut() };
 }
 
+///* Read the content of file zName into memory obtained from sqlite3_malloc64()
+///* and return a pointer to the buffer. The caller is responsible for freeing
+///* the memory.
+///*
+///* If parameter pnByte is not NULL, (*pnByte) is set to the number of bytes
+///* read.
+///*
+///* For convenience, a nul-terminator byte is always appended to the data read
+///* from the file before the buffer is returned. This byte is not included in
+///* the final value of (*pnByte), if applicable.
+///*
+///* NULL is returned if any error is encountered. The final value of *pnByte
+///* is undefined in this case.
 extern "C" fn read_file(z_name_1: *const i8, pn_byte_1: *mut i32) -> *mut i8 {
     unsafe {
         let in_: *mut FILE =
@@ -43147,13 +45925,19 @@ extern "C" fn read_file(z_name_1: *const i8, pn_byte_1: *mut i32) -> *mut i8 {
     }
 }
 
+///* Reconstruct an in-memory database using the output from the "dbtotxt"
+///* program.  Read content from the file in p->aAuxDb[].zDbFilename.
+///* If p->aAuxDb[].zDbFilename is 0, then read from standard input.
+#[allow(unused_doc_comments)]
 extern "C" fn read_hex_db(p: &mut ShellState, pn_data_1: &mut i32)
     -> *mut u8 {
     unsafe {
         let mut a: *mut u8 = core::ptr::null_mut();
         let mut n_line: i64 = 0 as i64;
         let mut n: i32 = 0;
+        /// Size of db per first line of hex dump
         let mut sz: i64 = 0 as i64;
+        /// n rounded up to nearest page boundary
         let mut pgsz: i32 = 0;
         let mut i_offset: i64 = 0 as i64;
         let mut rc: i32 = 0;
@@ -43161,8 +45945,11 @@ extern "C" fn read_hex_db(p: &mut ShellState, pn_data_1: &mut i32)
         let mut z_db_filename: *const i8 = core::ptr::null();
         let mut x: [u32; 16] = [0; 16];
         let mut z_line: [i8; 1000] = [0; 1000];
+        /// Round up to nearest multiple of pgsz
         let mut j: i32 = 0;
+        /// Page number from "| page" line
         let mut k: i32 = 0;
+        /// Offset from "| page" line
         let mut i_off: i64 = 0 as i64;
         let mut ii: i32 = 0;
         let mut __state: i32 = 0;
@@ -43430,16 +46217,26 @@ extern "C" fn read_hex_db(p: &mut ShellState, pn_data_1: &mut i32)
                 }
             }
         }
+
+        /// Size of db per first line of hex dump
+        /// n rounded up to nearest page boundary
+        /// Round up to nearest multiple of pgsz
+        /// Page number from "| page" line
+        /// Offset from "| page" line
         unreachable!();
     }
 }
 
+///* Make sure the database is open.  If it is not, then open it.  If
+///* the database fails to open, print an error message and exit.
+#[allow(unused_doc_comments)]
 extern "C" fn open_db(p: *mut ShellState, open_flags_1: i32) -> () {
     unsafe {
         if unsafe { (*p).db } == core::ptr::null_mut() {
             let mut z_db_filename: *const i8 =
                 unsafe { (*unsafe { (*p).p_aux_db }).z_db_filename };
             let mut z_home: *const i8 = core::ptr::null();
+            /// Value of HOME environment variable
             let mut z_to_free: *mut i8 = core::ptr::null_mut();
             if !(z_db_filename).is_null() &&
                                     unsafe { *z_db_filename.offset(0 as isize) } as i32 ==
@@ -43802,6 +46599,8 @@ extern "C" fn open_db(p: *mut ShellState, open_flags_1: i32) -> () {
     }
 }
 
+///* Interpret zArg as either an integer or a boolean value.  Return 1 or 0
+///* for TRUE and FALSE.  Return the integer value if appropriate.
 extern "C" fn boolean_value(z_arg_1: *const i8) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -43866,6 +46665,11 @@ extern "C" fn boolean_value(z_arg_1: *const i8) -> i32 {
     }
 }
 
+///***************************************************************************
+///* The ".archive" or ".ar" command.
+////
+////*
+///* Structure representing a single ".ar" command.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ArCommand {
@@ -43886,11 +46690,13 @@ struct ArCommand {
     db: *mut Sqlite3,
 }
 
+///* Print a usage message for the .ar command to stderr and return SQLITE_ERROR.
 extern "C" fn ar_usage(f: *mut FILE) -> i32 {
     show_help(f, c"archive".as_ptr() as *mut i8 as *const i8);
     return 1;
 }
 
+///* Print the given string as an error message.
 extern "C" fn shell_emit_error(z_err_1: *const i8) -> () {
     unsafe {
         unsafe {
@@ -43900,6 +46706,8 @@ extern "C" fn shell_emit_error(z_err_1: *const i8) -> () {
     }
 }
 
+///* Print an error message for the .ar command to stderr and return
+///* SQLITE_ERROR.
 unsafe extern "C" fn ar_error_msg(p_ar_1: &ArCommand, z_fmt_1: *const i8,
     mut __va0: ...) -> i32 {
     unsafe {
@@ -44016,6 +46824,11 @@ extern "C" fn ar_process_switch(p_ar_1: *mut ArCommand, e_switch_1: i32,
     return 0;
 }
 
+///* Parse the command line for an ".ar" command. The results are written into
+///* structure (*pAr). SQLITE_OK is returned if the command line is parsed
+///* successfully, otherwise an error message is written to stderr and
+///* SQLITE_ERROR returned.
+#[allow(unused_doc_comments)]
 extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
     p_ar_1: *mut ArCommand) -> i32 {
     unsafe {
@@ -44118,6 +46931,7 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
         } else {
             let mut z: *mut i8 = unsafe { *az_arg_1.offset(1 as isize) };
             if unsafe { *z.offset(0 as isize) } as i32 != '-' as i32 {
+                /// Traditional style [tar] invocation
                 let mut i: i32 = 0;
                 let mut i_arg: i32 = 2;
                 {
@@ -44191,6 +47005,7 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
                     };
                 }
             } else {
+                /// Non-traditional invocation
                 let mut i_arg_1: i32 = 0;
                 {
                     i_arg_1 = 1;
@@ -44200,6 +47015,8 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
                             let mut n: i32 = 0;
                             z = unsafe { *az_arg_1.offset(i_arg_1 as isize) };
                             if unsafe { *z.offset(0 as isize) } as i32 != '-' as i32 {
+
+                                /// All remaining command line words are command arguments.
                                 unsafe {
                                     (*p_ar_1).az_arg =
                                         unsafe { az_arg_1.offset(i_arg_1 as isize) }
@@ -44275,6 +47092,9 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
                                 }
                             } else if unsafe { *z.offset(2 as isize) } as i32 ==
                                     '\u{0}' as i32 {
+
+                                /// A -- option, indicating that all remaining command line words
+                                ///* are command arguments.
                                 unsafe {
                                     (*p_ar_1).az_arg =
                                         unsafe { az_arg_1.offset((i_arg_1 + 1) as isize) }
@@ -44282,9 +47102,12 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
                                 unsafe { (*p_ar_1).n_arg = n_arg_1 - i_arg_1 - 1 };
                                 break '__b432;
                             } else {
+                                /// A long option
                                 let mut z_arg_2: *const i8 = core::ptr::null();
+                                /// Argument for option, if any
                                 let mut p_match: *const ArSwitchN8ArSwitch =
                                     core::ptr::null();
+                                /// Matching option
                                 let mut p_opt_2: *mut ArSwitchN8ArSwitch =
                                     core::ptr::null_mut();
                                 {
@@ -44361,6 +47184,7 @@ extern "C" fn ar_parse_command(az_arg_1: *mut *mut i8, n_arg_1: i32,
     }
 }
 
+///* Attempt to close the database connection.  Report errors.
 #[unsafe(no_mangle)]
 pub extern "C" fn close_db(db: *mut Sqlite3) -> () {
     unsafe {
@@ -44375,6 +47199,7 @@ pub extern "C" fn close_db(db: *mut Sqlite3) -> () {
     }
 }
 
+///* Run the SQL statement in zSql.  Or if doing a --dryrun, merely print it out.
 extern "C" fn ar_exec_sql(p_ar_1: &ArCommand, z_sql_1: *const i8) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -44403,6 +47228,23 @@ extern "C" fn ar_exec_sql(p_ar_1: &ArCommand, z_sql_1: *const i8) -> i32 {
     }
 }
 
+///* Implementation of .ar "create", "insert", and "update" commands.
+///*
+///*     create    ->     Create a new SQL archive
+///*     insert    ->     Insert or reinsert all files listed
+///*     update    ->     Insert files that have changed or that were not
+///*                      previously in the archive
+///*
+///* Create the "sqlar" table in the database if it does not already exist.
+///* Then add each file in the azFile[] array to the archive. Directories
+///* are added recursively. If argument bVerbose is non-zero, a message is
+///* printed on stdout for each file archived.
+///*
+///* The create command is the same as update, except that it drops
+///* any existing "sqlar" table before beginning.  The "insert" command
+///* always overwrites every file named on the command-line, where as
+///* "update" only overwrites if the size or mtime or mode has changed.
+#[allow(unused_doc_comments)]
 extern "C" fn ar_create_or_update_command(p_ar_1: *mut ArCommand,
     b_update_1: i32, b_only_if_changed_1: i32) -> i32 {
     let mut z_create: *const i8 = core::ptr::null();
@@ -44413,12 +47255,17 @@ extern "C" fn ar_create_or_update_command(p_ar_1: *mut ArCommand,
                 c"REPLACE INTO %s(name,mode,mtime,data)\n  SELECT\n    %s,\n    mode,\n    mtime,\n    data\n  FROM fsdir(%Q,%Q) AS disk\n  WHERE lsmode(mode) NOT LIKE \'?%%\'%s;".as_ptr()
                     as *const i8];
     let mut i: i32 = 0;
+    /// For iterating through azFile[]
     let mut rc: i32 = 0;
+    /// Return code
     let mut z_tab: *const i8 = core::ptr::null();
+    /// SQL table into which to insert
     let mut z_sql: *mut i8 = core::ptr::null_mut();
     let mut z_temp: [i8; 50] = [0; 50];
     let mut z_exists: *mut i8 = core::ptr::null_mut();
+    /// Initialize the zipfile virtual table, if necessary
     let mut r: Sqlite3Uint64 = 0 as Sqlite3Uint64;
+    /// Initialize the table for an SQLAR
     let mut z_sql2: *mut i8 = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -44631,6 +47478,12 @@ extern "C" fn ar_create_or_update_command(p_ar_1: *mut ArCommand,
             }
         }
     }
+
+    /// For iterating through azFile[]
+    /// Return code
+    /// SQL table into which to insert
+    /// Initialize the zipfile virtual table, if necessary
+    /// Initialize the table for an SQLAR
     unreachable!();
 }
 
@@ -44657,6 +47510,7 @@ extern "C" fn shell_prepare(db: *mut Sqlite3, p_rc_1: &mut i32,
     }
 }
 
+///* Create a prepared statement using printf-style arguments for the SQL.
 unsafe extern "C" fn shell_prepare_printf(db: *mut Sqlite3, p_rc_1: *mut i32,
     pp_stmt_1: *mut *mut Sqlite3Stmt, z_fmt_1: *const i8, mut __va0: ...)
     -> () {
@@ -44677,6 +47531,11 @@ unsafe extern "C" fn shell_prepare_printf(db: *mut Sqlite3, p_rc_1: *mut i32,
     }
 }
 
+/// Reset the prepared statement created using shellPreparePrintf().
+///*
+///* This routine is could be marked "static".  But it is not always used,
+///* depending on compile-time options.  By omitting the "static", we avoid
+///* nuisance compiler warnings about "defined but not used".
 #[unsafe(no_mangle)]
 pub extern "C" fn shell_reset(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
@@ -44696,6 +47555,8 @@ pub extern "C" fn shell_reset(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     }
 }
 
+/// 
+///* Finalize the prepared statement created using shellPreparePrintf().
 extern "C" fn shell_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     unsafe {
@@ -44716,6 +47577,18 @@ extern "C" fn shell_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     }
 }
 
+///* This function assumes that all arguments within the ArCommand.azArg[]
+///* array refer to archive members, as for the --extract, --list or --remove
+///* commands. It checks that each of them are "present". If any specified
+///* file is not present in the archive, an error is printed to stderr and an
+///* error code returned. Otherwise, if all specified arguments are present
+///* in the archive, SQLITE_OK is returned. Here, "present" means either an
+///* exact equality when pAr->bGlob is false or a "name GLOB pattern" match
+///* when pAr->bGlob is true.
+///*
+///* This function strips any trailing '/' characters from each argument.
+///* This is consistent with the way the [tar] command seems to work on
+///* Linux.
 extern "C" fn ar_check_entries(p_ar_1: &ArCommand) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -44778,6 +47651,12 @@ extern "C" fn ar_check_entries(p_ar_1: &ArCommand) -> i32 {
     }
 }
 
+///* Format a WHERE clause that can be used against the "sqlar" table to
+///* identify all archive members that match the command arguments held
+///* in (*pAr). Leave this WHERE clause in (*pzWhere) before returning.
+///* The caller is responsible for eventually calling sqlite3_free() on
+///* any non-NULL (*pzWhere) value. Here, "match" means strict equality
+///* when pAr->bGlob is false and GLOB match when pAr->bGlob is true.
 extern "C" fn ar_where_clause(p_rc_1: &mut i32, p_ar_1: &ArCommand,
     pz_where_1: &mut *mut i8) -> () {
     let mut z_where: *mut i8 = core::ptr::null_mut();
@@ -44862,10 +47741,20 @@ extern "C" fn ar_where_clause(p_rc_1: &mut i32, p_ar_1: &ArCommand,
     *pz_where_1 = z_where;
 }
 
+///* Implementation of .ar "eXtract" command.
+#[allow(unused_doc_comments)]
 extern "C" fn ar_extract_command(p_ar_1: *mut ArCommand) -> i32 {
+    /// The zSql1[] string is a template for the query that does the
+    ///* extraction.  Notes:
+    ///*
+    ///*   *  $dir is the directory into which the archive is to be extracted
+    ///*   *  $pass is the integer pass number: 0, 1, or 2
+    ///*   *  The dest CTE is created so that realpath($dir) only needs
+    ///*      to be called once.
     let z_sql1: *const i8 =
         c"WITH dest(dpath,dlen) AS (\n  SELECT realpath($dir) || \'/\',\n  1+length(realpath($dir))\n)\nSELECT\n    ($dir || name),\n    CASE $dryrun\n      WHEN 0 THEN writefile($dir||name, %s, mode, mtime)\n      WHEN 1 THEN 0\n      ELSE shell_putsnl(format(\'writefile(%%Q,%%s,%%0o,%%d)\',$dir||name,quote(%s),mode,mtime)) IS NULL\n      END\n  FROM dest CROSS JOIN %s\n WHERE (%s)\n   AND (CASE $pass WHEN 0 THEN (mode&0xf000)<>0xa000\n                   WHEN 1 THEN (mode&0xf000)=0xa000\n                   ELSE data IS NULL END)\n   AND dpath=substr(realpath($dir||name),1,dlen)\n   AND name NOT GLOB \'*..[/\\]*\'\n".as_ptr()
                 as *mut i8 as *const i8;
+    /// No /../ in paths
     let az_extra_arg: [*const i8; 2] =
         [c"sqlar_uncompress(data, sz)".as_ptr() as *const i8,
                 c"data".as_ptr() as *const i8];
@@ -44875,7 +47764,11 @@ extern "C" fn ar_extract_command(p_ar_1: *mut ArCommand) -> i32 {
     let mut z_where: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
     let mut j: i32 = 0;
-    rc = ar_check_entries(unsafe { &*p_ar_1 });
+
+    /// If arguments are specified, check that they actually exist within
+    ///* the archive before proceeding. And formulate a WHERE clause to
+    ///* match them.
+    (rc = ar_check_entries(unsafe { &*p_ar_1 }));
     ar_where_clause(&mut rc, unsafe { &*p_ar_1 }, &mut z_where);
     if rc == 0 {
         if !(unsafe { (*p_ar_1).z_dir }).is_null() {
@@ -44970,6 +47863,7 @@ extern "C" fn ar_extract_command(p_ar_1: *mut ArCommand) -> i32 {
     return rc;
 }
 
+///* Implementation of .ar "lisT" command.
 extern "C" fn ar_list_command(p_ar_1: *mut ArCommand) -> i32 {
     let z_sql: *const i8 =
         c"SELECT %s FROM %s WHERE %s".as_ptr() as *mut i8 as *const i8;
@@ -45018,13 +47912,18 @@ extern "C" fn ar_list_command(p_ar_1: *mut ArCommand) -> i32 {
     return rc;
 }
 
+///* Implementation of .ar "Remove" command.
+#[allow(unused_doc_comments)]
 extern "C" fn ar_remove_command(p_ar_1: *mut ArCommand) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         let mut z_sql: *mut i8 = core::ptr::null_mut();
         let mut z_where: *mut i8 = core::ptr::null_mut();
         if unsafe { (*p_ar_1).n_arg } != 0 {
-            rc = ar_check_entries(unsafe { &*p_ar_1 });
+
+            /// Verify that args actually exist within the archive before proceeding.
+            ///* And formulate a WHERE clause to match them.
+            (rc = ar_check_entries(unsafe { &*p_ar_1 }));
             ar_where_clause(&mut rc, unsafe { &*p_ar_1 }, &mut z_where);
         }
         if rc == 0 {
@@ -45074,6 +47973,8 @@ extern "C" fn ar_remove_command(p_ar_1: *mut ArCommand) -> i32 {
                         cli_printf(__stdoutp,
                             c"ERROR: %s\n".as_ptr() as *mut i8 as *const i8, z_err)
                     };
+
+                    /// stdout?
                     unsafe { sqlite3_free(z_err as *mut ()) };
                 }
             }
@@ -45084,6 +47985,7 @@ extern "C" fn ar_remove_command(p_ar_1: *mut ArCommand) -> i32 {
     }
 }
 
+///* Implementation of ".ar" dot command.
 extern "C" fn ar_dot_command(p_state_1: *mut ShellState, from_cmd_line_1: i32,
     az_arg_1: *mut *mut i8, n_arg_1: i32) -> i32 {
     unsafe {
@@ -45354,11 +48256,17 @@ extern "C" fn ar_dot_command(p_state_1: *mut ShellState, from_cmd_line_1: i32,
     }
 }
 
+///* Print the current sqlite3_errmsg() value to stderr and return 1.
 extern "C" fn shell_database_error(db: *mut Sqlite3) -> i32 {
     shell_emit_error(unsafe { sqlite3_errmsg(db) });
     return 1;
 }
 
+///* A no-op routine that runs with the ".breakpoint" doc-command.  This is
+///* a useful spot to set a debugger breakpoint.
+///*
+///* This routine does not do anything practical.  The code are there simply
+///* to prevent the compiler from optimizing this routine out.
 extern "C" fn test_breakpoint() -> () {
     unsafe {
         if { let __p = &mut n_call; let __t = *__p; *__p += 1; __t } ==
@@ -45371,6 +48279,7 @@ extern "C" fn test_breakpoint() -> () {
     }
 }
 
+///* Set or clear a shell flag according to a boolean value.
 extern "C" fn set_or_clear_flag(p: &mut ShellState, m_flag_1: u32,
     z_arg_1: *const i8) -> () {
     if boolean_value(z_arg_1) != 0 {
@@ -45378,6 +48287,27 @@ extern "C" fn set_or_clear_flag(p: &mut ShellState, m_flag_1: u32,
     } else { (*p).shell_flgs &= !m_flag_1; }
 }
 
+///* Compare the pattern in zGlob[] against the text in z[].  Return TRUE
+///* if they match and FALSE (0) if they do not match.
+///*
+///* Globbing rules:
+///*
+///*      '*'       Matches any sequence of zero or more characters.
+///*
+///*      '?'       Matches exactly one character.
+///*
+///*     [...]      Matches one character from the enclosed list of
+///*                characters.
+///*
+///*     [^...]     Matches one character not in the enclosed list.
+///*
+///*      '#'       Matches any sequence of one or more digits with an
+///*                optional + or - sign in front
+///*
+///*      ' '       Any span of whitespace matches any other span of
+///*                whitespace.
+///*
+///* Extra whitespace at the end of z[] is ignored.
 extern "C" fn testcase_glob(mut z_glob_1: *const i8, mut z: *const i8)
     -> i32 {
     let mut c: i32 = 0;
@@ -45629,19 +48559,48 @@ extern "C" fn testcase_glob(mut z_glob_1: *const i8, mut z: *const i8)
     return (unsafe { *z } as i32 == 0) as i32;
 }
 
+///* DOT-COMMAND: .check
+///* USAGE: .check [OPTIONS] PATTERN
+///*
+///* Verify results of commands since the most recent .testcase command.
+///* Restore output to the console, unless --keep is used.
+///*
+///* If PATTERN starts with "<<ENDMARK" then the actual pattern is taken from
+///* subsequent lines of text up to the first line that begins with ENDMARK.
+///* All pattern lines and the ENDMARK are discarded.
+///*
+///* Options:
+///*   --exact                Do an exact comparison including leading and
+///*                          trailing whitespace.
+///*   --glob                 Treat PATTERN as a GLOB
+///*   --keep                 Do not reset the testcase.  More .check commands
+///*                          will follow.
+///*   --notglob              Output should not match PATTERN
+///*   --show                 Write testcase output to the screen, for debugging.
+#[allow(unused_doc_comments)]
 extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
     unsafe {
         let n_arg: i32 = unsafe { (*p).dot.n_arg };
+        /// Number of arguments
         let az_arg: *const *mut i8 =
             unsafe { (*p).dot.az_arg } as *const *mut i8;
+        /// Text of the arguments
         let mut i: i32 = 0;
+        /// Loop counter
         let mut k: i32 = 0;
+        /// Result of pickStr()
         let mut z_test: *mut i8 = core::ptr::null_mut();
+        /// Textcase result
         let mut b_keep: i32 = 0;
+        /// --keep option
         let mut z_check: *mut i8 = core::ptr::null_mut();
+        /// PATTERN argument
         let mut z_pattern: *mut i8 = core::ptr::null_mut();
+        /// Actual test pattern
         let mut e_check: i32 = 0;
+        /// 1: --glob,  2: --notglob,  3: --exact
         let mut is_ok: i32 = 0;
+        /// True if results are OK
         let i_start: Sqlite3Int64 = unsafe { (*p).lineno };
         if unsafe { (*p).z_testcase[0 as usize] } as i32 == 0 {
             unsafe {
@@ -45810,6 +48769,7 @@ extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
                         break '__s459;
                     }
                     {
+                        /// Skip leading and trailing \n and \r on both pattern and test output
                         let mut z1: *const i8 = z_pattern as *const i8;
                         let mut z2: *const i8 = z_test as *const i8;
                         let mut n1: u64 = 0 as u64;
@@ -45877,6 +48837,7 @@ extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
                         break '__s459;
                     }
                     {
+                        /// Skip leading and trailing \n and \r on both pattern and test output
                         let mut z1: *const i8 = z_pattern as *const i8;
                         let mut z2: *const i8 = z_test as *const i8;
                         let mut n1: u64 = 0 as u64;
@@ -45932,6 +48893,7 @@ extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
                         break '__s459;
                     }
                     {
+                        /// Skip leading and trailing \n and \r on both pattern and test output
                         let mut z1: *const i8 = z_pattern as *const i8;
                         let mut z2: *const i8 = z_test as *const i8;
                         let mut n1: u64 = 0 as u64;
@@ -45981,6 +48943,7 @@ extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
                 }
                 _ => {
                     {
+                        /// Skip leading and trailing \n and \r on both pattern and test output
                         let mut z1: *const i8 = z_pattern as *const i8;
                         let mut z2: *const i8 = z_test as *const i8;
                         let mut n1: u64 = 0 as u64;
@@ -46065,6 +49028,10 @@ extern "C" fn dot_cmd_check(p: *mut ShellState) -> i32 {
     }
 }
 
+///* Try to transfer all rows of the schema that match zWhere.  For
+///* each row, invoke xForEach() on the object defined by that row.
+///* If an error is encountered while moving forward through the
+///* sqlite_schema table, try again moving backwards.
 extern "C" fn try_to_clone_schema(p: *mut ShellState, new_db_1: *mut Sqlite3,
     z_where_1: *const i8,
     x_for_each_1:
@@ -46336,6 +49303,9 @@ extern "C" fn try_to_clone_schema(p: *mut ShellState, new_db_1: *mut Sqlite3,
     }
 }
 
+///* Try to transfer data for table zTable.  If an error is seen while
+///* moving forward, try to go backwards.  The backwards movement won't
+///* work for WITHOUT ROWID tables.
 extern "C" fn try_to_clone_data(p: *mut ShellState, new_db_1: *mut Sqlite3,
     z_table_1: *const i8) -> () {
     unsafe {
@@ -46644,6 +49614,9 @@ extern "C" fn try_to_clone_data(p: *mut ShellState, new_db_1: *mut Sqlite3,
     }
 }
 
+///* Open a new database file named "zNewDb".  Try to recover as much information
+///* as possible out of the main database (which might be corrupt) and write it
+///* into zNewDb.
 extern "C" fn try_to_clone(p: *mut ShellState, z_new_db_1: *const i8) -> () {
     unsafe {
         let mut rc: i32 = 0;
@@ -46696,6 +49669,10 @@ extern "C" fn try_to_clone(p: *mut ShellState, z_new_db_1: *const i8) -> () {
     }
 }
 
+///* Implementation of the ".dbtotxt" command.
+///*
+///* Return 1 on error, 2 to exit, and 0 otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn shell_dbtotxt_command(p: &ShellState, n_arg_1: i32,
     az_arg_1: *const *mut i8) -> i32 {
     unsafe {
@@ -46708,6 +49685,7 @@ extern "C" fn shell_dbtotxt_command(p: &ShellState, n_arg_1: i32,
         let mut i: i32 = 0;
         let mut j: i32 = 0;
         let mut b_show: [u8; 256] = [0; 256];
+        /// Characters ok to display
         let mut z_filename: *const i8 = core::ptr::null();
         let mut pgno: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut a_data: *const u8 = core::ptr::null();
@@ -47039,10 +50017,18 @@ extern "C" fn shell_dbtotxt_command(p: &ShellState, n_arg_1: i32,
                 }
             }
         }
+
+        /// Characters ok to display
         unreachable!();
     }
 }
 
+///* Check if the sqlite_schema table contains one or more virtual tables. If
+///* parameter zLike is not NULL, then it is an SQL expression that the
+///* sqlite_schema row must also match. If one or more such rows are found,
+///* print the following warning to the output:
+///*
+///* WARNING: Script requires that SQLITE_DBCONFIG_DEFENSIVE be disabled
 extern "C" fn output_dump_warning(p: &ShellState, z_like_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -47063,6 +50049,8 @@ extern "C" fn output_dump_warning(p: &ShellState, z_like_1: *const i8)
     return rc;
 }
 
+///* Compare the string as a command-line option with either one or two
+///* initial "-" characters.
 extern "C" fn option_match(mut z_str_1: *const i8, z_opt_1: *const i8)
     -> i32 {
     if unsafe { *z_str_1.offset(0 as isize) } as i32 != '-' as i32 {
@@ -47107,6 +50095,8 @@ struct ImportCtx {
     c_uq_escape: i32,
 }
 
+/// Read a single character of the .import input text.  Return EOF
+///* at end-of-file.
 extern "C" fn import_getc(p: &mut ImportCtx) -> i32 {
     if !((*p).in_).is_null() {
         return unsafe { fgetc((*p).in_) };
@@ -47123,6 +50113,8 @@ extern "C" fn import_getc(p: &mut ImportCtx) -> i32 {
     } else { return -1; }
 }
 
+/// Append a single byte to the field value begin constructed
+///* in the p->z[] buffer
 extern "C" fn import_append_char(p: &mut ImportCtx, c: i32) -> () {
     if (*p).n + 1 as i64 >= (*p).n_alloc {
         (*p).n_alloc += (*p).n_alloc + 100 as i64;
@@ -47143,6 +50135,17 @@ extern "C" fn import_append_char(p: &mut ImportCtx, c: i32) -> () {
     };
 }
 
+/// Read a single field of ASCII delimited text.
+///*
+///*   +  Input comes from p->in.
+///*   +  Store results in p->z of length p->n.  Space to hold p->z comes
+///*      from sqlite3_malloc64().
+///*   +  Use p->cColSep as the column separator.  The default is "\x1F".
+///*   +  Use p->cRowSep as the row separator.  The default is "\x1E".
+///*   +  Keep track of the row number in p->nLine.
+///*   +  Store the character that terminates the field in p->cTerm.  Store
+///*      EOF on end-of-file.
+///*   +  Report syntax errors on stderr
 extern "C" fn ascii_read_one_field(p: *mut ImportCtx) -> *mut i8 {
     unsafe {
         let mut c: i32 = 0;
@@ -47177,6 +50180,19 @@ extern "C" fn ascii_read_one_field(p: *mut ImportCtx) -> *mut i8 {
     }
 }
 
+/// Read a single field of CSV text.  Compatible with rfc4180 and extended
+///* with the option of having a separator other than ",".
+///*
+///*   +  Input comes from p->in.
+///*   +  Store results in p->z of length p->n.  Space to hold p->z comes
+///*      from sqlite3_malloc64().
+///*   +  Use p->cColSep as the column separator.  The default is ",".
+///*   +  Use p->cRowSep as the row separator.  The default is "\n".
+///*   +  Keep track of the line number in p->nLine.
+///*   +  Store the character that terminates the field in p->cTerm.  Store
+///*      EOF on end-of-file.
+///*   +  Report syntax errors on stderr
+#[allow(unused_doc_comments)]
 extern "C" fn csv_read_one_field(p: *mut ImportCtx) -> *mut i8 {
     unsafe {
         let mut c: i32 = 0;
@@ -47256,6 +50272,8 @@ extern "C" fn csv_read_one_field(p: *mut ImportCtx) -> *mut i8 {
                 pc = c;
             }
         } else {
+            /// If this is the first field being parsed and it begins with the
+            ///* UTF-8 BOM  (0xEF BB BF) then skip the BOM
             let c_esc_1: i32 = unsafe { (*p).c_uq_escape };
             if c & 255 == 239 && unsafe { (*p).b_not_first } == 0 {
                 import_append_char(unsafe { &mut *p }, c);
@@ -47311,6 +50329,7 @@ extern "C" fn csv_read_one_field(p: *mut ImportCtx) -> *mut i8 {
     }
 }
 
+/// Clean up resourced used by an ImportCtx
 extern "C" fn import_cleanup(p: &mut ImportCtx) -> () {
     if (*p).in_ != core::ptr::null_mut() && (*p).x_closer.is_some() {
         unsafe { (*p).x_closer.unwrap()((*p).in_ as *mut SFILE) };
@@ -47338,6 +50357,7 @@ extern "C" fn rc_err_oom_die(rc: i32) -> () {
     } else { { let _ = 0; } };
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn z_auto_column(z_col_new_1: *const i8, p_db_1: *mut *mut Sqlite3,
     pz_renamed_1: *mut *mut i8) -> *mut i8 {
     unsafe {
@@ -47388,6 +50408,7 @@ extern "C" fn z_auto_column(z_col_new_1: *const i8, p_db_1: *mut *mut Sqlite3,
         } else if unsafe { *p_db_1 } == core::ptr::null_mut() {
             return core::ptr::null_mut();
         } else {
+            /// Formulate the columns spec, close the DB, zero *pDb.
             let mut z_cols_spec: *mut i8 = core::ptr::null_mut();
             let has_dupes: i32 =
                 unsafe {
@@ -47430,11 +50451,13 @@ extern "C" fn z_auto_column(z_col_new_1: *const i8, p_db_1: *mut *mut Sqlite3,
                             *const i8)
                 }
             } else { { let _ = 0; } };
-            rc =
+
+            /// Consider: remove this
+            (rc =
                 unsafe {
                     sqlite3_prepare_v2(unsafe { *p_db_1 }, z_collect_var, -1,
                         &mut p_stmt, core::ptr::null_mut())
-                };
+                });
             rc_err_oom_die(rc);
             rc = unsafe { sqlite3_step(p_stmt) };
             if rc == 100 {
@@ -47472,30 +50495,83 @@ extern "C" fn z_auto_column(z_col_new_1: *const i8, p_db_1: *mut *mut Sqlite3,
     }
 }
 
+///* DOT-COMMAND: .import
+///*
+///* USAGE: .import [OPTIONS] FILE TABLE
+///*
+///* Import CSV or similar text from FILE into TABLE.  If TABLE does
+///* not exist, it is created using the first row of FILE as the column
+///* names.  If FILE begins with "|" then it is a command that is run
+///* and the output from the command is used as the input data.  If
+///* FILE begins with "<<" followed by a label, then content is read from
+///* the script until the first line that matches the label.
+///*
+///* The content of FILE is interpreted using RFC-4180 ("CSV") quoting
+///* rules unless the current mode is "ascii" or "tabs" or unless one
+///* the --ascii option is used.
+///*
+///* The column and row separators must be single ASCII characters.  If
+///* multiple characters or a Unicode character are specified for the
+///* separators, then only the first byte of the separator is used.  Except,
+///* if the row separator is \n and the mode is not --ascii, then \r\n is
+///* understood as a row separator too.
+///*
+///* Options:
+///*   --ascii         Do not use RFC-4180 quoting.  Use \037 and \036
+///*                   as column and row separators on input, unless other
+///*                   delimiters are specified using --colsep and/or --rowsep
+///*   --colsep CHAR   Use CHAR as the column separator.
+///*   --csv           Input is standard RFC-4180 CSV.
+///*   --esc CHAR      Use CHAR as an escape character in unquoted CSV inputs.
+///*   --qesc CHAR     Use CHAR as an escape character in quoted CSV inputs.
+///*   --rowsep CHAR   Use CHAR as the row separator.
+///*   --schema S      When creating TABLE, put it in schema S
+///*   --skip N        Ignore the first N rows of input
+///*   -v              Verbose mode
+#[allow(unused_doc_comments)]
 extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
     unsafe {
         let n_arg: i32 = unsafe { (*p).dot.n_arg };
+        /// Number of arguments
         let az_arg: *const *mut i8 =
             unsafe { (*p).dot.az_arg } as *const *mut i8;
+        /// Argument list
         let mut z_table: *mut i8 = core::ptr::null_mut();
+        /// Insert data into this table
         let mut z_schema: *mut i8 = core::ptr::null_mut();
+        /// Schema of zTable
         let mut z_file: *mut i8 = core::ptr::null_mut();
+        /// Name of file to extra content from
         let mut p_stmt: *mut Sqlite3Stmt = 0 as *mut () as *mut Sqlite3Stmt;
+        /// A statement
         let mut n_col: i32 = 0;
+        /// Number of columns in the table
         let mut n_byte: i64 = 0 as i64;
+        /// Number of bytes in an SQL string
         let mut i: i32 = 0;
         let mut j: i32 = 0;
+        /// Loop counters
         let mut need_commit: i32 = 0;
+        /// True to COMMIT or ROLLBACK at end
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// An SQL statement
         let mut s_ctx: ImportCtx = unsafe { core::mem::zeroed() };
+        /// Reader context
         let mut x_read:
                 Option<unsafe extern "C" fn(*mut ImportCtx) -> *mut i8> =
             None;
+        /// Func to read one value
         let mut e_verbose: i32 = 0;
+        /// Larger for more console output
         let mut n_skip: i64 = 0 as i64;
+        /// Initial lines to skip
         let mut i_line_offset: i64 = 0 as i64;
+        /// Offset to the first line of input
         let mut z_create: *mut i8 = core::ptr::null_mut();
+        /// CREATE TABLE statement text
         let mut rc: i32 = 0;
+
+        /// Result code
         unsafe {
             fail_if_safe_mode(p,
                 c"cannot run .import in safe mode".as_ptr() as *mut i8 as
@@ -47698,6 +50774,8 @@ extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
                     unsafe { *s_ctx.z_file.offset(1 as isize) } as i32 ==
                         '<' as i32 &&
                 unsafe { *s_ctx.z_file.offset(2 as isize) } as i32 != 0 {
+            /// Input text comes from subsequent lines of script until the zFile
+            ///* delimiter
             let n_end_mark: i32 = strlen30(z_file as *const i8) - 2;
             let z_end_mark: *mut i8 =
                 unsafe { &mut *z_file.offset(2 as isize) };
@@ -47829,6 +50907,7 @@ extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
                                 z_schema
                             } else { c"main".as_ptr() as *mut i8 }, z_table)
                     } {
+            /// Table does not exist.  Create it.
             let mut db_cols: *mut Sqlite3 = core::ptr::null_mut();
             let mut z_renames: *mut i8 = core::ptr::null_mut();
             let mut z_col_defs: *mut i8 = core::ptr::null_mut();
@@ -47935,16 +51014,20 @@ extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
         unsafe { sqlite3_finalize(p_stmt) };
         p_stmt = core::ptr::null_mut();
         if n_col == 0 { return 0; }
-        n_byte =
+
+        /// no columns, no error
+        (n_byte =
             (64 as u64 +
                                 if !(z_schema).is_null() {
                                     (unsafe { strlen(z_schema as *const i8) }) * 2 as u64 +
                                         2 as u64
                                 } else { 0 as u64 } +
                             unsafe { strlen(z_table as *const i8) } * 2 as u64 +
-                        2 as u64 + (n_col * 2) as u64) as i64;
-        z_sql =
-            unsafe { sqlite3_malloc64(n_byte as Sqlite3Uint64) } as *mut i8;
+                        2 as u64 + (n_col * 2) as u64) as i64);
+
+        /// Space for ",?" for each column
+        (z_sql =
+            unsafe { sqlite3_malloc64(n_byte as Sqlite3Uint64) } as *mut i8);
         if z_sql == core::ptr::null_mut() {
             import_cleanup(&mut s_ctx);
             shell_out_of_memory();
@@ -48068,6 +51151,8 @@ extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
                                                     strcmp(z as *const i8,
                                                         c"\r\n".as_ptr() as *mut i8 as *const i8)
                                                 } == 0) {
+
+                                    /// Ignore trailing \n or \r\n when some other row separator
                                     break '__b482;
                                 }
                                 unsafe {
@@ -48153,6 +51238,7 @@ extern "C" fn dot_cmd_import(p: *mut ShellState) -> i32 {
     }
 }
 
+///* Implementation of ".intck STEPS_PER_UNLOCK" command.
 extern "C" fn intck_database_cmd(p_state_1: &ShellState,
     n_step_per_unlock_1: i64) -> i32 {
     unsafe {
@@ -48198,6 +51284,20 @@ extern "C" fn intck_database_cmd(p_state_1: &ShellState,
     }
 }
 
+///* The implementation of SQL scalar function fkey_collate_clause(), used
+///* by the ".lint fkey-indexes" command. This scalar function is always
+///* called with four arguments - the parent table name, the parent column name,
+///* the child table name and the child column name.
+///*
+///*   fkey_collate_clause('parent-tab', 'parent-col', 'child-tab', 'child-col')
+///*
+///* If either of the named tables or columns do not exist, this function
+///* returns an empty string. An empty string is also returned if both tables
+///* and columns exist but have the same default collation sequence. Or,
+///* if both exist but the default collation sequences are different, this
+///* function returns the string " COLLATE <parent-collation>", where
+///* <parent-collation> is the default collation sequence of the parent column.
+#[allow(unused_doc_comments)]
 extern "C" fn shell_fkey_collate_clause(p_ctx_1: *mut Sqlite3Context,
     n_val_1: i32, ap_val_1: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(p_ctx_1) };
@@ -48207,6 +51307,7 @@ extern "C" fn shell_fkey_collate_clause(p_ctx_1: *mut Sqlite3Context,
     let mut z_child: *const i8 = core::ptr::null();
     let mut z_child_col: *const i8 = core::ptr::null();
     let mut z_child_seq: *const i8 = core::ptr::null();
+    /// Initialize to avoid false-positive warning
     let mut rc: i32 = 0;
     if !(n_val_1 == 4) as i32 as i64 != 0 {
         unsafe {
@@ -48267,17 +51368,60 @@ extern "C" fn shell_fkey_collate_clause(p_ctx_1: *mut Sqlite3Context,
     }
 }
 
+///* The implementation of dot-command ".lint fkey-indexes".
+#[allow(unused_doc_comments)]
 extern "C" fn lint_fkey_indexes(p_state_1: &ShellState,
     az_arg_1: *const *mut i8, n_arg_1: i32) -> i32 {
     unsafe {
         let db: *mut Sqlite3 = (*p_state_1).db;
+        /// Database handle to query "main" db of
         let mut b_verbose: i32 = 0;
+        /// If -verbose is present
         let mut b_group_by_parent: i32 = 0;
+        /// If -groupbyparent is present
         let mut i: i32 = 0;
+        /// To iterate through azArg[]
         let mut z_indent: *const i8 = c"".as_ptr() as *mut i8 as *const i8;
+        /// How much to indent CREATE INDEX by
         let mut rc: i32 = 0;
+        /// Return code
         let mut p_sql: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Compiled version of SQL statement below
         let out: *mut FILE = (*p_state_1).out;
+        /// Send output here
+        ///* This SELECT statement returns one row for each foreign key constraint
+        ///* in the schema of the main database. The column values are:
+        ///*
+        ///* 0. The text of an SQL statement similar to:
+        ///*
+        ///*      "EXPLAIN QUERY PLAN SELECT 1 FROM child_table WHERE child_key=?"
+        ///*
+        ///*    This SELECT is similar to the one that the foreign keys implementation
+        ///*    needs to run internally on child tables. If there is an index that can
+        ///*    be used to optimize this query, then it can also be used by the FK
+        ///*    implementation to optimize DELETE or UPDATE statements on the parent
+        ///*    table.
+        ///*
+        ///* 1. A GLOB pattern suitable for sqlite3_strglob(). If the plan output by
+        ///*    the EXPLAIN QUERY PLAN command matches this pattern, then the schema
+        ///*    contains an index that can be used to optimize the query.
+        ///*
+        ///* 2. Human readable text that describes the child table and columns. e.g.
+        ///*
+        ///*       "child_table(child_key1, child_key2)"
+        ///*
+        ///* 3. Human readable text that describes the parent table and columns. e.g.
+        ///*
+        ///*       "parent_table(parent_key1, parent_key2)"
+        ///*
+        ///* 4. A full CREATE INDEX statement for an index that could be used to
+        ///*    optimize DELETE or UPDATE statements on the parent table. e.g.
+        ///*
+        ///*       "CREATE INDEX child_table_child_key ON child_table(child_key)"
+        ///*
+        ///* 5. The name of the parent table.
+        ///*
+        ///* These six values are used by the C logic below to generate the report.
         let z_sql: *const i8 =
             c"SELECT      \'EXPLAIN QUERY PLAN SELECT 1 FROM \' || quote(s.name) || \' WHERE \'  || group_concat(quote(s.name) || \'.\' || quote(f.[from]) || \'=?\'   || fkey_collate_clause(       f.[table], COALESCE(f.[to], p.[name]), s.name, f.[from]),\' AND \'),      \'SEARCH \' || s.name || \' USING COVERING INDEX*(\'  || group_concat(\'*=?\', \' AND \') || \')\',      s.name  || \'(\' || group_concat(f.[from],  \', \') || \')\',      f.[table] || \'(\' || group_concat(COALESCE(f.[to], p.[name])) || \')\',      \'CREATE INDEX \' || quote(s.name ||\'_\'|| group_concat(f.[from], \'_\'))  || \' ON \' || quote(s.name) || \'(\'  || group_concat(quote(f.[from]) ||        fkey_collate_clause(          f.[table], COALESCE(f.[to], p.[name]), s.name, f.[from]), \', \')  || \');\',      f.[table] FROM sqlite_schema AS s, pragma_foreign_key_list(s.name) AS f LEFT JOIN pragma_table_info AS p ON (pk-1=seq AND p.arg=f.[table]) GROUP BY s.name, f.id ORDER BY (CASE WHEN ? THEN f.[table] ELSE s.name END)".as_ptr()
                     as *mut i8 as *const i8;
@@ -48322,13 +51466,15 @@ extern "C" fn lint_fkey_indexes(p_state_1: &ShellState,
                 { let __p = &mut i; let __t = *__p; *__p += 1; __t };
             }
         }
-        rc =
+
+        /// Register the fkey_collate_clause() SQL function
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"fkey_collate_clause".as_ptr() as *mut i8 as *const i8, 4,
                     1, core::ptr::null_mut(), Some(shell_fkey_collate_clause),
                     None, None)
-            };
+            });
         if rc == 0 {
             rc =
                 unsafe {
@@ -48440,6 +51586,7 @@ extern "C" fn lint_fkey_indexes(p_state_1: &ShellState,
     }
 }
 
+///* Implementation of ".lint" dot command.
 extern "C" fn lint_dot_command(p_state_1: *mut ShellState,
     az_arg_1: *mut *mut i8, n_arg_1: i32) -> i32 {
     unsafe {
@@ -48482,6 +51629,9 @@ extern "C" fn lint_dot_command(p_state_1: *mut ShellState,
     }
 }
 
+///* Try to open an output file.   The names "stdout" and "stderr" are
+///* recognized and do the right thing.  NULL is returned if the output
+///* filename is "off".
 extern "C" fn output_file_open(p: &ShellState, z_file_1: *const i8)
     -> *mut FILE {
     unsafe {
@@ -48513,6 +51663,23 @@ extern "C" fn output_file_open(p: &ShellState, z_file_1: *const i8)
     }
 }
 
+///* This function computes what to show the user about the configured
+///* titles (or column-names).  Output is an integer between 0 and 3:
+///*
+///*    0:     The titles do not matter.  Never show anything.
+///*    1:     Show  "--titles off"
+///*    2:     Show  "--titles on"
+///*    3:     Show  "--title VALUE"  where VALUE is an encoding method
+///*             to use, one of: plain sql csv html tcl json
+///*
+///* Inputs are:
+///*
+///*    spec.bTitles   (bT)     Whether or not to show the titles
+///*    spec.eTitle    (eT)     The actual encoding to be used for titles
+///*    ModeInfo.bHdr  (bH)     Default value for spec.bTitles
+///*    ModeInfo.eHdr  (eH)     Default value for spec.eTitle
+///*    bAll                    Whether the -v option is used
+#[allow(unused_doc_comments)]
 extern "C" fn mode_title_dsply(p: &ShellState, b_all_1: i32) -> i32 {
     let e_mode: i32 = (*p).mode.e_mode as i32;
     let p_i: *const ModeInfo = &a_mode_info[e_mode as usize];
@@ -48520,6 +51687,10 @@ extern "C" fn mode_title_dsply(p: &ShellState, b_all_1: i32) -> i32 {
     let mut e_t: i32 = (*p).mode.spec.e_title as i32;
     let b_h: i32 = unsafe { (*p_i).b_hdr } as i32;
     let e_h: i32 = unsafe { (*p_i).e_hdr } as i32;
+    /// Variable "v" is the truth table that will determine the answer
+    ///*
+    ///*                   Actual encoding is different from default 
+    ///*                            vvvvvvvv
     let mut v: Sqlite3Uint64 = 86414136692572418u64;
     if b_h == 0 { return 0; }
     if e_t == 0 { e_t = e_h; }
@@ -48528,19 +51699,96 @@ extern "C" fn mode_title_dsply(p: &ShellState, b_all_1: i32) -> i32 {
     if b_t != b_h { v >>= 16 as Sqlite3Uint64; }
     if b_t < 2 { v >>= 8 as Sqlite3Uint64; }
     if (b_all_1 == 0) as i32 != 0 { v >>= 4 as Sqlite3Uint64; }
+
+    /// bAll values are in the lower half-byte
     return (v & 3 as Sqlite3Uint64) as i32;
 }
 
+///* DOT-COMMAND:  .mode
+///*
+///* USAGE: .mode [MODE] [OPTIONS]
+///*
+///* Change the output mode to MODE and/or apply OPTIONS to the output mode.
+///* Arguments are processed from left to right.  If no arguments, show the
+///* current output mode and relevant options.
+///*
+///* Options:
+///*   --align STRING           Set the alignment of text in columnar modes
+///*                            String consists of characters 'L', 'C', 'R'
+///*                            meaning "left", "centered", and "right", with
+///*                            one letter per column starting from the left.
+///*                            Unspecified alignment defaults to 'L'.
+///*   --blob-quote ARG         ARG can be "auto", "text", "sql", "hex", "tcl",
+///*                            "json", or "size".  Default is "auto".
+///*   --border on|off          Show outer border on "box" and "table" modes.
+///*   --charlimit N            Set the maximum number of output characters to
+///*                            show for any single SQL value to N. Longer values
+///*                            truncated. Zero means "no limit".
+///*   --colsep STRING          Use STRING as the column separator
+///*   --escape ESC             Enable/disable escaping of control characters
+///*                            found in the output. ESC can be "off", "ascii",
+///*                            or "symbol".
+///*   --linelimit N            Set the maximum number of output lines to show for
+///*                            any single SQL value to N. Longer values are
+///*                            truncated. Zero means "no limit". Only works
+///*                            in "line" mode and in columnar modes.
+///*   --limits L,C,T           Shorthand for "--linelimit L --charlimit C
+///*                            --titlelimit T". The ",T" can be omitted in which
+///*                            case the --titlelimit is unchanged.  The argument
+///*                            can also be "off" to mean "0,0,0" or "on" to
+///*                            mean "5,300,20".
+///*   --list                   List available modes
+///*   --multiinsert N          In "insert" mode, put multiple rows on a single
+///*                            INSERT statement until the size exceeds N bytes.
+///*   --null STRING            Render SQL NULL values as the given string
+///*   --once                   Setting changes to the right are reverted after
+///*                            the next SQL command.
+///*   --quote ARG              Enable/disable quoting of text. ARG can be
+///*                            "off", "on", "sql", "relaxed", "csv", "html",
+///*                            "tcl", or "json". "off" means show the text as-is.
+///*                            "on" is an alias for "sql".
+///*   --reset                  Changes all mode settings back to their default.
+///*   --rowsep STRING          Use STRING as the row separator
+///*   --sw|--screenwidth N     Declare the screen width of the output device
+///*                            to be N characters.  An attempt may be made to
+///*                            wrap output text to fit within this limit. Zero
+///*                            means "no limit".  Or N can be "auto" to set the
+///*                            width automatically.
+///*   --tablename NAME         Set the name of the table for "insert" mode.
+///*   --tag NAME               Save mode to the left as NAME.
+///*   --textjsonb BOOLEAN      If enabled, JSONB text is displayed as text JSON.
+///*   --title ARG              Whether or not to show column headers, and if so
+///*                            how to encode them.  ARG can be "off", "on",
+///*                            "sql", "csv", "html", "tcl", or "json".
+///*   --titlelimit N           Limit the length of column titles to N characters.
+///*   -v|--verbose             Verbose output
+///*   --widths LIST            Set the columns widths for columnar modes. The
+///*                            argument is a list of integers, one for each
+///*                            column. A "0" width means use a dynamic width
+///*                            based on the actual width of data. If there are
+///*                            fewer entries in LIST than columns, "0" is used
+///*                            for the unspecified widths.
+///*   --wordwrap BOOLEAN       Enable/disable word wrapping
+///*   --wrap N                 Wrap columns wider than N characters
+///*   --ww                     Shorthand for "--wordwrap on"
+#[allow(unused_doc_comments)]
 extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
     unsafe {
         let n_arg: i32 = unsafe { (*p).dot.n_arg };
+        /// Number of arguments
         let az_arg: *const *mut i8 =
             unsafe { (*p).dot.az_arg } as *const *mut i8;
+        /// Argument list
         let mut e_mode: i32 = -1;
+        /// New mode value, or -1 for none
         let mut i_mode: i32 = -1;
+        /// Index of the argument that is the mode name
         let mut i: i32 = 0;
+        /// Loop counter
         let mut k: i32 = 0;
+        /// Misc index variable
         let mut chng: i32 = 0;
+        /// True if anything has changed
         let mut b_all: i32 = 0;
         {
             i = 1;
@@ -48777,6 +52025,7 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                         chng = 1;
                     } else if option_match(z,
                                 c"escape".as_ptr() as *mut i8 as *const i8) != 0 {
+                        /// See similar code at tag-20250224-1
                         let mut z_err: *mut i8 = core::ptr::null_mut();
                         if { let __p = &mut i; *__p += 1; *__p } >= n_arg {
                             unsafe {
@@ -48786,13 +52035,15 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                             };
                             return 1;
                         }
-                        k =
+
+                        ///  0     1       2  <-- One less than QRF_ESC_
+                        (k =
                             unsafe {
                                 pick_str(unsafe { *az_arg.offset(i as isize) } as *const i8,
                                     &mut z_err, c"off".as_ptr() as *mut i8,
                                     c"ascii".as_ptr() as *mut i8, c"symbol".as_ptr() as *mut i8,
                                     c"".as_ptr() as *mut i8)
-                            };
+                            });
                         if k < 0 {
                             unsafe {
                                 dot_cmd_error(p, i,
@@ -48877,7 +52128,11 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                         unsafe { (*p).n_pop_mode = 1 as u8 };
                     } else if option_match(z,
                                 c"noquote".as_ptr() as *mut i8 as *const i8) != 0 {
-                        unsafe { (*p).mode.spec.e_text = 1 as u8 };
+                        unsafe {
+
+                            /// (undocumented legacy) --noquote always turns quoting off
+                            ((*p).mode.spec.e_text = 1 as u8)
+                        };
                         unsafe { (*p).mode.spec.e_blob = 0 as u8 };
                         chng = 1;
                     } else if option_match(z,
@@ -48896,6 +52151,10 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                                     mode_find(unsafe { &*p },
                                             unsafe { *az_arg.offset((i + 1) as isize) } as *const i8) <
                                         0) {
+
+                            /// --quote is followed by an argument other that is not an option
+                            ///* or a mode name.  See it must be a boolean or a keyword to describe
+                            ///* how to set quoting.
                             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
                             if {
                                         k =
@@ -48928,7 +52187,11 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                                     return 1;
                                 }
                             }
-                        } else { k = 1; }
+                        } else {
+
+                            /// (Legacy) no following boolean argument.  Turn quoting on
+                            (k = 1);
+                        }
                         '__s496:
                             {
                             match k {
@@ -49134,8 +52397,12 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                                     *az_arg.offset({ let __p = &mut i; *__p += 1; *__p } as
                                                 isize)
                                 } as *const i8;
-                        a_width =
-                            unsafe { malloc(unsafe { strlen(z_w) }) } as *mut i16;
+
+                        /// Every width value takes at least 2 bytes in the input string to
+                        ///* specify, so strlen(zW) bytes should be plenty of space to hold the
+                        ///* result.
+                        (a_width =
+                            unsafe { malloc(unsafe { strlen(z_w) }) } as *mut i16);
                         while unsafe {
                                     isspace(unsafe { *z_w.offset(0 as isize) } as u8 as i32)
                                 } != 0 {
@@ -49373,6 +52640,8 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
                             c"hex".as_ptr() as *const i8, c"tcl".as_ptr() as *const i8,
                             c"json".as_ptr() as *const i8,
                             c"size".as_ptr() as *const i8];
+                ///      0       1       2      3      4      5       6
+                ///* Must match QRF_BLOB_xxxx values.  See all instances of tag-20251124a
                 let e: u8 = unsafe { (*p).mode.spec.e_blob };
                 unsafe {
                     sqlite3_str_appendf(p_desc,
@@ -49595,6 +52864,12 @@ extern "C" fn dot_cmd_mode(p: *mut ShellState) -> i32 {
     }
 }
 
+///* The input zFN is guaranteed to start with "file:" and is thus a URI
+///* filename.  Extract the actual filename and return a pointer to that
+///* filename in spaced obtained from sqlite3_malloc().
+///*
+///* The caller is responsible for freeing space using sqlite3_free() when
+///* it has finished with the filename.
 extern "C" fn shell_filename_from_uri(z_fn_1: *const i8) -> *mut i8 {
     let mut z_out: *mut i8 = core::ptr::null_mut();
     let mut i: i32 = 0;
@@ -49665,6 +52940,7 @@ extern "C" fn shell_filename_from_uri(z_fn_1: *const i8) -> *mut i8 {
     return z_out;
 }
 
+///* Change the output stream (file or pipe or console) to something else.
 extern "C" fn output_redir(p: *mut ShellState, pf_new_1: *mut FILE) -> () {
     unsafe {
         if unsafe { (*p).out } != __stdoutp {
@@ -49681,20 +52957,88 @@ extern "C" fn output_redir(p: *mut ShellState, pf_new_1: *mut FILE) -> () {
     }
 }
 
+///* DOT-COMMAND: .output
+///* USAGE: .output [OPTIONS] [FILE]
+///*
+///* Begin redirecting output to FILE.  Or if FILE is omitted, revert
+///* to sending output to the console.  If FILE begins with "|" then
+///* the remainder of file is taken as a pipe and output is directed
+///* into that pipe.  If FILE is "memory" then output is captured in an
+///* internal memory buffer.  If FILE is "off" then output is redirected
+///* into /dev/null or the equivalent.
+///*
+///* Options:
+///*   --bom             Prepend a byte-order mark to the output
+///*   -e                Accumulate output in a temporary text file then
+///*                     launch a text editor when the redirection ends.
+///*   --error-prefix X  Use X as the left-margin prefix for error messages.
+///*                     Set to an empty string to restore the default.
+///*   --keep            Keep redirecting output to its current destination.
+///*                     Use this option in combination with --show or
+///*                     with --error-prefix when you do not want to stop
+///*                     a current redirection.
+///*   --plain           Use plain text rather than HTML tables with -w
+///*   --show            Show output text captured by .testcase or by
+///*                     redirecting to "memory".
+///*   -w                Show the output in a web browser.  Output is
+///*                     written into a temporary HTML file until the
+///*                     redirect ends, then the web browser is launched.
+///*                     Query results  are shown as HTML tables, unless
+///*                     the --plain is used too.
+///*   -x                Show the output in a spreadsheet.  Output is
+///*                     written to a temp file as CSV then the spreadsheet
+///*                     is launched when
+///*
+///* DOT-COMMAND: .once
+///* USAGE: .once [OPTIONS] FILE ...
+///*
+///* Write the output for the next line of SQL or the next dot-command into
+///* FILE.  If FILE begins with "|" then it is a program into which output
+///* is written. The FILE argument should be omitted if one of the -e, -w,
+///* or -x options is used.
+///*
+///* Options:
+///*   -e                Capture output into a temporary file then bring up
+///*                     a text editor on that temporary file.
+///*   --plain           Use plain text rather than HTML tables with -w
+///*   -w                Capture output into an HTML file then bring up that
+///*                     file in a web browser
+///*   -x                Show the output in a spreadsheet.  Output is
+///*                     written to a temp file as CSV then the spreadsheet
+///*                     is launched when
+///*
+///* DOT-COMMAND: .excel
+///* Shorthand for ".once -x"
+///*
+///* DOT-COMMAND: .www [--plain]
+///* Shorthand for ".once -w" or ".once --plain -w"
+#[allow(unused_doc_comments)]
 extern "C" fn dot_cmd_output(p: *mut ShellState) -> i32 {
     unsafe {
         let mut n_arg: i32 = 0;
+        /// Number of arguments
         let mut az_arg: *const *mut i8 = core::ptr::null();
+        /// Text of the arguments
         let mut z_file: *mut i8 = core::ptr::null_mut();
+        /// The FILE argument
         let mut i: i32 = 0;
+        /// Loop counter
         let mut e_mode: i32 = 0;
+        /// 0: .outout/.once, 'x'=.excel, 'w'=.www
         let mut b_once: i32 = 0;
+        /// 0: .output, 1: .once, 2: .excel/.www
         let mut b_plain: i32 = 0;
+        /// --plain option
         let mut b_keep: i32 = 0;
         let mut z_bom: *const i8 = core::ptr::null();
         let mut c: i8 = 0 as i8;
         let mut n: i32 = 0;
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// spreadsheet mode.  Output as CSV.
+        /// web-browser mode.
+        /// text editor mode
+        /// SQLITE_NOHAVE_SYSTEM
+        /// no-op
         let mut pf_pipe: *mut FILE = core::ptr::null_mut();
         let mut pf_file: *mut FILE = core::ptr::null_mut();
         let mut __state: i32 = 0;
@@ -50269,16 +53613,43 @@ extern "C" fn dot_cmd_output(p: *mut ShellState) -> i32 {
                 }
             }
         }
+
+        /// Number of arguments
+        /// Text of the arguments
+        /// The FILE argument
+        /// Loop counter
+        /// 0: .outout/.once, 'x'=.excel, 'w'=.www
+        /// 0: .output, 1: .once, 2: .excel/.www
+        /// --plain option
+        /// Keep redirecting
+        /// spreadsheet mode.  Output as CSV.
+        /// web-browser mode.
+        /// text editor mode
+        /// SQLITE_NOHAVE_SYSTEM
+        /// no-op
         unreachable!();
     }
 }
 
+///* DOT-COMMAND: .testcase
+///* USAGE: .testcase [OPTIONS] NAME
+///*
+///* Start a new test case identified by NAME.  All output
+///* through the next ".check" command is captured for comparison. See the
+///* ".check" command for additional informatioon.
+///*
+///* Options:
+///*   --error-prefix TEXT       Change error message prefix text to TEXT
+#[allow(unused_doc_comments)]
 extern "C" fn dot_cmd_testcase(p: *mut ShellState) -> i32 {
     unsafe {
         let n_arg: i32 = unsafe { (*p).dot.n_arg };
+        /// Number of arguments
         let az_arg: *const *mut i8 =
             unsafe { (*p).dot.az_arg } as *const *mut i8;
+        /// Text of the arguments
         let mut i: i32 = 0;
+        /// Loop counter
         let mut z_name: *const i8 = core::ptr::null();
         {
             i = 1;
@@ -50360,6 +53731,7 @@ extern "C" fn dot_cmd_testcase(p: *mut ShellState) -> i32 {
     }
 }
 
+///* Fault-Simulator state and logic.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct AnonS2 {
@@ -50385,6 +53757,7 @@ static mut faultsim_state: AnonS2 =
         n_skip: 0,
     };
 
+///* This is the fault-sim callback
 extern "C" fn faultsim_callback(i_arg_1: i32) -> i32 {
     unsafe {
         if faultsim_state.i_id > 0 && faultsim_state.i_id != i_arg_1 {
@@ -50430,6 +53803,7 @@ extern "C" fn faultsim_callback(i_arg_1: i32) -> i32 {
     }
 }
 
+///* A routine for handling output from sqlite3_trace().
 extern "C" fn sql_trace_callback(m_type_1: u32, p_arg_1: *mut (),
     p_p_1: *mut (), p_x_1: *mut ()) -> i32 {
     let p: *const ShellState =
@@ -50541,6 +53915,11 @@ extern "C" fn sql_trace_callback(m_type_1: u32, p_arg_1: *mut (),
     return 0;
 }
 
+///* If an input line begins with "." then invoke this routine to
+///* process that line.
+///*
+///* Return 1 on error, 2 to exit, and 0 otherwise.
+#[allow(unused_doc_comments)]
 extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
     -> i32 {
     unsafe {
@@ -50549,6 +53928,9 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut c: i32 = 0;
         let mut rc: i32 = 0;
         let mut az_arg: *mut *mut i8 = core::ptr::null_mut();
+        /// Parse the input line into tokens stored in p->dot.
+        /// Process the input line.
+        /// no tokens, no error
         let mut z_dest_file: *const i8 = core::ptr::null();
         let mut z_db: *const i8 = core::ptr::null();
         let mut p_dest: *mut Sqlite3 = core::ptr::null_mut();
@@ -50557,10 +53939,21 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut b_async: i32 = 0;
         let mut z_vfs: *const i8 = core::ptr::null();
         let mut z: *const i8 = core::ptr::null();
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// Undocumented.  Legacy only.  See "crlf" below
+        /// The undocumented ".breakpoint" command causes a call to the no-op
+        ///* routine named test_breakpoint().
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// Cancel output redirection, if it is currently set (by .testcase)
+        ///* Then read the content of the testcase-out.txt file and compare against
+        ///* azArg[1].  If there are differences, report an error and exit.
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// List available connections
         let mut i: i32 = 0;
         let mut z_file: *const i8 = core::ptr::null();
         let mut i__1: i32 = 0;
         let mut i__2: i32 = 0;
+        /// No-op
         let mut az_name: *mut *mut i8 = core::ptr::null_mut();
         let mut n_name: i32 = 0;
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -50572,6 +53965,7 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut z__1: *const i8 = core::ptr::null();
         let mut ii: i32 = 0;
         let mut v: i32 = 0;
+        /// SQLITE_SHELL_HAVE_RECOVER
         let mut z_schema_1: *const i8 = core::ptr::null();
         let mut ii__1: i32 = 0;
         let mut z_sql: *mut i8 = core::ptr::null_mut();
@@ -50582,15 +53976,31 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut saved_shell_flags: i32 = 0;
         let mut saved_mode: Mode = unsafe { core::mem::zeroed() };
         let mut z__3: *const i8 = core::ptr::null();
+        ///ShellSetFlag(p, SHFLG_Newlines);
+        /// azArg[i] contains a LIKE pattern. This ".dump" request should
+        ///* only dump data for tables for which either the table name matches
+        ///* the LIKE pattern, or the table appears to be a shadow table of
+        ///* a virtual table for which the name matches the LIKE pattern.
         let mut z_expr: *mut i8 = core::ptr::null_mut();
+        /// Name of a test-control option
+        /// Integer code for that option
+        /// Usage notes
+        /// { "pragma",         SQLITE_FCNTL_PRAGMA,          "NAME ARG"       },
+        /// { "win32_av_retry", SQLITE_FCNTL_WIN32_AV_RETRY,  "COUNT DELAY"    },
         let mut filectrl: i32 = 0;
         let mut i_ctrl: i32 = 0;
         let mut i_res: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// Integer result to display if rc2==1
         let mut is_ok: i32 = 0;
+        /// 0: usage  1: %lld  2: no-result
         let mut n2: i32 = 0;
         let mut i__5: i32 = 0;
         let mut z_cmd: *const i8 = core::ptr::null();
         let mut z_schema_2: *const i8 = core::ptr::null();
+        /// The argument can optionally begin with "-" or "--"
+        /// --help lists all file-controls
+        /// convert filectrl text option to value. allow any unique prefix
+        ///* of the option name, or a numerical value.
         let mut x: i32 = 0;
         let mut x__1: i32 = 0;
         let mut x__2: i32 = 0;
@@ -50604,54 +54014,116 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut z_sql_2: *mut i8 = core::ptr::null_mut();
         let mut p_stmt_1: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut k: i32 = 0;
+        /// !defined(SQLITE_SHELL_FIDDLE)
         let mut z_sql_3: *mut i8 = core::ptr::null_mut();
         let mut z_collist: *mut i8 = core::ptr::null_mut();
         let mut p_stmt_2: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut tnum: i32 = 0;
         let mut is_wo: i32 = 0;
+        /// True if making an imposter of a WITHOUT ROWID table
         let mut len_pk: i32 = 0;
+        /// Length of the PRIMARY KEY string for isWO tables
         let mut i__6: i32 = 0;
+        /// Also allowed, but not documented:
+        ///*
+        ///*    .imposter TABLE IMPOSTER
+        ///*
+        ///* where TABLE is a WITHOUT ROWID table.  In that case, the
+        ///* imposter is another WITHOUT ROWID table with the columns in
+        ///* storage order.
         let mut z_label: [i8; 20] = [0; 20];
         let mut z_col: *const i8 = core::ptr::null();
+        /// !defined(SQLITE_OMIT_TEST_CONTROL)
         let mut p_sql: *mut Sqlite3Str = core::ptr::null_mut();
         let mut i__7: i32 = 0;
         let mut all_flag: i32 = 0;
         let mut sys_flag: i32 = 0;
         let mut expr_flag: i32 = 0;
         let mut debug_flag: i32 = 0;
+        /// Undocument --debug flag
         let mut z_pattern: *const i8 = core::ptr::null();
         let mut z_sep: *const i8 = core::ptr::null();
         let mut z__5: *const i8 = core::ptr::null();
+        /// Run the SQL statement in "split" mode.
         let mut i_arg: i64 = 0 as i64;
+        /// Name of a limit
+        /// Integer code for that limit
         let mut i__8: i32 = 0;
         let mut n2__1: i32 = 0;
         let mut i_limit: i32 = 0;
         let mut z_file_2: *const i8 = core::ptr::null();
         let mut z_proc: *const i8 = core::ptr::null();
         let mut z_err_msg: *mut i8 = core::ptr::null_mut();
+        /// Must have a non-empty FILE. (Will not load self.)
         let mut z_file_3: *const i8 = core::ptr::null();
+        /// Return immediately to bypass the safe mode reset
+        ///* at the end of this procedure
+        /// !defined(SQLITE_SHELL_FIDDLE)
         let mut z_fn: *const i8 = core::ptr::null();
+        /// Pointer to constant filename
         let mut z_new_filename: *mut i8 = core::ptr::null_mut();
+        /// Name of the database file to open
         let mut i_name: i32 = 0;
+        /// Index in azArg[] of the filename
         let mut new_flag: i32 = 0;
+        /// True to delete file before opening
         let mut open_mode: i32 = 0;
         let mut open_flags: i32 = 0;
+        /// Check for command-line arguments
         let mut z__6: *const i8 = core::ptr::null();
+        /// SQLITE_OMIT_DESERIALIZE
+        /// !SQLITE_SHELL_FIDDLE
+        /// Close the existing database
+        /// If a filename is specified, try to open it first
         let mut z_del: *mut i8 = core::ptr::null_mut();
+        /// As a fall-back open a TEMP database
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// .parameter clear
+        ///* Clear all bind parameters by dropping the TEMP table that holds them.
+        /// .parameter list
+        ///* List all bind parameters.
         let mut p_stmt_3: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut rx: i32 = 0;
         let mut len: i32 = 0;
+        /// .parameter init
+        ///* Make sure the TEMP table used to hold bind parameters exists.
+        ///* Create it if necessary.
+        /// .parameter set NAME VALUE
+        ///* Set or reset a bind parameter.  NAME should be the full parameter
+        ///* name exactly as it appears in the query.  (ex: $abc, @def).  The
+        ///* VALUE can be in either SQL literal notation, or if not it will be
+        ///* understood to be a text string.
         let mut rx__1: i32 = 0;
         let mut z_sql_4: *mut i8 = core::ptr::null_mut();
         let mut p_stmt_4: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut z_key: *const i8 = core::ptr::null();
         let mut z_value: *const i8 = core::ptr::null();
+        /// .parameter unset NAME
+        ///* Remove the NAME binding from the parameter binding table, if it
+        ///* exists.
         let mut z_sql_5: *mut i8 = core::ptr::null_mut();
         let mut __state__1: i32 = 0;
+        /// .parameter clear
+        ///* Clear all bind parameters by dropping the TEMP table that holds them.
+        /// .parameter list
+        ///* List all bind parameters.
+        /// .parameter init
+        ///* Make sure the TEMP table used to hold bind parameters exists.
+        ///* Create it if necessary.
+        /// .parameter set NAME VALUE
+        ///* Set or reset a bind parameter.  NAME should be the full parameter
+        ///* name exactly as it appears in the query.  (ex: $abc, @def).  The
+        ///* VALUE can be in either SQL literal notation, or if not it will be
+        ///* understood to be a text string.
+        /// .parameter unset NAME
+        ///* Remove the NAME binding from the parameter binding table, if it
+        ///* exists.
+        /// If no command name matches, show a syntax error
         let mut i__9: i32 = 0;
         let mut i__10: i32 = 0;
         let mut nn: i32 = 0;
         let mut z__7: *const i8 = core::ptr::null();
+        /// SQLITE_OMIT_PROGRESS_CALLBACK
         let mut i__11: i32 = 0;
         let mut cnt: i32 = 0;
         let mut no_opt: i32 = 0;
@@ -50659,11 +54131,14 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut in_saved: *mut FILE = core::ptr::null_mut();
         let mut saved_lineno: i64 = 0 as i64;
         let mut z_filename: *mut i8 = core::ptr::null_mut();
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// SQLITE_SHELL_HAVE_RECOVER
         let mut z_src_file: *const i8 = core::ptr::null();
         let mut z_db_1: *const i8 = core::ptr::null();
         let mut p_src: *mut Sqlite3 = core::ptr::null_mut();
         let mut p_backup_1: *mut Sqlite3Backup = core::ptr::null_mut();
         let mut n_timeout: i32 = 0;
+        /// !defined(SQLITE_SHELL_FIDDLE)
         let mut data__1: ShellState = unsafe { core::mem::zeroed() };
         let mut z_err_msg_1: *mut i8 = core::ptr::null_mut();
         let mut z_div: *const i8 = core::ptr::null();
@@ -50681,39 +54156,64 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut b_glob: i32 = 0;
         let mut x__4: u32 = 0 as u32;
         let mut b_is_init: i32 = 0;
+        /// True to initialize the SELFTEST table
         let mut b_verbose: i32 = 0;
+        /// Verbose output
         let mut b_selftest_exists: i32 = 0;
+        /// True if SELFTEST already exists
         let mut i__12: i32 = 0;
         let mut k__1: i32 = 0;
+        /// Loop counters
         let mut n_test: i32 = 0;
+        /// Number of tests runs
         let mut n_err: i32 = 0;
+        /// Number of errors seen
         let mut str: ShellText = unsafe { core::mem::zeroed() };
+        /// Answer for a query
         let mut p_stmt_6: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// Query against the SELFTEST table
         let mut z__9: *const i8 = core::ptr::null();
         let mut tno: i32 = 0;
         let mut z_op: *const i8 = core::ptr::null();
         let mut z_sql_6: *const i8 = core::ptr::null();
         let mut z_ans: *const i8 = core::ptr::null();
         let mut z_err_msg_2: *mut i8 = core::ptr::null_mut();
+        /// End loop over rows of content from SELFTEST
+        /// End loop over k
         let mut z_like_1: *const i8 = core::ptr::null();
+        /// Which table to checksum. 0 means everything
         let mut i__13: i32 = 0;
+        /// Loop counter
         let mut b_schema: i32 = 0;
+        /// Also hash the schema
         let mut b_separate: i32 = 0;
+        /// Hash each table separately
         let mut i_size: i32 = 0;
+        /// Hash algorithm to use
         let mut b_debug_1: i32 = 0;
+        /// Only show the query that would have run
         let mut p_stmt_7: *mut Sqlite3Stmt = core::ptr::null_mut();
+        /// For querying tables names
         let mut z_sql_7: *mut i8 = core::ptr::null_mut();
+        /// SQL to be run
         let mut z_sep_1: *const i8 = core::ptr::null();
+        /// Separator
         let mut s_sql: ShellText = unsafe { core::mem::zeroed() };
+        /// Complete SQL for the query to run the hash
         let mut s_query: ShellText = unsafe { core::mem::zeroed() };
+        /// Set of queries used to read all content
         let mut z__10: *const i8 = core::ptr::null();
         let mut z_tab: *const i8 = core::ptr::null();
         let mut lrc: i32 = 0;
         let mut z_rev_text: *mut i8 = core::ptr::null_mut();
+        /// lower-case query is first run, producing upper-case query.
+        /// assert(lrc==SQLITE_NOMEM); // might also be SQLITE_ERROR if the
+        ///* user does cruel and unnatural things like ".limit expr_depth 0".
         let mut z_gen_query: *const i8 = core::ptr::null();
         let mut p_check_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut count_irreversible: f64 = 0.0;
         let mut sz: i32 = 0;
+        /// !defined(*_OMIT_SCHEMA_PRAGMAS) && !defined(*_OMIT_VIRTUALTABLE)
         let mut z_cmd_1: *mut i8 = core::ptr::null_mut();
         let mut i__14: i32 = 0;
         let mut x__5: i32 = 0;
@@ -50723,13 +54223,22 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut p_sql_2: *mut Sqlite3Str = core::ptr::null_mut();
         let mut z_pattern_1: *const i8 = core::ptr::null();
         let mut z_db_name: *const i8 = core::ptr::null();
+        /// Name of a test-control option
+        /// Integer code for that option
+        /// Not valid unless --unsafe-testing
+        /// Usage notes
+        ///{"benign_malloc_hooks",SQLITE_TESTCTRL_BENIGN_MALLOC_HOOKS,1, ""        },
         let mut testctrl: i32 = 0;
         let mut i_ctrl_1: i32 = 0;
         let mut rc2: i32 = 0;
+        /// 0: usage.  1: %d  2: %x  3: no-output
         let mut is_ok_1: i32 = 0;
         let mut i__16: i32 = 0;
         let mut n2__2: i32 = 0;
         let mut z_cmd_2: *const i8 = core::ptr::null();
+        /// Mask for this optimization
+        /// Display this on output
+        /// Name of optimization
         let mut cur_opt: u32 = 0 as u32;
         let mut new_opt: u32 = 0 as u32;
         let mut m: u32 = 0 as u32;
@@ -50739,14 +54248,30 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut use_label: i32 = 0;
         let mut z_label_1: *const i8 = core::ptr::null();
         let mut jj: i32 = 0;
+        /// sqlite3_test_control(int, db, int)
         let mut opt: u32 = 0 as u32;
+        /// sqlite3_test_control(int)
+        /// sqlite3_test_control(int, uint)
         let mut opt__1: u32 = 0 as u32;
+        /// sqlite3_test_control(int, int, sqlite3*)
         let mut ii__4: i32 = 0;
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
+        /// Make sure the schema has been loaded
+        /// sqlite3_test_control(int, int)
         let mut opt__2: i32 = 0;
+        /// sqlite3_test_control(int, int)
         let mut opt__3: i32 = 0;
+        /// sqlite3_test_control(sqlite3*)
         let mut x__6: u64 = 0 as u64;
         let mut opt__4: i32 = 0;
+        /// Examples:
+        ///*   .testctrl bitvec_test 100   6,1       -- Show BITVEC constants
+        ///*   .testctrl bitvec_test 1000  1,12,7,3  -- Simple test
+        ///*                         ----  --------
+        ///*      size of Bitvec -----^        ^---  aOp array. 0 added at end.
+        ///*
+        ///* See comments on sqlite3BitvecBuiltinTest() for more information
+        ///* about the aOp[] array.
         let mut i_size_1: i32 = 0;
         let mut z_test_arg: *const i8 = core::ptr::null();
         let mut n_op: i32 = 0;
@@ -50757,10 +54282,13 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
         let mut kk: i32 = 0;
         let mut b_show_help: i32 = 0;
         let mut z__12: *const i8 = core::ptr::null();
+        /// !defined(SQLITE_UNTESTABLE)
         let mut m_type: i32 = 0;
         let mut jj__2: i32 = 0;
         let mut z__13: *const i8 = core::ptr::null();
+        /// !defined(SQLITE_OMIT_TRACE)
         let mut z_ptr_sz: *mut i8 = core::ptr::null_mut();
+        ///extra-version-info
         let mut z_db_name_1: *const i8 = core::ptr::null();
         let mut p_vfs: *const Sqlite3Vfs = core::ptr::null();
         let mut p_vfs_1: *mut Sqlite3Vfs = core::ptr::null_mut();
@@ -59046,10 +62574,175 @@ extern "C" fn do_meta_command(z_line_1: *const i8, p: *mut ShellState)
                 }
             }
         }
+
+        /// Parse the input line into tokens stored in p->dot.
+        /// Process the input line.
+        /// no tokens, no error
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// Undocumented.  Legacy only.  See "crlf" below
+        /// The undocumented ".breakpoint" command causes a call to the no-op
+        ///* routine named test_breakpoint().
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// Cancel output redirection, if it is currently set (by .testcase)
+        ///* Then read the content of the testcase-out.txt file and compare against
+        ///* azArg[1].  If there are differences, report an error and exit.
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// List available connections
+        /// No-op
+        /// SQLITE_SHELL_HAVE_RECOVER
+        ///ShellSetFlag(p, SHFLG_Newlines);
+        /// azArg[i] contains a LIKE pattern. This ".dump" request should
+        ///* only dump data for tables for which either the table name matches
+        ///* the LIKE pattern, or the table appears to be a shadow table of
+        ///* a virtual table for which the name matches the LIKE pattern.
+        /// When playing back a "dump", the content might appear in an order
+        ///* which causes immediate foreign key constraints to be violated.
+        ///* So disable foreign-key constraint enforcement to prevent problems.
+        /// Set writable_schema=ON since doing so forces SQLite to initialize
+        ///* as much of the schema as it can even if the sqlite_schema table is
+        ///* corrupt.
+        /// The ".explain" command is automatic now.  It is largely pointless.  It
+        ///* retained purely for backwards compatibility
+        /// Name of a test-control option
+        /// Integer code for that option
+        /// Usage notes
+        /// { "pragma",         SQLITE_FCNTL_PRAGMA,          "NAME ARG"       },
+        /// { "win32_av_retry", SQLITE_FCNTL_WIN32_AV_RETRY,  "COUNT DELAY"    },
+        /// Integer result to display if rc2==1
+        /// 0: usage  1: %lld  2: no-result
+        /// The argument can optionally begin with "-" or "--"
+        /// --help lists all file-controls
+        /// convert filectrl text option to value. allow any unique prefix
+        ///* of the option name, or a numerical value.
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// True if making an imposter of a WITHOUT ROWID table
+        /// Length of the PRIMARY KEY string for isWO tables
+        /// Also allowed, but not documented:
+        ///*
+        ///*    .imposter TABLE IMPOSTER
+        ///*
+        ///* where TABLE is a WITHOUT ROWID table.  In that case, the
+        ///* imposter is another WITHOUT ROWID table with the columns in
+        ///* storage order.
+        /// !defined(SQLITE_OMIT_TEST_CONTROL)
+        /// Undocument --debug flag
+        /// Run the SQL statement in "split" mode.
+        /// Name of a limit
+        /// Integer code for that limit
+        /// Must have a non-empty FILE. (Will not load self.)
+        /// Return immediately to bypass the safe mode reset
+        ///* at the end of this procedure
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// Pointer to constant filename
+        /// Name of the database file to open
+        /// Index in azArg[] of the filename
+        /// True to delete file before opening
+        /// Check for command-line arguments
+        /// SQLITE_OMIT_DESERIALIZE
+        /// !SQLITE_SHELL_FIDDLE
+        /// Close the existing database
+        /// If a filename is specified, try to open it first
+        /// As a fall-back open a TEMP database
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// .parameter clear
+        ///* Clear all bind parameters by dropping the TEMP table that holds them.
+        /// .parameter list
+        ///* List all bind parameters.
+        /// .parameter init
+        ///* Make sure the TEMP table used to hold bind parameters exists.
+        ///* Create it if necessary.
+        /// .parameter set NAME VALUE
+        ///* Set or reset a bind parameter.  NAME should be the full parameter
+        ///* name exactly as it appears in the query.  (ex: $abc, @def).  The
+        ///* VALUE can be in either SQL literal notation, or if not it will be
+        ///* understood to be a text string.
+        /// .parameter unset NAME
+        ///* Remove the NAME binding from the parameter binding table, if it
+        ///* exists.
+        /// If no command name matches, show a syntax error
+        /// SQLITE_OMIT_PROGRESS_CALLBACK
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// SQLITE_SHELL_HAVE_RECOVER
+        /// !defined(SQLITE_SHELL_FIDDLE)
+        /// True to initialize the SELFTEST table
+        /// Verbose output
+        /// True if SELFTEST already exists
+        /// Loop counters
+        /// Number of tests runs
+        /// Number of errors seen
+        /// Answer for a query
+        /// Query against the SELFTEST table
+        /// End loop over rows of content from SELFTEST
+        /// End loop over k
+        /// Which table to checksum. 0 means everything
+        /// Loop counter
+        /// Also hash the schema
+        /// Hash each table separately
+        /// Hash algorithm to use
+        /// Only show the query that would have run
+        /// For querying tables names
+        /// SQL to be run
+        /// Separator
+        /// Complete SQL for the query to run the hash
+        /// Set of queries used to read all content
+        /// Query for reversible to-blob-to-text check
+        /// lower-case query is first run, producing upper-case query.
+        /// assert(lrc==SQLITE_NOMEM); // might also be SQLITE_ERROR if the
+        ///* user does cruel and unnatural things like ".limit expr_depth 0".
+        /// !defined(*_OMIT_SCHEMA_PRAGMAS) && !defined(*_OMIT_VIRTUALTABLE)
+        ///consoleRestore();
+        ///consoleRenewSetup();
+        /// !defined(SQLITE_NOHAVE_SYSTEM) && !defined(SQLITE_SHELL_FIDDLE)
+        /// Run the SQL statement in "split" mode.
+        /// Set the p->zTestcase name and begin redirecting output into
+        ///* the cli_output_capture sqlite3_str
+        /// Name of a test-control option
+        /// Integer code for that option
+        /// Not valid unless --unsafe-testing
+        /// Usage notes
+        ///{"benign_malloc_hooks",SQLITE_TESTCTRL_BENIGN_MALLOC_HOOKS,1, ""        },
+        /// 0: usage.  1: %d  2: %x  3: no-output
+        /// The argument can optionally begin with "-" or "--"
+        /// --help lists all test-controls
+        /// convert testctrl text option to value. allow any unique prefix
+        ///* of the option name, or a numerical value.
+        /// Special processing for .testctrl opt MASK ...
+        ///* Each MASK argument can be one of:
+        ///*
+        ///*      +LABEL       Enable the named optimization 
+        ///*
+        ///*      -LABEL       Disable the named optimization
+        ///*
+        ///*      INTEGER      Mask of optimizations to disable
+        /// Mask for this optimization
+        /// Display this on output
+        /// Name of optimization
+        /// sqlite3_test_control(int, db, int)
+        /// sqlite3_test_control(int)
+        /// sqlite3_test_control(int, uint)
+        /// sqlite3_test_control(int, int, sqlite3*)
+        /// Make sure the schema has been loaded
+        /// sqlite3_test_control(int, int)
+        /// sqlite3_test_control(int, int)
+        /// sqlite3_test_control(sqlite3*)
+        /// Examples:
+        ///*   .testctrl bitvec_test 100   6,1       -- Show BITVEC constants
+        ///*   .testctrl bitvec_test 1000  1,12,7,3  -- Simple test
+        ///*                         ----  --------
+        ///*      size of Bitvec -----^        ^---  aOp array. 0 added at end.
+        ///*
+        ///* See comments on sqlite3BitvecBuiltinTest() for more information
+        ///* about the aOp[] array.
+        /// !defined(SQLITE_UNTESTABLE)
+        /// !defined(SQLITE_OMIT_TRACE)
+        ///extra-version-info
         unreachable!();
     }
 }
 
+///* Return TRUE if the line typed in is an SQL command terminator other
+///* than a semi-colon.  The SQL Server style "go" command is understood
+///* as is the Oracle "/".
 extern "C" fn line_is_command_terminator(mut z_line_1: *const i8) -> i32 {
     while unsafe {
                 isspace(unsafe { *z_line_1.offset(0 as isize) } as u8 as i32)
@@ -59081,6 +62774,8 @@ extern "C" fn line_is_command_terminator(mut z_line_1: *const i8) -> i32 {
     return 0;
 }
 
+///* Return true if zSql is a complete SQL statement.  Return false if it
+///* ends in the middle of a string literal or C-style comment.
 extern "C" fn line_is_complete(z_sql_1: *mut i8, n_sql_1: i32) -> i32 {
     let mut rc: i32 = 0;
     if z_sql_1 == core::ptr::null_mut() { return 1; }
@@ -59091,6 +62786,23 @@ extern "C" fn line_is_complete(z_sql_1: *mut i8, n_sql_1: i32) -> i32 {
     return rc;
 }
 
+///* This function is called after processing each line of SQL in the
+///* runOneSqlLine() function. Its purpose is to detect scenarios where
+///* defensive mode should be automatically turned off. Specifically, when
+///*
+///*   1. The first line of input is "PRAGMA foreign_keys=OFF;",
+///*   2. The second line of input is "BEGIN TRANSACTION;",
+///*   3. The database is empty, and
+///*   4. The shell is not running in --safe mode.
+///* 
+///* The implementation uses the ShellState.eRestoreState to maintain state:
+///*
+///*    0: Have not seen any SQL.
+///*    1: Have seen "PRAGMA foreign_keys=OFF;".
+///*    2-6: Currently running .dump transaction. If the "2" bit is set,
+///*         disable DEFENSIVE when done. If "4" is set, disable DQS_DDL.
+///*    7: Nothing left to do. This function becomes a no-op.
+#[allow(unused_doc_comments)]
 extern "C" fn do_auto_detect_restore(p: &mut ShellState, z_sql_1: *const i8)
     -> i32 {
     let mut rc: i32 = 0;
@@ -59137,6 +62849,7 @@ extern "C" fn do_auto_detect_restore(p: &mut ShellState, z_sql_1: *const i8)
                                     memcmp(z_sql_1 as *const (), z_expect_1 as *const (),
                                         19 as u64)
                                 } == 0 {
+                            /// Now check if the database is empty.
                             let z_query: *const i8 =
                                 c"SELECT 1 FROM sqlite_schema LIMIT 1".as_ptr() as *mut i8
                                     as *const i8;
@@ -59197,6 +62910,7 @@ extern "C" fn do_auto_detect_restore(p: &mut ShellState, z_sql_1: *const i8)
                                     memcmp(z_sql_1 as *const (), z_expect_1 as *const (),
                                         19 as u64)
                                 } == 0 {
+                            /// Now check if the database is empty.
                             let z_query: *const i8 =
                                 c"SELECT 1 FROM sqlite_schema LIMIT 1".as_ptr() as *mut i8
                                     as *const i8;
@@ -59260,6 +62974,7 @@ extern "C" fn do_auto_detect_restore(p: &mut ShellState, z_sql_1: *const i8)
     return rc;
 }
 
+///* Run a single line of SQL.  Return the number of errors.
 extern "C" fn run_one_sql_line(p: *mut ShellState, z_sql_1: *mut i8,
     z_filename_1: *const i8, startline: i32) -> i32 {
     unsafe {
@@ -59356,20 +63071,34 @@ extern "C" fn run_one_sql_line(p: *mut ShellState, z_sql_1: *mut i8,
     }
 }
 
+/// Forward reference
+#[allow(unused_doc_comments)]
 extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
     unsafe {
         let mut z_line: *mut i8 = core::ptr::null_mut();
+        /// A single input line
         let mut z_sql: *mut i8 = core::ptr::null_mut();
+        /// Accumulated SQL text
         let mut n_line: i64 = 0 as i64;
+        /// Length of current line
         let mut n_sql: i64 = 0 as i64;
+        /// Bytes of zSql[] used
         let mut n_alloc: i64 = 0 as i64;
+        /// Allocated zSql[] space
         let mut rc: i32 = 0;
+        /// Error code
         let mut err_cnt: i32 = 0;
+        /// Number of errors seen
         let mut has_semi: i32 = 0;
+        /// Input line contains a semicolon
         let mut startline: i64 = 0 as i64;
+        /// Line number for start of current input
         let mut saved_z_in_file: *const i8 = core::ptr::null();
+        /// Prior value of p->zInFile
         let mut saved_lineno: i64 = 0 as i64;
         if unsafe { (*p).input_nesting } == 25 {
+
+            /// This will be more informative in a later version.
             unsafe {
                 cli_printf(__stderrp,
                     c"%s: Input nesting limit (%d) reached at line %lld. Check recursion.\n".as_ptr()
@@ -59410,6 +63139,8 @@ extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
             };
             if n_sql == 0 as i64 &&
                     line_is_all_whitespace(z_line as *const i8) != 0 {
+
+                /// Just swallow single-line whitespace
                 echo_group_input(unsafe { &*p }, z_line as *const i8);
                 continue;
             }
@@ -59423,6 +63154,8 @@ extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
                     {
                     rc = do_meta_command(z_line as *const i8, p);
                     if rc == 2 {
+
+                        /// exit requested
                         break;
                     } else if rc != 0 {
                         { let __p = &mut err_cnt; let __t = *__p; *__p += 1; __t };
@@ -59442,7 +63175,9 @@ extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
                         core::ptr::null_mut()) as i32;
             n_line = unsafe { strlen(z_line as *const i8) } as i64;
             if n_sql + n_line + 2 as i64 >= n_alloc {
-                n_alloc = n_sql + (n_sql >> 1) + n_line + 100 as i64;
+
+                /// Grow buffer by half-again increments when big.
+                (n_alloc = n_sql + (n_sql >> 1) + n_line + 100 as i64);
                 z_sql =
                     unsafe { realloc(z_sql as *mut (), n_alloc as u64) } as
                         *mut i8;
@@ -59535,6 +63270,8 @@ extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
             }
         }
         if n_sql != 0 {
+
+            /// This may be incomplete. Let the SQL parser deal with that.
             echo_group_input(unsafe { &*p }, z_sql as *const i8);
             err_cnt +=
                 run_one_sql_line(p, z_sql, unsafe { (*p).z_in_file },
@@ -59549,6 +63286,16 @@ extern "C" fn process_input(p: *mut ShellState, z_src_1: *const i8) -> i32 {
     }
 }
 
+///* If the text in z[] is the name of a readable file and that file appears
+///* to contain SQL text and/or dot-commands, then return true.  If z[] is
+///* not a file, or if the file is unreadable, or if the file is a database
+///* or anything else that is not SQL text and dot-commands, then return false.
+///*
+///* If the bLeaveUninit flag is set, then be sure to leave SQLite in an
+///* uninitialized state.  This means invoking sqlite3_shutdown() after any
+///* SQLite API is used.
+///*
+///* Some amount of guesswork is involved in this decision.
 extern "C" fn is_script_file(z: *const i8, b_leave_uninit_1: i32) -> i32 {
     let sz: Sqlite3Int64 = file_size(z);
     if sz <= 0 as i64 { return 0; }
@@ -59574,6 +63321,27 @@ extern "C" fn is_script_file(z: *const i8, b_leave_uninit_1: i32) -> i32 {
     return 0;
 }
 
+///* On non-Windows platforms, look for:
+///*
+///* - ${zEnvVar}/${zBaseName}
+///* - ${HOME}/${zSubdir}/${zBaseName}
+///*
+///* $zEnvVar is intended to be the name of an XDG_... environment
+///* variable, e.g. XDG_CONFIG_HOME or XDG_STATE_HOME.  If zEnvVar is
+///* NULL or getenv(zEnvVar) is NULL then fall back to the second
+///* option. If the selected option is not found in the filesystem,
+///* return 0.
+///*
+///* zSubdir may be NULL or empty, in which case ${HOME}/${zBaseName}
+///* becomes the fallback.
+///*
+///* Both zSubdir and zBaseName may contain subdirectory parts. zSubdir
+///* will conventionally be ".config" or ".local/state", which, not
+///* coincidentally, is the typical subdir of the corresponding XDG_...
+///* var with the XDG var's $HOME prefix.
+///*
+///* The returned string is obtained from sqlite3_malloc() and should be
+///* sqlite3_free()'d by the caller.
 extern "C" fn find_xdg_file(z_env_var_1: *const i8, z_subdir_1: *const i8,
     z_base_name_1: *const i8) -> *mut i8 {
     let mut z_config_file: *mut i8 = core::ptr::null_mut();
@@ -59612,6 +63380,14 @@ extern "C" fn find_xdg_file(z_env_var_1: *const i8, z_subdir_1: *const i8,
     return z_config_file;
 }
 
+///* Read input from the file sqliterc_override.  If that parameter is
+///* NULL, take it from find_xdg_file(), if found, or fall back to
+///* ~/.sqliterc.
+///*
+///* Failure to read the config is only considered a failure if
+///* sqliterc_override is not NULL, in which case this function may emit
+///* a warning or, if ::bail_on_error is true, fail fatally if the file
+///* named by sqliterc_override is not found.
 extern "C" fn process_sqliterc(p: *mut ShellState,
     sqliterc_override: *const i8) -> () {
     unsafe {
@@ -59677,6 +63453,7 @@ extern "C" fn process_sqliterc(p: *mut ShellState,
     }
 }
 
+///* Show available command line options
 static z_options: [i8; 2632] =
     [32 as i8, 32 as i8, 32 as i8, 45 as i8, 45 as i8, 32 as i8, 32 as i8,
             32 as i8, 32 as i8, 32 as i8, 32 as i8, 32 as i8, 32 as i8,
@@ -60139,6 +63916,8 @@ extern "C" fn usage(show_detail_1: i32) -> () {
     }
 }
 
+///* Internal check:  Verify that the SQLite is uninitialized.  Print a
+///* error message if it is initialized.
 extern "C" fn verify_uninitialized() -> () {
     unsafe {
         if unsafe { sqlite3_config(-1) } == 21 {
@@ -60148,6 +63927,8 @@ extern "C" fn verify_uninitialized() -> () {
     }
 }
 
+///* Initialize the state information in data
+#[allow(unused_doc_comments)]
 extern "C" fn main_init(p: *mut ShellState) -> () {
     unsafe {
         unsafe {
@@ -60167,10 +63948,14 @@ extern "C" fn main_init(p: *mut ShellState) -> () {
         unsafe { sqlite3_config(17, 1) };
         unsafe { sqlite3_config(2) };
         global_shell_state = p;
+
+        /// No \001...\002 escapes required for linenoise or when not using a
+        ///* command-line editing library
         unsafe { (*p).b_delimit_nonprint = 0 as u8 };
     }
 }
 
+///* Output text to the console in a font that attracts extra attention.
 extern "C" fn print_bold(z_text_1: *const i8) -> () {
     unsafe {
         if shell_no_color() != 0 {
@@ -60188,6 +63973,8 @@ extern "C" fn print_bold(z_text_1: *const i8) -> () {
     }
 }
 
+///* Get the argument to an --option.  Throw an error and die if no argument
+///* is available.
 extern "C" fn cmdline_option_value(argc: i32, argv: *const *mut i8, i: i32)
     -> *mut i8 {
     unsafe {
@@ -60204,6 +63991,7 @@ extern "C" fn cmdline_option_value(argc: i32, argv: *const *mut i8, i: i32)
     }
 }
 
+///* The callback from atexit().
 extern "C" fn abnormal_exit() -> () {
     unsafe {
         if seen_interrupt != 0 {
@@ -60216,6 +64004,7 @@ extern "C" fn abnormal_exit() -> () {
     }
 }
 
+/// Routine to output from vfstrace
 extern "C" fn vfstrace_out(z: *const i8, p_arg_1: *mut ()) -> i32 {
     let p: *const ShellState =
         p_arg_1 as *mut ShellState as *const ShellState;
@@ -60224,6 +64013,14 @@ extern "C" fn vfstrace_out(z: *const i8, p_arg_1: *mut ()) -> i32 {
     return 1;
 }
 
+///* This is the main entry point for the process.  Everything starts here.
+///*
+///* The "main" identifier may have been #defined to something else:
+///*
+///*     utf8_main            On Windows
+///*     fiddle_main          In Fiddle
+///*     sqlite3_shell        Other projects that use shell.c as a subroutine
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
     unsafe {
         let mut data: ShellState = unsafe { core::mem::zeroed() };
@@ -60233,36 +64030,101 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
         let mut warn_inmemory_db: i32 = 0;
         let mut read_stdin: i32 = 0;
         let mut no_init: i32 = 0;
+        /// Do not read ~/.sqliterc if true
         let mut n_cmd: i32 = 0;
         let mut n_opts_end: i32 = 0;
         let mut b_enable_vfstrace: i32 = 0;
         let mut az_cmd: *mut *mut i8 = core::ptr::null_mut();
         let mut ai_cmd: *mut i32 = core::ptr::null_mut();
         let mut z_vfs: *const i8 = core::ptr::null();
+        /// Value of -vfs command-line option
+        /// Make sure stderr is unbuffered
         let mut z_line: [i8; 100] = [0; 100];
+        /// Register a valid signal handler early, before much else is done.
+        /// Do an initial pass through the command-line arguments to locate
+        ///* the name of the database file, the name of the initialization file,
+        ///* the size of the alternative malloc heap, options affecting commands
+        ///* or SQL run from the command line, and the first command to execute.
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// Excess arguments are interpreted as SQL (or dot-commands) and
+        ///* mean that nothing is read from stdin
+        /// Need to check for batch mode here to so we can avoid printing
+        ///* informational messages (like from process_sqliterc) before
+        ///* we do the actual processing of arguments later in a second pass.
         let mut n: i32 = 0;
         let mut val: i32 = 0;
         let mut n__1: Sqlite3Int64 = 0 as Sqlite3Int64;
         let mut sz: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// If SIZE is a power of two, round it up by the PCACHE_HDRSZ
         let mut sz_hdr: i32 = 0;
         let mut n__2: i32 = 0;
         let mut sz__1: i32 = 0;
         let mut n__3: i32 = 0;
         let mut sz__2: Sqlite3Int64 = 0 as Sqlite3Int64;
+        /// UNDOCUMENTED
+        /// All remaining command-line arguments are passed to the ".archive"
+        ///* command, so ignore them
+        /// no-op - catch this on the second pass
+        /// skip over the argument
+        /// Undocumented test option.  Print the values in argv[] and exit.
+        ///* Use this to verify that any translation of the argv[], for example
+        ///* on Windows that receives wargv[] from the OS and must convert
+        ///* to UTF8 prior to calling this routine.
         let mut kk: i32 = 0;
+        /// All the sqlite3_config() calls have now been made. So it is safe
+        ///* to call sqlite3_initialize() and process any command line -vfs option.
         let mut p_vfs: *mut Sqlite3Vfs = core::ptr::null_mut();
+        /// If the VFS name is not the name of an existing VFS, but it is
+        ///* the name of a file, then try to load that file as an extension.
+        ///* Presumably the extension implements the desired VFS.
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
         let mut z_err: *mut i8 = core::ptr::null_mut();
+        /// Go ahead and open the database file if it already exists.  If the
+        ///* file does not exist, delay opening it.  This prevents empty database
+        ///* files from being created if a user mistypes the database name argument
+        ///* to the sqlite command-line tool.
+        /// Process the initialization file if there is one.  If no -init option
+        ///* is given on the command line, look for a file named ~/.sqliterc and
+        ///* try to process it.
+        /// Make a second pass through the command-line arguments and set
+        ///* options.  This second pass is delayed until after the initialization
+        ///* file is processed so that the command-line arguments will override
+        ///* settings in the initialization file.
         let mut z__1: *mut i8 = core::ptr::null_mut();
+        /// See similar code at tag-20250224-1
         let mut z_esc: *const i8 = core::ptr::null();
         let mut k: i32 = 0;
+        /// No-op
+        /// UNDOCUMENTED
+        /// Undocumented command-line option: -backslash
+        ///* Causes C-style backslash escapes to be evaluated in SQL statements
+        ///* prior to sending the SQL into SQLite.  Useful for injecting
+        ///* crazy bytes in the middle of SQL statements for testing and debugging.
+        /// No-op.  The bail_on_error flag should already be set.
+        /// Need to check for interactive override here to so that it can
+        ///* affect console setup (for Windows only) and testing thereof.
+        /// already handled
+        /// already handled
+        /// already handled
+        /// already handled
+        /// Run commands that follow -cmd first and separately from commands
+        ///* that simply appear on the command-line.  This seems goofy.  It would
+        ///* be better if all commands ran in the order that they appear.  But
+        ///* we retain the goofy behavior for historical compatibility.
+        /// Acted upon in first pass.
+        /// Run all arguments that do not begin with '-' as if they were separate
+        ///* command-line inputs, except for the argToSkip argument which contains
+        ///* the database filename.
         let mut in_saved: *mut FILE = core::ptr::null_mut();
         let mut saved_lineno: i64 = 0 as i64;
         let mut res: i32 = 0;
         let mut z_err_ctx: *mut i8 = core::ptr::null_mut();
+        /// Run commands received from standard input
         let mut z_home: *mut i8 = core::ptr::null_mut();
         let mut z_history: *mut i8 = core::ptr::null_mut();
+        ///extra-version-info
+        /// In WASM mode we have to leave the db state in place so that
+        ///* client code can "push" SQL into it after this call returns.
         let mut ii: i32 = 0;
         let mut __state: i32 = 0;
         loop {
@@ -62207,6 +66069,75 @@ extern "C" fn __main_inner(argc: i32, argv: *mut *mut i8) -> Result<(), i32> {
                 }
             }
         }
+
+        /// Do not read ~/.sqliterc if true
+        /// Value of -vfs command-line option
+        /// Make sure stderr is unbuffered
+        /// Register a valid signal handler early, before much else is done.
+        /// Do an initial pass through the command-line arguments to locate
+        ///* the name of the database file, the name of the initialization file,
+        ///* the size of the alternative malloc heap, options affecting commands
+        ///* or SQL run from the command line, and the first command to execute.
+        /// Excess arguments are interpreted as SQL (or dot-commands) and
+        ///* mean that nothing is read from stdin
+        /// Need to check for batch mode here to so we can avoid printing
+        ///* informational messages (like from process_sqliterc) before
+        ///* we do the actual processing of arguments later in a second pass.
+        /// If SIZE is a power of two, round it up by the PCACHE_HDRSZ
+        /// UNDOCUMENTED
+        /// All remaining command-line arguments are passed to the ".archive"
+        ///* command, so ignore them
+        /// no-op - catch this on the second pass
+        /// skip over the argument
+        /// Undocumented test option.  Print the values in argv[] and exit.
+        ///* Use this to verify that any translation of the argv[], for example
+        ///* on Windows that receives wargv[] from the OS and must convert
+        ///* to UTF8 prior to calling this routine.
+        /// All the sqlite3_config() calls have now been made. So it is safe
+        ///* to call sqlite3_initialize() and process any command line -vfs option.
+        /// If the VFS name is not the name of an existing VFS, but it is
+        ///* the name of a file, then try to load that file as an extension.
+        ///* Presumably the extension implements the desired VFS.
+        /// Go ahead and open the database file if it already exists.  If the
+        ///* file does not exist, delay opening it.  This prevents empty database
+        ///* files from being created if a user mistypes the database name argument
+        ///* to the sqlite command-line tool.
+        /// Process the initialization file if there is one.  If no -init option
+        ///* is given on the command line, look for a file named ~/.sqliterc and
+        ///* try to process it.
+        /// Make a second pass through the command-line arguments and set
+        ///* options.  This second pass is delayed until after the initialization
+        ///* file is processed so that the command-line arguments will override
+        ///* settings in the initialization file.
+        /// See similar code at tag-20250224-1
+        /// No-op
+        /// UNDOCUMENTED
+        /// Undocumented command-line option: -backslash
+        ///* Causes C-style backslash escapes to be evaluated in SQL statements
+        ///* prior to sending the SQL into SQLite.  Useful for injecting
+        ///* crazy bytes in the middle of SQL statements for testing and debugging.
+        /// No-op.  The bail_on_error flag should already be set.
+        /// Need to check for interactive override here to so that it can
+        ///* affect console setup (for Windows only) and testing thereof.
+        /// already handled
+        /// already handled
+        /// already handled
+        /// already handled
+        /// Run commands that follow -cmd first and separately from commands
+        ///* that simply appear on the command-line.  This seems goofy.  It would
+        ///* be better if all commands ran in the order that they appear.  But
+        ///* we retain the goofy behavior for historical compatibility.
+        /// Acted upon in first pass.
+        /// Run all arguments that do not begin with '-' as if they were separate
+        ///* command-line inputs, except for the argToSkip argument which contains
+        ///* the database filename.
+        /// Run commands received from standard input
+        ///extra-version-info
+        /// In WASM mode we have to leave the db state in place so that
+        ///* client code can "push" SQL into it after this call returns.
+        /// Clear the global data structure so that valgrind will detect memory
+        ///* leaks
+        /// SQLITE_SHELL_FIDDLE...
         unreachable!();
         return Ok(());
     }

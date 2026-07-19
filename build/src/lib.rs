@@ -2,19 +2,34 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::{Hash, HashElem};
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Value, Sqlite3Vfs, Sqlite3Vtab,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, IdListItem, Index, KeyInfo,
+    LogEst, Module, NameContext, OnOrUsing, Parse, Returning, RowSet, SColMap,
+    SQLiteThread, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    VList, VTable, Walker, WhereInfo, Window, With, YDbMask,
+};
+use crate::vdbe_h::{Mem, SubProgram, Vdbe, VdbeOp, VdbeOpList};
 
 type DarwinSizeT = u64;
 
@@ -394,6 +409,8 @@ impl Parse {
     }
 }
 
+///* The TableLock structure is only used by the sqlite3TableLock() and
+///* codeTableLocks() functions.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct TableLock {
@@ -403,6 +420,8 @@ struct TableLock {
     z_lock_name: *const i8,
 }
 
+///* Code an OP_TableLock instruction for each table locked by the
+///* statement (configured by calls to sqlite3TableLock()).
 extern "C" fn code_table_locks(p_parse_1: &Parse) -> () {
     let mut i: i32 = 0;
     let p_vdbe: *mut Vdbe = (*p_parse_1).p_vdbe;
@@ -430,7 +449,16 @@ extern "C" fn code_table_locks(p_parse_1: &Parse) -> () {
     }
 }
 
+///* This routine is called after a single SQL statement has been
+///* parsed and a VDBE program to execute that statement has been
+///* prepared.  This routine puts the finishing touches on the
+///* VDBE program and resets the pParse structure for the next
+///* parse.
+///*
+///* Note that if an error occurred, it might be the case that
+///* no VDBE code was generated.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_finish_coding(p_parse: *mut Parse) -> () {
     unsafe {
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
@@ -448,7 +476,10 @@ pub extern "C" fn sqlite3_finish_coding(p_parse: *mut Parse) -> () {
             return;
         }
         { let _ = 0; };
-        v = unsafe { (*p_parse).p_vdbe };
+
+        /// Begin by generating some termination code at the end of the
+        ///* vdbe program
+        (v = unsafe { (*p_parse).p_vdbe });
         if v == core::ptr::null_mut() {
             if unsafe { (*db).init.busy } != 0 {
                 unsafe { (*p_parse).rc = 101 };
@@ -498,6 +529,12 @@ pub extern "C" fn sqlite3_finish_coding(p_parse: *mut Parse) -> () {
                 }
             }
             unsafe { sqlite3_vdbe_add_op0(v, 72) };
+
+            /// The cookie mask contains one bit for each database file open.
+            ///* (Bit 0 is for main, bit 1 is for temp, and so forth.)  Bits are
+            ///* set for each database that is used.  Generate code to start a
+            ///* transaction on each used database and to verify the schema cookie
+            ///* on each used database.
             { let _ = 0; };
             unsafe { sqlite3_vdbe_jump_here(v, 0) };
             { let _ = 0; };
@@ -596,11 +633,18 @@ pub extern "C" fn sqlite3_finish_coding(p_parse: *mut Parse) -> () {
                     };
                 }
             }
+
+            /// Finally, jump back to the beginning of the executable code.
             unsafe { sqlite3_vdbe_goto(v, 1) };
         }
+
+        /// Get the VDBE program ready for execution
         { let _ = 0; };
         { let _ = 0; };
         if unsafe { (*p_parse).n_err } == 0 {
+
+            /// A minimum of one cursor is required if autoincrement is used
+            /// See ticket [a696379c1f08866]
             { let _ = 0; };
             unsafe { sqlite3_vdbe_make_ready(v, p_parse) };
             unsafe { (*p_parse).rc = 101 };
@@ -608,6 +652,12 @@ pub extern "C" fn sqlite3_finish_coding(p_parse: *mut Parse) -> () {
     }
 }
 
+///* Look through the list of open database files in db->aDb[] and if
+///* any have been closed, remove them from the list.  Reallocate the
+///* db->aDb[] structure to a smaller size, if possible.
+///*
+///* Entry 0 (the "main" database) and entry 1 (the "temp" database)
+///* are never candidates for being collapsed.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_collapse_database_array(db: *mut Sqlite3) -> () {
     let mut i: i32 = 0;
@@ -656,6 +706,8 @@ pub extern "C" fn sqlite3_collapse_database_array(db: *mut Sqlite3) -> () {
     }
 }
 
+///* Erase all schema information from all attached databases (including
+///* "main" and "temp") for a single database connection.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_reset_all_schemas_of_connection(db: *mut Sqlite3)
     -> () {
@@ -698,6 +750,9 @@ pub extern "C" fn sqlite3_reset_all_schemas_of_connection(db: *mut Sqlite3)
     }
 }
 
+///* Reset the schema for the database at index iDb.  Also reset the
+///* TEMP schema.  The reset is deferred if db->nSchemaLock is not zero.
+///* Deferred resets may be run by calling with iDb<0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_reset_one_schema(db: &mut Sqlite3, i_db: i32)
     -> () {
@@ -744,11 +799,15 @@ pub extern "C" fn sqlite3_reset_one_schema(db: &mut Sqlite3, i_db: i32)
     }
 }
 
+///* This routine is called when a commit occurs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_commit_internal_changes(db: &mut Sqlite3) -> () {
     (*db).m_db_flags &= !1 as u32;
 }
 
+///* Set the expression associated with a column.  This is usually
+///* the DEFAULT value, but might also be the expression that computes
+///* the value for a generated column.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_set_expr(p_parse: *mut Parse,
     p_tab: &mut Table, p_col: &mut Column, p_expr: *mut Expr) -> () {
@@ -782,6 +841,9 @@ pub extern "C" fn sqlite3_column_set_expr(p_parse: *mut Parse,
     }
 }
 
+///* Return the expression associated with a column.  The expression might be
+///* the DEFAULT clause or the AS clause of a generated column.
+///* Return NULL if the column has no associated expression.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_expr(p_tab: &Table, p_col: &Column)
     -> *mut Expr {
@@ -805,6 +867,7 @@ pub extern "C" fn sqlite3_column_expr(p_tab: &Table, p_col: &Column)
     }
 }
 
+///* Set the collating sequence name for a column.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_set_coll(db: *mut Sqlite3,
     p_col: &mut Column, z_coll: *const i8) -> () {
@@ -839,6 +902,7 @@ pub extern "C" fn sqlite3_column_set_coll(db: *mut Sqlite3,
     }
 }
 
+///* Return the collating sequence name for a column
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_column_coll(p_col: &Column) -> *const i8 {
     let mut z: *const i8 = core::ptr::null();
@@ -869,6 +933,8 @@ pub extern "C" fn sqlite3_column_coll(p_col: &Column) -> *const i8 {
     return unsafe { z.offset(1 as isize) };
 }
 
+///* Delete memory allocated for the column names of a table or view (the
+///* Table.aCol[] array).
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_delete_column_names(db: *mut Sqlite3,
     p_table: &mut Table) -> () {
@@ -918,6 +984,14 @@ pub extern "C" fn sqlite3_delete_column_names(db: *mut Sqlite3,
     }
 }
 
+///* Record the fact that we want to lock a table at run-time. 
+///*
+///* The table to be locked has root page iTab and is found in database iDb.
+///* A read or a write lock can be taken depending on isWritelock.
+///*
+///* This routine just records the fact that the lock is desired.  The
+///* code to make the lock occur is generated by a later call to
+///* codeTableLocks() which occurs during sqlite3FinishCoding().
 extern "C" fn lock_table(p_parse_1: *mut Parse, i_db_1: i32, i_tab_1: Pgno,
     is_write_lock_1: u8, z_name_1: *const i8) -> () {
     let mut p_toplevel: *mut Parse = core::ptr::null_mut();
@@ -1005,6 +1079,8 @@ pub extern "C" fn sqlite3_table_lock(p_parse: *mut Parse, i_db: i32,
     lock_table(p_parse, i_db, i_tab, is_write_lock, z_name);
 }
 
+///* Open the sqlite_schema table stored in database number iDb for
+///* writing. The table is opened using cursor 0.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_open_schema_table(p: *mut Parse, i_db: i32) -> () {
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p) };
@@ -1014,6 +1090,7 @@ pub extern "C" fn sqlite3_open_schema_table(p: *mut Parse, i_db: i32) -> () {
     if unsafe { (*p).n_tab } == 0 { unsafe { (*p).n_tab = 1 }; }
 }
 
+///* Return the PRIMARY KEY index of a table
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_primary_key_index(p_tab: &Table) -> *mut Index {
     let mut p: *mut Index = core::ptr::null_mut();
@@ -1031,6 +1108,10 @@ pub extern "C" fn sqlite3_primary_key_index(p_tab: &Table) -> *mut Index {
     return p;
 }
 
+///* Convert an table column number into a index column number.  That is,
+///* for the column iCol in the table (as defined by the CREATE TABLE statement)
+///* find the (first) offset of that column in index pIdx.  Or return -1
+///* if column iCol is not used in index pIdx.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_table_column_to_index(p_idx: &Index, i_col: i32)
     -> i32 {
@@ -1056,7 +1137,43 @@ pub extern "C" fn sqlite3_table_column_to_index(p_idx: &Index, i_col: i32)
     return -1;
 }
 
+/// Convert a table column number into a storage column number.
+///*
+///* The storage column number (0,1,2,....) is the index of the value
+///* as it appears in the record on disk.  Or, if the input column is
+///* the N-th virtual column (zero-based) then the storage number is
+///* the number of non-virtual columns in the table plus N. 
+///*
+///* The true column number is the index (0,1,2,...) of the column in
+///* the CREATE TABLE statement.
+///*
+///* If the input column is a VIRTUAL column, then it should not appear
+///* in storage.  But the value sometimes is cached in registers that
+///* follow the range of registers used to construct storage.  This
+///* avoids computing the same VIRTUAL column multiple times, and provides
+///* values for use by OP_Param opcodes in triggers.  Hence, if the
+///* input column is a VIRTUAL table, put it after all the other columns.
+///*
+///* In the following, N means "normal column", S means STORED, and
+///* V means VIRTUAL.  Suppose the CREATE TABLE has columns like this:
+///*
+///*        CREATE TABLE ex(N,S,V,N,S,V,N,S,V);
+///*                     -- 0 1 2 3 4 5 6 7 8
+///*
+///* Then the mapping from this function is as follows:
+///*
+///*    INPUTS:     0 1 2 3 4 5 6 7 8
+///*    OUTPUTS:    0 1 6 2 3 7 4 5 8
+///*
+///* So, in other words, this routine shifts all the virtual columns to
+///* the end.
+///*
+///* If SQLITE_OMIT_GENERATED_COLUMNS then there are no virtual columns and
+///* this routine is a no-op macro.  If the pTab does not have any virtual
+///* columns, then this routine is no-op that always return iCol.  If iCol
+///* is negative (indicating the ROWID column) then this routine return iCol.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_table_column_to_storage(p_tab: &Table, i_col: i16)
     -> i16 {
     let mut i: i32 = 0;
@@ -1081,10 +1198,26 @@ pub extern "C" fn sqlite3_table_column_to_storage(p_tab: &Table, i_col: i16)
     }
     if unsafe { (*(*p_tab).a_col.offset(i as isize)).col_flags } as i32 & 32
             != 0 {
+
+        /// iCol is a virtual column itself
         return ((*p_tab).n_nv_col as i32 + i - n as i32) as i16;
-    } else { return n; }
+    } else {
+
+        /// iCol is a normal or stored column
+        return n;
+    }
 }
 
+/// Convert a storage column number into a table column number.
+///*
+///* The storage column number (0,1,2,....) is the index of the value
+///* as it appears in the record on disk.  The true column number
+///* is the index (0,1,2,...) of the column in the CREATE TABLE statement.
+///*
+///* The storage column number is less than the table column number if
+///* and only there are VIRTUAL columns to the left.
+///*
+///* If SQLITE_OMIT_GENERATED_COLUMNS, this routine is a no-op macro.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_storage_column_to_table(p_tab: &Table,
     mut i_col: i16) -> i16 {
@@ -1108,6 +1241,17 @@ pub extern "C" fn sqlite3_storage_column_to_table(p_tab: &Table,
     return i_col;
 }
 
+///* Given a token, return a string that consists of the text of that
+///* token.  Space to hold the returned string
+///* is obtained from sqliteMalloc() and must be freed by the calling
+///* function.
+///*
+///* Any quotation marks (ex:  "name", 'name', [name], or `name`) that
+///* surround the body of the token are removed.
+///*
+///* Tokens are often just pointers into the original SQL text and so
+///* are not \000 terminated and are not persistent.  The returned string
+///* is \000 terminated and is persistent.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_name_from_token(db: *mut Sqlite3,
     p_name: *const Token) -> *mut i8 {
@@ -1126,6 +1270,10 @@ pub extern "C" fn sqlite3_name_from_token(db: *mut Sqlite3,
     }
 }
 
+///* Parameter zName points to a nul-terminated buffer containing the name
+///* of a database ("main", "temp" or the name of an attached db). This
+///* function returns the index of the named database in db->aDb[], or
+///* -1 if the named db cannot be found.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_find_db_name(db: &Sqlite3, z_name: *const i8)
     -> i32 {
@@ -1172,23 +1320,48 @@ pub extern "C" fn sqlite3_find_db_name(db: &Sqlite3, z_name: *const i8)
     return i;
 }
 
+///* The token *pName contains the name of a database (either "main" or
+///* "temp" or the name of an attached db). This routine returns the
+///* index of the named database in db->aDb[], or -1 if the named db
+///* does not exist.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_find_db(db: *mut Sqlite3, p_name: *mut Token)
     -> i32 {
     let mut i: i32 = 0;
+    /// Database number
     let mut z_name: *mut i8 = core::ptr::null_mut();
-    z_name = sqlite3_name_from_token(db, p_name as *const Token);
+
+    /// Name we are searching for
+    (z_name = sqlite3_name_from_token(db, p_name as *const Token));
     i = sqlite3_find_db_name(unsafe { &*db }, z_name as *const i8);
     unsafe { sqlite3_db_free(db, z_name as *mut ()) };
     return i;
 }
 
+/// The table or view or trigger name is passed to this routine via tokens
+///* pName1 and pName2. If the table name was fully qualified, for example:
+///*
+///* CREATE TABLE xxx.yyy (...);
+///*
+///* Then pName1 is set to "xxx" and pName2 "yyy". On the other hand if
+///* the table name is not fully qualified, i.e.:
+///*
+///* CREATE TABLE yyy(...);
+///*
+///* Then pName1 is set to "yyy" and pName2 is "".
+///*
+///* This routine sets the *ppUnqual pointer to point at the token (pName1 or
+///* pName2) that stores the unqualified table name.  The index of the
+///* database "xxx" is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_two_part_name(p_parse: *mut Parse,
     p_name1: *mut Token, p_name2: *mut Token, p_unqual: &mut *mut Token)
     -> i32 {
     unsafe {
         let mut i_db: i32 = 0;
+        /// Database holding the object
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
         { let _ = 0; };
         if unsafe { (*p_name2).n } > 0 as u32 {
@@ -1218,11 +1391,14 @@ pub extern "C" fn sqlite3_two_part_name(p_parse: *mut Parse,
     }
 }
 
+///* True if PRAGMA writable_schema is ON
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_writable_schema(db: &Sqlite3) -> i32 {
     return ((*db).flags & (1 | 268435456) as u64 == 1 as u64) as i32;
 }
 
+///* Return TRUE if shadow tables should be read-only in the current
+///* context.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_read_only_shadow_tables(db: &Sqlite3) -> i32 {
     if (*db).flags & 268435456 as u64 != 0 as u64 &&
@@ -1235,12 +1411,25 @@ pub extern "C" fn sqlite3_read_only_shadow_tables(db: &Sqlite3) -> i32 {
     return 0;
 }
 
+///* Locate the in-memory structure that describes a particular database
+///* table given the name of that table and (optionally) the name of the
+///* database containing the table.  Return NULL if not found.
+///*
+///* If zDatabase is 0, all databases are searched for the table and the
+///* first matching table is returned.  (No checking for duplicate table
+///* names is done.)  The search order is TEMP first, then MAIN, then any
+///* auxiliary databases added using the ATTACH command.
+///*
+///* See also sqlite3LocateTable().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_find_table(db: &Sqlite3, z_name: *const i8,
     z_database: *const i8) -> *mut Table {
     unsafe {
         let mut p: *mut Table = core::ptr::null_mut();
         let mut i: i32 = 0;
+
+        /// All mutexes are required for schema access.  Make sure we hold them.
         { let _ = 0; };
         if !(z_database).is_null() {
             {
@@ -1334,23 +1523,27 @@ pub extern "C" fn sqlite3_find_table(db: &Sqlite3, z_name: *const i8,
                 }
             }
         } else {
-            p =
+
+            /// Match against TEMP first
+            (p =
                 unsafe {
                         sqlite3_hash_find(unsafe {
                                     &raw mut (*unsafe {
                                                         (*(*db).a_db.offset(1 as isize)).p_schema
                                                     }).tbl_hash
                                 } as *const Hash, z_name)
-                    } as *mut Table;
+                    } as *mut Table);
             if !(p).is_null() { return p; }
-            p =
+
+            /// The main database is second
+            (p =
                 unsafe {
                         sqlite3_hash_find(unsafe {
                                     &raw mut (*unsafe {
                                                         (*(*db).a_db.offset(0 as isize)).p_schema
                                                     }).tbl_hash
                                 } as *const Hash, z_name)
-                    } as *mut Table;
+                    } as *mut Table);
             if !(p).is_null() { return p; }
             {
                 i = 2;
@@ -1416,11 +1609,15 @@ pub extern "C" fn sqlite3_find_table(db: &Sqlite3, z_name: *const i8,
     }
 }
 
+///* Return true if pTab is a virtual table and zName is a shadow table name
+///* for that virtual table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_is_shadow_table_of(db: &mut Sqlite3, p_tab: &Table,
     z_name: *const i8) -> i32 {
     unsafe {
         let mut n_name: i32 = 0;
+        /// Length of zName
         let mut p_mod: *const Module = core::ptr::null();
         if !((*p_tab).e_tab_type as i32 == 1) as i32 != 0 { return 0; }
         n_name = unsafe { sqlite3_strlen30((*p_tab).z_name as *const i8) };
@@ -1457,13 +1654,20 @@ pub extern "C" fn sqlite3_is_shadow_table_of(db: &mut Sqlite3, p_tab: &Table,
     }
 }
 
+///* Return true if zName is a shadow table name in the current database
+///* connection.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_shadow_table_name(db: *mut Sqlite3,
     z_name: *const i8) -> i32 {
     let mut z_tail: *const i8 = core::ptr::null();
+    /// Pointer to the last "_" in zName
     let mut p_tab: *mut Table = core::ptr::null_mut();
+    /// Table that zName is a shadow of
     let mut z_copy: *mut i8 = core::ptr::null_mut();
-    z_tail = unsafe { strrchr(z_name, '_' as i32) } as *const i8;
+
+    /// Transient copy of zName after last "_"
+    (z_tail = unsafe { strrchr(z_name, '_' as i32) } as *const i8);
     if z_tail == core::ptr::null() { return 0; }
     z_copy =
         unsafe {
@@ -1482,7 +1686,17 @@ pub extern "C" fn sqlite3_shadow_table_name(db: *mut Sqlite3,
             z_name);
 }
 
+///* This routine is used to check if the UTF-8 string zName is a legal
+///* unqualified name for a new schema object (table, index, view or
+///* trigger). All names are legal except those that begin with the string
+///* "sqlite_" (in upper, lower or mixed case). This portion of the namespace
+///* is reserved for internal use.
+///*
+///* When parsing the sqlite_schema table, this routine also checks to
+///* make sure the "type", "name", and "tbl_name" columns are consistent
+///* with the SQL.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_check_object_name(p_parse: *mut Parse,
     z_name: *const i8, z_type: *const i8, z_tbl_name: *const i8) -> i32 {
     unsafe {
@@ -1490,6 +1704,8 @@ pub extern "C" fn sqlite3_check_object_name(p_parse: *mut Parse,
         if sqlite3_writable_schema(unsafe { &*db }) != 0 ||
                     unsafe { (*db).init.imposter_table() } != 0 ||
                 (sqlite3Config.b_extra_schema_checks == 0) as i32 != 0 {
+
+            /// Skip these error checks for writable_schema=ON
             return 0;
         }
         if unsafe { (*db).init.busy } != 0 {
@@ -1515,6 +1731,8 @@ pub extern "C" fn sqlite3_check_object_name(p_parse: *mut Parse,
                     sqlite3_error_msg(p_parse,
                         c"".as_ptr() as *mut i8 as *const i8)
                 };
+
+                /// corruptSchema() will supply the error
                 return 1;
             }
         } else {
@@ -1538,6 +1756,8 @@ pub extern "C" fn sqlite3_check_object_name(p_parse: *mut Parse,
     }
 }
 
+///* Make sure the TEMP database is open and available for use.  Return
+///* the number of errors.  Leave any error messages in the pParse structure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_open_temp_database(p_parse: *mut Parse) -> i32 {
     let db: *mut Sqlite3 = unsafe { (*p_parse).db };
@@ -1574,6 +1794,10 @@ pub extern "C" fn sqlite3_open_temp_database(p_parse: *mut Parse) -> i32 {
     return 0;
 }
 
+///* Record the fact that the schema cookie will need to be verified
+///* for database iDb.  The code to actually verify the schema cookie
+///* will occur at the end of the top-level VDBE and will be generated
+///* later, by sqlite3FinishCoding().
 extern "C" fn sqlite3_code_verify_schema_at_toplevel(p_toplevel_1: *mut Parse,
     i_db_1: i32) -> () {
     { let _ = 0; };
@@ -1599,6 +1823,12 @@ pub extern "C" fn sqlite3_code_verify_schema(p_parse: *mut Parse, i_db: i32)
         } else { p_parse }, i_db);
 }
 
+///* Insert a single OP_JournalMode query opcode in order to force the
+///* prepared statement to return false for sqlite3_stmt_readonly().  This
+///* is used by CREATE TABLE IF NOT EXISTS and similar if the table already
+///* exists, so that the prepared statement for CREATE TABLE IF NOT EXISTS
+///* will return false for sqlite3_stmt_readonly() even if that statement
+///* is a read-only no-op.
 extern "C" fn sqlite3_force_not_read_only(p_parse_1: *mut Parse) -> () {
     let i_reg: i32 =
         { let __p = unsafe { &mut (*p_parse_1).n_mem }; *__p += 1; *__p };
@@ -1609,12 +1839,25 @@ extern "C" fn sqlite3_force_not_read_only(p_parse_1: *mut Parse) -> () {
     }
 }
 
+///* Locate the in-memory structure that describes
+///* a particular index given the name of that index
+///* and the name of the database that contains the index.
+///* Return NULL if not found.
+///*
+///* If zDatabase is 0, all databases are searched for the
+///* table and the first matching index is returned.  (No checking
+///* for duplicate index names is done.)  The search order is
+///* TEMP first, then MAIN, then any auxiliary databases added
+///* using the ATTACH command.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_find_index(db: *mut Sqlite3, z_name: *const i8,
     z_db: *const i8) -> *mut Index {
     unsafe {
         let mut p: *mut Index = core::ptr::null_mut();
         let mut i: i32 = 0;
+
+        /// All mutexes are required for schema access.  Make sure we hold them.
         { let _ = 0; };
         {
             i = 0;
@@ -1622,6 +1865,7 @@ pub extern "C" fn sqlite3_find_index(db: *mut Sqlite3, z_name: *const i8,
                 if !(i < unsafe { (*db).n_db }) { break '__b19; }
                 '__c19: loop {
                     let j: i32 = if i < 2 { i ^ 1 } else { i };
+                    /// Search TEMP before MAIN
                     let p_schema: *mut Schema =
                         unsafe {
                             (*unsafe { (*db).a_db.offset(j as isize) }).p_schema
@@ -1647,6 +1891,17 @@ pub extern "C" fn sqlite3_find_index(db: *mut Sqlite3, z_name: *const i8,
     }
 }
 
+///* Generate VDBE code that prepares for doing an operation that
+///* might change the database.
+///*
+///* This routine starts a new transaction if we are not already within
+///* a transaction.  If we are already within a transaction, then a checkpoint
+///* is set if the setStatement parameter is true.  A checkpoint should
+///* be set for operations that might fail (due to a constraint) part of
+///* the way through and which will need to undo some writes without having to
+///* rollback the whole transaction.  For operations where all constraints
+///* can be checked before any changes are made to the database, it is never
+///* necessary to undo a write and the checkpoint should not be set.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_begin_write_operation(p_parse: *mut Parse,
     set_statement: i32, i_db: i32) -> () {
@@ -1659,22 +1914,42 @@ pub extern "C" fn sqlite3_begin_write_operation(p_parse: *mut Parse,
     unsafe { (*p_toplevel).is_multi_write |= set_statement as u8 };
 }
 
+///* Begin constructing a new table representation in memory.  This is
+///* the first of several action routines that get called in response
+///* to a CREATE TABLE statement.  In particular, this routine is called
+///* after seeing tokens "CREATE" and "TABLE" and the table name. The isTemp
+///* flag is true if the table should be stored in the auxiliary database
+///* file instead of in the main database file.  This is normally the case
+///* when the "TEMP" or "TEMPORARY" keyword occurs in between
+///* CREATE and TABLE.
+///*
+///* The new table record is initialized and put in pParse->pNewTable.
+///* As more of the CREATE TABLE statement is parsed, additional action
+///* routines will be called to add more information to this record.
+///* At the end of the CREATE TABLE statement, the sqlite3EndTable() routine
+///* is called to complete the construction of the new table record.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_start_table(p_parse: *mut Parse,
     p_name1: *mut Token, p_name2: *mut Token, mut is_temp: i32, is_view: i32,
     is_virtual: i32, no_err: i32) -> () {
     unsafe {
         let mut z_name: *mut i8 = core::ptr::null_mut();
+        /// The name of the new table
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
         '__b20: loop {
             '__c20: loop {
                 let mut p_table: *mut Table = core::ptr::null_mut();
+                /// The name of the new table
                 let mut v: *mut Vdbe = core::ptr::null_mut();
                 let mut i_db: i32 = 0;
+                /// Database number to create the table in
                 let mut p_name: *mut Token = core::ptr::null_mut();
                 if unsafe { (*db).init.busy } != 0 &&
                         unsafe { (*db).init.new_tnum } == 1 as u32 {
-                    i_db = unsafe { (*db).init.i_db } as i32;
+
+                    /// Special case:  Parsing the sqlite_schema or sqlite_temp_schema schema
+                    (i_db = unsafe { (*db).init.i_db } as i32);
                     z_name =
                         unsafe {
                             sqlite3_db_str_dup(db,
@@ -1685,12 +1960,17 @@ pub extern "C" fn sqlite3_start_table(p_parse: *mut Parse,
                         };
                     p_name = p_name1;
                 } else {
-                    i_db =
+
+                    /// The common case
+                    (i_db =
                         sqlite3_two_part_name(p_parse, p_name1, p_name2,
-                            &mut p_name);
+                            &mut p_name));
                     if i_db < 0 { return; }
                     if (0 == 0) as i32 != 0 && is_temp != 0 &&
                                 unsafe { (*p_name2).n } > 0 as u32 && i_db != 1 {
+
+                        /// If creating a temp table, the name may not be qualified. Unless
+                        ///* the database name is "temp" anyway.
                         unsafe {
                             sqlite3_error_msg(p_parse,
                                 c"temporary table name must be unqualified".as_ptr() as
@@ -1824,6 +2104,9 @@ pub extern "C" fn sqlite3_start_table(p_parse: *mut Parse,
                     if is_virtual != 0 {
                         unsafe { sqlite3_vdbe_add_op0(v, 172) };
                     }
+
+                    /// If the file format and encoding in the database have not been set,
+                    ///* set them now.
                     { let _ = 0; };
                     reg1 =
                         {
@@ -1894,18 +2177,78 @@ pub extern "C" fn sqlite3_start_table(p_parse: *mut Parse,
                         unsafe { (*p_table).tab_flags |= 1 as u32 };
                     }
                 }
+
+                /// Normal (non-error) return.
                 return;
                 break '__c20;
             }
             if !(false) { break '__b20; }
         }
+
+        /// The name of the new table
+        /// Database number to create the table in
+        /// Unqualified name of the table to create
+        /// Special case:  Parsing the sqlite_schema or sqlite_temp_schema schema
+        /// The common case
+        /// If creating a temp table, the name may not be qualified. Unless
+        ///* the database name is "temp" anyway.
+        /// Make sure the new table name does not collide with an existing
+        ///* index or table name in the same database.  Issue an error message if
+        ///* it does. The exception is if the statement being parsed was passed
+        ///* to an sqlite3_declare_vtab() call. In that case only the column names
+        ///* and types will be used, so there is no need to test for namespace
+        ///* collisions.
+        /// Begin generating the code that will insert the table record into
+        ///* the schema table.  Note in particular that we must go ahead
+        ///* and allocate the record number for the table entry now.  Before any
+        ///* PRIMARY KEY or UNIQUE keywords are parsed.  Those keywords will cause
+        ///* indices to be created and the table record must come before the
+        ///* indices.  Hence, the record number for the table must be allocated
+        ///* now.
+        /// nullRow[] is an OP_Record encoding of a row containing 5 NULLs
+        /// If the file format and encoding in the database have not been set,
+        ///* set them now.
+        /// This just creates a place-holder record in the sqlite_schema table.
+        ///* The record created does not contain anything yet.  It will be replaced
+        ///* by the real entry in code generated at sqlite3EndTable().
+        ///*
+        ///* The rowid for the new entry is left in register pParse->u1.cr.regRowid.
+        ///* The root page of the new table is left in reg pParse->u1.cr.regRoot.
+        ///* The rowid and root page number values are needed by the code that
+        ///* sqlite3EndTable will generate.
+        /// Normal (non-error) return.
+        /// If an error occurs, we jump here
         unsafe { (*p_parse).set_check_schema(1 as Bft as u32) };
         unsafe { sqlite3_db_free(db, z_name as *mut ()) };
         return;
     }
 }
 
+///* Scan the column type name zType (length nType) and return the
+///* associated affinity type.
+///*
+///* This routine does a case-independent search of zType for the
+///* substrings in the following table. If one of the substrings is
+///* found, the corresponding affinity is returned. If zType contains
+///* more than one of the substrings, entries toward the top of
+///* the table take priority. For example, if zType is 'BLOBINT',
+///* SQLITE_AFF_INTEGER is returned.
+///*
+///* Substring     | Affinity
+///* --------------------------------
+///* 'INT'         | SQLITE_AFF_INTEGER
+///* 'CHAR'        | SQLITE_AFF_TEXT
+///* 'CLOB'        | SQLITE_AFF_TEXT
+///* 'TEXT'        | SQLITE_AFF_TEXT
+///* 'BLOB'        | SQLITE_AFF_BLOB
+///* 'REAL'        | SQLITE_AFF_REAL
+///* 'FLOA'        | SQLITE_AFF_REAL
+///* 'DOUB'        | SQLITE_AFF_REAL
+///*
+///* If none of the substrings in the above table are found,
+///* SQLITE_AFF_NUMERIC is returned.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_affinity_type(mut z_in: *const i8,
     p_col: *mut Column) -> i8 {
     unsafe {
@@ -1930,16 +2273,22 @@ pub extern "C" fn sqlite3_affinity_type(mut z_in: *const i8,
             if h ==
                     ((('c' as i32) << 24) + (('h' as i32) << 16) +
                                 (('a' as i32) << 8) + 'r' as i32) as u32 {
-                aff = 66 as i8;
+
+                /// CHAR
+                (aff = 66 as i8);
                 z_char = z_in;
             } else if h ==
                     ((('c' as i32) << 24) + (('l' as i32) << 16) +
                                 (('o' as i32) << 8) + 'b' as i32) as u32 {
-                aff = 66 as i8;
+
+                /// CLOB
+                (aff = 66 as i8);
             } else if h ==
                     ((('t' as i32) << 24) + (('e' as i32) << 16) +
                                 (('x' as i32) << 8) + 't' as i32) as u32 {
-                aff = 66 as i8;
+
+                /// TEXT
+                (aff = 66 as i8);
             } else if h ==
                         ((('b' as i32) << 24) + (('l' as i32) << 16) +
                                     (('o' as i32) << 8) + 'b' as i32) as u32 &&
@@ -1966,7 +2315,9 @@ pub extern "C" fn sqlite3_affinity_type(mut z_in: *const i8,
             } else if h & 16777215 as u32 ==
                     ((('i' as i32) << 16) + (('n' as i32) << 8) + 't' as i32) as
                         u32 {
-                aff = 68 as i8;
+
+                /// INT
+                (aff = 68 as i8);
                 break;
             }
         }
@@ -1980,6 +2331,8 @@ pub extern "C" fn sqlite3_affinity_type(mut z_in: *const i8,
                                                         *const u8).add(unsafe { *z_char.offset(0 as isize) } as u8
                                                         as usize)
                                         } as i32 & 4 != 0 {
+
+                            /// BLOB(k), VARCHAR(k), CHAR(k) -> r=(k/4+1)
                             unsafe { sqlite3_get_int32(z_char, &mut v) };
                             break;
                         }
@@ -2000,7 +2353,14 @@ pub extern "C" fn sqlite3_affinity_type(mut z_in: *const i8,
     }
 }
 
+///* Add a new column to the table currently being constructed.
+///*
+///* The parser calls this routine once for each column declaration
+///* in a CREATE TABLE statement.  sqlite3StartTable() gets called
+///* first to get things going.  Then this routine is called for each
+///* column.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_add_column(p_parse: *mut Parse, mut s_name: Token,
     mut s_type: Token) -> () {
     unsafe {
@@ -2153,6 +2513,9 @@ pub extern "C" fn sqlite3_add_column(p_parse: *mut Parse, mut s_name: Token,
                     unsafe { sqlite3_str_i_hash(z as *const i8) }
             };
             if s_type.n == 0 as u32 {
+
+                /// If there is no type specified, columns have the default affinity
+                ///* 'BLOB' with a default size of 4 bytes.
                 unsafe { (*p_col).affinity = affinity };
                 unsafe { (*p_col).set_e_c_type(e_type as u32 as u32) };
                 unsafe { (*p_col).sz_est = sz_est };
@@ -2202,6 +2565,10 @@ pub extern "C" fn sqlite3_add_column(p_parse: *mut Parse, mut s_name: Token,
     }
 }
 
+///* This routine is called by the parser while in the middle of
+///* parsing a CREATE TABLE statement.  A "NOT NULL" constraint has
+///* been seen on a column.  This routine sets the notNull flag on
+///* the column currently under construction.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_not_null(p_parse: &Parse, on_error: i32) -> () {
     let mut p: *mut Table = core::ptr::null_mut();
@@ -2239,6 +2606,7 @@ pub extern "C" fn sqlite3_add_not_null(p_parse: &Parse, on_error: i32) -> () {
     }
 }
 
+///* Tag the given column as being part of the PRIMARY KEY
 extern "C" fn make_column_part_of_primary_key(p_parse_1: *mut Parse,
     p_col_1: &mut Column) -> () {
     (*p_col_1).col_flags |= 1 as u16;
@@ -2251,6 +2619,20 @@ extern "C" fn make_column_part_of_primary_key(p_parse_1: *mut Parse,
     }
 }
 
+///* Backwards Compatibility Hack:
+///*
+///* Historical versions of SQLite accepted strings as column names in
+///* indexes and PRIMARY KEY constraints and in UNIQUE constraints.  Example:
+///*
+///*     CREATE TABLE xyz(a,b,c,d,e,PRIMARY KEY('a'),UNIQUE('b','c' COLLATE trim)
+///*     CREATE INDEX abc ON xyz('c','d' DESC,'e' COLLATE nocase DESC);
+///*
+///* This is goofy.  But to preserve backwards compatibility we continue to
+///* accept it.  This routine does the necessary conversion.  It converts
+///* the expression given in its argument from a TK_STRING into a TK_ID
+///* if the expression is just a TK_STRING with an optional COLLATE clause.
+///* If the expression is anything other than TK_STRING, the expression is
+///* unchanged.
 extern "C" fn sqlite3_string_to_id(p: &mut Expr) -> () {
     if (*p).op as i32 == 118 {
         (*p).op = 60 as u8;
@@ -2260,6 +2642,9 @@ extern "C" fn sqlite3_string_to_id(p: &mut Expr) -> () {
     }
 }
 
+///* If expression list pList contains an expression that was parsed with
+///* an explicit "NULLS FIRST" or "NULLS LAST" clause, leave an error in
+///* pParse and return non-zero. Otherwise, return zero.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_has_explicit_nulls(p_parse: *mut Parse,
     p_list: *mut ExprList) -> i32 {
@@ -2298,6 +2683,7 @@ pub extern "C" fn sqlite3_has_explicit_nulls(p_parse: *mut Parse,
     return 0;
 }
 
+///* Reclaim the memory used by an index
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_free_index(db: *mut Sqlite3, p: *mut Index) -> () {
     unsafe { sqlite3_delete_index_samples(db, p) };
@@ -2310,6 +2696,14 @@ pub extern "C" fn sqlite3_free_index(db: *mut Sqlite3, p: *mut Index) -> () {
     unsafe { sqlite3_db_free(db, p as *mut ()) };
 }
 
+///* Locate the in-memory structure that describes a particular database
+///* table given the name of that table and (optionally) the name of the
+///* database containing the table.  Return NULL if not found.  Also leave an
+///* error message in pParse->zErrMsg.
+///*
+///* The difference between this routine and sqlite3FindTable() is that this
+///* routine leaves an error message in pParse->zErrMsg where
+///* sqlite3FindTable() does not.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_locate_table(p_parse: *mut Parse, flags: u32,
     z_name: *const i8, z_dbase: *const i8) -> *mut Table {
@@ -2375,6 +2769,13 @@ pub extern "C" fn sqlite3_locate_table(p_parse: *mut Parse, flags: u32,
     return p;
 }
 
+///* Locate the table identified by *p.
+///*
+///* This is a wrapper around sqlite3LocateTable(). The difference between
+///* sqlite3LocateTable() and this function is that this function restricts
+///* the search to schema (p->pSchema) if it is not NULL. p->pSchema may be
+///* non-NULL if it is part of a view or trigger program definition. See
+///* sqlite3FixSrcList() for details.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_locate_table_item(p_parse: *mut Parse, flags: u32,
     p: &SrcItem) -> *mut Table {
@@ -2399,11 +2800,20 @@ pub extern "C" fn sqlite3_locate_table_item(p_parse: *mut Parse, flags: u32,
     }
 }
 
+///* Allocate heap space to hold an Index object with nCol columns.
+///*
+///* Increase the allocation size to provide an extra nExtra bytes
+///* of 8-byte aligned space after the Index object and return a
+///* pointer to this extra space in *ppExtra.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_allocate_index_object(db: *mut Sqlite3, n_col: i32,
     n_extra: i32, pp_extra: &mut *mut i8) -> *mut Index {
     let mut p: *mut Index = core::ptr::null_mut();
+    /// Allocated index object
     let mut n_byte: i64 = 0 as i64;
+
+    /// Bytes of space for Index object + arrays
     { let _ = 0; };
     n_byte =
         ((core::mem::size_of::<Index>() as u64 + 7 as u64 & !7 as u64) +
@@ -2413,10 +2823,15 @@ pub extern "C" fn sqlite3_allocate_index_object(db: *mut Sqlite3, n_col: i32,
                                 core::mem::size_of::<i16>() as u64 * n_col as u64 +
                             core::mem::size_of::<u8>() as u64 * n_col as u64 + 7 as u64
                     & !7 as u64)) as i64;
-    p =
+
+    /// Index.azColl
+    /// Index.aiRowLogEst
+    /// Index.aiColumn
+    /// Index.aSortOrder
+    (p =
         unsafe {
                 sqlite3_db_malloc_zero(db, (n_byte + n_extra as i64) as u64)
-            } as *mut Index;
+            } as *mut Index);
     if !(p).is_null() {
         let mut p_extra: *mut i8 =
             unsafe {
@@ -2454,6 +2869,17 @@ pub extern "C" fn sqlite3_allocate_index_object(db: *mut Sqlite3, n_col: i32,
     return p;
 }
 
+///* Return true if any of the first nKey entries of index pIdx exactly
+///* match the iCol-th entry of pPk.  pPk is always a WITHOUT ROWID
+///* PRIMARY KEY index.  pIdx is an index on the same table.  pIdx may
+///* or may not be the same index as pPk.
+///*
+///* The first nKey entries of pIdx are guaranteed to be ordinary columns,
+///* not a rowid or expression.
+///*
+///* This routine differs from hasColumn() in that both the column and the
+///* collating sequence must match for this routine, but for hasColumn() only
+///* the column name must match.
 extern "C" fn is_dup_column(p_idx_1: &Index, n_key_1: i32, p_pk_1: &Index,
     i_col_1: i32) -> i32 {
     let mut i: i32 = 0;
@@ -2488,7 +2914,24 @@ extern "C" fn is_dup_column(p_idx_1: &Index, n_key_1: i32, p_pk_1: &Index,
     return 0;
 }
 
+///* Fill the Index.aiRowEst[] array with default information - information
+///* to be used when we have not run the ANALYZE command.
+///*
+///* aiRowEst[0] is supposed to contain the number of elements in the index.
+///* Since we do not know, guess 1 million.  aiRowEst[1] is an estimate of the
+///* number of rows in the table that match any particular value of the
+///* first column of the index.  aiRowEst[2] is an estimate of the number
+///* of rows that match any particular combination of the first 2 columns
+///* of the index.  And so forth.  It must always be the case that
+///
+///*           aiRowEst[N]<=aiRowEst[N-1]
+///*           aiRowEst[N]>=1
+///*
+///* Apart from that, we have little to go on besides intuition as to
+///* how aiRowEst[] should be initialized.  The numbers generated here
+///* are based on typical values found in actual indices.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_default_row_est(p_idx: &Index) -> () {
     let a: *mut LogEst = (*p_idx).ai_row_log_est;
     let mut x: LogEst = 0 as LogEst;
@@ -2500,8 +2943,20 @@ pub extern "C" fn sqlite3_default_row_est(p_idx: &Index) -> () {
                     core::mem::size_of::<LogEst>() as u64) as i32
         } else { (*p_idx).n_key_col as i32 };
     let mut i: i32 = 0;
+
+    /// Indexes with default row estimates should not have stat1 data
     { let _ = 0; };
-    x = unsafe { (*(*p_idx).p_table).n_row_log_est };
+
+    /// Set the first entry (number of rows in the index) to the estimated
+    ///* number of rows in the table, or half the number of rows in the table
+    ///* for a partial index.
+    ///*
+    ///* 2020-05-27:  If some of the stat data is coming from the sqlite_stat1
+    ///* table but other parts we are having to guess at, then do not let the
+    ///* estimated number of rows in the table be less than 1000 (LogEst 99).
+    ///* Failure to do this can cause the indexes for which we do not have
+    ///* stat1 data to be ignored by the query planner.
+    (x = unsafe { (*(*p_idx).p_table).n_row_log_est });
     { let _ = 0; };
     if (x as i32) < 99 {
         unsafe {
@@ -2513,6 +2968,9 @@ pub extern "C" fn sqlite3_default_row_est(p_idx: &Index) -> () {
         { let _ = 0; };
     }
     unsafe { *a.offset(0 as isize) = x };
+
+    /// Estimate that a[1] is 10, a[2] is 9, a[3] is 8, a[4] is 7, a[5] is
+    ///* 6 and each subsequent value (if any) is 5.
     unsafe {
         memcpy(unsafe { &raw mut *a.offset(1 as isize) } as *mut (),
             &raw const a_val[0 as usize] as *const LogEst as *const (),
@@ -2536,6 +2994,7 @@ pub extern "C" fn sqlite3_default_row_est(p_idx: &Index) -> () {
     }
 }
 
+///* Estimate the average size of a row for an index.
 extern "C" fn estimate_index_width(p_idx_1: &mut Index) -> () {
     let mut w_index: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -2564,6 +3023,24 @@ extern "C" fn estimate_index_width(p_idx_1: &mut Index) -> () {
         unsafe { sqlite3_log_est((w_index * 4 as u32) as u64) };
 }
 
+/// Recompute the colNotIdxed field of the Index.
+///*
+///* colNotIdxed is a bitmask that has a 0 bit representing each indexed
+///* columns that are within the first 63 columns of the table and a 1 for
+///* all other bits (all columns that are not in the index).  The
+///* high-order bit of colNotIdxed is always 1.  All unindexed columns
+///* of the table have a 1.
+///*
+///* 2019-10-24:  For the purpose of this computation, virtual columns are
+///* not considered to be covered by the index, even if they are in the
+///* index, because we do not trust the logic in whereIndexExprTrans() to be
+///* able to find all instances of a reference to the indexed table column
+///* and convert them into references to the index.  Hence we always want
+///* the actual table at hand in order to recompute the virtual column, if
+///* necessary.
+///*
+///* The colNotIdxed mask is AND-ed with the SrcList.a[].colUsed mask
+///* to determine if the index is covering index.
 extern "C" fn recompute_columns_not_indexed(p_idx_1: &mut Index) -> () {
     let mut m: Bitmask = 0 as Bitmask;
     let mut j: i32 = 0;
@@ -2594,7 +3071,19 @@ extern "C" fn recompute_columns_not_indexed(p_idx_1: &mut Index) -> () {
     { let _ = 0; };
 }
 
+///* Run the parser and code generator recursively in order to generate
+///* code for the SQL statement given onto the end of the pParse context
+///* currently under construction.  Notes:
+///*
+///*   *  The final OP_Halt is not appended and other initialization
+///*      and finalization steps are omitted because those are handling by the
+///*      outermost parser.
+///*
+///*   *  Built-in SQL functions always take precedence over application-defined
+///*      SQL functions.  In other words, it is not possible to override a
+///*      built-in function.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub unsafe extern "C" fn sqlite3_nested_parse(p_parse: *mut Parse,
     z_format: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -2605,6 +3094,8 @@ pub unsafe extern "C" fn sqlite3_nested_parse(p_parse: *mut Parse,
     if unsafe { (*p_parse).n_err } != 0 { return; }
     if unsafe { (*p_parse).e_parse_mode } != 0 { return; }
     { let _ = 0; };
+
+    /// Nesting should only be of limited depth
     unsafe { ap = core::mem::transmute_copy(&__va0) };
     z_sql = unsafe { sqlite3_vm_printf(db, z_format, ap) };
     ();
@@ -2667,7 +3158,12 @@ pub unsafe extern "C" fn sqlite3_nested_parse(p_parse: *mut Parse,
     };
 }
 
+///* Return a KeyInfo structure that is appropriate for the given Index.
+///*
+///* The caller should invoke sqlite3KeyInfoUnref() on the returned object
+///* when it has finished using it.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_key_info_of_index(p_parse: *mut Parse,
     p_idx: &mut Index) -> *mut KeyInfo {
     unsafe {
@@ -2727,6 +3223,17 @@ pub extern "C" fn sqlite3_key_info_of_index(p_parse: *mut Parse,
                                                         &raw mut (*(*p_idx).p_schema).idx_hash
                                                     } as *const Hash, (*p_idx).z_name as *const i8)
                                         }).is_null() {
+
+                        /// Deactivate the index because it contains an unknown collating
+                        ///* sequence.  The only way to reactive the index is to reload the
+                        ///* schema.  Adding the missing collating sequence later does not
+                        ///* reactive the index.  The application had the chance to register
+                        ///* the missing index using the collation-needed callback.  For
+                        ///* simplicity, SQLite will not give the application a second chance.
+                        ///*
+                        ///* Except, do not do this if the index is not in the schema hash
+                        ///* table. In this case the index is currently being constructed
+                        ///* by a CREATE INDEX statement, and retrying will not help.
                         (*p_idx).set_b_no_query(1 as u32 as u32);
                         unsafe { (*p_parse).rc = 1 | 2 << 8 };
                     }
@@ -2739,6 +3246,11 @@ pub extern "C" fn sqlite3_key_info_of_index(p_parse: *mut Parse,
     }
 }
 
+///* Indicate that the statement currently under construction might write
+///* more than one entry (example: deleting one row then inserting another,
+///* inserting multiple rows in a table, or inserting a row and index entries.)
+///* If an abort occurs after some of these writes have completed, then it will
+///* be necessary to undo the completed writes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_multi_write(p_parse: *mut Parse) -> () {
     let p_toplevel: *mut Parse =
@@ -2748,6 +3260,20 @@ pub extern "C" fn sqlite3_multi_write(p_parse: *mut Parse) -> () {
     unsafe { (*p_toplevel).is_multi_write = 1 as u8 };
 }
 
+///* The code generator calls this routine if is discovers that it is
+///* possible to abort a statement prior to completion.  In order to
+///* perform this abort without corrupting the database, we need to make
+///* sure that the statement is protected by a statement transaction.
+///*
+///* Technically, we only need to set the mayAbort flag if the
+///* isMultiWrite flag was previously set.  There is a time dependency
+///* such that the abort must occur after the multiwrite.  This makes
+///* some statements involving the REPLACE conflict resolution algorithm
+///* go a little faster.  But taking advantage of this time dependency
+///* makes it more difficult to prove that the code is correct (in
+///* particular, it prevents us from writing an effective
+///* implementation of sqlite3AssertMayAbort()) and so we have chosen
+///* to take the safe route and skip the optimization.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_may_abort(p_parse: *mut Parse) -> () {
     let p_toplevel: *mut Parse =
@@ -2757,6 +3283,9 @@ pub extern "C" fn sqlite3_may_abort(p_parse: *mut Parse) -> () {
     unsafe { (*p_toplevel).set_may_abort(1 as Bft as u32) };
 }
 
+///* Code an OP_Halt that causes the vdbe to return an SQLITE_CONSTRAINT
+///* error. The onError parameter determines which (if any) of the statement
+///* and/or current transaction is rolled back.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_halt_constraint(p_parse: *mut Parse, err_code: i32,
     on_error: i32, p4: *mut i8, p4type: i8, p5_errmsg: u8) -> () {
@@ -2772,6 +3301,7 @@ pub extern "C" fn sqlite3_halt_constraint(p_parse: *mut Parse, err_code: i32,
     unsafe { sqlite3_vdbe_change_p5(v, p5_errmsg as u16) };
 }
 
+///* Code an OP_Halt due to UNIQUE or PRIMARY KEY constraint violation.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_unique_constraint(p_parse: *mut Parse,
     on_error: i32, p_idx: &Index) -> () {
@@ -2837,10 +3367,21 @@ pub extern "C" fn sqlite3_unique_constraint(p_parse: *mut Parse,
         } else { 19 | 8 << 8 }, on_error, z_err, -7 as i8, 2 as u8);
 }
 
+///* Generate code that will erase and refill index *pIdx.  This is
+///* used to initialize a newly created index or to recompute the
+///* content of an index in response to a REINDEX command.
+///*
+///* if memRootPage is not negative, it means that the index is newly
+///* created.  The register specified by memRootPage contains the
+///* root page number of the index.  If memRootPage is negative, then
+///* the index already exists and must be cleared before being refilled and
+///* the root page number of the index is taken from pIndex->tnum.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
     p_index_1: *mut Index, mem_root_page_1: i32) -> () {
     unsafe {
         let p_tab: *mut Table = unsafe { (*p_index_1).p_table };
+        /// The table that is indexed
         let i_tab: i32 =
             {
                 let __p = unsafe { &mut (*p_parse_1).n_tab };
@@ -2848,6 +3389,7 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
                 *__p += 1;
                 __t
             };
+        /// Btree cursor used for pTab
         let i_idx: i32 =
             {
                 let __p = unsafe { &mut (*p_parse_1).n_tab };
@@ -2855,15 +3397,25 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
                 *__p += 1;
                 __t
             };
+        /// Btree cursor used for pIndex
         let mut i_sorter: i32 = 0;
+        /// Cursor opened by OpenSorter (if in use)
         let mut addr1: i32 = 0;
+        /// Address of top of loop
         let mut addr2: i32 = 0;
+        /// Address to jump to for next iteration
         let mut tnum: Pgno = 0 as Pgno;
+        /// Root page of index
         let mut i_part_idx_label: i32 = 0;
+        /// Jump to this label to skip a row
         let mut v: *mut Vdbe = core::ptr::null_mut();
+        /// Generate code into this virtual machine
         let mut p_key: *mut KeyInfo = core::ptr::null_mut();
+        /// KeyInfo for index
         let mut reg_record: i32 = 0;
+        /// Register holding assembled index record
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// The database connection
         let i_db: i32 =
             unsafe {
                 sqlite3_schema_to_index(db, unsafe { (*p_index_1).p_schema })
@@ -2878,6 +3430,8 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
                 } != 0 {
             return;
         }
+
+        /// Require a write-lock on the table to perform this operation
         sqlite3_table_lock(p_parse_1, i_db, unsafe { (*p_tab).tnum }, 1 as u8,
             unsafe { (*p_tab).z_name } as *const i8);
         v = unsafe { sqlite3_get_vdbe(p_parse_1) };
@@ -2888,19 +3442,24 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
         p_key =
             sqlite3_key_info_of_index(p_parse_1, unsafe { &mut *p_index_1 });
         { let _ = 0; };
-        i_sorter =
+
+        /// Open the sorter cursor if we are to use one.
+        (i_sorter =
             {
                 let __p = unsafe { &mut (*p_parse_1).n_tab };
                 let __t = *__p;
                 *__p += 1;
                 __t
-            };
+            });
         unsafe {
             sqlite3_vdbe_add_op4(v, 121, i_sorter, 0,
                 unsafe { (*p_index_1).n_key_col } as i32,
                 unsafe { sqlite3_key_info_ref(p_key) } as *mut i8 as
                     *const i8, -9)
         };
+
+        /// Open the table. Loop through all rows of the table, inserting index
+        ///* records into the sorter.
         unsafe { sqlite3_open_table(p_parse_1, i_tab, i_db, p_tab, 114) };
         addr1 = unsafe { sqlite3_vdbe_add_op2(v, 36, i_tab, 0) };
         reg_record = unsafe { sqlite3_get_temp_reg(p_parse_1) };
@@ -2938,11 +3497,26 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
             sqlite3_unique_constraint(p_parse_1, 2, unsafe { &*p_index_1 });
             unsafe { sqlite3_vdbe_jump_here(v, j2) };
         } else {
+
+            /// Most CREATE INDEX and REINDEX statements that are not UNIQUE can not
+            ///* abort. The exception is if one of the indexed expressions contains a
+            ///* user function that throws an exception when it is evaluated. But the
+            ///* overhead of adding a statement journal to a CREATE INDEX statement is
+            ///* very small (since most of the pages written do not contain content that
+            ///* needs to be restored if the statement aborts), so we call
+            ///* sqlite3MayAbort() for all CREATE INDEX statements.
             sqlite3_may_abort(p_parse_1);
             addr2 = unsafe { sqlite3_vdbe_current_addr(v) };
         }
         unsafe { sqlite3_vdbe_add_op3(v, 135, i_sorter, reg_record, i_idx) };
         if (unsafe { (*p_index_1).b_asc_key_bug() } == 0) as i32 != 0 {
+
+            /// This OP_SeekEnd opcode makes index insert for a REINDEX go much
+            ///* faster by avoiding unnecessary seeks.  But the optimization does
+            ///* not work for UNIQUE constraint indexes on WITHOUT ROWID tables
+            ///* with DESC primary keys, since those indexes have there keys in
+            ///* a different order from the main table.
+            ///* See ticket: https://sqlite.org/src/info/bba7b69f9849b5bf
             unsafe { sqlite3_vdbe_add_op1(v, 139, i_idx) };
         }
         unsafe { sqlite3_vdbe_add_op2(v, 140, i_idx, reg_record) };
@@ -2956,6 +3530,23 @@ extern "C" fn sqlite3_refill_index(p_parse_1: *mut Parse,
     }
 }
 
+///* Generate code that will increment the schema cookie.
+///*
+///* The schema cookie is used to determine when the schema for the
+///* database changes.  After each schema change, the cookie value
+///* changes.  When a process first reads the schema it records the
+///* cookie.  Thereafter, whenever it goes to access the database,
+///* it checks the cookie to make sure the schema has not changed
+///* since it was last read.
+///*
+///* This plan is not completely bullet-proof.  It is possible for
+///* the schema to change multiple times and for the cookie to be
+///* set back to prior value.  But schema changes are infrequent
+///* and the probability of hitting the same cookie value is only
+///* 1 chance in 2^32.  So we're safe enough.
+///*
+///* IMPLEMENTATION-OF: R-34230-56049 SQLite automatically increments
+///* the schema-version whenever the schema changes.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_change_cookie(p_parse: &Parse, i_db: i32) -> () {
     unsafe {
@@ -2974,6 +3565,7 @@ pub extern "C" fn sqlite3_change_cookie(p_parse: &Parse, i_db: i32) -> () {
     }
 }
 
+///* Delete a Subquery object and its substructure.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_subquery_delete(db: *mut Sqlite3,
     p_subq: *mut Subquery) -> () {
@@ -2984,6 +3576,20 @@ pub extern "C" fn sqlite3_subquery_delete(db: *mut Sqlite3,
     }
 }
 
+///* Remove the memory data structures associated with the given
+///* Table.  No changes are made to disk by this routine.
+///*
+///* This routine just deletes the data structure.  It does not unlink
+///* the table data structure from the hash table.  But it does destroy
+///* memory structures of the indices and foreign keys associated with
+///* the table.
+///*
+///* The db parameter is optional.  It is needed if the Table object
+///* contains lookaside memory.  (Table objects in the schema do not use
+///* lookaside memory, but some ephemeral Table objects do.)  Or the
+///* db parameter can be used with db->pnBytesFreed to measure the memory
+///* used by the Table object.
+#[allow(unused_doc_comments)]
 extern "C" fn delete_table(db: *mut Sqlite3, p_table_1: *mut Table) -> () {
     unsafe {
         let mut p_index: *mut Index = core::ptr::null_mut();
@@ -3026,6 +3632,8 @@ extern "C" fn delete_table(db: *mut Sqlite3, p_table_1: *mut Table) -> () {
                     unsafe { (*p_table_1).u.view.p_select })
             };
         }
+
+        /// Delete the Table structure itself.
         sqlite3_delete_column_names(db, unsafe { &mut *p_table_1 });
         unsafe {
             sqlite3_db_free(db, unsafe { (*p_table_1).z_name } as *mut ())
@@ -3037,13 +3645,18 @@ extern "C" fn delete_table(db: *mut Sqlite3, p_table_1: *mut Table) -> () {
             sqlite3_expr_list_delete(db, unsafe { (*p_table_1).p_check })
         };
         unsafe { sqlite3_db_free(db, p_table_1 as *mut ()) };
+
+        /// Verify that no lookaside memory was used by schema tables
         { let _ = 0; };
     }
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_delete_table(db: *mut Sqlite3, p_table: *mut Table)
     -> () {
+
+    /// Do not delete the table until the reference count reaches zero.
     { let _ = 0; };
     if (p_table).is_null() as i32 != 0 { return; }
     if unsafe { (*db).pn_bytes_freed } == core::ptr::null_mut() &&
@@ -3057,6 +3670,7 @@ pub extern "C" fn sqlite3_delete_table(db: *mut Sqlite3, p_table: *mut Table)
     delete_table(db, p_table);
 }
 
+///* Delete an IdList.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_id_list_delete(db: *mut Sqlite3,
     p_list: *mut IdList) -> () {
@@ -3083,7 +3697,9 @@ pub extern "C" fn sqlite3_id_list_delete(db: *mut Sqlite3,
     unsafe { sqlite3_db_nn_free_nn(db, p_list as *mut ()) };
 }
 
+///* Delete an entire SrcList including all its substructure.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_src_list_delete(db: *mut Sqlite3,
     p_list: *mut SrcList) -> () {
     unsafe {
@@ -3099,6 +3715,8 @@ pub extern "C" fn sqlite3_src_list_delete(db: *mut Sqlite3,
             '__b36: loop {
                 if !(i < unsafe { (*p_list).n_src }) { break '__b36; }
                 '__c36: loop {
+
+                    /// Check invariants on SrcItem
                     { let _ = 0; };
                     { let _ = 0; };
                     { let _ = 0; };
@@ -3163,7 +3781,18 @@ pub extern "C" fn sqlite3_src_list_delete(db: *mut Sqlite3,
     }
 }
 
+///* Create a new index for an SQL table.  pName1.pName2 is the name of the index
+///* and pTblList is the name of the table that is to be indexed.  Both will
+///* be NULL for a primary key or an index that is created to satisfy a
+///* UNIQUE constraint.  If pTable and pIndex are NULL, use pParse->pNewTable
+///* as the table to be indexed.  pParse->pNewTable is a table that is
+///* currently being constructed by a CREATE TABLE statement.
+///*
+///* pList is a list of columns to be indexed.  pList will be NULL if this
+///* is a primary key or unique-constraint on the most recent column added
+///* to the table currently under construction.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_create_index(p_parse: *mut Parse,
     p_name1: *mut Token, p_name2: *mut Token, p_tbl_name: *mut SrcList,
     mut p_list: *mut ExprList, on_error: i32, p_start: Option<&Token>,
@@ -3172,42 +3801,168 @@ pub extern "C" fn sqlite3_create_index(p_parse: *mut Parse,
     unsafe {
         unsafe {
             let mut p_tab: *mut Table = core::ptr::null_mut();
+            /// Table to be indexed
             let mut p_index: *mut Index = core::ptr::null_mut();
+            /// The index to be created
             let mut z_name: *mut i8 = core::ptr::null_mut();
+            /// Name of the index
             let mut n_name: i32 = 0;
+            /// Number of characters in zName
             let mut i: i32 = 0;
             let mut j: i32 = 0;
             let mut s_fix: DbFixer = unsafe { core::mem::zeroed() };
+            /// For assigning database names to pTable
             let mut sort_order_mask: i32 = 0;
+            /// 1 to honor DESC in index.  0 to ignore.
             let mut db: *mut Sqlite3 = core::ptr::null_mut();
             let mut p_db: *const Db = core::ptr::null();
+            /// The specific table containing the indexed database
             let mut i_db: i32 = 0;
+            /// Index of the database that is being written
             let mut p_name: *mut Token = core::ptr::null_mut();
+            /// Unqualified name of the index to create
             let mut p_list_item: *const ExprListItem = core::ptr::null();
+            /// For looping over pList
             let mut n_extra: i32 = 0;
+            /// Space allocated for zExtra[]
             let mut n_extra_col: i32 = 0;
+            /// Number of extra columns needed
             let mut z_extra: *mut i8 = core::ptr::null_mut();
+            /// Extra space after the Index object
             let mut p_pk: *mut Index = core::ptr::null_mut();
+            /// PRIMARY KEY index for WITHOUT ROWID tables
+            ///* Find the table that is to be indexed.  Return early if not found.
+            /// Use the two-part index name to determine the database
+            ///* to search for the table. 'Fix' the table name to this db
+            ///* before looking up the table.
+            /// If the index name was unqualified, check if the table
+            ///* is a temp table. If so, set the database to 1. Do not do this
+            ///* if initializing a database schema.
+            /// Because the parser constructs pTblName from a single identifier,
+            ///* sqlite3FixSrcList can never fail.
+            ///* Find the name of the index.  Make sure there is not already another
+            ///* index or table with the same name. 
+            ///*
+            ///* Exception:  If we are reading the names of permanent indices from the
+            ///* sqlite_schema table (because some other process changed the schema) and
+            ///* one of the index names collides with the name of a temporary table or
+            ///* index, then we will continue to process this index.
+            ///*
+            ///* If pName==0 it means that we are
+            ///* dealing with a primary key or UNIQUE constraint.  We have to invent our
+            ///* own name.
             let mut n: i32 = 0;
             let mut p_loop: *const Index = core::ptr::null();
+            /// Automatic index names generated from within sqlite3_declare_vtab()
+            ///* must have names that are distinct from normal automatic index names.
+            ///* The following statement converts "sqlite3_autoindex..." into
+            ///* "sqlite3_butoindex..." in order to make the names distinct.
+            ///* The "vtab_err.test" test demonstrates the need of this statement.
+            /// Check for authorization to create an index.
             let mut z_db: *const i8 = core::ptr::null();
+            /// If pList==0, it means this routine was called to make a primary
+            ///* key out of the last column added to the table under construction.
+            ///* So create a fake list to simulate this.
             let mut prev_col: Token = unsafe { core::mem::zeroed() };
             let mut p_col: *mut Column = core::ptr::null_mut();
+            /// Figure out how many bytes of space are required to store explicitly
+            ///* specified collation sequence names.
             let mut p_expr: *const Expr = core::ptr::null();
+            ///* Allocate the index structure.
+            /// Fits in i16
+            /// Check to see if we should honor DESC requests on index columns
+            /// Honor DESC
+            /// Ignore DESC
+            /// Analyze the list of expressions that form the terms of the index and
+            ///* report any errors.  In the common case where the expression is exactly
+            ///* a table column, store that column in aiColumn[].  For general expressions,
+            ///* populate pIndex->aColExpr and store XN_EXPR (-2) in aiColumn[].
+            ///*
+            ///* TODO: Issue a warning if two or more columns of the index are identical.
+            ///* TODO: Issue a warning if the table primary key is used as part of the
+            ///* index key.
             let mut p_c_expr: *const Expr = core::ptr::null();
+            /// The i-th index expression
             let mut requested_sort_order: i32 = 0;
+            /// ASC or DESC on the i-th expression
             let mut z_coll: *const i8 = core::ptr::null();
+            /// Collation sequence name
             let mut n_coll: i32 = 0;
+            /// Append the table key to the end of the index.  For WITHOUT ROWID
+            ///* tables (when pPk!=0) this will be the declared PRIMARY KEY.  For
+            ///* normal tables (when pPk==0) this will be the rowid.
             let mut x: i32 = 0;
+            /// If this index contains every column of its table, then mark
+            ///* it as a covering index
+            /// This routine has been called to create an automatic index as a
+            ///* result of a PRIMARY KEY or UNIQUE clause on a column definition, or
+            ///* a PRIMARY KEY or UNIQUE clause following the column definitions.
+            ///* i.e. one of:
+            ///*
+            ///* CREATE TABLE t(x PRIMARY KEY, y);
+            ///* CREATE TABLE t(x, y, UNIQUE(x, y));
+            ///*
+            ///* Either way, check to see if the table already has such an index. If
+            ///* so, don't bother creating this one. This only applies to
+            ///* automatically created indices. Users can do as they wish with
+            ///* explicit indices.
+            ///*
+            ///* Two UNIQUE or PRIMARY KEY constraints are considered equivalent
+            ///* (and thus suppressing the second one) even if they have different
+            ///* sort orders.
+            ///*
+            ///* If there are different collating sequences or if the columns of
+            ///* the constraint occur in different orders, then the constraints are
+            ///* considered distinct and both result in separate indices.
             let mut p_idx: *mut Index = core::ptr::null_mut();
             let mut k: i32 = 0;
             let mut z1: *const i8 = core::ptr::null();
             let mut z2: *const i8 = core::ptr::null();
+            /// This constraint creates the same index as a previous
+            ///* constraint specified somewhere in the CREATE TABLE statement.
+            ///* However the ON CONFLICT clauses are different. If both this
+            ///* constraint and the previous equivalent constraint have explicit
+            ///* ON CONFLICT clauses this is an error. Otherwise, use the
+            ///* explicitly specified behavior for the index.
+            /// Link the new Index structure to its table and to the other
+            ///* in-memory database structures.
             let mut p: *const Index = core::ptr::null();
+            /// Malloc must have failed
+            /// If this is the initial CREATE INDEX statement (or CREATE TABLE if the
+            ///* index is an implied index for a UNIQUE or PRIMARY KEY constraint) then
+            ///* emit code to allocate the index rootpage on disk and make an entry for
+            ///* the index in the sqlite_schema table and populate the index with
+            ///* content.  But, do not do this if we are simply reading the sqlite_schema
+            ///* table to parse the schema, or if this index is the PRIMARY KEY index
+            ///* of a WITHOUT ROWID table.
+            ///*
+            ///* If pTblName==0 it means this index is generated as an implied PRIMARY KEY
+            ///* or UNIQUE index in a CREATE TABLE statement.  Since the table
+            ///* has just been created, it contains no data and the index initialization
+            ///* step can be skipped.
             let mut v: *mut Vdbe = core::ptr::null_mut();
             let mut z_stmt: *mut i8 = core::ptr::null_mut();
             let mut i_mem: i32 = 0;
+            /// Create the rootpage for the index using CreateIndex. But before
+            ///* doing so, code a Noop instruction and store its address in
+            ///* Index.tnum. This is required in case this index is actually a
+            ///* PRIMARY KEY and the table is actually a WITHOUT ROWID table. In
+            ///* that case the convertToWithoutRowidTable() routine will replace
+            ///* the Noop with a Goto to jump over the VDBE code generated below.
+            /// Gather the complete text of the CREATE INDEX statement into
+            ///* the zStmt variable
             let mut n__1: i32 = 0;
+            /// A named index with an explicit CREATE INDEX statement
+            /// An automatic index created by a PRIMARY KEY or UNIQUE constraint */
+            ///        /* zStmt = sqlite3MPrintf("");
+            /// Add an entry in sqlite_schema for this index
+            /// Fill the index with data and reparse the schema. Code an OP_Expire
+            ///* to invalidate all pre-compiled statements.
+            /// Clean up before exiting
+            /// Ensure all REPLACE indexes on pTab are at the end of the pIndex list.
+            ///* The list was already ordered when this routine was entered, so at this
+            ///* point at most a single index (the newly added index) will be out of
+            ///* order.  So we have to reorder at most one index.
             let mut pp_from: *mut *mut Index = core::ptr::null_mut();
             let mut p_this: *mut Index = core::ptr::null_mut();
             let mut p_next: *mut Index = core::ptr::null_mut();
@@ -4616,6 +5371,22 @@ pub extern "C" fn sqlite3_create_index(p_parse: *mut Parse,
     }
 }
 
+///* Designate the PRIMARY KEY for the table.  pList is a list of names
+///* of columns that form the primary key.  If pList is NULL, then the
+///* most recently added column of the table is the primary key.
+///*
+///* A table can have at most one primary key.  If the table already has
+///* a primary key (and this is the second primary key) then create an
+///* error.
+///*
+///* If the PRIMARY KEY is on a single column whose datatype is INTEGER,
+///* then we will try to use that column as the rowid.  Set the Table.iPKey
+///* field of the table under construction to be the index of the
+///* INTEGER PRIMARY KEY column.  Table.iPKey is set to -1 if there is
+///* no INTEGER PRIMARY KEY.
+///*
+///* If the key is not an INTEGER PRIMARY KEY, then create a unique
+///* index for the key.  No index is created for INTEGER PRIMARY KEYs.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_primary_key(p_parse: *mut Parse,
     mut p_list: *mut ExprList, on_error: i32, auto_inc: i32, sort_order: i32)
@@ -4836,6 +5607,7 @@ pub extern "C" fn sqlite3_add_primary_key(p_parse: *mut Parse,
     }
 }
 
+///* Add a new CHECK constraint to the table currently under construction.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_check_constraint(p_parse: *mut Parse,
     p_check_expr: *mut Expr, mut z_start: *const i8, mut z_end: *const i8)
@@ -4925,7 +5697,16 @@ pub extern "C" fn sqlite3_add_check_constraint(p_parse: *mut Parse,
     }
 }
 
+///* The expression is the default value for the most recently added column
+///* of the table currently under construction.
+///*
+///* Default value expressions must be constant.  Raise an exception if this
+///* is not the case.
+///*
+///* This routine is called by the parser while in the middle of
+///* parsing a CREATE TABLE statement.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_add_default_value(p_parse: *mut Parse,
     p_expr: *mut Expr, z_start: *const i8, z_end: *const i8) -> () {
     unsafe {
@@ -4959,6 +5740,8 @@ pub extern "C" fn sqlite3_add_default_value(p_parse: *mut Parse,
                                 *mut i8 as *const i8)
                 };
             } else {
+                /// A copy of pExpr is used instead of the original, as pExpr contains
+                ///* tokens that point to volatile memory.
                 let mut x: Expr = unsafe { core::mem::zeroed() };
                 let mut p_dflt_expr: *mut Expr = core::ptr::null_mut();
                 unsafe {
@@ -4986,12 +5769,16 @@ pub extern "C" fn sqlite3_add_default_value(p_parse: *mut Parse,
     }
 }
 
+///* Set the collation function of the most recently parsed table column
+///* to the CollSeq given.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_add_collate_type(p_parse: *mut Parse,
     p_token: *mut Token) -> () {
     let mut p: *const Table = core::ptr::null();
     let mut i: i32 = 0;
     let mut z_coll: *mut i8 = core::ptr::null_mut();
+    /// Dequoted name of collation sequence
     let mut db: *mut Sqlite3 = core::ptr::null_mut();
     if { p = unsafe { (*p_parse).p_new_table }; p } == core::ptr::null_mut()
             || unsafe { (*p_parse).e_parse_mode } as i32 >= 2 {
@@ -5033,6 +5820,8 @@ pub extern "C" fn sqlite3_add_collate_type(p_parse: *mut Parse,
     unsafe { sqlite3_db_free(db, z_coll as *mut ()) };
 }
 
+/// Change the most recently parsed column to be a GENERATED ALWAYS AS
+///* column.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_generated(p_parse: *mut Parse,
     mut p_expr: *mut Expr, p_type: *mut Token) -> () {
@@ -5203,6 +5992,9 @@ pub extern "C" fn sqlite3_add_generated(p_parse: *mut Parse,
     }
 }
 
+///* Resize an Index object to hold N columns total.  Return SQLITE_OK
+///* on success and SQLITE_NOMEM on an OOM error.
+#[allow(unused_doc_comments)]
 extern "C" fn resize_index_object(p_parse_1: &Parse, p_idx_1: &mut Index,
     n_1: i32) -> i32 {
     let mut z_extra: *mut i8 = core::ptr::null_mut();
@@ -5257,10 +6049,15 @@ extern "C" fn resize_index_object(p_parse_1: &Parse, p_idx_1: &mut Index,
     };
     (*p_idx_1).a_sort_order = z_extra as *mut u8;
     (*p_idx_1).n_column = n_1 as u16;
+
+    /// See tag-20250221-1 above for proof of safety
     (*p_idx_1).set_is_resized(1 as u32 as u32);
     return 0;
 }
 
+/// Return true if column number x is any of the first nCol entries of aiCol[].
+///* This is used to determine if the column number x appears in any of the
+///* first nCol entries of an index.
 extern "C" fn has_column(mut ai_col_1: *const i16, mut n_col_1: i32, x: i32)
     -> i32 {
     while { let __p = &mut n_col_1; let __t = *__p; *__p -= 1; __t } > 0 {
@@ -5279,6 +6076,29 @@ extern "C" fn has_column(mut ai_col_1: *const i16, mut n_col_1: i32, x: i32)
     return 0;
 }
 
+///* This routine runs at the end of parsing a CREATE TABLE statement that
+///* has a WITHOUT ROWID clause.  The job of this routine is to convert both
+///* internal schema data structures and the generated VDBE code so that they
+///* are appropriate for a WITHOUT ROWID table instead of a rowid table.
+///* Changes include:
+///*
+///*     (1)  Set all columns of the PRIMARY KEY schema object to be NOT NULL.
+///*     (2)  Convert P3 parameter of the OP_CreateBtree from BTREE_INTKEY
+///*          into BTREE_BLOBKEY.
+///*     (3)  Bypass the creation of the sqlite_schema table entry
+///*          for the PRIMARY KEY as the primary key index is now
+///*          identified by the sqlite_schema table entry of the table itself.
+///*     (4)  Set the Index.tnum of the PRIMARY KEY Index object in the
+///*          schema to the rootpage from the main table.
+///*     (5)  Add all table columns to the PRIMARY KEY Index object
+///*          so that the PRIMARY KEY is a covering index.  The surplus
+///*          columns are part of KeyInfo.nAllField and are not used for
+///*          sorting or lookup or uniqueness checks.
+///*     (6)  Replace the rowid tail on all automatically generated UNIQUE
+///*          indices with the PRIMARY KEY columns.
+///*
+///* For virtual tables, only (1) is performed.
+#[allow(unused_doc_comments)]
 extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
     p_tab_1: *mut Table) -> () {
     unsafe {
@@ -5318,6 +6138,9 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
                 }
                 unsafe { (*p_tab_1).tab_flags |= 2048 as u32 };
             }
+
+            /// Convert the P3 operand of the OP_CreateBtree opcode from BTREE_INTKEY
+            ///* into BTREE_BLOBKEY.
             { let _ = 0; };
             if unsafe { (*p_parse_1).u1.cr.addr_cr_tab } != 0 {
                 { let _ = 0; };
@@ -5444,6 +6267,8 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
                         unsafe { (*p_pk).tnum } as i32, 9 as u8)
                 };
             }
+
+            /// The root page of the PRIMARY KEY is the table root page
             unsafe { (*p_pk).tnum = unsafe { (*p_tab_1).tnum } };
             {
                 p_idx = unsafe { (*p_tab_1).p_index };
@@ -5470,6 +6295,8 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
                             }
                         }
                         if n == 0 {
+
+                            /// This index is a superset of the primary key
                             unsafe {
                                 (*p_idx).n_column = unsafe { (*p_idx).n_key_col }
                             };
@@ -5499,6 +6326,8 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
                                         if unsafe {
                                                     *unsafe { (*p_pk).a_sort_order.offset(i as isize) }
                                                 } != 0 {
+
+                                            /// See ticket https://sqlite.org/src/info/bba7b69f9849b5bf
                                             unsafe { (*p_idx).set_b_asc_key_bug(1 as u32 as u32) };
                                         }
                                         { let __p = &mut j; let __t = *__p; *__p += 1; __t };
@@ -5515,7 +6344,9 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
                     p_idx = unsafe { (*p_idx).p_next };
                 }
             }
-            n_extra = 0;
+
+            /// Add all table columns to the PRIMARY KEY index
+            (n_extra = 0);
             {
                 i = 0;
                 '__b52: loop {
@@ -5579,6 +6410,7 @@ extern "C" fn convert_to_without_rowid_table(p_parse_1: *mut Parse,
     }
 }
 
+///* Estimate the total row width for a table.
 extern "C" fn estimate_table_width(p_tab_1: &mut Table) -> () {
     let mut w_table: u32 = 0 as u32;
     let mut p_tab_col: *const Column = core::ptr::null();
@@ -5612,6 +6444,12 @@ extern "C" fn estimate_table_width(p_tab_1: &mut Table) -> () {
         unsafe { sqlite3_log_est((w_table * 4 as u32) as u64) };
 }
 
+///* Measure the number of characters needed to output the given
+///* identifier.  The number returned includes any quotes used
+///* but does not include the null terminator.
+///*
+///* The estimate is conservative.  It might be larger that what is
+///* really needed.
 extern "C" fn ident_length(mut z: *const i8) -> i64 {
     let mut n: i64 = 0 as i64;
     {
@@ -5638,6 +6476,17 @@ extern "C" fn ident_length(mut z: *const i8) -> i64 {
     return n + 2 as i64;
 }
 
+///* The first parameter is a pointer to an output buffer. The second
+///* parameter is a pointer to an integer that contains the offset at
+///* which to write into the output buffer. This function copies the
+///* nul-terminated string pointed to by the third parameter, zSignedIdent,
+///* to the specified offset in the buffer and updates *pIdx to refer
+///* to the first byte after the last byte written before returning.
+///*
+///* If the string zSignedIdent consists entirely of alphanumeric
+///* characters, does not begin with a digit and is not an SQL keyword,
+///* then it is copied to the output buffer exactly as it is. Otherwise,
+///* it is quoted using double-quotes.
 extern "C" fn ident_put(z: *mut i8, p_idx_1: &mut i32,
     z_signed_ident_1: *mut i8) -> () {
     unsafe {
@@ -5724,6 +6573,10 @@ extern "C" fn ident_put(z: *mut i8, p_idx_1: &mut i32,
     }
 }
 
+///* Generate a CREATE TABLE statement appropriate for the given
+///* table.  Memory to hold the text of the statement is obtained
+///* from sqliteMalloc() and must be freed by the calling function.
+#[allow(unused_doc_comments)]
 extern "C" fn create_table_stmt(db: *mut Sqlite3, p: &Table) -> *mut i8 {
     unsafe {
         let mut i: i32 = 0;
@@ -5795,6 +6648,12 @@ extern "C" fn create_table_stmt(db: *mut Sqlite3, p: &Table) -> *mut i8 {
             '__b59: loop {
                 if !(i < (*p).n_col as i32) { break '__b59; }
                 '__c59: loop {
+                    /// SQLITE_AFF_BLOB
+                    /// SQLITE_AFF_TEXT
+                    /// SQLITE_AFF_NUMERIC
+                    /// SQLITE_AFF_INTEGER
+                    /// SQLITE_AFF_REAL
+                    /// SQLITE_AFF_FLEXNUM
                     let mut z_type: *const i8 = core::ptr::null();
                     len = unsafe { sqlite3_strlen30(z_sep as *const i8) };
                     { let _ = 0; };
@@ -5843,14 +6702,36 @@ extern "C" fn create_table_stmt(db: *mut Sqlite3, p: &Table) -> *mut i8 {
     }
 }
 
+///* This routine is called to report the final ")" that terminates
+///* a CREATE TABLE statement.
+///*
+///* The table structure that other action routines have been building
+///* is added to the internal hash tables, assuming no errors have
+///* occurred.
+///*
+///* An entry for the table is made in the schema table on disk, unless
+///* this is a temporary table or db->init.busy==1.  When db->init.busy==1
+///* it means we are reading the sqlite_schema table because we just
+///* connected to the database or because the sqlite_schema table has
+///* recently changed, so the entry for this table already exists in
+///* the sqlite_schema table.  We do not want to create it again.
+///*
+///* If the pSelect argument is not NULL, it means that this routine
+///* was called to create a table generated from a
+///* "CREATE TABLE ... AS SELECT ..." statement.  The column names of
+///* the new table will match the result set of the SELECT.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
     mut p_cons: *mut Token, p_end: *mut Token, tab_opts: u32,
     p_select: *mut Select) -> () {
     unsafe {
         let mut p: *mut Table = core::ptr::null_mut();
+        /// The new table
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+        /// The database connection
         let mut i_db: i32 = 0;
+        /// Database in which the table lives
         let mut p_idx: *mut Index = core::ptr::null_mut();
         if p_end == core::ptr::null_mut() && p_select == core::ptr::null_mut()
             {
@@ -5954,6 +6835,9 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                     core::ptr::null_mut(), unsafe { (*p).p_check })
             };
             if unsafe { (*p_parse).n_err } != 0 {
+
+                /// If errors are seen, delete the CHECK constraints now, else they might
+                ///* actually be used if PRAGMA writable_schema=ON is set.
                 unsafe {
                     sqlite3_expr_list_delete(db, unsafe { (*p).p_check })
                 };
@@ -5980,6 +6864,13 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                                         sqlite3_resolve_self_reference(p_parse, p, 8, p_x,
                                             core::ptr::null_mut())
                                     } != 0 {
+
+                                /// If there are errors in resolving the expression, change the
+                                ///* expression to a NULL.  This prevents code generators that operate
+                                ///* on the expression from inserting extra parts into the expression
+                                ///* tree that have been allocated from lookaside memory, which is
+                                ///* illegal in a schema and will lead to errors or heap corruption
+                                ///* when the database connection closes.
                                 sqlite3_column_set_expr(p_parse, unsafe { &mut *p },
                                     unsafe { &mut *unsafe { (*p).a_col.offset(ii as isize) } },
                                     unsafe {
@@ -6003,6 +6894,8 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                 return;
             }
         }
+
+        /// Estimate the average row size for the table and for all implied indices
         estimate_table_width(unsafe { &mut *p });
         {
             p_idx = unsafe { (*p).p_index };
@@ -6019,26 +6912,41 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
             let mut n: i32 = 0;
             let mut v: *mut Vdbe = core::ptr::null_mut();
             let mut z_type: *mut i8 = core::ptr::null_mut();
+            /// "view" or "table"
             let mut z_type2: *mut i8 = core::ptr::null_mut();
+            /// "VIEW" or "TABLE"
             let mut z_stmt: *mut i8 = core::ptr::null_mut();
-            v = unsafe { sqlite3_get_vdbe(p_parse) };
+
+            /// Text of the CREATE TABLE or CREATE VIEW statement
+            (v = unsafe { sqlite3_get_vdbe(p_parse) });
             if v == core::ptr::null_mut() { return; }
             unsafe { sqlite3_vdbe_add_op1(v, 124, 0) };
             if unsafe { (*p).e_tab_type } as i32 == 0 {
-                z_type = c"table".as_ptr() as *mut i8;
+
+                /// A regular table
+                (z_type = c"table".as_ptr() as *mut i8);
                 z_type2 = c"TABLE".as_ptr() as *mut i8;
             } else {
-                z_type = c"view".as_ptr() as *mut i8;
+
+                /// A view
+                (z_type = c"view".as_ptr() as *mut i8);
                 z_type2 = c"VIEW".as_ptr() as *mut i8;
             }
             if !(p_select).is_null() {
                 let mut dest: SelectDest = unsafe { core::mem::zeroed() };
+                /// Where the SELECT should store results
                 let mut reg_yield: i32 = 0;
+                /// Register holding co-routine entry-point
                 let mut addr_top: i32 = 0;
+                /// Top of the co-routine
                 let mut reg_rec: i32 = 0;
+                /// A record to be insert into the new table
                 let mut reg_rowid: i32 = 0;
+                /// Rowid of the next row to insert
                 let mut addr_ins_loop: i32 = 0;
+                /// Top of the loop for inserting rows
                 let mut p_sel_tab: *mut Table = core::ptr::null_mut();
+                /// A table that describes the SELECT results
                 let mut i_csr: i32 = 0;
                 if unsafe { (*p_parse).e_parse_mode } as i32 != 0 {
                     unsafe { (*p_parse).rc = 1 };
@@ -6150,6 +7058,10 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                             n, unsafe { (*p_parse).s_name_token.z })
                     };
             }
+
+            /// A slot for the record has already been allocated in the
+            ///* schema table.  We just need to update that slot with all
+            ///* the information we've collected.
             { let _ = 0; };
             unsafe {
                 sqlite3_nested_parse(p_parse,
@@ -6180,6 +7092,8 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                     };
                 }
             }
+
+            /// Reparse everything to update our internal data structures
             unsafe {
                 sqlite3_vdbe_add_parse_schema_op(v, i_db,
                     unsafe {
@@ -6214,11 +7128,17 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
                     } as *mut Table;
             if !(p_old).is_null() {
                 { let _ = 0; };
+
+                /// Malloc must have failed inside HashInsert()
                 unsafe { sqlite3_oom_fault(db) };
                 return;
             }
             unsafe { (*p_parse).p_new_table = core::ptr::null_mut() };
             unsafe { (*db).m_db_flags |= 1 as u32 };
+
+            /// If this is the magic sqlite_sequence table used by autoincrement,
+            ///* then record a pointer to this table in the main database structure
+            ///* so that INSERT can find the table easily.
             { let _ = 0; };
             if unsafe {
                         strcmp(unsafe { (*p).z_name } as *const i8,
@@ -6247,6 +7167,7 @@ pub extern "C" fn sqlite3_end_table(p_parse: *mut Parse,
     }
 }
 
+///* Clean up the data structures associated with the RETURNING clause.
 extern "C" fn sqlite3_delete_returning(db: *mut Sqlite3, p_arg_1: *mut ())
     -> () {
     unsafe {
@@ -6270,6 +7191,20 @@ extern "C" fn sqlite3_delete_returning(db: *mut Sqlite3, p_arg_1: *mut ())
     }
 }
 
+///* Add the RETURNING clause to the parse currently underway.
+///*
+///* This routine creates a special TEMP trigger that will fire for each row
+///* of the DML statement.  That TEMP trigger contains a single SELECT
+///* statement with a result set that is the argument of the RETURNING clause.
+///* The trigger has the Trigger.bReturning flag and an opcode of
+///* TK_RETURNING instead of TK_SELECT, so that the trigger code generator
+///* knows to handle it specially.  The TEMP trigger is automatically
+///* removed at the end of the parse.
+///*
+///* When this routine is called, we do not yet know if the RETURNING clause
+///* is attached to a DELETE, INSERT, or UPDATE, so construct it as a
+///* RETURNING trigger instead.  It will then be converted into the appropriate
+///* type on the first call to sqlite3TriggersExist().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_add_returning(p_parse: *mut Parse,
     p_list: *mut ExprList) -> () {
@@ -6354,6 +7289,7 @@ pub extern "C" fn sqlite3_add_returning(p_parse: *mut Parse,
     }
 }
 
+///* The parser calls this routine in order to create a new VIEW
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_view(p_parse: *mut Parse, p_begin: &Token,
     p_name1: *mut Token, p_name2: *mut Token, p_c_names: *mut ExprList,
@@ -6565,6 +7501,7 @@ pub extern "C" fn sqlite3_create_view(p_parse: *mut Parse, p_begin: &Token,
     }
 }
 
+///* Assign VdbeCursor index numbers to all tables in a SrcList
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_assign_cursors(p_parse: *mut Parse,
     p_list: *mut SrcList) -> () {
@@ -6619,17 +7556,28 @@ pub extern "C" fn sqlite3_src_list_assign_cursors(p_parse: *mut Parse,
     }
 }
 
+///* The Table structure pTable is really a VIEW.  Fill in the names of
+///* the columns of the view in the pTable structure.  Return non-zero if
+///* there are errors.  If an error is seen an error message is left
+///* in pParse->zErrMsg.
+#[allow(unused_doc_comments)]
 extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
     p_table_1: *mut Table) -> i32 {
     unsafe {
         let mut p_sel_tab: *mut Table = core::ptr::null_mut();
+        /// A fake table from which we get the result set
         let mut p_sel: *mut Select = core::ptr::null_mut();
+        /// Copy of the SELECT that implements the view
         let mut n_err: i32 = 0;
+        /// Number of errors encountered
         let db: *mut Sqlite3 = unsafe { (*p_parse_1).db };
+        /// Database connection for malloc errors
         let mut rc: i32 = 0;
         let mut x_auth:
                 Option<unsafe extern "C" fn(*mut (), i32, *const i8,
                     *const i8, *const i8, *const i8) -> i32> = None;
+
+        /// Saved xAuth pointer
         { let _ = 0; };
         if unsafe { (*p_table_1).e_tab_type } as i32 == 1 {
             {
@@ -6647,6 +7595,10 @@ extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
             };
             return rc;
         }
+
+        /// A positive nCol means the columns names for this view are
+        ///* already known.  This routine is not called unless either the
+        ///* table is virtual or nCol is zero.
         { let _ = 0; };
         if (unsafe { (*p_table_1).n_col } as i32) < 0 {
             unsafe {
@@ -6657,6 +7609,13 @@ extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
             return 1;
         }
         { let _ = 0; };
+
+        /// If we get this far, it means we need to compute the table names.
+        ///* Note that the call to sqlite3ResultSetOfSelect() will expand any
+        ///* "*" elements in the results set of the view and will assign cursors
+        ///* to the elements of the FROM clause.  But we do not want these changes
+        ///* to be permanent.  So the computation is done on a copy of the SELECT
+        ///* statement that defines the view.
         { let _ = 0; };
         p_sel =
             unsafe {
@@ -6691,6 +7650,12 @@ extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
                 unsafe { (*p_table_1).n_col = 0 as i16 };
                 { let __p = &mut n_err; let __t = *__p; *__p += 1; __t };
             } else if !(unsafe { (*p_table_1).p_check }).is_null() {
+
+                /// CREATE VIEW name(arglist) AS ...
+                ///* The names of the columns in the table are taken from
+                ///* arglist which is stored in pTable->pCheck.  The pCheck field
+                ///* normally holds CHECK constraints on an ordinary table, but for
+                ///* a VIEW it holds the list of column names.
                 unsafe {
                     sqlite3_columns_from_expr_list(p_parse_1,
                         unsafe { (*p_table_1).p_check },
@@ -6707,6 +7672,9 @@ extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
                     };
                 }
             } else {
+
+                /// CREATE VIEW name AS...  without an argument list.  Construct
+                ///* the column names from the SELECT statement that defines the view.
                 { let _ = 0; };
                 unsafe { (*p_table_1).n_col = unsafe { (*p_sel_tab).n_col } };
                 unsafe { (*p_table_1).a_col = unsafe { (*p_sel_tab).a_col } };
@@ -6742,6 +7710,8 @@ extern "C" fn view_get_column_names(p_parse_1: *mut Parse,
         if unsafe { (*db).malloc_failed } != 0 {
             sqlite3_delete_column_names(db, unsafe { &mut *p_table_1 });
         }
+
+        /// SQLITE_OMIT_VIEW
         return n_err + unsafe { (*p_parse_1).n_err };
     }
 }
@@ -6757,6 +7727,8 @@ pub extern "C" fn sqlite3_view_get_column_names(p_parse: *mut Parse,
     return view_get_column_names(p_parse, p_table);
 }
 
+///* If argument zDb is NULL, then call sqlite3CodeVerifySchema() for each
+///* attached database. Otherwise, invoke it for the database named zDb only.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_code_verify_named_schema(p_parse: *mut Parse,
     z_db: *const i8) -> () {
@@ -6787,6 +7759,7 @@ pub extern "C" fn sqlite3_code_verify_named_schema(p_parse: *mut Parse,
     }
 }
 
+///* Return true if it is not allowed to drop the given table
 extern "C" fn table_may_not_be_dropped(db: *mut Sqlite3, p_tab_1: &Table)
     -> i32 {
     if unsafe {
@@ -6818,6 +7791,8 @@ extern "C" fn table_may_not_be_dropped(db: *mut Sqlite3, p_tab_1: &Table)
     return 0;
 }
 
+///* Remove entries from the sqlite_statN tables (for N in (1,2,3))
+///* after a DROP INDEX or DROP TABLE command.
 extern "C" fn sqlite3_clear_stat_tables(p_parse_1: *mut Parse, i_db_1: i32,
     z_type_1: *const i8, z_name_1: *const i8) -> () {
     let mut i: i32 = 0;
@@ -6856,6 +7831,11 @@ extern "C" fn sqlite3_clear_stat_tables(p_parse_1: *mut Parse, i_db_1: i32,
     }
 }
 
+///* Write code to erase the table with root-page iTable from database iDb.
+///* Also write code to modify the sqlite_schema table and internal schema
+///* if a root-page of another table is moved by the btree-layer whilst
+///* erasing iTable (this can happen with an auto-vacuum database).
+#[allow(unused_doc_comments)]
 extern "C" fn destroy_root_page(p_parse_1: *mut Parse, i_table_1: i32,
     i_db_1: i32) -> () {
     let v: *mut Vdbe = unsafe { sqlite3_get_vdbe(p_parse_1) };
@@ -6868,6 +7848,15 @@ extern "C" fn destroy_root_page(p_parse_1: *mut Parse, i_table_1: i32,
     }
     unsafe { sqlite3_vdbe_add_op3(v, 146, i_table_1, r1, i_db_1) };
     sqlite3_may_abort(p_parse_1);
+
+    /// OP_Destroy stores an in integer r1. If this integer
+    ///* is non-zero, then it is the root page number of a table moved to
+    ///* location iTable. The following code modifies the sqlite_schema table to
+    ///* reflect this.
+    ///*
+    ///* The "#NNN" in the SQL is a special constant that means whatever value
+    ///* is in register NNN.  See grammar rules associated with the TK_REGISTER
+    ///* token for additional information.
     unsafe {
         sqlite3_nested_parse(p_parse_1,
             c"UPDATE %Q.sqlite_master SET rootpage=%d WHERE #%d AND rootpage=#%d".as_ptr()
@@ -6881,8 +7870,28 @@ extern "C" fn destroy_root_page(p_parse_1: *mut Parse, i_table_1: i32,
     unsafe { sqlite3_release_temp_reg(p_parse_1, r1) };
 }
 
+///* Write VDBE code to erase table pTab and all associated indices on disk.
+///* Code to update the sqlite_schema tables and internal schema definitions
+///* in case a root-page belonging to another table is moved by the btree layer
+///* is also added (this can happen with an auto-vacuum database).
+#[allow(unused_doc_comments)]
 extern "C" fn destroy_table(p_parse_1: *mut Parse, p_tab_1: &Table) -> () {
     unsafe {
+        /// If the database may be auto-vacuum capable (if SQLITE_OMIT_AUTOVACUUM
+        ///* is not defined), then it is important to call OP_Destroy on the
+        ///* table and index root-pages in order, starting with the numerically
+        ///* largest root-page number. This guarantees that none of the root-pages
+        ///* to be destroyed is relocated by an earlier OP_Destroy. i.e. if the
+        ///* following were coded:
+        ///*
+        ///* OP_Destroy 4 0
+        ///* ...
+        ///* OP_Destroy 5 0
+        ///*
+        ///* and root page 5 happened to be the largest root-page number in the
+        ///* database, then root page 5 would be moved to page 4 by the
+        ///* "OP_Destroy 4 0" opcode. The subsequent "OP_Destroy 5 0" would hit
+        ///* a free-list page.
         let i_tab: Pgno = (*p_tab_1).tnum;
         let mut i_destroyed: Pgno = 0 as Pgno;
         loop {
@@ -6923,6 +7932,7 @@ extern "C" fn destroy_table(p_parse_1: *mut Parse, p_tab_1: &Table) -> () {
     }
 }
 
+///* Clear the column names from every VIEW in database idx.
 extern "C" fn sqlite_view_reset_all(db: *mut Sqlite3, idx: i32) -> () {
     unsafe {
         let mut i: *const HashElem = core::ptr::null();
@@ -6963,7 +7973,9 @@ extern "C" fn sqlite_view_reset_all(db: *mut Sqlite3, idx: i32) -> () {
     }
 }
 
+///* Generate code to drop a table.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_code_drop_table(p_parse: *mut Parse,
     p_tab: *mut Table, i_db: i32, is_view: i32) -> () {
     let mut v: *mut Vdbe = core::ptr::null_mut();
@@ -6978,7 +7990,11 @@ pub extern "C" fn sqlite3_code_drop_table(p_parse: *mut Parse,
     if unsafe { (*p_tab).e_tab_type } as i32 == 1 {
         unsafe { sqlite3_vdbe_add_op0(v, 172) };
     }
-    p_trigger = unsafe { sqlite3_trigger_list(p_parse, p_tab) };
+
+    /// Drop all triggers associated with the table being dropped. Code
+    ///* is generated to remove entries from sqlite_schema and/or
+    ///* sqlite_temp_schema if required.
+    (p_trigger = unsafe { sqlite3_trigger_list(p_parse, p_tab) });
     while !(p_trigger).is_null() {
         { let _ = 0; };
         unsafe { sqlite3_drop_trigger_ptr(p_parse, p_trigger) };
@@ -6992,6 +8008,13 @@ pub extern "C" fn sqlite3_code_drop_table(p_parse: *mut Parse,
                 unsafe { (*p_tab).z_name })
         };
     }
+
+    /// Drop all entries in the schema table that refer to the
+    ///* table. The program name loops through the schema table and deletes
+    ///* every row that refers to a table of the same name as the one being
+    ///* dropped. Triggers are handled separately because a trigger can be
+    ///* created in the temp database that refers to a table in another
+    ///* database.
     unsafe {
         sqlite3_nested_parse(p_parse,
             c"DELETE FROM %Q.sqlite_master WHERE tbl_name=%Q and type!=\'trigger\'".as_ptr()
@@ -7017,7 +8040,10 @@ pub extern "C" fn sqlite3_code_drop_table(p_parse: *mut Parse,
     sqlite_view_reset_all(db, i_db);
 }
 
+///* This routine is called to do the work of a DROP TABLE statement.
+///* pName is the name of the table to be dropped.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_drop_table(p_parse: *mut Parse,
     p_name: *mut SrcList, is_view: i32, no_err: i32) -> () {
     unsafe {
@@ -7153,7 +8179,10 @@ pub extern "C" fn sqlite3_drop_table(p_parse: *mut Parse,
                     };
                     break '__b72;
                 }
-                v = unsafe { sqlite3_get_vdbe(p_parse) };
+
+                /// Generate code to remove the table from the schema table
+                ///* on disk.
+                (v = unsafe { sqlite3_get_vdbe(p_parse) });
                 if !(v).is_null() {
                     sqlite3_begin_write_operation(p_parse, 1, i_db);
                     if (is_view == 0) as i32 != 0 {
@@ -7168,6 +8197,13 @@ pub extern "C" fn sqlite3_drop_table(p_parse: *mut Parse,
             }
             if !(false) { break '__b72; }
         }
+
+        /// If pTab is a virtual table, call ViewGetColumnNames() to ensure
+        ///* it is initialized.
+        /// Ensure DROP TABLE is not used on a view, and DROP VIEW is not used
+        ///* on a table.
+        /// Generate code to remove the table from the schema table
+        ///* on disk.
         sqlite3_src_list_delete(db, p_name);
     }
 }
@@ -7178,6 +8214,21 @@ pub extern "C" fn sqlite3_delete_table_generic(db: *mut Sqlite3,
     sqlite3_delete_table(db, p_table as *mut Table);
 }
 
+///* pArray is a pointer to an array of objects. Each object in the
+///* array is szEntry bytes in size. This routine uses sqlite3DbRealloc()
+///* to extend the array so that there is space for a new object at the end.
+///*
+///* When this function is called, *pnEntry contains the current size of
+///* the array (in entries - so the allocation is ((*pnEntry) * szEntry) bytes
+///* in total).
+///*
+///* If the realloc() is successful (i.e. if no OOM condition occurs), the
+///* space allocated for the new object is zeroed, *pnEntry updated to
+///* reflect the new size of the array and a pointer to the new allocation
+///* returned. *pIdx is set to the index of the new array entry in this case.
+///*
+///* Otherwise, if the realloc() fails, *pIdx is set to -1, *pnEntry remains
+///* unchanged and a copy of pArray returned.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_array_allocate(db: *mut Sqlite3,
     mut p_array: *mut (), sz_entry: i32, pn_entry: &mut i32, p_idx: &mut i32)
@@ -7207,6 +8258,10 @@ pub extern "C" fn sqlite3_array_allocate(db: *mut Sqlite3,
     return p_array;
 }
 
+///* Append a new element to the given IdList.  Create a new IdList if
+///* need be.
+///*
+///* A new IdList is returned, or NULL if malloc() fails.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_id_list_append(p_parse: *mut Parse,
     mut p_list: *mut IdList, p_token: *mut Token) -> *mut IdList {
@@ -7263,6 +8318,8 @@ pub extern "C" fn sqlite3_id_list_append(p_parse: *mut Parse,
     return p_list;
 }
 
+///* Return the index in pList of the identifier named zId.  Return -1
+///* if not found.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_id_list_index(p_list: &IdList, z_name: *const i8)
     -> i32 {
@@ -7289,10 +8346,31 @@ pub extern "C" fn sqlite3_id_list_index(p_list: &IdList, z_name: *const i8)
     return -1;
 }
 
+///* Expand the space allocated for the given SrcList object by
+///* creating nExtra new slots beginning at iStart.  iStart is zero based.
+///* New slots are zeroed.
+///*
+///* For example, suppose a SrcList initially contains two entries: A,B.
+///* To append 3 new entries onto the end, do this:
+///*
+///*    sqlite3SrcListEnlarge(db, pSrclist, 3, 2);
+///*
+///* After the call above it would contain:  A, B, nil, nil, nil.
+///* If the iStart argument had been 1 instead of 2, then the result
+///* would have been:  A, nil, nil, nil, B.  To prepend the new slots,
+///* the iStart value would be 0.  The result then would
+///* be: nil, nil, nil, A, B.
+///*
+///* If a memory allocation fails or the SrcList becomes too large, leave
+///* the original SrcList unchanged, return NULL, and leave an error message
+///* in pParse.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_src_list_enlarge(p_parse: *mut Parse,
     mut p_src: *mut SrcList, n_extra: i32, i_start: i32) -> *mut SrcList {
     let mut i: i32 = 0;
+
+    /// Sanity checking on calling parameters
     { let _ = 0; };
     { let _ = 0; };
     { let _ = 0; };
@@ -7345,6 +8423,8 @@ pub extern "C" fn sqlite3_src_list_enlarge(p_parse: *mut Parse,
         }
     }
     unsafe { (*p_src).n_src += n_extra };
+
+    /// Zero the newly allocated slots
     unsafe {
         memset(unsafe {
                     &raw mut *(unsafe { (*p_src).a.as_ptr() } as
@@ -7366,9 +8446,14 @@ pub extern "C" fn sqlite3_src_list_enlarge(p_parse: *mut Parse,
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
+
+    /// Return a pointer to the enlarged SrcList
     return p_src;
 }
 
+///* Append the contents of SrcList p2 to SrcList p1 and return the resulting
+///* SrcList. Or, if an error occurs, return NULL. In all cases, p1 and p2
+///* are deleted by this function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_append_list(p_parse: *mut Parse,
     mut p1: *mut SrcList, p2: *mut SrcList) -> *mut SrcList {
@@ -7412,7 +8497,41 @@ pub extern "C" fn sqlite3_src_list_append_list(p_parse: *mut Parse,
     return p1;
 }
 
+///* Append a new table name to the given SrcList.  Create a new SrcList if
+///* need be.  A new entry is created in the SrcList even if pTable is NULL.
+///*
+///* A SrcList is returned, or NULL if there is an OOM error or if the
+///* SrcList grows to large.  The returned
+///* SrcList might be the same as the SrcList that was input or it might be
+///* a new one.  If an OOM error does occurs, then the prior value of pList
+///* that is input to this routine is automatically freed.
+///*
+///* If pDatabase is not null, it means that the table has an optional
+///* database name prefix.  Like this:  "database.table".  The pDatabase
+///* points to the table name and the pTable points to the database name.
+///* The SrcList.a[].zName field is filled with the table name which might
+///* come from pTable (if pDatabase is NULL) or from pDatabase. 
+///* SrcList.a[].zDatabase is filled with the database name from pTable,
+///* or with NULL if no database is specified.
+///*
+///* In other words, if call like this:
+///*
+///*         sqlite3SrcListAppend(D,A,B,0);
+///*
+///* Then B is a table name and the database name is unspecified.  If called
+///* like this:
+///*
+///*         sqlite3SrcListAppend(D,A,B,C);
+///*
+///* Then C is the table name and B is the database name.  If C is defined
+///* then so is B.  In other words, we never have a case where:
+///*
+///*         sqlite3SrcListAppend(D,A,0,C);
+///*
+///* Both pTable and pDatabase are assumed to be quoted.  They are dequoted
+///* before being added to the SrcList.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_src_list_append(p_parse: *mut Parse,
     mut p_list: *mut SrcList, p_table: *mut Token, mut p_database: *mut Token)
     -> *mut SrcList {
@@ -7420,6 +8539,8 @@ pub extern "C" fn sqlite3_src_list_append(p_parse: *mut Parse,
         let mut p_item: *mut SrcItem = core::ptr::null_mut();
         let mut db: *mut Sqlite3 = core::ptr::null_mut();
         { let _ = 0; };
+
+        /// Cannot have C without B
         { let _ = 0; };
         { let _ = 0; };
         db = unsafe { (*p_parse).db };
@@ -7486,6 +8607,8 @@ pub extern "C" fn sqlite3_src_list_append(p_parse: *mut Parse,
     }
 }
 
+///* Remove a Subquery from a SrcItem.  Return the associated Select object.
+///* The returned Select becomes the responsibility of the caller.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_subquery_detach(db: *mut Sqlite3,
     p_item: &mut SrcItem) -> *mut Select {
@@ -7501,6 +8624,19 @@ pub extern "C" fn sqlite3_subquery_detach(db: *mut Sqlite3,
     }
 }
 
+///* Attach a Subquery object to pItem->uv.pSubq.  Set the
+///* pSelect value but leave all the other values initialized
+///* to zero.
+///*
+///* A copy of the Select object is made if dupSelect is true, and the
+///* SrcItem takes responsibility for deleting the copy.  If dupSelect is
+///* false, ownership of the Select passes to the SrcItem.  Either way,
+///* the SrcItem will take responsibility for deleting the Select.
+///*
+///* When dupSelect is zero, that means the Select might get deleted right
+///* away if there is an OOM error.  Beware.
+///*
+///* Return non-zero on success.  Return zero on an OOM error.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_item_attach_subquery(p_parse: &Parse,
     p_item: &mut SrcItem, mut p_select: *mut Select, dup_select: i32) -> i32 {
@@ -7554,6 +8690,20 @@ pub extern "C" fn sqlite3_src_item_attach_subquery(p_parse: &Parse,
     }
 }
 
+///* This routine is called by the parser to add a new term to the
+///* end of a growing FROM clause.  The "p" parameter is the part of
+///* the FROM clause that has already been constructed.  "p" is NULL
+///* if this is the first term of the FROM clause.  pTable and pDatabase
+///* are the name of the table and database named in the FROM clause term.
+///* pDatabase is NULL if the database name qualifier is missing - the
+///* usual case.  If the term has an alias, then pAlias points to the
+///* alias token.  If the term is a subquery, then pSubquery is the
+///* SELECT statement that the subquery encodes.  The pTable and
+///* pDatabase parameters are NULL for subqueries.  The pOn and pUsing
+///* parameters are the content of the ON and USING clauses.
+///*
+///* Return a new SrcList which encodes is the FROM with the new
+///* term added.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_append_from_term(p_parse: *mut Parse,
     mut p: *mut SrcList, p_table: *mut Token, p_database: *mut Token,
@@ -7643,7 +8793,10 @@ pub extern "C" fn sqlite3_src_list_append_from_term(p_parse: *mut Parse,
     }
 }
 
+///* Add an INDEXED BY or NOT INDEXED clause to the most recently added
+///* element of the source-list passed as the second argument.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_src_list_indexed_by(p_parse: &Parse,
     p: *mut SrcList, p_indexed_by: *mut Token) -> () {
     unsafe {
@@ -7661,7 +8814,12 @@ pub extern "C" fn sqlite3_src_list_indexed_by(p_parse: &Parse,
             { let _ = 0; };
             if unsafe { (*p_indexed_by).n } == 1 as u32 &&
                     (unsafe { (*p_indexed_by).z }).is_null() as i32 != 0 {
-                unsafe { (*p_item).fg.set_not_indexed(1 as u32 as u32) };
+                unsafe {
+
+                    /// A "NOT INDEXED" clause was supplied. See parse.y
+                    ///* construct "indexed_opt" for details.
+                    (*p_item).fg.set_not_indexed(1 as u32 as u32)
+                };
             } else {
                 unsafe {
                     (*p_item).u1.z_indexed_by =
@@ -7675,6 +8833,8 @@ pub extern "C" fn sqlite3_src_list_indexed_by(p_parse: &Parse,
     }
 }
 
+///* Add the list of function arguments to the SrcList entry for a
+///* table-valued-function.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_func_args(p_parse: &Parse, p: *mut SrcList,
     p_list: *mut ExprList) -> () {
@@ -7694,6 +8854,26 @@ pub extern "C" fn sqlite3_src_list_func_args(p_parse: &Parse, p: *mut SrcList,
     }
 }
 
+///* When building up a FROM clause in the parser, the join operator
+///* is initially attached to the left operand.  But the code generator
+///* expects the join operator to be on the right operand.  This routine
+///* Shifts all join operators from left to right for an entire FROM
+///* clause.
+///*
+///* Example: Suppose the join is like this:
+///*
+///*           A natural cross join B
+///*
+///* The operator is "natural cross join".  The A and B operands are stored
+///* in p->a[0] and p->a[1], respectively.  The parser initially stores the
+///* operator with A.  This routine shifts that operator over to B.
+///*
+///* Additional changes:
+///*
+///*   *   All tables to the left of the right-most RIGHT JOIN are tagged with
+///*       JT_LTORJ (mnemonic: Left Table Of Right Join) so that the
+///*       code generator can easily tell that the table is part of
+///*       the left operand of at least one RIGHT JOIN.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_src_list_shift_join_type(p_parse: *mut Parse,
     p: *mut SrcList) -> () {
@@ -7759,7 +8939,10 @@ pub extern "C" fn sqlite3_src_list_shift_join_type(p_parse: *mut Parse,
     }
 }
 
+///* This routine will drop an existing named index.  This routine
+///* implements the DROP INDEX statement.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_drop_index(p_parse: *mut Parse,
     p_name: *mut SrcList, if_exists: i32) -> () {
     unsafe {
@@ -7771,6 +8954,8 @@ pub extern "C" fn sqlite3_drop_index(p_parse: *mut Parse,
                 let mut i_db: i32 = 0;
                 if unsafe { (*db).malloc_failed } != 0 { break '__b80; }
                 { let _ = 0; };
+
+                /// Never called with prior non-OOM errors
                 { let _ = 0; };
                 { let _ = 0; };
                 { let _ = 0; };
@@ -7846,7 +9031,9 @@ pub extern "C" fn sqlite3_drop_index(p_parse: *mut Parse,
                         break '__b80;
                     }
                 }
-                v = unsafe { sqlite3_get_vdbe(p_parse) };
+
+                /// Generate code to remove the index and from the schema table
+                (v = unsafe { sqlite3_get_vdbe(p_parse) });
                 if !(v).is_null() {
                     sqlite3_begin_write_operation(p_parse, 1, i_db);
                     unsafe {
@@ -7872,10 +9059,15 @@ pub extern "C" fn sqlite3_drop_index(p_parse: *mut Parse,
             }
             if !(false) { break '__b80; }
         }
+
+        /// Never called with prior non-OOM errors
+        /// Generate code to remove the index and from the schema table
         sqlite3_src_list_delete(db, p_name);
     }
 }
 
+///* Return the preferred table name for system tables.  Translate legacy
+///* names into the new preferred names, as appropriate.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_preferred_table_name(z_name: *const i8)
     -> *const i8 {
@@ -7905,7 +9097,10 @@ pub extern "C" fn sqlite3_preferred_table_name(z_name: *const i8)
     return z_name;
 }
 
+///* Unlink the given table from the hash tables and the delete the
+///* table structure with all its indices and foreign keys.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_unlink_and_delete_table(db: *mut Sqlite3, i_db: i32,
     z_tab_name: *const i8) -> () {
     unsafe {
@@ -7915,7 +9110,9 @@ pub extern "C" fn sqlite3_unlink_and_delete_table(db: *mut Sqlite3, i_db: i32,
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
-        p_db = unsafe { unsafe { (*db).a_db.offset(i_db as isize) } };
+
+        /// Zero-length table names are allowed
+        (p_db = unsafe { unsafe { (*db).a_db.offset(i_db as isize) } });
         p =
             unsafe {
                     sqlite3_hash_insert(unsafe {
@@ -7927,7 +9124,12 @@ pub extern "C" fn sqlite3_unlink_and_delete_table(db: *mut Sqlite3, i_db: i32,
     }
 }
 
+///* For the index called zIdxName which is found in the database iDb,
+///* unlike that index from its Table then remove the index from
+///* the index hash table and free all memory structures associated
+///* with the index.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_unlink_and_delete_index(db: *mut Sqlite3, i_db: i32,
     z_idx_name: *const i8) -> () {
     unsafe {
@@ -7954,7 +9156,10 @@ pub extern "C" fn sqlite3_unlink_and_delete_index(db: *mut Sqlite3, i_db: i32,
                 };
             } else {
                 let mut p: *mut Index = core::ptr::null_mut();
-                p = unsafe { (*unsafe { (*p_index).p_table }).p_index };
+
+                /// Justification of ALWAYS();  The index must be on the list of
+                ///* indices.
+                (p = unsafe { (*unsafe { (*p_index).p_table }).p_index });
                 while !(p).is_null() && unsafe { (*p).p_next } != p_index {
                     p = unsafe { (*p).p_next };
                 }
@@ -7968,6 +9173,7 @@ pub extern "C" fn sqlite3_unlink_and_delete_index(db: *mut Sqlite3, i_db: i32,
     }
 }
 
+///* Generate VDBE code for a BEGIN statement.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_begin_transaction(p_parse: *mut Parse, type_: i32)
     -> () {
@@ -8012,6 +9218,9 @@ pub extern "C" fn sqlite3_begin_transaction(p_parse: *mut Parse, type_: i32)
     unsafe { sqlite3_vdbe_add_op0(v, 1) };
 }
 
+///* Generate VDBE code for a COMMIT or ROLLBACK statement.
+///* Code for ROLLBACK is generated if eType==TK_ROLLBACK.  Otherwise
+///* code is generated for a COMMIT.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_end_transaction(p_parse: *mut Parse, e_type: i32)
     -> () {
@@ -8036,6 +9245,8 @@ pub extern "C" fn sqlite3_end_transaction(p_parse: *mut Parse, e_type: i32)
     }
 }
 
+///* This function is called by the parser when it parses a command to create,
+///* release or rollback an SQL savepoint.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_savepoint(p_parse: *mut Parse, op: i32,
     p_name: *mut Token) -> () {
@@ -8063,6 +9274,7 @@ pub extern "C" fn sqlite3_savepoint(p_parse: *mut Parse, op: i32,
     }
 }
 
+///* Code an OP_Halt due to non-unique rowid.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_rowid_constraint(p_parse: *mut Parse, on_error: i32,
     p_tab: &Table) -> () {
@@ -8091,6 +9303,20 @@ pub extern "C" fn sqlite3_rowid_constraint(p_parse: *mut Parse, on_error: i32,
     sqlite3_halt_constraint(p_parse, rc, on_error, z_msg, -7 as i8, 2 as u8);
 }
 
+///* This routine is called to create a new foreign key on the table
+///* currently under construction.  pFromCol determines which columns
+///* in the current table point to the foreign key.  If pFromCol==0 then
+///* connect the key to the last column inserted.  pTo is the name of
+///* the table referred to (a.k.a the "parent" table).  pToCol is a list
+///* of tables in the parent pTo table.  flags contains all
+///* information about the conflict resolution algorithms specified
+///* in the ON DELETE, ON UPDATE and ON INSERT clauses.
+///*
+///* An FKey structure is created and added to the table currently
+///* under construction in the pParse->pNewTable field.
+///*
+///* The foreign key is set for IMMEDIATE processing.  A subsequent call
+///* to sqlite3DeferForeignKey() might change this to DEFERRED.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_create_foreign_key(p_parse: *mut Parse,
     p_from_col: *mut ExprList, p_to: *mut Token, p_to_col: *mut ExprList,
@@ -8506,7 +9732,13 @@ pub extern "C" fn sqlite3_create_foreign_key(p_parse: *mut Parse,
     }
 }
 
+///* This routine is called when an INITIALLY IMMEDIATE or INITIALLY DEFERRED
+///* clause is seen as part of a foreign key definition.  The isDeferred
+///* parameter is 1 for INITIALLY DEFERRED and 0 for INITIALLY IMMEDIATE.
+///* The behavior of the most recently created foreign key is adjusted
+///* accordingly.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_defer_foreign_key(p_parse: &Parse, is_deferred: i32)
     -> () {
     unsafe {
@@ -8524,6 +9756,8 @@ pub extern "C" fn sqlite3_defer_foreign_key(p_parse: &Parse, is_deferred: i32)
             return;
         }
         { let _ = 0; };
+
+        /// EV: R-30323-21917
         unsafe { (*p_f_key).is_deferred = is_deferred as u8 };
     }
 }
@@ -8595,23 +9829,36 @@ extern "C" fn collation_match(z_coll_1: *const i8, p_index_1: &Index) -> i32 {
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_reindex(p_parse: *mut Parse, p_name1: *mut Token,
     p_name2: *mut Token) -> () {
     unsafe {
         let mut z: *mut i8 = core::ptr::null_mut();
+        /// Name of a table or index or collation
         let mut z_db: *const i8 = core::ptr::null();
+        /// Name of the database
         let mut i_re_db: i32 = -1;
+        /// The database index number
         let db: *mut Sqlite3 = unsafe { (*p_parse).db };
+        /// The database connection
         let mut p_obj_name: *mut Token = core::ptr::null_mut();
+        /// Name of the table or index to be reindexed
         let mut b_match: i32 = 0;
+        /// At least one name match
         let mut z_coll: *const i8 = core::ptr::null();
+        /// Rebuild indexes using this collation
         let mut p_re_tab: *mut Table = core::ptr::null_mut();
+        /// Rebuild all indexes of this table
         let mut p_re_index: *mut Index = core::ptr::null_mut();
+        /// Rebuild this index
         let mut is_expr_idx: i32 = 0;
+        /// Rebuild all expression indexes
         let mut b_all: i32 = 0;
         if 0 != unsafe { sqlite3_read_schema(p_parse) } { return; }
         if p_name1 == core::ptr::null_mut() {
-            b_match = 1;
+
+            /// rebuild all indexes
+            (b_match = 1);
             b_all = 1;
         } else if p_name2 == core::ptr::null_mut() ||
                 unsafe { (*p_name2).z } == core::ptr::null() {
@@ -8741,13 +9988,22 @@ pub extern "C" fn sqlite3_reindex(p_parse: *mut Parse, p_name1: *mut Token,
     }
 }
 
+///* Table pTab is a virtual table.  If it the virtual table implementation
+///* exists and has an xShadowName method, then loop over all other ordinary
+///* tables within the same schema looking for shadow tables of pTab, and mark
+///* any shadow tables seen using the TF_Shadow flag.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_mark_all_shadow_tables_of(db: &mut Sqlite3,
     p_tab: &Table) -> () {
     unsafe {
         let mut n_name: i32 = 0;
+        /// Length of pTab->zName
         let mut p_mod: *const Module = core::ptr::null();
+        /// Module for the virtual table
         let mut k: *const HashElem = core::ptr::null();
+
+        /// For looping through the symbol table
         { let _ = 0; };
         p_mod =
             unsafe {
@@ -8812,6 +10068,7 @@ pub extern "C" fn sqlite3_mark_all_shadow_tables_of(db: &mut Sqlite3,
     }
 }
 
+///* Create a new CTE object
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_cte_new(p_parse: &Parse, p_name: *mut Token,
     p_arglist: *mut ExprList, p_query: *mut Select, e_m10d: u8) -> *mut Cte {
@@ -8841,6 +10098,8 @@ pub extern "C" fn sqlite3_cte_new(p_parse: &Parse, p_name: *mut Token,
     }
 }
 
+///* Clear information from a Cte object, but do not deallocate storage
+///* for the object itself.
 extern "C" fn cte_clear(db: *mut Sqlite3, p_cte_1: &Cte) -> () {
     unsafe {
         { let _ = 0; };
@@ -8850,6 +10109,7 @@ extern "C" fn cte_clear(db: *mut Sqlite3, p_cte_1: &Cte) -> () {
     }
 }
 
+///* Free the contents of the CTE object passed as the second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_cte_delete(db: *mut Sqlite3, p_cte: *mut Cte)
     -> () {
@@ -8858,14 +10118,22 @@ pub extern "C" fn sqlite3_cte_delete(db: *mut Sqlite3, p_cte: *mut Cte)
     unsafe { sqlite3_db_free(db, p_cte as *mut ()) };
 }
 
+///* This routine is invoked once per CTE by the parser while parsing a
+///* WITH clause.  The CTE described by the third argument is added to
+///* the WITH clause of the second argument.  If the second argument is
+///* NULL, then a new WITH argument is created.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_with_add(p_parse: *mut Parse, p_with: *mut With,
     p_cte: *mut Cte) -> *mut With {
     let db: *mut Sqlite3 = unsafe { (*p_parse).db };
     let mut p_new: *mut With = core::ptr::null_mut();
     let mut z_name: *mut i8 = core::ptr::null_mut();
     if p_cte == core::ptr::null_mut() { return p_with; }
-    z_name = unsafe { (*p_cte).z_name };
+
+    /// Check that the CTE name is unique within this WITH clause. If
+    ///* not, store an error in the Parse structure.
+    (z_name = unsafe { (*p_cte).z_name });
     if !(z_name).is_null() && !(p_with).is_null() {
         let mut i: i32 = 0;
         {
@@ -8927,6 +10195,7 @@ pub extern "C" fn sqlite3_with_add(p_parse: *mut Parse, p_with: *mut With,
     return p_new;
 }
 
+///* Free the contents of the With object passed as the second argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_with_delete(db: *mut Sqlite3, p_with: *mut With)
     -> () {

@@ -2,10 +2,17 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexConstraint, Sqlite3IndexInfo, Sqlite3Int64,
+    Sqlite3Module, Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
 
 type DarwinSizeT = u64;
 
+///* sqlite3expert object.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Sqlite3expert {
@@ -33,6 +40,8 @@ struct IdxTable {
     p_next: *mut IdxTable,
 }
 
+///* Information regarding a single database table. Extracted from 
+///* "PRAGMA table_info" by function idxGetTableInfo().
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxColumn {
@@ -41,6 +50,7 @@ struct IdxColumn {
     i_pk: i32,
 }
 
+///* A single scan of a single table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxScan {
@@ -53,6 +63,12 @@ struct IdxScan {
     p_next_scan: *mut IdxScan,
 }
 
+///* A single constraint. Equivalent to either "col = ?" or "col < ?" (or
+///* any other type of single-ended range constraint on a column).
+///*
+///* pLink:
+///*   Used to temporarily link IdxConstraint objects into lists while
+///*   creating candidate indexes.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxConstraint {
@@ -65,6 +81,9 @@ struct IdxConstraint {
     p_link: *mut IdxConstraint,
 }
 
+///* An object of the following type is created for each unique table/write-op
+///* seen. The objects are stored in a singly-linked list beginning at
+///* sqlite3expert.pWrite.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxWrite {
@@ -73,6 +92,8 @@ struct IdxWrite {
     p_next: *mut IdxWrite,
 }
 
+///* Each statement being analyzed is represented by an instance of this
+///* structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct IdxStatement {
@@ -100,6 +121,8 @@ struct IdxHashEntry {
     p_next: *mut IdxHashEntry,
 }
 
+///* Allocate and return nByte bytes of zeroed memory using sqlite3_malloc(). 
+///* If the allocation fails, set *pRc to SQLITE_NOMEM and return NULL.
 extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     let mut p_ret: *mut () = core::ptr::null_mut();
     if !(*p_rc_1 == 0) as i32 as i64 != 0 {
@@ -123,7 +146,10 @@ extern "C" fn idx_malloc(p_rc_1: &mut i32, n_byte_1: i64) -> *mut () {
     return p_ret;
 }
 
+///* Define and possibly pretend to use a useless collation sequence.
+///* This pretense allows expert to accept SQL using custom collations.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
     up4: i32, up5: *const ()) -> i32 {
     { let _ = up1; };
@@ -138,9 +164,12 @@ pub extern "C" fn dummy_compare(up1: *mut (), up2: i32, up3: *const (),
                 c"0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// VDBE should never be run.
     return 0;
 }
 
+/// And a callback to register above upon actual need
 #[unsafe(no_mangle)]
 pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
     z_name_1: *const i8) -> () {
@@ -151,6 +180,7 @@ pub extern "C" fn use_dummy_cs(up1: *mut (), db: *mut Sqlite3, etr: i32,
     };
 }
 
+///* dummy functions for no-op implementation of UDFs during expert's work
 #[unsafe(no_mangle)]
 pub extern "C" fn dummy_udf(up1: *mut Sqlite3Context, up2: i32,
     up3: *mut *mut Sqlite3Value) -> () {
@@ -178,6 +208,7 @@ pub extern "C" fn dummy_ud_fvalue(up1: *mut Sqlite3Context) -> () {
     } else { { let _ = 0; } };
 }
 
+///* Register UDFs from user database with another.
 #[unsafe(no_mangle)]
 pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     db_dst_1: *mut Sqlite3) -> i32 {
@@ -253,6 +284,8 @@ pub extern "C" fn register_ud_fs(db_src_1: *mut Sqlite3,
     return rc;
 }
 
+///* An error associated with database handle db has just occurred. Pass
+///* the error message to callback function xOut.
 extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
     -> () {
     *pz_errmsg_1 =
@@ -262,6 +295,7 @@ extern "C" fn idx_database_error(db: *mut Sqlite3, pz_errmsg_1: &mut *mut i8)
         };
 }
 
+///* Prepare an SQL statement.
 extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_sql_1: *const i8) -> i32 {
@@ -277,6 +311,7 @@ extern "C" fn idx_prepare_stmt(db: *mut Sqlite3,
     return rc;
 }
 
+///* Prepare an SQL statement using the results of a printf() formatting.
 unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     pp_stmt_1: *mut *mut Sqlite3Stmt, pz_errmsg_1: *mut *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> i32 {
@@ -295,6 +330,12 @@ unsafe extern "C" fn idx_printf_prepare_stmt(db: *mut Sqlite3,
     return rc;
 }
 
+///* This function tests if the schema of the main database of database handle
+///* db contains an object named zTab. Assuming no error occurs, output parameter
+///* (*pbContains) is set to true if zTab exists, or false if it does not.
+///*
+///* Or, if an error occurs, an SQLite error code is returned. The final value
+///* of (*pbContains) is undefined in this case.
 extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     pb_contains_1: &mut i32) -> i32 {
     let z_sql: *const i8 =
@@ -317,6 +358,16 @@ extern "C" fn expert_db_contains_object(db: *mut Sqlite3, z_tab_1: *const i8,
     return rc;
 }
 
+///* Execute SQL command zSql using database handle db. If no error occurs,
+///* set (*pzErr) to NULL and return SQLITE_OK. 
+///*
+///* If an error does occur, return an SQLite error code and set (*pzErr) to
+///* point to a buffer containing an English language error message. Except,
+///* if the error message begins with "no such module:", then ignore the
+///* error and return as if the SQL statement had succeeded.
+///*
+///* This is used to copy as much of the database schema as possible while 
+///* ignoring any errors related to missing virtual table modules.
 extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     pz_err_1: &mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -342,12 +393,20 @@ extern "C" fn expert_schema_sql(db: *mut Sqlite3, z_sql_1: *const i8,
     return rc;
 }
 
+///* End of virtual table implementation.
+///************************************************************************/
+////*
+///* Finalize SQL statement pStmt. If (*pRc) is SQLITE_OK when this function
+///* is called, set it to the return value of sqlite3_finalize() before
+///* returning. Otherwise, discard the sqlite3_finalize() return value.
 extern "C" fn idx_finalize(p_rc_1: &mut i32, p_stmt_1: *mut Sqlite3Stmt)
     -> () {
     let rc: i32 = unsafe { sqlite3_finalize(p_stmt_1) };
     if *p_rc_1 == 0 { *p_rc_1 = rc; }
 }
 
+///**********************************************************************
+///* Beginning of virtual table implementation.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct ExpertVtab {
@@ -414,6 +473,14 @@ extern "C" fn expert_dequote(z_in_1: *const i8) -> *mut i8 {
     return z_ret;
 }
 
+/// 
+///* This function is the implementation of both the xConnect and xCreate
+///* methods of the r-tree virtual table.
+///*
+///*   argv[0]   -> module name
+///*   argv[1]   -> database name
+///*   argv[2]   -> table name
+///*   argv[...] -> column names...
 extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     argv: *const *const i8, pp_vtab_1: *mut *mut Sqlite3Vtab,
     pz_err_1: *mut *mut i8) -> i32 {
@@ -465,6 +532,8 @@ extern "C" fn expert_connect(db: *mut Sqlite3, p_aux_1: *mut (), argc: i32,
     return rc;
 }
 
+///* Allocate and return a new IdxConstraint object. Set the IdxConstraint.zColl
+///* variable to point to a copy of nul-terminated string zColl.
 extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     -> *mut IdxConstraint {
     let mut p_new: *mut IdxConstraint = core::ptr::null_mut();
@@ -493,6 +562,7 @@ extern "C" fn idx_new_constraint(p_rc_1: *mut i32, z_coll_1: *const i8)
     return p_new;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
     p_idx_info_1: *mut Sqlite3IndexInfo) -> i32 {
     let p: *const ExpertVtab =
@@ -506,6 +576,8 @@ extern "C" fn expert_best_index(p_vtab_1: *mut Sqlite3Vtab,
             *mut IdxScan;
     if !(p_scan).is_null() {
         let mut i: i32 = 0;
+
+        /// Link the new scan object into the list
         unsafe { (*p_scan).p_tab = unsafe { (*p).p_tab } };
         unsafe {
             (*p_scan).p_next_scan =
@@ -620,6 +692,8 @@ struct ExpertCsr {
     p_data: *mut Sqlite3Stmt,
 }
 
+/// 
+///* Virtual table module xOpen method.
 extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     pp_cursor_1: *mut *mut Sqlite3VtabCursor) -> i32 {
     let mut rc: i32 = 0;
@@ -632,6 +706,8 @@ extern "C" fn expert_open(p_v_tab_1: *mut Sqlite3Vtab,
     return rc;
 }
 
+/// 
+///* Virtual table module xClose method.
 extern "C" fn expert_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     unsafe { sqlite3_finalize(unsafe { (*p_csr).p_data }) };
@@ -639,6 +715,8 @@ extern "C" fn expert_close(cur: *mut Sqlite3VtabCursor) -> i32 {
     return 0;
 }
 
+/// 
+///* Virtual table module xNext method.
 extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
     let mut rc: i32 = 0;
@@ -657,6 +735,8 @@ extern "C" fn expert_next(cur: *mut Sqlite3VtabCursor) -> i32 {
     return rc;
 }
 
+/// 
+///* Virtual table module xFilter method.
 extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     idx_str_1: *const i8, argc: i32, argv: *mut *mut Sqlite3Value) -> i32 {
     let p_csr: *mut ExpertCsr = cur as *mut ExpertCsr;
@@ -685,11 +765,17 @@ extern "C" fn expert_filter(cur: *mut Sqlite3VtabCursor, idx_num_1: i32,
     return rc;
 }
 
+///* Virtual table module xEof method.
+///*
+///* Return non-zero if the cursor does not currently point to a valid 
+///* record (i.e if the scan has finished), or zero otherwise.
 extern "C" fn expert_eof(cur: *mut Sqlite3VtabCursor) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
     return (unsafe { (*p_csr).p_data } == core::ptr::null_mut()) as i32;
 }
 
+/// 
+///* Virtual table module xColumn method.
 extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     ctx: *mut Sqlite3Context, i: i32) -> i32 {
     let p_csr: *const ExpertCsr = cur as *mut ExpertCsr as *const ExpertCsr;
@@ -699,6 +785,8 @@ extern "C" fn expert_column(cur: *mut Sqlite3VtabCursor,
     return 0;
 }
 
+/// 
+///* Virtual table module xRowid method.
 extern "C" fn expert_rowid(cur: *mut Sqlite3VtabCursor,
     p_rowid_1: *mut SqliteInt64) -> i32 {
     { let _ = cur; };
@@ -715,8 +803,35 @@ extern "C" fn expert_update(p_vtab_1: *mut Sqlite3Vtab, n_data_1: i32,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
     unsafe {
+
+        /// iVersion
+        /// xCreate - create a table
+        /// xConnect - connect to an existing table
+        /// xBestIndex - Determine search strategy
+        /// xDisconnect - Disconnect from a table
+        /// xDestroy - Drop a table
+        /// xOpen - open a cursor
+        /// xClose - close a cursor
+        /// xFilter - configure scan constraints
+        /// xNext - advance a cursor
+        /// xEof
+        /// xColumn - read data
+        /// xRowid - read data
+        /// xUpdate - write data
+        /// xBegin - begin transaction
+        /// xSync - sync transaction
+        /// xCommit - commit transaction
+        /// xRollback - rollback transaction
+        /// xFindFunction - function overloading
+        /// xRename - rename the table
+        /// xSavepoint
+        /// xRelease
+        /// xRollbackTo
+        /// xShadowName
+        /// xIntegrity
         return unsafe {
                 sqlite3_create_module(unsafe { (*p).dbv },
                     c"expert".as_ptr() as *mut i8 as *const i8,
@@ -726,6 +841,14 @@ extern "C" fn idx_register_vtab(p: *mut Sqlite3expert) -> i32 {
     }
 }
 
+///* Attempt to allocate an IdxTable structure corresponding to table zTab
+///* in the main database of connection db. If successful, set (*ppOut) to
+///* point to the new object and return SQLITE_OK. Otherwise, return an
+///* SQLite error code and set (*ppOut) to NULL. In this case *pzErrmsg may be
+///* set to point to an error string.
+///*
+///* It is the responsibility of the caller to eventually free either the
+///* IdxTable object or error message using sqlite3_free().
 extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     pp_out_1: &mut *mut IdxTable, pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut p1: *mut Sqlite3Stmt = core::ptr::null_mut();
@@ -884,6 +1007,13 @@ extern "C" fn idx_get_table_info(db: *mut Sqlite3, z_tab_1: *const i8,
     return rc;
 }
 
+///* This function is a no-op if *pRc is set to anything other than 
+///* SQLITE_OK when it is called.
+///*
+///* If *pRc is initially set to SQLITE_OK, then the text specified by
+///* the printf() style arguments is appended to zIn and the result returned
+///* in a buffer allocated by sqlite3_malloc(). sqlite3_free() is called on
+///* zIn before returning.
 unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     z_fmt_1: *const i8, mut __va0: ...) -> *mut i8 {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -928,14 +1058,20 @@ unsafe extern "C" fn idx_append_text(p_rc_1: &mut i32, z_in_1: *mut i8,
     return z_ret;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
     pz_errmsg_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = idx_register_vtab(p);
     let mut p_schema: *mut Sqlite3Stmt = core::ptr::null_mut();
-    rc =
+
+    /// For each table in the main db schema:
+    ///*
+    ///*   1) Add an entry to the p->pTable list, and
+    ///*   2) Create the equivalent virtual table in dbv.
+    (rc =
         idx_prepare_stmt(unsafe { (*p).db }, &mut p_schema, pz_errmsg_1,
             c"SELECT type, name, sql, 1,        substr(sql,1,14)==\'create virtual\' COLLATE nocase FROM sqlite_schema WHERE type IN (\'table\',\'view\') AND       substr(name,1,7)!=\'sqlite_\' COLLATE nocase  UNION ALL SELECT type, name, sql, 2, 0 FROM sqlite_schema WHERE type = \'trigger\'  AND tbl_name IN(SELECT name FROM sqlite_schema WHERE type = \'view\') ORDER BY 4, 5 DESC, 1".as_ptr()
-                    as *mut i8 as *const i8);
+                    as *mut i8 as *const i8));
     while rc == 0 && 100 == unsafe { sqlite3_step(p_schema) } {
         let z_type: *const i8 =
             unsafe { sqlite3_column_text(p_schema, 0) } as *const i8;
@@ -985,11 +1121,13 @@ extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
                 let mut z_outer: *mut i8 = core::ptr::null_mut();
                 unsafe { (*p_tab).p_next = unsafe { (*p).p_table } };
                 unsafe { (*p).p_table = p_tab };
-                z_inner =
+
+                /// The statement the vtab will pass to sqlite3_declare_vtab()
+                (z_inner =
                     unsafe {
                         idx_append_text(&mut rc, core::ptr::null_mut(),
                             c"CREATE TABLE x(".as_ptr() as *mut i8 as *const i8)
-                    };
+                    });
                 {
                     i = 0;
                     '__b7: loop {
@@ -1019,12 +1157,14 @@ extern "C" fn idx_create_vtab_schema(p: *mut Sqlite3expert,
                         idx_append_text(&mut rc, z_inner,
                             c")".as_ptr() as *mut i8 as *const i8)
                     };
-                z_outer =
+
+                /// The CVT statement to create the vtab
+                (z_outer =
                     unsafe {
                         idx_append_text(&mut rc, core::ptr::null_mut(),
                             c"CREATE VIRTUAL TABLE %Q USING expert(%Q)".as_ptr() as
                                     *mut i8 as *const i8, z_name, z_inner)
-                    };
+                    });
                 if rc == 0 {
                     rc =
                         unsafe {
@@ -1102,6 +1242,7 @@ extern "C" fn idx_auth_callback(p_ctx_1: *mut (), e_op_1: i32, z3: *const i8,
     return rc;
 }
 
+///* Free all elements of the linked list starting at pConstraint.
 extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
     let mut p_next: *mut IdxConstraint = core::ptr::null_mut();
     let mut p: *mut IdxConstraint = core::ptr::null_mut();
@@ -1119,6 +1260,8 @@ extern "C" fn idx_constraint_free(p_constraint_1: *mut IdxConstraint) -> () {
     }
 }
 
+///* Free all elements of the linked list starting from pScan up until pLast
+///* (pLast is not freed).
 extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
     -> () {
     let mut p: *mut IdxScan = core::ptr::null_mut();
@@ -1140,6 +1283,8 @@ extern "C" fn idx_scan_free(p_scan_1: *mut IdxScan, p_last_1: *mut IdxScan)
     }
 }
 
+///* Free all elements of the linked list starting from pStatement up 
+///* until pLast (pLast is not freed).
 extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
     p_last_1: *mut IdxStatement) -> () {
     let mut p: *mut IdxStatement = core::ptr::null_mut();
@@ -1160,6 +1305,7 @@ extern "C" fn idx_statement_free(p_statement_1: *mut IdxStatement,
     }
 }
 
+///* Free the linked list of IdxTable objects starting at pTab.
 extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
     let mut p_iter: *mut IdxTable = core::ptr::null_mut();
     let mut p_next: *mut IdxTable = core::ptr::null_mut();
@@ -1177,6 +1323,7 @@ extern "C" fn idx_table_free(p_tab_1: *mut IdxTable) -> () {
     }
 }
 
+///* Free the linked list of IdxWrite objects starting at pTab.
 extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
     let mut p_iter: *mut IdxWrite = core::ptr::null_mut();
     let mut p_next: *mut IdxWrite = core::ptr::null_mut();
@@ -1194,6 +1341,7 @@ extern "C" fn idx_write_free(p_tab_1: *mut IdxWrite) -> () {
     }
 }
 
+///* Reset an IdxHash hash table.
 extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
     let mut i: i32 = 0;
     {
@@ -1228,6 +1376,9 @@ extern "C" fn idx_hash_clear(p_hash_1: *mut IdxHash) -> () {
     };
 }
 
+///* Free an (sqlite3expert*) handle and all associated resources. There 
+///* should be one call to this function for each successful call to 
+///* sqlite3-expert_new().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
     if !(p).is_null() {
@@ -1244,6 +1395,13 @@ pub extern "C" fn sqlite3_expert_destroy(p: *mut Sqlite3expert) -> () {
     }
 }
 
+///* Create a new sqlite3expert object.
+///*
+///* If successful, a pointer to the new object is returned and (*pzErr) set
+///* to NULL. Or, if an error occurs, NULL is returned and (*pzErr) set to
+///* an English-language error message. In this case it is the responsibility
+///* of the caller to eventually free the error message buffer using
+///* sqlite3_free().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     pz_errmsg_1: *mut *mut i8) -> *mut Sqlite3expert {
@@ -1334,6 +1492,32 @@ pub extern "C" fn sqlite3_expert_new(db: *mut Sqlite3,
     return p_new;
 }
 
+///* Configure an sqlite3expert object.
+///*
+///* EXPERT_CONFIG_SAMPLE:
+///*   By default, sqlite3_expert_analyze() generates sqlite_stat1 data for
+///*   each candidate index. This involves scanning and sorting the entire
+///*   contents of each user database table once for each candidate index
+///*   associated with the table. For large databases, this can be 
+///*   prohibitively slow. This option allows the sqlite3expert object to
+///*   be configured so that sqlite_stat1 data is instead generated based on a
+///*   subset of each table, or so that no sqlite_stat1 data is used at all.
+///*
+///*   A single integer argument is passed to this option. If the value is less
+///*   than or equal to zero, then no sqlite_stat1 data is generated or used by
+///*   the analysis - indexes are recommended based on the database schema only.
+///*   Or, if the value is 100 or greater, complete sqlite_stat1 data is
+///*   generated for each candidate index (this is the default). Finally, if the
+///*   value falls between 0 and 100, then it represents the percentage of user
+///*   table rows that should be considered when generating sqlite_stat1 data.
+///*
+///*   Examples:
+///*
+///*     // Do not generate any sqlite_stat1 data
+///*     sqlite3_expert_config(pExpert, EXPERT_CONFIG_SAMPLE, 0);
+///*
+///*     // Generate sqlite_stat1 data based on 10% of the rows in each table.
+///*     sqlite3_expert_config(pExpert, EXPERT_CONFIG_SAMPLE, 10);
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     mut __va0: ...) -> i32 {
@@ -1366,7 +1550,27 @@ pub unsafe extern "C" fn sqlite3_expert_config(p: &mut Sqlite3expert, op: i32,
     return rc;
 }
 
+///* Specify zero or more SQL statements to be included in the analysis.
+///*
+///* Buffer zSql must contain zero or more complete SQL statements. This
+///* function parses all statements contained in the buffer and adds them
+///* to the internal list of statements to analyze. If successful, SQLITE_OK
+///* is returned and (*pzErr) set to NULL. Or, if an error occurs - for example
+///* due to a error in the SQL - an SQLite error code is returned and (*pzErr)
+///* may be set to point to an English language error message. In this case
+///* the caller is responsible for eventually freeing the error message buffer
+///* using sqlite3_free().
+///*
+///* If an error does occur while processing one of the statements in the
+///* buffer passed as the second argument, none of the statements in the
+///* buffer are added to the analysis.
+///*
+///* This function must be called before sqlite3_expert_analyze(). If a call
+///* to this function is made on an sqlite3expert object that has already
+///* been passed to sqlite3_expert_analyze() SQLITE_MISUSE is returned
+///* immediately and no statements are added to the analysis.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     z_sql_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
     let p_scan_orig: *mut IdxScan = (*p).p_scan;
@@ -1377,7 +1581,9 @@ pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     while rc == 0 && !(z_stmt).is_null() &&
             unsafe { *z_stmt.offset(0 as isize) } != 0 {
         let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
-        rc = idx_prepare_stmt((*p).db, &mut p_stmt, pz_err_1, z_stmt);
+
+        /// Ensure that the provided statement compiles against user's DB.
+        (rc = idx_prepare_stmt((*p).db, &mut p_stmt, pz_err_1, z_stmt));
         if rc != 0 { break; }
         unsafe { sqlite3_finalize(p_stmt) };
         rc =
@@ -1424,6 +1630,7 @@ pub extern "C" fn sqlite3_expert_sql(p: &mut Sqlite3expert,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
     pz_err_1: *mut *mut i8) -> i32 {
     unsafe {
@@ -1435,11 +1642,13 @@ extern "C" fn idx_process_one_trigger(p: &Sqlite3expert, p_write_1: &IdxWrite,
         let mut p_select: *mut Sqlite3Stmt = core::ptr::null_mut();
         let mut rc: i32 = 0;
         let mut z_write: *mut i8 = core::ptr::null_mut();
-        rc =
+
+        /// Create the table and its triggers in the temp schema
+        (rc =
             unsafe {
                 idx_printf_prepare_stmt((*p).db, &mut p_select, pz_err_1,
                     z_sql, z_tab, z_tab)
-            };
+            });
         while rc == 0 && 100 == unsafe { sqlite3_step(p_select) } {
             let z_create: *const i8 =
                 unsafe { sqlite3_column_text(p_select, 0) } as *const i8;
@@ -1676,6 +1885,8 @@ extern "C" fn idx_process_triggers(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Return true if list pList (linked by IdxConstraint.pLink) contains
+///* a constraint compatible with *p. Otherwise return false.
 extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     p: &IdxConstraint) -> i32 {
     let mut p_cmp: *const IdxConstraint = core::ptr::null();
@@ -1693,6 +1904,13 @@ extern "C" fn idx_find_constraint(p_list_1: *mut IdxConstraint,
     return 0;
 }
 
+///* Search database dbm for an index compatible with the one idxCreateFromCons()
+///* would create from arguments pScan, pEq and pTail. If no error occurs and 
+///* such an index is found, return non-zero. Or, if no such index is found,
+///* return zero.
+///*
+///* If an error occurs, set *pRc to an SQLite error code and return zero.
+#[allow(unused_doc_comments)]
 extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     p_scan_1: &IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -1701,6 +1919,7 @@ extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     let mut p_idx_list: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut p_iter: *mut IdxConstraint = core::ptr::null_mut();
     let mut n_eq: i32 = 0;
+    /// Number of elements in pEq
     let mut rc: i32 = 0;
     {
         p_iter = p_eq_1;
@@ -1797,6 +2016,8 @@ extern "C" fn idx_find_compatible(p_rc_1: &mut i32, dbm: *mut Sqlite3,
     return 0;
 }
 
+///* Return true if zId must be quoted in order to use it as an SQL
+///* identifier, or false otherwise.
 extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     let mut i: i32 = 0;
     let n_id: i32 = unsafe { strlen(z_id_1) } as i32;
@@ -1830,6 +2051,8 @@ extern "C" fn idx_identifier_requires_quotes(z_id_1: *const i8) -> i32 {
     return 0;
 }
 
+///* This function appends an index column definition suitable for constraint
+///* pCons to the string passed as zIn and returns the result.
 extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     p_tab_1: &IdxTable, p_cons_1: &IdxConstraint) -> *mut i8 {
     let mut z_ret: *mut i8 = z_in_1;
@@ -1891,6 +2114,9 @@ extern "C" fn idx_append_col_defn(p_rc_1: *mut i32, z_in_1: *mut i8,
     return z_ret;
 }
 
+/// Callback for sqlite3_exec() with query with leading count(*) column.
+///The first argument is expected to be an int*, referent to be incremented
+///if that leading column is not exactly '0'.
 extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     az_results_1: *mut *mut i8, az_columns_1: *mut *mut i8) -> i32 {
     { let _ = az_columns_1; };
@@ -1910,6 +2136,8 @@ extern "C" fn count_nonzeros(p_count_1: *mut (), nc: i32,
     return 0;
 }
 
+///* Return the index of the hash bucket that the string specified by the
+///* arguments to this function belongs.
 extern "C" fn idx_hash_string(z: &[i8]) -> i32 {
     let mut ret: u32 = 0 as u32;
     let mut i: i32 = 0;
@@ -1927,6 +2155,9 @@ extern "C" fn idx_hash_string(z: &[i8]) -> i32 {
     return (ret % 1023 as u32) as i32;
 }
 
+///* If zKey is already present in the hash table, return non-zero and do
+///* nothing. Otherwise, add an entry with key zKey and payload string zVal to
+///* the hash table passed as the second argument.
 extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     z_key_1: *const i8, z_val_1: *const i8) -> i32 {
     let n_key: i32 = unsafe { strlen(z_key_1) } as i32;
@@ -2004,6 +2235,7 @@ extern "C" fn idx_hash_add(p_rc_1: *mut i32, p_hash_1: &mut IdxHash,
     return 0;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_eq_1: *mut IdxConstraint,
     p_tail_1: *mut IdxConstraint) -> i32 {
@@ -2046,11 +2278,13 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
             }
         }
         if rc == 0 {
+            /// Hash the list of columns to come up with a name for the index
             let z_table: *const i8 =
                 unsafe { (*unsafe { (*p_scan_1).p_tab }).z_name } as
                     *const i8;
             let quote_table: i32 = idx_identifier_requires_quotes(z_table);
             let mut z_name: *mut i8 = core::ptr::null_mut();
+            /// Index name
             let mut collisions: i32 = 0;
             '__b37: loop {
                 '__c37: loop {
@@ -2077,9 +2311,11 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
                                     *const i8, z_table, h)
                         };
                     if z_name == core::ptr::null_mut() { break '__b37; }
-                    z_fmt =
+
+                    /// Is is unique among table, view and index names?
+                    (z_fmt =
                         c"SELECT count(*) FROM sqlite_schema WHERE name=%Q AND type in (\'index\',\'table\',\'view\')".as_ptr()
-                                as *mut i8 as *const i8;
+                                as *mut i8 as *const i8);
                     z_find = unsafe { sqlite3_mprintf(z_fmt, z_name) };
                     i = 0;
                     rc =
@@ -2104,7 +2340,9 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
                 }
             }
             if collisions != 0 {
-                rc = 5 | 3 << 8;
+
+                /// This return means "Gave up trying to find a unique index name."
+                (rc = 5 | 3 << 8);
             } else if z_name == core::ptr::null_mut() {
                 rc = 7;
             } else {
@@ -2143,6 +2381,7 @@ extern "C" fn idx_create_from_cons(p: &mut Sqlite3expert,
     return rc;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     p_scan_1: *mut IdxScan, p_tail_1: *mut IdxConstraint) -> i32 {
     let mut p1: *mut IdxConstraint = core::ptr::null_mut();
@@ -2165,7 +2404,10 @@ extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
             p_con = unsafe { (*p_con).p_next };
         }
     }
-    rc = idx_create_from_cons(unsafe { &mut *p }, p_scan_1, p1, p_tail_1);
+
+    /// Create an index using the == constraints collected above. And the
+    ///* range constraint/ORDER BY terms passed in by the caller, if any.
+    (rc = idx_create_from_cons(unsafe { &mut *p }, p_scan_1, p1, p_tail_1));
     if p_tail_1 == core::ptr::null_mut() {
         {
             p_con = unsafe { (*p_scan_1).p_range };
@@ -2197,6 +2439,8 @@ extern "C" fn idx_create_from_where(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Create candidate indexes in database [dbm] based on the data in 
+///* linked-list pScan.
 extern "C" fn idx_create_candidates(p: *mut Sqlite3expert) -> i32 {
     let mut rc: i32 = 0;
     let mut p_iter: *mut IdxScan = core::ptr::null_mut();
@@ -2262,6 +2506,7 @@ extern "C" fn idx_largest_index(db: *mut Sqlite3, pn_max_1: &mut i32,
     return rc;
 }
 
+///* Implementation of scalar function sqlite_expert_rem().
 extern "C" fn idx_rem_func(p_ctx_1: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let p: *mut IdxRemCtx =
@@ -2518,6 +2763,8 @@ extern "C" fn idx_build_sample_table(p: &Sqlite3expert, z_tab_1: *const i8)
     return rc;
 }
 
+///* If zKey/nKey is present in the hash table, return a pointer to the 
+///* hash-entry object.
 extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     mut n_key_1: i32) -> *mut IdxHashEntry {
     let mut i_hash: i32 = 0;
@@ -2559,6 +2806,7 @@ extern "C" fn idx_hash_find(p_hash_1: &IdxHash, z_key_1: *const i8,
     return core::ptr::null_mut();
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     p_index_x_info_1: *mut Sqlite3Stmt, p_write_stat_1: *mut Sqlite3Stmt,
     z_tab_1: *const i8, z_idx_1: *const i8, pz_err_1: *mut *mut i8) -> i32 {
@@ -2577,6 +2825,8 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
                 c"p->iSample>0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
+
+    /// Formulate the query text
     unsafe { sqlite3_bind_text(p_index_x_info_1, 1, z_idx_1, -1, None) };
     while 0 == rc && 100 == unsafe { sqlite3_step(p_index_x_info_1) } {
         let z_comma: *const i8 =
@@ -2588,6 +2838,8 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
         let z_coll: *const i8 =
             unsafe { sqlite3_column_text(p_index_x_info_1, 1) } as *const i8;
         if z_name == core::ptr::null() {
+
+            /// This index contains an expression. Ignore it.
             unsafe { sqlite3_free(z_cols as *mut ()) };
             unsafe { sqlite3_free(z_order as *mut ()) };
             return unsafe { sqlite3_reset(p_index_x_info_1) };
@@ -2748,6 +3000,11 @@ extern "C" fn idx_populate_one_stat1(p: &mut Sqlite3expert,
     return rc;
 }
 
+///* This function is called as part of sqlite3_expert_analyze(). Candidate
+///* indexes have already been created in database sqlite3expert.dbm, this
+///* function populates sqlite_stat1 table in the same database.
+///*
+///* The stat1 data is generated by querying the
 extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
@@ -2900,12 +3157,17 @@ extern "C" fn idx_populate_stat1(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Initialize an IdxHash hash table.
 extern "C" fn idx_hash_init(p_hash_1: *mut IdxHash) -> () {
     unsafe {
         memset(p_hash_1 as *mut (), 0, core::mem::size_of::<IdxHash>() as u64)
     };
 }
 
+///* If the hash table contains an entry with a key equal to the string
+///* passed as the final two arguments to this function, return a pointer
+///* to the payload string. Otherwise, if zKey/nKey is not present in the
+///* hash table, return NULL.
 extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     n_key_1: i32) -> *const i8 {
     let p_entry: *const IdxHashEntry =
@@ -2917,6 +3179,10 @@ extern "C" fn idx_hash_search(p_hash_1: *mut IdxHash, z_key_1: *const i8,
     return core::ptr::null();
 }
 
+///* This function is called after candidate indexes have been created. It
+///* runs all the queries to see which indexes they prefer, and populates
+///* IdxStatement.zIdx and IdxStatement.zEQP with the results.
+#[allow(unused_doc_comments)]
 extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     -> i32 {
     let mut p_stmt: *mut IdxStatement = core::ptr::null_mut();
@@ -2925,6 +3191,9 @@ extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
     let mut h_idx: IdxHash = unsafe { core::mem::zeroed() };
     let mut p_entry: *const IdxHashEntry = core::ptr::null();
     let mut p_explain: *mut Sqlite3Stmt = core::ptr::null_mut();
+    /// int iId = sqlite3_column_int(pExplain, 0); */
+    ///      /* int iParent = sqlite3_column_int(pExplain, 1); */
+    ///      /* int iNotUsed = sqlite3_column_int(pExplain, 2);
     let mut z_detail: *const i8 = core::ptr::null();
     let mut n_detail: i32 = 0;
     let mut i: i32 = 0;
@@ -3104,15 +3373,38 @@ extern "C" fn idx_find_indexes(p: &mut Sqlite3expert, pz_err_1: *mut *mut i8)
             }
         }
     }
+
+    /// int iId = sqlite3_column_int(pExplain, 0); */
+    ///      /* int iParent = sqlite3_column_int(pExplain, 1); */
+    ///      /* int iNotUsed = sqlite3_column_int(pExplain, 2);
     unreachable!();
 }
 
+///* This function is called after the sqlite3expert object has been configured
+///* with all SQL statements using sqlite3_expert_sql() to actually perform
+///* the analysis. Once this function has been called, it is not possible to
+///* add further SQL statements to the analysis.
+///*
+///* If successful, SQLITE_OK is returned and (*pzErr) is set to NULL. Or, if
+///* an error occurs, an SQLite error code is returned and (*pzErr) set to 
+///* point to a buffer containing an English language error message. In this
+///* case it is the responsibility of the caller to eventually free the buffer
+///* using sqlite3_free().
+///*
+///* If an error does occur within this function, the sqlite3expert object
+///* is no longer useful for any purpose. At that point it is no longer
+///* possible to add further SQL statements to the object or to re-attempt
+///* the analysis. The sqlite3expert object must still be freed using a call
+///* sqlite3_expert_destroy().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     pz_err_1: *mut *mut i8) -> i32 {
     let mut rc: i32 = 0;
     let mut p_entry: *const IdxHashEntry = core::ptr::null();
-    rc = idx_process_triggers(p, pz_err_1);
+
+    /// Do trigger processing to collect any extra IdxScan structures
+    (rc = idx_process_triggers(p, pz_err_1));
     if rc == 0 {
         rc = idx_create_candidates(p);
     } else if rc == 5 | 3 << 8 {
@@ -3155,6 +3447,9 @@ pub extern "C" fn sqlite3_expert_analyze(p: *mut Sqlite3expert,
     return rc;
 }
 
+///* Return the total number of statements loaded using sqlite3_expert_sql().
+///* The total number of SQL statements may be different from the total number
+///* to calls to sqlite3_expert_sql().
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     let mut n_ret: i32 = 0;
@@ -3164,6 +3459,38 @@ pub extern "C" fn sqlite3_expert_count(p: &Sqlite3expert) -> i32 {
     return n_ret;
 }
 
+///* Return a component of the report.
+///*
+///* This function is called after sqlite3_expert_analyze() to extract the
+///* results of the analysis. Each call to this function returns either a
+///* NULL pointer or a pointer to a buffer containing a nul-terminated string.
+///* The value passed as the third argument must be one of the EXPERT_REPORT_*
+///* #define constants defined below.
+///*
+///* For some EXPERT_REPORT_* parameters, the buffer returned contains 
+///* information relating to a specific SQL statement. In these cases that
+///* SQL statement is identified by the value passed as the second argument.
+///* SQL statements are numbered from 0 in the order in which they are parsed.
+///* If an out-of-range value (less than zero or equal to or greater than the
+///* value returned by sqlite3_expert_count()) is passed as the second argument
+///* along with such an EXPERT_REPORT_* parameter, NULL is always returned.
+///*
+///* EXPERT_REPORT_SQL:
+///*   Return the text of SQL statement iStmt.
+///*
+///* EXPERT_REPORT_INDEXES:
+///*   Return a buffer containing the CREATE INDEX statements for all recommended
+///*   indexes for statement iStmt. If there are no new recommeded indexes, NULL 
+///*   is returned.
+///*
+///* EXPERT_REPORT_PLAN:
+///*   Return a buffer containing the EXPLAIN QUERY PLAN output for SQL query
+///*   iStmt after the proposed indexes have been added to the database schema.
+///*
+///* EXPERT_REPORT_CANDIDATES:
+///*   Return a pointer to a buffer containing the CREATE INDEX statements 
+///*   for all indexes that were tested (for all SQL statements). The iStmt
+///*   parameter is ignored for EXPERT_REPORT_CANDIDATES calls.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_expert_report(p: &Sqlite3expert, i_stmt_1: i32,
     e_report_1: i32) -> *const i8 {

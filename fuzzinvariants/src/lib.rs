@@ -1,10 +1,22 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
 
 type DarwinSizeT = u64;
 
+///* Special parameter binding, for testing and debugging purposes.
+///*
+///*     $int_NNN        ->   integer value NNN
+///*     $text_TTTT      ->   floating point value TTT with destructor
+///*     $carray_clr     ->   First argument to carray() for color names
+///*     $carray_primes  ->   First argument to carray() for prime numbers
 extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
     let n_var: i32 = unsafe { sqlite3_bind_parameter_count(p_stmt_1) };
     let mut i: i32 = 0;
@@ -50,6 +62,8 @@ extern "C" fn bind_debug_parameters(p_stmt_1: *mut Sqlite3Stmt) -> () {
     }
 }
 
+/// Forward references
+#[allow(unused_doc_comments)]
 extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
     -> *mut i8 {
     let mut z_in: *const i8 = core::ptr::null();
@@ -139,6 +153,9 @@ extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
                             unsafe {
                                     isdigit(unsafe { *z_suffix.offset(2 as isize) } as i32)
                                 } != 0) {
+
+                    /// This is a randomized column name and so cannot be used in the
+                    ///* WHERE clause.
                     break '__c3;
                 }
                 {
@@ -156,7 +173,11 @@ extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
                         { let __p = &mut j; let __t = *__p; *__p += 1; __t };
                     }
                 }
-                if j < i { break '__c3; }
+                if j < i {
+
+                    /// Duplicate column name
+                    break '__c3;
+                }
                 if i_cnt == 0 { break '__c3; }
                 if i_cnt > 1 && i + 2 != i_cnt { break '__c3; }
                 if z_col_name == core::ptr::null() { break '__c3; }
@@ -194,6 +215,7 @@ extern "C" fn fuzz_invariant_sql(p_stmt: *mut Sqlite3Stmt, mut i_cnt: i32)
     return unsafe { sqlite3_str_finish(p_test) };
 }
 
+///* Return true if and only if v1 and is the same as v2.
 extern "C" fn same_value(p_s1: *mut Sqlite3Stmt, i1: i32,
     p_s2: *mut Sqlite3Stmt, i2: i32, p_test_compare: *mut Sqlite3Stmt)
     -> i32 {
@@ -519,6 +541,7 @@ extern "C" fn same_value(p_s1: *mut Sqlite3Stmt, i1: i32,
     return x;
 }
 
+///* Print binary data as hex
 extern "C" fn print_hex(a: &[u8], mx: i32) -> () {
     let mut j: i32 = 0;
     {
@@ -540,6 +563,7 @@ extern "C" fn print_hex(a: &[u8], mx: i32) -> () {
     }
 }
 
+///* Print a single row from the prepared statement
 extern "C" fn print_row(p_stmt_1: *mut Sqlite3Stmt, i_row_1: i32) -> () {
     let mut i: i32 = 0;
     let mut n: i32 = 0;
@@ -1360,6 +1384,8 @@ extern "C" fn print_row(p_stmt_1: *mut Sqlite3Stmt, i_row_1: i32) -> () {
     }
 }
 
+///* Report a failure of the invariant:  The current output row of pOrig
+///* does not appear in any row of the output from pTest.
 extern "C" fn report_invariant_failed(p_orig: *mut Sqlite3Stmt,
     p_test: *mut Sqlite3Stmt, i_row: i32, db_opt: u32, no_opt: i32) -> () {
     let mut i_test_row: i32 = 0;
@@ -1402,7 +1428,35 @@ extern "C" fn report_invariant_failed(p_orig: *mut Sqlite3Stmt,
     unsafe { abort() };
 }
 
+///* Do an invariant check on pStmt.  iCnt determines which invariant check to
+///* perform.  The first check is iCnt==0.
+///*
+///* *pbCorrupt is a flag that, if true, indicates that the database file
+///* is known to be corrupt.  A value of non-zero means "yes, the database
+///* is corrupt".  A zero value means "we do not know whether or not the
+///* database is corrupt".  The value might be set prior to entry, or this
+///* routine might set the value.
+///*
+///* Return values:
+///*
+///*     SQLITE_OK          This check was successful.
+///*
+///*     SQLITE_DONE        iCnt is out of range.  The caller typically sets
+///*                        up a loop on iCnt starting with zero, and increments
+///*                        iCnt until this code is returned.
+///*
+///*     SQLITE_CORRUPT     The invariant failed, but the underlying database
+///*                        file is indicating that it is corrupt, which might
+///*                        be the cause of the malfunction.  The *pCorrupt
+///*                        value will also be set.
+///*
+///*     SQLITE_INTERNAL    The invariant failed, and the database file is not
+///*                        corrupt.  (This never happens because this function
+///*                        will call abort() following an invariant failure.)
+///*
+///*     (other)            Some other kind of error occurred.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn fuzz_invariant(db: *mut Sqlite3, p_stmt_1: *mut Sqlite3Stmt,
     i_cnt_1: i32, i_row_1: i32, n_row_1: i32, pb_corrupt_1: &mut i32,
     e_verbosity_1: i32, db_opt_1: u32) -> i32 {
@@ -1414,11 +1468,22 @@ pub extern "C" fn fuzz_invariant(db: *mut Sqlite3, p_stmt_1: *mut Sqlite3Stmt,
     let mut n_param: i32 = 0;
     let mut no_opt: i32 = 0;
     let mut z_sql: *mut i8 = core::ptr::null_mut();
+    /// No matching output row found
     let mut p_ck: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut i_orig_rso: i32 = 0;
+    /// This is not a fault if the database file is corrupt, because anything
+    ///* can happen with a corrupt database file
     let mut z_sql_1: *mut i8 = core::ptr::null_mut();
+    ///* If inverting the scan order also results in a miss, assume that the
+    ///* query is ambiguous and do not report a fault.
     let mut z_sql_2: *mut i8 = core::ptr::null_mut();
+    /// The original sameValue() comparison assumed a collating sequence
+    ///* of "binary".  It can sometimes get an incorrect result for different
+    ///* collating sequences.  So rerun the test with no assumptions about
+    ///* collations.
     let mut z_sql_3: *mut i8 = core::ptr::null_mut();
+    /// Invariants do not necessarily work if there are virtual tables
+    ///* or scalar subqueries involved in the query
     let mut z_sql_4: *mut i8 = core::ptr::null_mut();
     let mut __state: i32 = 0;
     loop {
@@ -1855,6 +1920,18 @@ pub extern "C" fn fuzz_invariant(db: *mut Sqlite3, p_stmt_1: *mut Sqlite3Stmt,
             }
         }
     }
+
+    /// No matching output row found
+    /// This is not a fault if the database file is corrupt, because anything
+    ///* can happen with a corrupt database file
+    ///* If inverting the scan order also results in a miss, assume that the
+    ///* query is ambiguous and do not report a fault.
+    /// The original sameValue() comparison assumed a collating sequence
+    ///* of "binary".  It can sometimes get an incorrect result for different
+    ///* collating sequences.  So rerun the test with no assumptions about
+    ///* collations.
+    /// Invariants do not necessarily work if there are virtual tables
+    ///* or scalar subqueries involved in the query
     unreachable!();
 }
 

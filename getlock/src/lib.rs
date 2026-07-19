@@ -35,6 +35,9 @@ extern "C" fn usage(argv0: *const i8) -> () {
     }
 }
 
+/// Check for a conflicting lock.  If one is found, print an this
+///* on standard output using the format string given and return 1.
+///* If there are no conflicting locks, return 0.
 extern "C" fn is_locked(h: i32, type__1: i32, i_ofst_1: u32, i_cnt_1: u32,
     z_type_1: *const i8) -> i32 {
     unsafe {
@@ -64,17 +67,26 @@ extern "C" fn is_locked(h: i32, type__1: i32, i_ofst_1: u32, i_cnt_1: u32,
     }
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
     -> Result<(), i32> {
     unsafe {
         let mut h_db: i32 = 0;
+        /// File descriptor for the open database file
         let mut h_shm: i32 = 0;
+        /// File descriptor for WAL shared-memory file
         let mut z_shm: *mut i8 = core::ptr::null_mut();
+        /// Name of the shared-memory file for WAL mode
         let mut got: i64 = 0 as i64;
+        /// Bytes read from header
         let mut is_wal: i32 = 0;
+        /// True if in WAL mode
         let mut n_name: i32 = 0;
+        /// Length of filename
         let mut a_hdr: [u8; 100] = [0; 100];
+        /// Database header
         let mut n_lock: i32 = 0;
+        /// Number of locks held
         let mut i: i32 = 0;
         if argc != 2 {
             usage(unsafe { *argv.offset(0 as isize) } as *const i8);
@@ -91,11 +103,13 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
             };
             return Err(1);
         }
-        got =
+
+        /// Make sure we are dealing with an database file
+        (got =
             unsafe {
                 read(h_db, &raw mut a_hdr[0 as usize] as *mut u8 as *mut (),
                     100 as u64)
-            };
+            });
         if got != 100 as i64 ||
                 unsafe {
                         memcmp(&raw mut a_hdr[0 as usize] as *mut u8 as *const (),
@@ -128,11 +142,15 @@ extern "C" fn __main_inner(argc: i32, argv: *const *mut i8)
                 return Ok(());
             }
         } else {
-            n_name =
+
+            /// WAL mode
+            (n_name =
                 unsafe {
                         strlen(unsafe { *argv.offset(1 as isize) } as *const i8)
-                    } as i32;
-            z_shm = unsafe { malloc((n_name + 100) as u64) } as *mut i8;
+                    } as i32);
+
+            /// WAL mode
+            (z_shm = unsafe { malloc((n_name + 100) as u64) } as *mut i8);
             if z_shm == core::ptr::null_mut() {
                 eprintln!("out of memory");
                 unsafe { exit(1) };

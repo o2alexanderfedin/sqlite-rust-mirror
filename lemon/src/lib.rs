@@ -2,6 +2,8 @@
 
 type DarwinSizeT = u64;
 
+/// Each state of the generated parser's finite state machine
+///* is encoded as an instance of the following structure.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct State {
@@ -31,6 +33,7 @@ struct Config {
     bp: *mut Config,
 }
 
+/// a few forward declarations...
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Rule {
@@ -78,6 +81,8 @@ struct Symbol {
     subsym: *mut *mut Symbol,
 }
 
+/// Symbols (terminals and nonterminals) of the grammar are stored
+///* in the following:
 const TERMINAL: u32 = 0;
 
 const NONTERMINAL: u32 = 1;
@@ -92,12 +97,21 @@ const NONE: u32 = 2;
 
 const UNK: u32 = 3;
 
+///******* From the file "struct.h" *************************************/
+////*
+///* Principal data structures for the LEMON parser generator.
 const LEMON_FALSE: u32 = 0;
 
 const LEMON_TRUE: u32 = 1;
 
+///******* From the file "struct.h" *************************************/
+////*
+///* Principal data structures for the LEMON parser generator.
 type Boolean = u32;
 
+/// A followset propagation link indicates that the contents of one
+///* configuration followset should be propagated to another whenever
+///* the first changes.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Plink {
@@ -105,10 +119,16 @@ struct Plink {
     next: *mut Plink,
 }
 
+/// A configuration is a production rule of the grammar together with
+///* a mark (dot) showing how much of that rule has been processed so far.
+///* Configurations also contain a follow-set which is a list of terminal
+///* symbols which are allowed to immediately follow the end of the rule.
+///* Every configuration is recorded as an instance of the following:
 const COMPLETE: u32 = 0;
 
 const INCOMPLETE: u32 = 1;
 
+/// Every shift or reduce operation is stored as one of the following
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Action {
@@ -148,6 +168,10 @@ union ActionU0 {
     rp: *mut Rule,
 }
 
+/// The state vector for the entire parser generator is recorded as
+///* follows.  (LEMON uses no global variables and makes little use of
+///* static variables.  Fields in the following structure can be thought
+///* of as begin global variables in the program.)
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Lemon {
@@ -203,8 +227,22 @@ struct Lemon {
     argv: *mut *mut i8,
 }
 
+/// Top of list of basis configs
 static mut basis: *mut Config = core::ptr::null_mut();
 
+///* Inputs:
+///*   a:       A sorted, null-terminated linked list.  (May be null).
+///*   b:       A sorted, null-terminated linked list.  (May be null).
+///*   cmp:     A pointer to the comparison function.
+///*   offset:  Offset in the structure to the "next" field.
+///*
+///* Return Value:
+///*   A pointer to the head of a sorted list containing the elements
+///*   of both a and b.
+///*
+///* Side effects:
+///*   The "next" pointers for elements in the lists a and b are
+///*   changed.
 extern "C" fn merge(mut a: *mut i8, mut b: *mut i8,
     cmp: Option<unsafe extern "C" fn(*const i8, *const i8) -> i32>,
     offset: i32) -> *mut i8 {
@@ -336,8 +374,10 @@ extern "C" fn msort(mut list: *mut i8, next: *mut *mut i8,
     return ep;
 }
 
+/// Top of list of configurations
 static mut current: *mut Config = core::ptr::null_mut();
 
+/// Routines to manage the state table
 #[unsafe(no_mangle)]
 pub extern "C" fn configcmp(_a: *const i8, _b: *const i8) -> i32 {
     unsafe {
@@ -352,8 +392,10 @@ pub extern "C" fn configcmp(_a: *const i8, _b: *const i8) -> i32 {
     }
 }
 
+/// End of list of basis configs
 static mut basisend: *mut *mut Config = core::ptr::null_mut();
 
+/// Sort the basis configuration list
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_sortbasis() -> () {
     unsafe {
@@ -375,8 +417,19 @@ struct MemChunk {
     sz: u64,
 }
 
+///* Global linked list of all memory allocations.
 static mut mem_chunk_list: *mut MemChunk = core::ptr::null_mut();
 
+///* Wrappers around malloc(), calloc(), realloc() and free().
+///*
+///* All memory allocations are kept on a doubly-linked list.  The
+///* lemon_free_all() function can be called prior to exit to clean
+///* up any memory leaks.
+///*
+///* This is not necessary.  But compilers and getting increasingly
+///* fussy about memory leaks, even in command-line programs like Lemon
+///* where they do not matter.  So this code is provided to hush the
+///* warnings.
 extern "C" fn lemon_malloc(n_byte_1: u64) -> *mut () {
     unsafe {
         let mut p: *mut MemChunk = core::ptr::null_mut();
@@ -433,6 +486,8 @@ extern "C" fn lemon_realloc(p_old_1: *mut (), n_new_1: u64) -> *mut () {
     return p_new;
 }
 
+/// Free all outstanding memory allocations.
+///* Do this right before exiting.
 extern "C" fn lemon_free_all() -> () {
     unsafe {
         while !(mem_chunk_list).is_null() {
@@ -443,6 +498,21 @@ extern "C" fn lemon_free_all() -> () {
     }
 }
 
+///* Compilers are starting to complain about the use of sprintf() and strcpy(),
+///* saying they are unsafe.  So we define our own versions of those routines too.
+///*
+///* There are three routines here:  lemon_sprintf(), lemon_vsprintf(), and
+///* lemon_addtext(). The first two are replacements for sprintf() and vsprintf().
+///* The third is a helper routine for vsnprintf() that adds texts to the end of a
+///* buffer, making sure the buffer is always zero-terminated.
+///*
+///* The string formatter is a minimal subset of stdlib sprintf() supporting only
+///* a few simply conversions:
+///*
+///*   %d
+///*   %s
+///*   %.*s
+///*
 extern "C" fn lemon_addtext(z_buf_1: *mut i8, pn_used_1: &mut i32,
     z_in_1: *const i8, mut n_in_1: i32, mut i_width_1: i32) -> () {
     if n_in_1 < 0 {
@@ -662,6 +732,7 @@ extern "C" fn lemon_strcat(mut dest: *mut i8, src: *const i8) -> () {
     lemon_strcpy(dest, src);
 }
 
+/// Allocate a new parser action
 extern "C" fn action_new() -> *mut Action {
     unsafe {
         let mut newaction: *mut Action = core::ptr::null_mut();
@@ -700,6 +771,9 @@ extern "C" fn action_new() -> *mut Action {
     }
 }
 
+/// Compare two actions for sorting purposes.  Return negative, zero, or
+///* positive if the first action is less than, equal to, or greater than
+///* the first
 extern "C" fn actioncmp(ap1: *mut Action, ap2: *mut Action) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
@@ -723,6 +797,7 @@ extern "C" fn actioncmp(ap1: *mut Action, ap2: *mut Action) -> i32 {
     }
 }
 
+/// Sort parser actions
 extern "C" fn action_sort(mut ap: *mut Action) -> *mut Action {
     ap =
         msort(ap as *mut i8, unsafe { &raw mut (*ap).next } as *mut *mut i8,
@@ -734,8 +809,11 @@ extern "C" fn action_sort(mut ap: *mut Action) -> *mut Action {
     return ap;
 }
 
+/// Last on list of configs
 static mut currentend: *mut *mut Config = core::ptr::null_mut();
 
+/// There is one instance of the following structure for each
+///* associative array of type "x4".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX4 {
@@ -745,6 +823,8 @@ struct SX4 {
     ht: *mut *mut SX4node,
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x4".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX4node {
@@ -753,10 +833,14 @@ struct SX4node {
     from: *mut *mut SX4node,
 }
 
+/// There is only one instance of the array, which is the following
 static mut x4a: *mut SX4 = unsafe { core::mem::zeroed() };
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x4".
 type X4node = SX4node;
 
+/// Routines used for efficiency in Configlist_add
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_init() -> () {
     unsafe {
@@ -802,6 +886,7 @@ pub extern "C" fn configtable_init() -> () {
     }
 }
 
+///****** From the file "configlist.h" ********************************
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_init() -> () {
     unsafe {
@@ -814,6 +899,7 @@ pub extern "C" fn configlist_init() -> () {
     }
 }
 
+/// Sort the configuration list
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_sort() -> () {
     unsafe {
@@ -826,6 +912,8 @@ pub extern "C" fn configlist_sort() -> () {
     }
 }
 
+/// Remove all data from the table.  Pass each data to the function "f"
+///* as it is removed.  ("f" may be null to avoid this step.)
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_clear(f:
         Option<unsafe extern "C" fn(*mut Config) -> i32>) -> () {
@@ -870,6 +958,7 @@ pub extern "C" fn configtable_clear(f:
     }
 }
 
+/// Initialized the configuration list builder
 #[unsafe(no_mangle)]
 pub extern "C" fn configlist_reset() -> () {
     unsafe {
@@ -882,6 +971,7 @@ pub extern "C" fn configlist_reset() -> () {
     }
 }
 
+///****** From the file "error.h" **************************************
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn error_msg(filename: *const i8, lineno: i32,
     format: *const i8, mut __va0: ...) -> () {
@@ -898,6 +988,7 @@ pub unsafe extern "C" fn error_msg(filename: *const i8, lineno: i32,
     }
 }
 
+///*** From the file "option.h" *****************************************
 const OPT_FLAG: u32 = 1;
 
 const OPT_INT: u32 = 2;
@@ -923,6 +1014,7 @@ struct SOptions {
     message: *const i8,
 }
 
+///********************* From the file "option.c" *************************
 static mut g_argv: *mut *mut i8 = unsafe { core::mem::zeroed() };
 
 static mut op: *mut SOptions = unsafe { core::mem::zeroed() };
@@ -936,6 +1028,8 @@ static mut emsg: [i8; 28] =
             120 as i8, 32 as i8, 101 as i8, 114 as i8, 114 as i8, 111 as i8,
             114 as i8, 58 as i8, 32 as i8, 0 as i8];
 
+///* Print the command line with a carrot pointing to the k-th character
+///* of the n-th field.
 extern "C" fn errline(n: i32, k: i32, err: *mut FILE) -> () {
     unsafe {
         let mut spcnt: i32 = 0;
@@ -1003,6 +1097,7 @@ extern "C" fn errline(n: i32, k: i32, err: *mut FILE) -> () {
     }
 }
 
+///* Process a flag command line argument.
 extern "C" fn handleflags(i: i32, err: *mut FILE) -> i32 {
     unsafe {
         let mut v: i32 = 0;
@@ -1088,6 +1183,7 @@ extern "C" fn handleflags(i: i32, err: *mut FILE) -> i32 {
     }
 }
 
+///* Process a command line switch which has an argument.
 extern "C" fn handleswitch(i: i32, err: *mut FILE) -> i32 {
     unsafe {
         let mut lv: i32 = 0;
@@ -1555,6 +1651,8 @@ pub extern "C" fn opt_n_args() -> i32 {
     }
 }
 
+///* Return the index of the N-th non-switch argument.  Return -1
+///* if N is out of range.
 extern "C" fn argindex(mut n: i32) -> i32 {
     unsafe {
         let mut i: i32 = 0;
@@ -1618,8 +1716,13 @@ pub extern "C" fn opt_err(n: i32) -> () {
     }
 }
 
+///************************ From the file "plink.c" *********************/
+////*
+///* Routines processing configuration follow-set propagation links
+///* in the LEMON parser generator.
 static mut plink_freelist: *mut Plink = core::ptr::null_mut();
 
+///****** From the file "plink.h" **************************************
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_new() -> *mut Plink {
     unsafe {
@@ -1659,6 +1762,7 @@ pub extern "C" fn plink_new() -> *mut Plink {
     }
 }
 
+/// Transfer every plink on the list "from" to the list "to"
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_copy(to: &mut *mut Plink, mut from: *mut Plink)
     -> () {
@@ -1671,6 +1775,7 @@ pub extern "C" fn plink_copy(to: &mut *mut Plink, mut from: *mut Plink)
     }
 }
 
+/// Delete every plink on the list
 #[unsafe(no_mangle)]
 pub extern "C" fn plink_delete(mut plp: *mut Plink) -> () {
     unsafe {
@@ -1684,14 +1789,21 @@ pub extern "C" fn plink_delete(mut plp: *mut Plink) -> () {
     }
 }
 
+///************** From the file "set.c" ************************************/
+////*
+///* Set manipulation routines for the LEMON parser generator.
 static mut size: i32 = 0;
 
+///******* From the file "set.h" ***************************************
 #[unsafe(no_mangle)]
 pub extern "C" fn set_size(n: i32) -> () { unsafe { size = n + 1; } }
 
+/// Deallocate a set
 #[unsafe(no_mangle)]
 pub extern "C" fn set_free(s: *mut i8) -> () { lemon_free(s as *mut ()); }
 
+/// Add a new element to the set.  Return TRUE if the element was added
+///* and FALSE if it was already there.
 #[unsafe(no_mangle)]
 pub extern "C" fn set_add(s: *mut i8, e: i32) -> i32 {
     unsafe {
@@ -1709,6 +1821,7 @@ pub extern "C" fn set_add(s: *mut i8, e: i32) -> i32 {
     }
 }
 
+/// Add every element of s2 to s1.  Return TRUE if s1 changes.
 #[unsafe(no_mangle)]
 pub extern "C" fn set_union(s1: *mut i8, s2: *mut i8) -> i32 {
     unsafe {
@@ -1736,6 +1849,8 @@ pub extern "C" fn set_union(s1: *mut i8, s2: *mut i8) -> i32 {
     }
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x1".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX1node {
@@ -1744,8 +1859,12 @@ struct SX1node {
     from: *mut *mut SX1node,
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x1".
 type X1node = SX1node;
 
+/// There is one instance of the following structure for each
+///* associative array of type "x1".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX1 {
@@ -1753,8 +1872,20 @@ struct SX1 {
     count: i32,
 }
 
+/// There is only one instance of the array, which is the following
 static mut x1a: *mut SX1 = unsafe { core::mem::zeroed() };
 
+///******************* From the file "table.c" ****************************/
+////*
+///* All code in this file has been automatically generated
+///* from a specification in the file
+///*              "table.q"
+///* by the associative array code building program "aagen".
+///* Do not edit this file!  Instead, edit the specification
+///* file, then rerun aagen.
+////
+////*
+///* Code for processing tables in the LEMON parser generator.
 #[unsafe(no_mangle)]
 pub extern "C" fn strhash(mut x: *const i8) -> u32 {
     let mut h: u32 = 0 as u32;
@@ -1773,6 +1904,8 @@ pub extern "C" fn strhash(mut x: *const i8) -> u32 {
     return h;
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x2".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX2node {
@@ -1782,8 +1915,12 @@ struct SX2node {
     from: *mut *mut SX2node,
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x2".
 type X2node = SX2node;
 
+/// There is one instance of the following structure for each
+///* associative array of type "x2".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX2 {
@@ -1791,8 +1928,22 @@ struct SX2 {
     count: i32,
 }
 
+/// There is only one instance of the array, which is the following
 static mut x2a: *mut SX2 = unsafe { core::mem::zeroed() };
 
+/// Compare two symbols for sorting purposes.  Return negative,
+///* zero, or positive if a is less then, equal to, or greater
+///* than b.
+///*
+///* Symbols that begin with upper case letters (terminals or tokens)
+///* must sort before symbols that begin with lower case letters
+///* (non-terminals).  And MULTITERMINAL symbols (created using the
+///* %token_class directive) must sort at the very end. Other than
+///* that, the order does not matter.
+///*
+///* We find experimentally that leaving the symbols in their original
+///* order (the order they appeared in the grammar file) gives the
+///* smallest parser tables in SQLite.
 #[unsafe(no_mangle)]
 pub extern "C" fn symbolcmpp(_a: *const (), _b: *const ()) -> i32 {
     let a: *const Symbol = unsafe { *(_a as *mut *const Symbol) };
@@ -1820,6 +1971,7 @@ pub extern "C" fn symbolcmpp(_a: *const (), _b: *const ()) -> i32 {
         } else { i1 - i2 };
 }
 
+/// Return the size of the array
 #[unsafe(no_mangle)]
 pub extern "C" fn symbol_count() -> i32 {
     unsafe {
@@ -1827,6 +1979,8 @@ pub extern "C" fn symbol_count() -> i32 {
     }
 }
 
+/// There is one instance of the following structure for each
+///* associative array of type "x3".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX3 {
@@ -1836,6 +1990,8 @@ struct SX3 {
     ht: *mut *mut SX3node,
 }
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x3".
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct SX3node {
@@ -1845,10 +2001,14 @@ struct SX3node {
     from: *mut *mut SX3node,
 }
 
+/// There is only one instance of the array, which is the following
 static mut x3a: *mut SX3 = unsafe { core::mem::zeroed() };
 
+/// There is one instance of this structure for every data element
+///* in an associative array of type "x3".
 type X3node = SX3node;
 
+/// Allocate a new associative array
 #[unsafe(no_mangle)]
 pub extern "C" fn state_init() -> () {
     unsafe {
@@ -1894,6 +2054,7 @@ pub extern "C" fn state_init() -> () {
     }
 }
 
+/// Hash a state
 #[unsafe(no_mangle)]
 pub extern "C" fn statehash(mut a: *const Config) -> u32 {
     unsafe {
@@ -1909,6 +2070,7 @@ pub extern "C" fn statehash(mut a: *const Config) -> u32 {
     }
 }
 
+/// Compare two states
 #[unsafe(no_mangle)]
 pub extern "C" fn statecmp(mut a: *const Config, mut b: *const Config)
     -> i32 {
@@ -1940,7 +2102,10 @@ pub extern "C" fn statecmp(mut a: *const Config, mut b: *const Config)
     }
 }
 
+/// Insert a new record into the array.  Return TRUE if successful.
+///* Prior data with the same key is NOT overwritten
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
     unsafe {
         let mut np: *mut X3node = core::ptr::null_mut();
@@ -1953,11 +2118,15 @@ pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
         while !(np).is_null() {
             if statecmp(unsafe { (*np).key } as *const Config,
                         key as *const Config) == 0 {
+
+                /// An existing entry with the same key is found. */
+                ///      /* Fail because overwrite is not allows.
                 return 0;
             }
             np = unsafe { (*np).next } as *mut X3node;
         }
         if unsafe { (*x3a).count } >= unsafe { (*x3a).size } {
+            /// Need to make the hash table bigger
             let mut i: i32 = 0;
             let mut arr_size: i32 = 0;
             let mut array: SX3 = unsafe { core::mem::zeroed() };
@@ -1969,9 +2138,11 @@ pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
                                 core::mem::size_of::<*mut X3node>() as u64) as *mut X3node
                     as *mut SX3node;
             if array.tbl == core::ptr::null_mut() { return 0; }
-            array.ht =
+
+            /// Fail due to malloc failure
+            (array.ht =
                 unsafe { &raw mut *array.tbl.offset(arr_size as isize) } as
-                        *mut *mut X3node as *mut *mut SX3node;
+                        *mut *mut X3node as *mut *mut SX3node);
             {
                 i = 0;
                 '__b40: loop {
@@ -2025,7 +2196,9 @@ pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
             lemon_free(unsafe { (*x3a).tbl } as *mut ());
             unsafe { *x3a = array };
         }
-        h = ph & (unsafe { (*x3a).size } - 1) as u32;
+
+        /// Insert the new data
+        (h = ph & (unsafe { (*x3a).size } - 1) as u32);
         np =
             unsafe {
                     unsafe {
@@ -2056,6 +2229,8 @@ pub extern "C" fn state_insert(data: *mut State, key: *mut Config) -> i32 {
     }
 }
 
+/// Return a pointer to data assigned to the given key.  Return NULL
+///* if no such key.
 #[unsafe(no_mangle)]
 pub extern "C" fn state_find(key: *mut Config) -> *mut State {
     unsafe {
@@ -2079,6 +2254,9 @@ pub extern "C" fn state_find(key: *mut Config) -> *mut State {
     }
 }
 
+/// Return an array of pointers to all data in the table.
+///* The array is obtained from malloc.  Return NULL if memory allocation
+///* problems, or if the array is empty.
 #[unsafe(no_mangle)]
 pub extern "C" fn state_arrayof() -> *mut *mut State {
     unsafe {
@@ -2111,6 +2289,7 @@ pub extern "C" fn state_arrayof() -> *mut *mut State {
     }
 }
 
+/// Hash a configuration
 #[unsafe(no_mangle)]
 pub extern "C" fn confighash(a: &Config) -> u32 {
     unsafe {
@@ -2120,7 +2299,10 @@ pub extern "C" fn confighash(a: &Config) -> u32 {
     }
 }
 
+/// Insert a new record into the array.  Return TRUE if successful.
+///* Prior data with the same key is NOT overwritten
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
     unsafe {
         let mut np: *mut X4node = core::ptr::null_mut();
@@ -2133,11 +2315,15 @@ pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
         while !(np).is_null() {
             if configcmp(unsafe { (*np).data } as *const i8,
                         data as *const i8) == 0 {
+
+                /// An existing entry with the same key is found. */
+                ///      /* Fail because overwrite is not allows.
                 return 0;
             }
             np = unsafe { (*np).next } as *mut X4node;
         }
         if unsafe { (*x4a).count } >= unsafe { (*x4a).size } {
+            /// Need to make the hash table bigger
             let mut i: i32 = 0;
             let mut arr_size: i32 = 0;
             let mut array: SX4 = unsafe { core::mem::zeroed() };
@@ -2149,9 +2335,11 @@ pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
                                 core::mem::size_of::<*mut X4node>() as u64) as *mut X4node
                     as *mut SX4node;
             if array.tbl == core::ptr::null_mut() { return 0; }
-            array.ht =
+
+            /// Fail due to malloc failure
+            (array.ht =
                 unsafe { &raw mut *array.tbl.offset(arr_size as isize) } as
-                        *mut *mut X4node as *mut *mut SX4node;
+                        *mut *mut X4node as *mut *mut SX4node);
             {
                 i = 0;
                 '__b45: loop {
@@ -2203,7 +2391,9 @@ pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
             }
             unsafe { *x4a = array };
         }
-        h = ph & (unsafe { (*x4a).size } - 1) as u32;
+
+        /// Insert the new data
+        (h = ph & (unsafe { (*x4a).size } - 1) as u32);
         np =
             unsafe {
                     unsafe {
@@ -2233,6 +2423,8 @@ pub extern "C" fn configtable_insert(data: *mut Config) -> i32 {
     }
 }
 
+/// Return a pointer to data assigned to the given key.  Return NULL
+///* if no such key.
 #[unsafe(no_mangle)]
 pub extern "C" fn configtable_find(key: *mut Config) -> *mut Config {
     unsafe {
@@ -2258,6 +2450,24 @@ pub extern "C" fn configtable_find(key: *mut Config) -> *mut Config {
     }
 }
 
+///* The state of the yy_action table under construction is an instance of
+///* the following structure.
+///*
+///* The yy_action table maps the pair (state_number, lookahead) into an
+///* action_number.  The table is an array of integers pairs.  The state_number
+///* determines an initial offset into the yy_action array.  The lookahead
+///* value is then added to this initial offset to get an index X into the
+///* yy_action array. If the aAction[X].lookahead equals the value of the
+///* of the lookahead input, then the value of the action_number output is
+///* aAction[X].action.  If the lookaheads do not match then the
+///* default action for the state_number is returned.
+///*
+///* All actions associated with a single state_number are first entered
+///* into aLookahead[] using multiple calls to acttab_action().  Then the
+///* actions for that single state_number are placed into the aAction[]
+///* array with a single call to acttab_insert().  The acttab_insert() call
+///* also resets the aLookahead[] array in preparation for the next
+///* state number.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct LookaheadAction {
@@ -2281,6 +2491,7 @@ struct Acttab {
     nsymbol: i32,
 }
 
+/// Free all memory associated with the given acttab
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_free(p: *mut Acttab) -> () {
     lemon_free(unsafe { (*p).a_action } as *mut ());
@@ -2288,6 +2499,7 @@ pub extern "C" fn acttab_free(p: *mut Acttab) -> () {
     lemon_free(p as *mut ());
 }
 
+/// Allocate a new acttab structure
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_alloc(nsymbol: i32, nterminal: i32) -> *mut Acttab {
     let p: *mut Acttab =
@@ -2303,6 +2515,10 @@ pub extern "C" fn acttab_alloc(nsymbol: i32, nterminal: i32) -> *mut Acttab {
     return p;
 }
 
+/// Add a new action to the current transaction set.
+///*
+///* This routine is called once for each lookahead for a particular
+///* state.
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_action(p: &mut Acttab, lookahead: i32, action: i32)
     -> () {
@@ -2338,7 +2554,21 @@ pub extern "C" fn acttab_action(p: &mut Acttab, lookahead: i32, action: i32)
     { let __p = &mut (*p).n_lookahead; let __t = *__p; *__p += 1; __t };
 }
 
+///* Add the transaction set built up with prior calls to acttab_action()
+///* into the current action table.  Then reset the transaction set back
+///* to an empty set in preparation for a new round of acttab_action() calls.
+///*
+///* Return the offset into the action table of the new transaction.
+///*
+///* If the makeItSafe parameter is true, then the offset is chosen so that
+///* it is impossible to overread the yy_lookaside[] table regardless of
+///* the lookaside token.  This is done for the terminal symbols, as they
+///* come from external inputs and can contain syntax errors.  When makeItSafe
+///* is false, there is more flexibility in selecting offsets, resulting in
+///* a smaller table.  For non-terminal symbols, which are never syntax errors,
+///* makeItSafe can be false.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -2352,7 +2582,11 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
                 c"p->nLookahead>0".as_ptr() as *mut i8 as *const i8)
         }
     } else { { let _ = 0; } };
-    n = (*p).nsymbol + 1;
+
+    /// Make sure we have enough space to hold the expanded action table
+    ///* in the worst case.  The worst case occurs if the transaction set
+    ///* must be appended to the current action table
+    (n = (*p).nsymbol + 1);
     if (*p).n_action + n >= (*p).n_action_alloc {
         let old_alloc: i32 = (*p).n_action_alloc;
         (*p).n_action_alloc = (*p).n_action + n + (*p).n_action_alloc + 20;
@@ -2379,7 +2613,13 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
             }
         }
     }
-    end = if make_it_safe_1 != 0 { (*p).mn_lookahead } else { 0 };
+
+    /// Scan the existing action table looking for an offset that is a
+    ///* duplicate of the current transaction set.  Fall out of the loop
+    ///* if and when the duplicate is found.
+    ///*
+    ///* i is the index in p->aAction[] where p->mnLookahead is inserted.
+    (end = if make_it_safe_1 != 0 { (*p).mn_lookahead } else { 0 });
     {
         i = (*p).n_action - 1;
         '__b49: loop {
@@ -2416,7 +2656,10 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
                         }
                     }
                     if j < (*p).n_lookahead { break '__c49; }
-                    n = 0;
+
+                    /// No possible lookahead value that is not in the aLookahead[]
+                    ///* transaction is allowed to match aAction[i]
+                    (n = 0);
                     {
                         j = 0;
                         '__b51: loop {
@@ -2443,7 +2686,12 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
         }
     }
     if i < end {
-        i = if make_it_safe_1 != 0 { (*p).mn_lookahead } else { 0 };
+
+        /// Look for holes in the aAction[] table that fit the current
+        ///* aLookahead[] transaction.  Leave i set to the offset of the hole.
+        ///* If no holes are found, i is left at p->nAction, which means the
+        ///* transaction will be appended.
+        (i = if make_it_safe_1 != 0 { (*p).mn_lookahead } else { 0 });
         {
             '__b52: loop {
                 if !(i < (*p).n_action_alloc - (*p).mx_lookahead) {
@@ -2515,9 +2763,14 @@ pub extern "C" fn acttab_insert(p: &mut Acttab, make_it_safe_1: i32) -> i32 {
         (*p).n_action = i + (*p).nterminal + 1;
     }
     (*p).n_lookahead = 0;
+
+    /// Return the offset that is added to the lookahead in order to get the
+    ///* index into yy_action of the action
     return i - (*p).mn_lookahead;
 }
 
+///* Return the size of the action table without the trailing syntax error
+///* entries.
 #[unsafe(no_mangle)]
 pub extern "C" fn acttab_action_size(p: &Acttab) -> i32 {
     let mut n: i32 = (*p).n_action;
@@ -2529,6 +2782,7 @@ pub extern "C" fn acttab_action_size(p: &Acttab) -> i32 {
     return n;
 }
 
+///* Return true if two symbols are the same.
 #[unsafe(no_mangle)]
 pub extern "C" fn same_symbol(a: *mut Symbol, b: *mut Symbol) -> i32 {
     let mut i: i32 = 0;
@@ -2553,6 +2807,19 @@ pub extern "C" fn same_symbol(a: *mut Symbol, b: *mut Symbol) -> i32 {
     return 1;
 }
 
+/// Resolve a conflict between the two given actions.  If the
+///* conflict can't be resolved, return non-zero.
+///*
+///* NO LONGER TRUE:
+///*   To resolve a conflict, first look to see if either action
+///*   is on an error rule.  In that case, take the action which
+///*   is not associated with the error rule.  If neither or both
+///*   actions are associated with an error rule, then try to
+///*   use precedence to resolve the conflict.
+///*
+///* If either action is a SHIFT, then it must be apx.  This
+///* function won't work if apx->type==REDUCE and apy->type==SHIFT.
+#[allow(unused_doc_comments)]
 extern "C" fn resolve_conflict(apx: &mut Action, apy: &mut Action) -> i32 {
     unsafe {
         let mut spx: *const Symbol = core::ptr::null();
@@ -2574,18 +2841,26 @@ extern "C" fn resolve_conflict(apx: &mut Action, apy: &mut Action) -> i32 {
             spy = unsafe { (*(*apy).x.rp).precsym };
             if spy == core::ptr::null_mut() || unsafe { (*spx).prec } < 0 ||
                     unsafe { (*spy).prec } < 0 {
-                (*apy).type_ = SRCONFLICT;
+
+                /// Not enough precedence information.
+                ((*apy).type_ = SRCONFLICT);
                 { let __p = &mut errcnt; let __t = *__p; *__p += 1; __t };
             } else if unsafe { (*spx).prec } > unsafe { (*spy).prec } {
-                (*apy).type_ = RD_RESOLVED;
+
+                /// higher precedence wins
+                ((*apy).type_ = RD_RESOLVED);
             } else if unsafe { (*spx).prec } < unsafe { (*spy).prec } {
                 (*apx).type_ = SH_RESOLVED;
             } else if unsafe { (*spx).prec } == unsafe { (*spy).prec } &&
                     unsafe { (*spx).assoc } == RIGHT {
-                (*apy).type_ = RD_RESOLVED;
+
+                /// Use operator
+                ((*apy).type_ = RD_RESOLVED);
             } else if unsafe { (*spx).prec } == unsafe { (*spy).prec } &&
                     unsafe { (*spx).assoc } == LEFT {
-                (*apx).type_ = SH_RESOLVED;
+
+                /// to break tie
+                ((*apx).type_ = SH_RESOLVED);
             } else {
                 if !(unsafe { (*spx).prec } == unsafe { (*spy).prec } &&
                                         unsafe { (*spx).assoc } == NONE) as i32 as i64 != 0 {
@@ -2630,27 +2905,36 @@ extern "C" fn resolve_conflict(apx: &mut Action, apy: &mut Action) -> i32 {
     }
 }
 
+/// List of free configurations
 static mut freelist: *mut Config = core::ptr::null_mut();
 
+/// Return a pointer to a new configuration
 #[unsafe(no_mangle)]
 pub extern "C" fn newconfig() -> *mut Config {
     return lemon_calloc(1 as u64, core::mem::size_of::<Config>() as u64) as
             *mut Config;
 }
 
+/// The configuration "old" is no longer used
 #[unsafe(no_mangle)]
 pub extern "C" fn deleteconfig(old: *mut Config) -> () {
     unsafe { unsafe { (*old).next = freelist }; freelist = old; }
 }
 
+/// Number of -D options on the command line
 static mut n_define: i32 = 0;
 
+/// Number of -D options actually used
 static mut n_define_used: i32 = 0;
 
+/// Name of the -D macros
 static mut az_define: *mut *mut i8 = core::ptr::null_mut();
 
+/// True for every -D macro actually used
 static mut b_define_used: *mut i8 = core::ptr::null_mut();
 
+/// This routine is called with the argument to each -D command-line option.
+///* Add the macro defined to the azDefine array.
 extern "C" fn handle_d_option_1(mut z: *mut i8) -> () {
     unsafe {
         let mut paz: *mut *mut i8 = core::ptr::null_mut();
@@ -2702,6 +2986,8 @@ extern "C" fn handle_d_option_1(mut z: *mut i8) -> () {
     }
 }
 
+/// This routine is called with the argument to each -U command-line option.
+///* Omit a previously defined macro.
 extern "C" fn handle_u_option(z: *const i8) -> () {
     unsafe {
         let mut i: i32 = 0;
@@ -2735,6 +3021,7 @@ extern "C" fn handle_u_option(z: *const i8) -> () {
     }
 }
 
+/// Rember the name of the output directory
 static mut output_dir: *mut i8 = 0 as *mut () as *mut i8;
 
 extern "C" fn handle_d_option(z: *const i8) -> () {
@@ -2752,6 +3039,7 @@ extern "C" fn handle_d_option(z: *const i8) -> () {
 
 static mut user_templatename: *mut i8 = 0 as *mut () as *mut i8;
 
+/// Merge together to lists of rules ordered by rule.iRule
 extern "C" fn rule_merge(mut p_a_1: *mut Rule, mut p_b_1: *mut Rule)
     -> *mut Rule {
     let mut p_first: *mut Rule = core::ptr::null_mut();
@@ -2773,6 +3061,7 @@ extern "C" fn rule_merge(mut p_a_1: *mut Rule, mut p_b_1: *mut Rule)
     return p_first;
 }
 
+///* Sort a list of rules in order of increasing iRule value
 extern "C" fn rule_sort(mut rp: *mut Rule) -> *mut Rule {
     let mut i: u32 = 0 as u32;
     let mut p_next: *mut Rule = core::ptr::null_mut();
@@ -2820,6 +3109,7 @@ extern "C" fn rule_sort(mut rp: *mut Rule) -> *mut Rule {
     return rp;
 }
 
+/// forward reference
 extern "C" fn minimum_size_type(lwr: i32, upr: i32, pn_byte: *mut i32)
     -> *const i8 {
     let mut z_type: *const i8 = c"int".as_ptr() as *mut i8 as *const i8;
@@ -2846,6 +3136,7 @@ extern "C" fn minimum_size_type(lwr: i32, upr: i32, pn_byte: *mut i32)
     return z_type;
 }
 
+/// Print a single line of the "Parser Stats" output
 extern "C" fn stats_line(z_label_1: *const i8, i_value_1: i32) -> () {
     let n_label: i32 = unsafe { strlen(z_label_1) } as i32;
     unsafe {
@@ -2856,12 +3147,14 @@ extern "C" fn stats_line(z_label_1: *const i8, i_value_1: i32) -> () {
     };
 }
 
+///* Comparison function used by qsort() to sort the azDefine[] array.
 extern "C" fn define_cmp(p_a_1: *const (), p_b_1: *const ()) -> i32 {
     let z_a: *const i8 = unsafe { *(p_a_1 as *mut *const i8) };
     let z_b: *const i8 = unsafe { *(p_b_1 as *mut *const i8) };
     return unsafe { strcmp(z_a, z_b) };
 }
 
+/// The state of the parser
 const INITIALIZE: u32 = 0;
 
 const WAITING_FOR_DECL_OR_RULE: u32 = 1;
@@ -2935,6 +3228,8 @@ struct Pstate {
     lastrule: *mut Rule,
 }
 
+/// The text in the input is part of the argument to an %ifdef or %ifndef.
+///* Evaluate the text as a boolean expression.  Return true or false.
 extern "C" fn eval_preprocessor_boolean(z: *mut i8, lineno: i32) -> i32 {
     unsafe {
         let mut neg: i32 = 0;
@@ -3219,6 +3514,10 @@ extern "C" fn eval_preprocessor_boolean(z: *mut i8, lineno: i32) -> i32 {
     }
 }
 
+/// Run the preprocessor over the input file text.  The global variables
+///* azDefine[0] through azDefine[nDefine-1] contains the names of all defined
+///* macros.  This routine looks for "%ifdef" and "%ifndef" and "%endif" and
+///* comments them out.  Text in between is also commented out as appropriate.
 extern "C" fn preprocess_input(z: *mut i8) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -3400,6 +3699,7 @@ extern "C" fn preprocess_input(z: *mut i8) -> () {
     }
 }
 
+/// Generate a filename with the given suffix.
 #[unsafe(no_mangle)]
 pub extern "C" fn file_makename(lemp: &Lemon, suffix: *const i8) -> *mut i8 {
     unsafe {
@@ -3437,6 +3737,9 @@ pub extern "C" fn file_makename(lemp: &Lemon, suffix: *const i8) -> *mut i8 {
     }
 }
 
+/// Open a file with a name based on the name of the input file,
+///* but with a different (specified) suffix, and return a pointer
+///* to the stream
 #[unsafe(no_mangle)]
 pub extern "C" fn file_open(lemp: *mut Lemon, suffix: *const i8,
     mode: *const i8) -> *mut FILE {
@@ -3466,7 +3769,9 @@ pub extern "C" fn file_open(lemp: *mut Lemon, suffix: *const i8,
     }
 }
 
+/// Print the text of a rule
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn rule_print(out: *mut FILE, rp: &Rule) -> () {
     let mut i: i32 = 0;
     let mut j: i32 = 0;
@@ -3474,6 +3779,8 @@ pub extern "C" fn rule_print(out: *mut FILE, rp: &Rule) -> () {
         fprintf(out, c"%s".as_ptr() as *mut i8 as *const i8,
             unsafe { (*(*rp).lhs).name })
     };
+
+    ///    if( rp->lhsalias ) fprintf(out,"(%s)",rp->lhsalias);
     unsafe { fprintf(out, c" ::=".as_ptr() as *mut i8 as *const i8) };
     {
         i = 0;
@@ -3522,6 +3829,7 @@ pub extern "C" fn rule_print(out: *mut FILE, rp: &Rule) -> () {
     }
 }
 
+/// Print a single rule.
 #[unsafe(no_mangle)]
 pub extern "C" fn RulePrint(fp: *mut FILE, rp: &Rule, i_cursor_1: i32) -> () {
     let mut sp: *const Symbol = core::ptr::null();
@@ -3583,11 +3891,14 @@ pub extern "C" fn RulePrint(fp: *mut FILE, rp: &Rule, i_cursor_1: i32) -> () {
     }
 }
 
+/// Print the rule for a configuration.
 #[unsafe(no_mangle)]
 pub extern "C" fn config_print(fp: *mut FILE, cfp: &Config) -> () {
     unsafe { RulePrint(fp, unsafe { &*(*cfp).rp }, (*cfp).dot); }
 }
 
+/// Search for the file "name" which is in the same directory as
+///* the executable
 #[unsafe(no_mangle)]
 pub extern "C" fn pathsearch(argv0: *mut i8, name: *mut i8, modemask: i32)
     -> *mut i8 {
@@ -3658,6 +3969,14 @@ pub extern "C" fn pathsearch(argv0: *mut i8, name: *mut i8, modemask: i32)
     return path;
 }
 
+/// The next cluster of routines are for reading the template file
+///* and writing the results to the generated parser */
+////* The first function transfers data from "in" to "out" until
+///* a line is seen which begins with "%%".  The line number is
+///* tracked.
+///*
+///* if name!=0, then any word that begin with "Parse" is changed to
+///* begin with *name instead.
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_xfer(name: *mut i8, in__1: *mut FILE, out: *mut FILE,
     lineno: &mut i32) -> () {
@@ -3710,6 +4029,7 @@ pub extern "C" fn tplt_xfer(name: *mut i8, in__1: *mut FILE, out: *mut FILE,
     }
 }
 
+/// Skip forward past the header of the template file to the first "%%"
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_skip_header(in__1: *mut FILE) -> () {
     let mut line: [i8; 10000] = [0; 10000];
@@ -3720,6 +4040,8 @@ pub extern "C" fn tplt_skip_header(in__1: *mut FILE) -> () {
                 line[1 as usize] as i32 != '%' as i32) {}
 }
 
+/// The next function finds the template file and opens it, returning
+///* a pointer to the opened file.
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_open(lemp: &mut Lemon) -> *mut FILE {
     unsafe {
@@ -3834,6 +4156,7 @@ pub extern "C" fn tplt_open(lemp: &mut Lemon) -> *mut FILE {
     }
 }
 
+/// Print a #line directive line to the output file.
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_linedir(out: *mut FILE, lineno: i32,
     mut filename: *const i8) -> () {
@@ -3856,6 +4179,7 @@ pub extern "C" fn tplt_linedir(out: *mut FILE, lineno: i32,
     unsafe { fflush(out) };
 }
 
+/// Print a string to the file and keep the linenumber up to date
 #[unsafe(no_mangle)]
 pub extern "C" fn tplt_print(out: *mut FILE, lemp: &Lemon, mut str: *const i8,
     lineno: &mut i32) -> () {
@@ -3885,6 +4209,8 @@ pub extern "C" fn tplt_print(out: *mut FILE, lemp: &Lemon, mut str: *const i8,
     return;
 }
 
+///* The following routine emits code for the destructor for the
+///* symbol sp
 #[unsafe(no_mangle)]
 pub extern "C" fn emit_destructor_code(out: *mut FILE, sp: &Symbol,
     lemp: &Lemon, lineno: &mut i32) -> () {
@@ -3961,6 +4287,7 @@ pub extern "C" fn emit_destructor_code(out: *mut FILE, sp: &Symbol,
     return;
 }
 
+///* Return TRUE (non-zero) if the given symbol has a destructor.
 #[unsafe(no_mangle)]
 pub extern "C" fn has_destructor(sp: &Symbol, lemp: &Lemon) -> i32 {
     let mut ret: i32 = 0;
@@ -3974,6 +4301,16 @@ pub extern "C" fn has_destructor(sp: &Symbol, lemp: &Lemon) -> i32 {
     return ret;
 }
 
+///* Append text to a dynamically allocated string.  If zText is 0 then
+///* reset the string to be empty again.  Always return the complete text
+///* of the string (which is overwritten with each call).
+///*
+///* n bytes of zText are stored.  If n==0 then all of zText up to the first
+///* \000 terminator is stored.  zText can contain up to two instances of
+///* %d.  The values of p1 and p2 are written into the first and second
+///* %d.
+///*
+///* If n==-1, then the previous character is overwritten.
 #[unsafe(no_mangle)]
 pub extern "C" fn append_str(mut z_text_1: *const i8, mut n: i32, mut p1: i32,
     p2: i32) -> *mut i8 {
@@ -4058,6 +4395,8 @@ pub extern "C" fn append_str(mut z_text_1: *const i8, mut n: i32, mut p1: i32,
     }
 }
 
+///* Generate code which executes when the rule "rp" is reduced.  Write
+///* the code to "out".  Make sure lineno stays up-to-date.
 #[unsafe(no_mangle)]
 pub extern "C" fn emit_code(out: *mut FILE, rp: &Rule, lemp: &Lemon,
     lineno: &mut i32) -> () {
@@ -4152,19 +4491,35 @@ pub extern "C" fn emit_code(out: *mut FILE, rp: &Rule, lemp: &Lemon,
     return;
 }
 
+///* Print the definition of the union used for the parser's data stack.
+///* This union contains fields for every possible data type for tokens
+///* and nonterminals.  In the process of computing and printing this
+///* union, also set the ".dtnum" field of every terminal and nonterminal
+///* symbol.
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn print_stack_union(out: *mut FILE, lemp: &Lemon,
     plineno: &mut i32, mhflag: i32) -> () {
     let mut lineno: i32 = 0;
+    /// The line number of the output
     let mut types: *mut *mut i8 = core::ptr::null_mut();
+    /// A hash table of datatypes
     let mut arraysize: i32 = 0;
+    /// Size of the "types" array
     let mut maxdtlength: i32 = 0;
+    /// Maximum length of any ".datatype" field.
     let mut stddt: *mut i8 = core::ptr::null_mut();
+    /// Standardized name for a datatype
     let mut i: i32 = 0;
     let mut j: i32 = 0;
+    /// Loop counters
     let mut hash: u32 = 0 as u32;
+    /// For hashing the name of a type
     let mut name: *const i8 = core::ptr::null();
-    arraysize = (*lemp).nsymbol * 2;
+
+    /// Name of the parser
+    /// Allocate and initialize types[] and allocate stddt[]
+    (arraysize = (*lemp).nsymbol * 2);
     types =
         lemon_calloc(arraysize as u64, core::mem::size_of::<*mut i8>() as u64)
             as *mut *mut i8;
@@ -4324,10 +4679,12 @@ pub extern "C" fn print_stack_union(out: *mut FILE, lemp: &Lemon,
             { let __p = &mut i; let __t = *__p; *__p += 1; __t };
         }
     }
-    name =
+
+    /// Print out the definition of YYTOKENTYPE and YYMINORTYPE
+    (name =
         if !((*lemp).name).is_null() {
                 (*lemp).name
-            } else { c"Parse".as_ptr() as *mut i8 } as *const i8;
+            } else { c"Parse".as_ptr() as *mut i8 } as *const i8);
     lineno = *plineno;
     if mhflag != 0 {
         unsafe {
@@ -4399,6 +4756,10 @@ pub extern "C" fn print_stack_union(out: *mut FILE, lemp: &Lemon,
     *plineno = lineno;
 }
 
+///* Each state contains a set of token transaction and a set of
+///* nonterminal transactions.  Each of these sets makes an instance
+///* of the following structure.  An array of these structures is used
+///* to order the creation of entries in the yy_action[] table.
 #[repr(C)]
 #[derive(Copy, Clone)]
 struct Axset {
@@ -4408,6 +4769,7 @@ struct Axset {
     i_order: i32,
 }
 
+///* Compare to axset structures for sorting purposes
 extern "C" fn axset_compare(a: *const (), b: *const ()) -> i32 {
     let p1: *mut Axset = a as *mut Axset;
     let p2: *mut Axset = b as *mut Axset;
@@ -4424,6 +4786,7 @@ extern "C" fn axset_compare(a: *const (), b: *const ()) -> i32 {
     return c;
 }
 
+///* Write text on "out" that describes the rule "rp".
 extern "C" fn write_rule_text(out: *mut FILE, rp: &Rule) -> () {
     let mut j: i32 = 0;
     unsafe {
@@ -4478,10 +4841,15 @@ extern "C" fn write_rule_text(out: *mut FILE, rp: &Rule) -> () {
     }
 }
 
+///* Return true if the string is not NULL and not empty.
 extern "C" fn notnull(z: *const i8) -> i32 {
     return (!(z).is_null() && unsafe { *z.offset(0 as isize) } != 0) as i32;
 }
 
+///* Compare two states for sorting purposes.  The smaller state is the
+///* one with the most non-terminal actions.  If they have the same number
+///* of non-terminal actions, then the smaller is the one with the most
+///* token actions.
 extern "C" fn state_resort_compare(a: *const (), b: *const ()) -> i32 {
     let p_a: *const State = unsafe { *(a as *mut *const State) };
     let p_b: *const State = unsafe { *(b as *mut *const State) };

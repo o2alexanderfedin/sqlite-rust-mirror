@@ -1,21 +1,39 @@
 #![allow(unused_imports, dead_code)]
 
 mod btree_h;
-pub(crate) use crate::btree_h::*;
 mod hash_h;
-pub(crate) use crate::hash_h::*;
 mod pager_h;
-pub(crate) use crate::pager_h::*;
 mod pcache_h;
-pub(crate) use crate::pcache_h::*;
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite_int_h;
-pub(crate) use crate::sqlite_int_h::*;
 mod vdbe_h;
-pub(crate) use crate::vdbe_h::*;
 mod vdbe_int_h;
-pub(crate) use crate::vdbe_int_h::*;
+use crate::btree_h::{BtCursor, Btree, BtreePayload};
+use crate::hash_h::Hash;
+use crate::pager_h::{DbPage, Pager, Pgno};
+use crate::pcache_h::{PCache, PgHdr};
+use crate::sqlite3_h::{
+    Sqlite3Backup, Sqlite3Blob, Sqlite3File, Sqlite3Filename,
+    Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module, Sqlite3Mutex,
+    Sqlite3MutexMethods, Sqlite3PcachePage, Sqlite3RtreeGeometry,
+    Sqlite3RtreeQueryInfo, Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Uint64,
+    Sqlite3Vfs, Sqlite3Vtab, Sqlite3VtabCursor, SqliteInt64,
+};
+use crate::sqlite_int_h::{
+    AuthContext, Bft, Bitmask, Bitvec, BusyHandler, CollSeq, Column, Cte, Db,
+    DbFixer, Expr, ExprList, ExprListItem, ExprListItemS0, FKey, FpDecode,
+    FuncDef, FuncDefHash, FuncDestructor, IdList, Index, InitData, KeyInfo,
+    LogEst, Module, NameContext, OnOrUsing, Parse, RowSet, SQLiteThread,
+    Savepoint, Schema, Select, SelectDest, Sqlite3, Sqlite3Config,
+    Sqlite3InitInfo, Sqlite3Str, SrcItem, SrcItemS0, SrcList, StrAccum,
+    Subquery, Table, Token, Trigger, TriggerStep, UnpackedRecord, Upsert,
+    VList, VTable, Walker, WhereInfo, Window, With,
+};
+use crate::vdbe_h::{Mem, SubProgram, VdbeOp, VdbeOpList};
+use crate::vdbe_int_h::{
+    AuxData, Bool, Op, Sqlite3Context, Sqlite3Value, ValueList, Vdbe,
+    VdbeCursor, VdbeFrame, VdbeSorter, VdbeTxtBlbCache,
+};
 
 type DarwinSizeT = u64;
 
@@ -479,6 +497,10 @@ impl Sqlite3InitInfo {
     }
 }
 
+///* The string in pRec is known to look like an integer and to have a
+///* floating point value of rValue.  Return true and set *piValue to the
+///* integer value if the string is in range to be an integer.  Otherwise,
+///* return false.
 extern "C" fn also_an_int(p_rec_1: &Mem, r_value_1: f64, pi_value_1: *mut i64)
     -> i32 {
     unsafe {
@@ -496,6 +518,20 @@ extern "C" fn also_an_int(p_rec_1: &Mem, r_value_1: f64, pi_value_1: *mut i64)
     }
 }
 
+///* Try to convert a value into a numeric representation if we can
+///* do so without loss of information.  In other words, if the string
+///* looks like a number, convert it into a number.  If it does not
+///* look like a number, leave it alone.
+///*
+///* If the bTryForInt flag is true, then extra effort is made to give
+///* an integer representation.  Strings that look like floating point
+///* values but which have no fractional component (example: '48.00')
+///* will have a MEM_Int representation when bTryForInt is true.
+///*
+///* If bTryForInt is false, then if the input string contains a decimal
+///* point or exponential notation, the result is only MEM_Real, even
+///* if there is an exact integer representation of the quantity.
+#[allow(unused_doc_comments)]
 extern "C" fn apply_numeric_affinity(p_rec_1: *mut Mem, b_try_for_int_1: i32)
     -> () {
     unsafe {
@@ -515,10 +551,19 @@ extern "C" fn apply_numeric_affinity(p_rec_1: *mut Mem, b_try_for_int_1: i32)
                 unsafe { sqlite3_vdbe_integer_affinity(p_rec_1) };
             }
         }
+
+        /// TEXT->NUMERIC is many->one.  Hence, it is important to invalidate the
+        ///* string representation after computing a numeric equivalent, because the
+        ///* string representation might not be the canonical representation for the
+        ///* numeric value.  Ticket [343634942dd54ab57b7024] 2018-01-31.
         unsafe { (*p_rec_1).flags &= !2 as u16 };
     }
 }
 
+///* Try to convert the type of a function argument or a result column
+///* into a numeric representation.  Use either INTEGER or REAL whichever
+///* is appropriate.  But only do the conversion if it is possible without
+///* loss of information and return the revised type of the argument.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_numeric_type(p_val_1: *mut Sqlite3Value)
     -> i32 {
@@ -537,6 +582,27 @@ pub extern "C" fn sqlite3_value_numeric_type(p_val_1: *mut Sqlite3Value)
     return e_type;
 }
 
+///* Processing is determine by the affinity parameter:
+///*
+///* SQLITE_AFF_INTEGER:
+///* SQLITE_AFF_REAL:
+///* SQLITE_AFF_NUMERIC:
+///*    Try to convert pRec to an integer representation or a
+///*    floating-point representation if an integer representation
+///*    is not possible.  Note that the integer representation is
+///*    always preferred, even if the affinity is REAL, because
+///*    an integer representation is more space efficient on disk.
+///*
+///* SQLITE_AFF_FLEXNUM:
+///*    If the value is text, then try to convert it into a number of
+///*    some kind (integer or real) but do not make any other changes.
+///*
+///* SQLITE_AFF_TEXT:
+///*    Convert pRec to a text representation.
+///*
+///* SQLITE_AFF_BLOB:
+///* SQLITE_AFF_NONE:
+///*    No-op.  pRec is unchanged.
 extern "C" fn apply_affinity(p_rec_1: *mut Mem, affinity: i8, enc: u8) -> () {
     if affinity as i32 >= 67 {
         { let _ = 0; };
@@ -559,18 +625,25 @@ extern "C" fn apply_affinity(p_rec_1: *mut Mem, affinity: i8, enc: u8) -> () {
     }
 }
 
+///* Exported version of applyAffinity(). This one works on sqlite3_value*,
+///* not the internal Mem* type.
 #[unsafe(no_mangle)]
 pub extern "C" fn sqlite3_value_apply_affinity(p_val_1: *mut Sqlite3Value,
     affinity: u8, enc: u8) -> () {
     apply_affinity(p_val_1 as *mut Mem, affinity as i8, enc);
 }
 
+///* Send a "statement aborts" message to the error log.
+#[allow(unused_doc_comments)]
 extern "C" fn sqlite3_vdbe_log_abort(p: &Vdbe, rc: i32, p_op_1: *const Op,
     a_op_1: *const Op) -> () {
     unsafe {
         let z_sql: *const i8 = (*p).z_sql as *const i8;
+        /// Original SQL text
         let mut z_prefix: *const i8 = c"".as_ptr() as *mut i8 as *const i8;
+        /// Prefix added to SQL text
         let mut pc: i32 = 0;
+        /// Opcode address
         let mut z_xtra: [i8; 100] = [0; 100];
         if !((*p).p_frame).is_null() {
             { let _ = 0; };
@@ -603,12 +676,15 @@ extern "C" fn sqlite3_vdbe_log_abort(p: &Vdbe, rc: i32, p_op_1: *const Op,
     }
 }
 
+///* Return the register of pOp->p2 after first preparing it to be
+///* overwritten with an integer value.
 extern "C" fn out2_prerelease_with_clear(p_out_1: *mut Mem) -> *mut Mem {
     unsafe { sqlite3_vdbe_mem_set_null(p_out_1) };
     unsafe { (*p_out_1).flags = 4 as u16 };
     return p_out_1;
 }
 
+#[allow(unused_doc_comments)]
 extern "C" fn out2_prerelease(p: &Vdbe, p_op_1: &VdbeOp) -> *mut Mem {
     unsafe {
         let mut p_out: *mut Mem = core::ptr::null_mut();
@@ -616,11 +692,17 @@ extern "C" fn out2_prerelease(p: &Vdbe, p_op_1: &VdbeOp) -> *mut Mem {
         { let _ = 0; };
         p_out = unsafe { (*p).a_mem.offset((*p_op_1).p2 as isize) };
         if unsafe { (*p_out).flags } as i32 & (32768 | 4096) != 0 {
+
+            ///OPTIMIZATION-IF-FALSE
             return out2_prerelease_with_clear(p_out);
         } else { unsafe { (*p_out).flags = 4 as u16 }; return p_out; }
     }
 }
 
+///* pMem currently only holds a string type (or maybe a BLOB that we can
+///* interpret as a string if we want to).  Compute its corresponding
+///* numeric type, if has one.  Set the pMem->u.r and pMem->u.i fields
+///* accordingly.
 extern "C" fn compute_numeric_type(p_mem_1: *mut Mem) -> u16 {
     unsafe {
         let mut rc: i32 = 0;
@@ -659,6 +741,11 @@ extern "C" fn compute_numeric_type(p_mem_1: *mut Mem) -> u16 {
     }
 }
 
+///* Return the numeric type for pMem, either MEM_Int or MEM_Real or both or
+///* none. 
+///*
+///* Unlike applyNumericAffinity(), this routine does not modify pMem->flags.
+///* But it does set pMem->u.r and pMem->u.i appropriately.
 extern "C" fn numeric_type(p_mem_1: *mut Mem) -> u16 {
     { let _ = 0; };
     if unsafe { (*p_mem_1).flags } as i32 & (4 | 8 | 32 | 1) != 0 {
@@ -669,6 +756,12 @@ extern "C" fn numeric_type(p_mem_1: *mut Mem) -> u16 {
     return 0 as u16;
 }
 
+///* For OP_Column, factor out the case where content is loaded from
+///* overflow pages, so that the code to implement this case is separate
+///* the common case where all content fits on the page.  Factoring out
+///* the code reduces register pressure and helps the common case
+///* to run faster.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
     t: u32, i_offset_1: i64, cache_status_1: u32, col_cache_ctr_1: u32,
     p_dest_1: *mut Mem) -> i32 {
@@ -680,6 +773,15 @@ extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
         { let _ = 0; };
         if len > unsafe { (*db).a_limit[0 as usize] } { return 18; }
         if len > 4000 && (*p_c_1).p_key_info == core::ptr::null_mut() {
+            /// Cache large column values that are on overflow pages using
+            ///* an RCStr (reference counted string) so that if they are reloaded,
+            ///* that do not have to be copied a second time.  The overhead of
+            ///* creating and managing the cache is such that this is only
+            ///* profitable for larger TEXT and BLOB values.
+            ///*
+            ///* Only do this on table-btrees so that writes to index-btrees do not
+            ///* need to clear the cache.  This buys performance in the common case
+            ///* in exchange for generality.
             let mut p_cache: *mut VdbeTxtBlbCache = core::ptr::null_mut();
             let mut p_buf: *mut i8 = core::ptr::null_mut();
             if (*p_c_1).col_cache() as i32 == 0 {
@@ -769,17 +871,45 @@ extern "C" fn vdbe_column_from_overflow(p_c_1: &mut VdbeCursor, i_col_1: i32,
     }
 }
 
+///* Return the symbolic name for the data type of a pMem
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_mem_type_name(p_mem_1: *mut Mem) -> *const i8 {
     unsafe {
+
+        /// SQLITE_INTEGER
+        /// SQLITE_FLOAT
+        /// SQLITE_TEXT
+        /// SQLITE_BLOB
+        /// SQLITE_NULL
         return az_types[(unsafe {
                             sqlite3_value_type(p_mem_1 as *mut Sqlite3Value)
                         } - 1) as usize];
     }
 }
 
+///* Allocate VdbeCursor number iCur.  Return a pointer to it.  Return NULL
+///* if we run out of memory.
+#[allow(unused_doc_comments)]
 extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
     e_cur_type_1: u8) -> *mut VdbeCursor {
     unsafe {
+        /// Find the memory cell that will be used to store the blob of memory
+        ///* required for this VdbeCursor structure. It is convenient to use a
+        ///* vdbe memory cell to manage the memory allocation required for a
+        ///* VdbeCursor structure for the following reasons:
+        ///*
+        ///*   * Sometimes cursor numbers are used for a couple of different
+        ///*     purposes in a vdbe program. The different uses might require
+        ///*     different sized allocations. Memory cells provide growable
+        ///*     allocations.
+        ///*
+        ///*   * When using ENABLE_MEMORY_MANAGEMENT, memory cell buffers can
+        ///*     be freed lazily via the sqlite3_release_memory() API. This
+        ///*     minimizes the number of malloc calls made by the system.
+        ///*
+        ///* The memory cell for cursor 0 is aMem[0]. The rest are allocated from
+        ///* the top of the register space.  Cursor 1 is at Mem[p->nMem-1].
+        ///* Cursor 2 is at Mem[p->nMem-2]. And so forth.
         let p_mem: *mut Mem =
             if i_cur_1 > 0 {
                 unsafe {
@@ -804,6 +934,8 @@ extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
         if !(unsafe {
                             *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) }
                         }).is_null() {
+
+            ///OPTIMIZATION-IF-FALSE
             unsafe {
                 sqlite3_vdbe_free_cursor_nn(p,
                     unsafe { *unsafe { (*p).ap_csr.offset(i_cur_1 as isize) } })
@@ -813,6 +945,11 @@ extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
                     core::ptr::null_mut()
             };
         }
+
+        /// There used to be a call to sqlite3VdbeMemClearAndResize() to make sure
+        ///* the pMem used to hold space for the cursor has enough storage available
+        ///* in pMem->zMalloc.  But for the special case of the aMem[] entries used
+        ///* to hold cursors, it is faster to in-line the logic.
         { let _ = 0; };
         { let _ = 0; };
         { let _ = 0; };
@@ -882,6 +1019,13 @@ extern "C" fn allocate_cursor(p: *mut Vdbe, i_cur_1: i32, n_field_1: i32,
     }
 }
 
+///* Memory cell pMem may contain a blob or a NULL value. Cursor pCsr is
+///* open on an index. If the current index entry matches the blob value in
+///* pMem byte-for-byte, set pMem to NULL and return 1. Otherwise, return 0.
+///*
+///* If an error occurs, set (*pRc) to an SQLite error code. Return 1 in this
+///* case as well.
+#[allow(unused_doc_comments)]
 extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
     p_rc_1: &mut i32) -> i32 {
     unsafe {
@@ -890,6 +1034,11 @@ extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
         { let _ = 0; };
         n_key = unsafe { sqlite3_btree_payload_size(p_csr_1) };
         if n_key == (*p_mem_1).n as u32 && (*p_mem_1).flags as i32 & 16 != 0 {
+            /// This code could just use sqlite3BtreePayloadFetch(). But calling that
+            ///* function here apparently prevents compilers from inlining it in other,
+            ///* more performance critical, places. So this code uses
+            ///* MemFromBtreeZeroOffset(), which is just as fast in most cases, but also
+            ///* handles the case where the index record uses overflow pages.
             let mut m: Mem = unsafe { core::mem::zeroed() };
             unsafe {
                 memset(&raw mut m as *mut (), 0,
@@ -913,6 +1062,9 @@ extern "C" fn vdbe_index_key_compare(p_csr_1: *mut BtCursor, p_mem_1: &Mem,
     }
 }
 
+///* Compute a bloom filter hash using pOp->p4.i registers from aMem[] beginning
+///* with pOp->p3.  Return the hash.
+#[allow(unused_doc_comments)]
 extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
     unsafe {
         let mut i: i32 = 0;
@@ -930,8 +1082,12 @@ extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
                     } else if unsafe { (*p).flags } as i32 & 8 != 0 {
                         h += unsafe { sqlite3_vdbe_int_value(p) } as u64;
                     } else if unsafe { (*p).flags } as i32 & (2 | 16) != 0 {
-                        h +=
-                            (4093 + (unsafe { (*p).flags } as i32 & (2 | 16))) as u64;
+
+                        /// All strings have the same hash and all blobs have the same hash,
+                        ///* though, at least, those hashes are different from each other and
+                        ///* from NULL.
+                        (h +=
+                            (4093 + (unsafe { (*p).flags } as i32 & (2 | 16))) as u64);
                     }
                     break '__c0;
                 }
@@ -942,56 +1098,736 @@ extern "C" fn filter_hash(a_mem_1: *const Mem, p_op_1: &Op) -> u64 {
     }
 }
 
+///* Execute as much of a VDBE program as we can.
+///* This is the core of sqlite3_step().
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
     unsafe {
         unsafe {
             let mut a_op: *mut Op = core::ptr::null_mut();
+            /// Copy of p->aOp
             let mut p_op: *mut Op = core::ptr::null_mut();
+            /// Current operation
             let mut rc: i32 = 0;
+            /// Value to return
             let mut db: *mut Sqlite3 = core::ptr::null_mut();
+            /// The database
             let mut reset_schema_on_fault: u8 = 0 as u8;
+            /// Reset schema after an error if positive
             let mut encoding: u8 = 0 as u8;
+            /// The database encoding
             let mut i_compare: i32 = 0;
+            /// Result of last comparison
             let mut n_vm_step: u64 = 0 as u64;
+            /// Number of virtual machine steps
             let mut n_progress_limit: u64 = 0 as u64;
+            /// Invoke xProgress() when nVmStep reaches this
             let mut a_mem: *mut Mem = core::ptr::null_mut();
+            /// Copy of p->aMem
             let mut p_in1: *mut Mem = core::ptr::null_mut();
+            /// 1st input operand
             let mut p_in2: *mut Mem = core::ptr::null_mut();
+            /// 2nd input operand
             let mut p_in3: *mut Mem = core::ptr::null_mut();
+            /// 3rd input operand
             let mut p_out: *mut Mem = core::ptr::null_mut();
+            /// Output operand
             let mut col_cache_ctr: u32 = 0 as u32;
+            /// Column cache counter
+            ///INSERT STACK UNION HERE **
+            /// sqlite3_step() verifies this
             let mut i_prior: u32 = 0 as u32;
+            /// This happens if a malloc() inside a call to sqlite3_column_text() or
+            ///* sqlite3_column_text16() failed.
+            /// Errors are detected by individual opcodes, with an immediate
+            ///* jumps to abort_due_to_error.
+            /// Only allow tracing if SQLITE_DEBUG is defined.
+            /// Check to see if we need to simulate an interrupt.  This only happens
+            ///* if we have a special test build.
+            /// Sanity checking on other operands
+            ///**************************************************************************
+            ///* What follows is a massive switch statement where each case implements a
+            ///* separate instruction in the virtual machine.  If we follow the usual
+            ///* indentation conventions, each case should be indented by 6 spaces.  But
+            ///* that is a lot of wasted space on the left margin.  So the code within
+            ///* the switch statement will break with convention and be flush-left. Another
+            ///* big comment (similar to this one) will mark the point in the code where
+            ///* we transition back to normal indentation.
+            ///*
+            ///* The formatting of each case is important.  The makefile for SQLite
+            ///* generates two C files "opcodes.h" and "opcodes.c" by scanning this
+            ///* file looking for lines that begin with "case OP_".  The opcodes.h files
+            ///* will be filled with #defines that give unique integer values to each
+            ///* opcode and the opcodes.c file is filled with an array of strings where
+            ///* each string is the symbolic name for the corresponding opcode.  If the
+            ///* case statement is followed by a comment of the form "/# same as ... #/"
+            ///* that comment is used to determine the particular value of the opcode.
+            ///*
+            ///* Other keywords in the comment that follows each case are used to
+            ///* construct the OPFLG_INITIALIZER value that initializes opcodeProperty[].
+            ///* Keywords include: in1, in2, in3, out2, out3.  See
+            ///* the mkopcodeh.awk script for additional information.
+            ///*
+            ///* Documentation about VDBE opcodes is generated by scanning this file
+            ///* for lines of that contain "Opcode:".  That line and all subsequent
+            ///* comment lines are used in the generation of the opcode.html documentation
+            ///* file.
+            ///*
+            ///* SUMMARY:
+            ///*
+            ///*     Formatting is important to scripts that scan this file.
+            ///*     Do not deviate from the formatting style currently in use.
+            ///*
+            ///***************************************************************************
+            /// Opcode:  Goto * P2 * * *
+            ///*
+            ///* An unconditional jump to address P2.
+            ///* The next instruction executed will be
+            ///* the one at index P2 from the beginning of
+            ///* the program.
+            ///*
+            ///* The P1 parameter is not actually used by this opcode.  However, it
+            ///* is sometimes set to 1 instead of 0 as a hint to the command-line shell
+            ///* that this Goto is the bottom of a loop and that the lines from P2 down
+            ///* to the current line should be indented for EXPLAIN output.
+            /// jump
+            /// Opcodes that are used as the bottom of a loop (OP_Next, OP_Prev,
+            ///* OP_VNext, or OP_SorterNext) all jump here upon
+            ///* completion.  Check to see if sqlite3_interrupt() has been called
+            ///* or if the progress callback needs to be invoked.
+            ///*
+            ///* This code uses unstructured "goto" statements and does not look clean.
+            ///* But that is not due to sloppy coding habits. The code is written this
+            ///* way for performance, to avoid having to run the interrupt and progress
+            ///* checks on every opcode.  This helps sqlite3_step() to run about 1.5%
+            ///* faster according to "valgrind --tool=cachegrind"
+            /// Call the progress callback if it is configured and the required number
+            ///* of VDBE ops have been executed (either since this invocation of
+            ///* sqlite3VdbeExec() or since last time the progress callback was called).
+            ///* If the progress callback returns non-zero, exit the virtual machine with
+            ///* a return code SQLITE_ABORT.
+            /// Opcode:  Gosub P1 P2 * * *
+            ///*
+            ///* Write the current address onto register P1
+            ///* and then jump to address P2.
+            /// jump
+            /// Opcode:  Return P1 P2 P3 * *
+            ///*
+            ///* Jump to the address stored in register P1.  If P1 is a return address
+            ///* register, then this accomplishes a return from a subroutine.
+            ///*
+            ///* If P3 is 1, then the jump is only taken if register P1 holds an integer
+            ///* values, otherwise execution falls through to the next opcode, and the
+            ///* OP_Return becomes a no-op. If P3 is 0, then register P1 must hold an
+            ///* integer or else an assert() is raised.  P3 should be set to 1 when
+            ///* this opcode is used in combination with OP_BeginSubrtn, and set to 0
+            ///* otherwise.
+            ///*
+            ///* The value in register P1 is unchanged by this opcode.
+            ///*
+            ///* P2 is not used by the byte-code engine.  However, if P2 is positive
+            ///* and also less than the current address, then the "EXPLAIN" output
+            ///* formatter in the CLI will indent all opcodes from the P2 opcode up
+            ///* to be not including the current Return.   P2 should be the first opcode
+            ///* in the subroutine from which this opcode is returning.  Thus the P2
+            ///* value is a byte-code indentation hint.  See tag-20220407a in
+            ///* wherecode.c and shell.c.
+            /// in1
+            /// Opcode: InitCoroutine P1 P2 P3 * *
+            ///*
+            ///* Set up register P1 so that it will Yield to the coroutine
+            ///* located at address P3.
+            ///*
+            ///* If P2!=0 then the coroutine implementation immediately follows
+            ///* this opcode.  So jump over the coroutine implementation to
+            ///* address P2.
+            ///*
+            ///* See also: EndCoroutine
+            /// jump0
+            /// Most jump operations do a goto to this spot in order to update
+            ///* the pOp pointer.
+            /// There are never any jumps to instruction 0
+            /// Jumps must be in range
+            /// Opcode:  EndCoroutine P1 * * * *
+            ///*
+            ///* The instruction at the address in register P1 is a Yield.
+            ///* Jump to the P2 parameter of that Yield.
+            ///* After the jump, the value register P1 is left with a value
+            ///* such that subsequent OP_Yields go back to the this same
+            ///* OP_EndCoroutine instruction.
+            ///*
+            ///* See also: InitCoroutine
+            /// in1
             let mut p_caller: *const VdbeOp = core::ptr::null();
+            /// Opcode:  Yield P1 P2 * * *
+            ///*
+            ///* Swap the program counter with the value in register P1.  This
+            ///* has the effect of yielding to a coroutine.
+            ///*
+            ///* If the coroutine that is launched by this instruction ends with
+            ///* Yield or Return then continue to the next instruction.  But if
+            ///* the coroutine launched by this instruction ends with
+            ///* EndCoroutine, then jump to P2 rather than continuing with the
+            ///* next instruction.
+            ///*
+            ///* See also: InitCoroutine
+            /// in1, jump0
             let mut pc_dest: i32 = 0;
+            /// Opcode:  HaltIfNull  P1 P2 P3 P4 P5
+            ///* Synopsis: if r[P3]=null halt
+            ///*
+            ///* Check the value in register P3.  If it is NULL then Halt using
+            ///* parameter P1, P2, and P4 as if this were a Halt instruction.  If the
+            ///* value in register P3 is not NULL, then this routine is a no-op.
+            ///* The P5 parameter should be 1.
+            /// in3
+            /// Fall through into OP_Halt */
+            ///  /* no break
+            /// Opcode:  Halt P1 P2 P3 P4 P5
+            ///*
+            ///* Exit immediately.  All open cursors, etc are closed
+            ///* automatically.
+            ///*
+            ///* P1 is the result code returned by sqlite3_exec(), sqlite3_reset(),
+            ///* or sqlite3_finalize().  For a normal halt, this should be SQLITE_OK (0).
+            ///* For errors, it can be some other value.  If P1!=0 then P2 will determine
+            ///* whether or not to rollback the current transaction.  Do not rollback
+            ///* if P2==OE_Fail. Do the rollback if P2==OE_Rollback.  If P2==OE_Abort,
+            ///* then back out all changes that have occurred during this execution of the
+            ///* VDBE, but do not rollback the transaction.
+            ///*
+            ///* If P3 is not zero and P4 is NULL, then P3 is a register that holds the
+            ///* text of an error message.
+            ///*
+            ///* If P3 is zero and P4 is not null then the error message string is held
+            ///* in P4.
+            ///*
+            ///* P5 is a value between 1 and 4, inclusive, then the P4 error message
+            ///* string is modified as follows:
+            ///*
+            ///*    1:  NOT NULL constraint failed: P4
+            ///*    2:  UNIQUE constraint failed: P4
+            ///*    3:  CHECK constraint failed: P4
+            ///*    4:  FOREIGN KEY constraint failed: P4
+            ///*
+            ///* If P3 is zero and P5 is not zero and P4 is NULL, then everything after
+            ///* the ":" is omitted.
+            ///*
+            ///* There is an implied "Halt 0 0 0" instruction inserted at the very end of
+            ///* every program.  So a jump past the last instruction of the program
+            ///* is the same as executing Halt.
             let mut p_frame: *mut VdbeFrame = core::ptr::null_mut();
             let mut pcx: i32 = 0;
+            /// A deliberately coded "OP_Halt SQLITE_INTERNAL * * * *" opcode indicates
+            ///* something is wrong with the code generator.  Raise an assertion in order
+            ///* to bring this to the attention of fuzzers and other testing tools.
+            /// Halt the sub-program. Return control to the parent frame.
+            /// Instruction pcx is the OP_Program that invoked the sub-program
+            ///* currently being halted. If the p2 instruction of this OP_Halt
+            ///* instruction is set to OE_Ignore, then the sub-program is throwing
+            ///* an IGNORE exception. In this case jump to the address specified
+            ///* as the p2 of the calling OP_Program.
             let mut z_err: *const i8 = core::ptr::null();
+            /// Opcode: Integer P1 P2 * * *
+            ///* Synopsis: r[P2]=P1
+            ///*
+            ///* The 32-bit integer value P1 is written into register P2.
+            /// out2
+            /// Opcode: Int64 * P2 * P4 *
+            ///* Synopsis: r[P2]=P4
+            ///*
+            ///* P4 is a pointer to a 64-bit integer value.
+            ///* Write that value into register P2.
+            /// out2
+            /// Opcode: Real * P2 * P4 *
+            ///* Synopsis: r[P2]=P4
+            ///*
+            ///* P4 is a pointer to a 64-bit floating point value.
+            ///* Write that value into register P2.
+            /// same as TK_FLOAT, out2
+            /// Opcode: String8 * P2 * P4 *
+            ///* Synopsis: r[P2]='P4'
+            ///*
+            ///* P4 points to a nul terminated UTF-8 string. This opcode is transformed
+            ///* into a String opcode before it is executed for the first time.  During
+            ///* this transformation, the length of string P4 is computed and stored
+            ///* as the P1 parameter.
+            /// same as TK_STRING, out2
+            /// Fall through to the next case, OP_String */
+            ///  /* no break
+            /// Opcode: String P1 P2 P3 P4 P5
+            ///* Synopsis: r[P2]='P4' (len=P1)
+            ///*
+            ///* The string value P4 of length P1 (bytes) is stored in register P2.
+            ///*
+            ///* If P3 is not zero and the content of register P3 is equal to P5, then
+            ///* the datatype of the register P2 is converted to BLOB.  The content is
+            ///* the same sequence of bytes, it is merely interpreted as a BLOB instead
+            ///* of a string, as if it had been CAST.  In other words:
+            ///*
+            ///* if( P3!=0 and reg[P3]==P5 ) reg[P2] := CAST(reg[P2] as BLOB)
+            /// out2
+            /// Opcode: BeginSubrtn * P2 * * *
+            ///* Synopsis: r[P2]=NULL
+            ///*
+            ///* Mark the beginning of a subroutine that can be entered in-line
+            ///* or that can be called using OP_Gosub.  The subroutine should
+            ///* be terminated by an OP_Return instruction that has a P1 operand that
+            ///* is the same as the P2 operand to this opcode and that has P3 set to 1.
+            ///* If the subroutine is entered in-line, then the OP_Return will simply
+            ///* fall through.  But if the subroutine is entered using OP_Gosub, then
+            ///* the OP_Return will jump back to the first instruction after the OP_Gosub.
+            ///*
+            ///* This routine works by loading a NULL into the P2 register.  When the
+            ///* return address register contains a NULL, the OP_Return instruction is
+            ///* a no-op that simply falls through to the next instruction (assuming that
+            ///* the OP_Return opcode has a P3 value of 1).  Thus if the subroutine is
+            ///* entered in-line, then the OP_Return will cause in-line execution to
+            ///* continue.  But if the subroutine is entered via OP_Gosub, then the
+            ///* OP_Return will cause a return to the address following the OP_Gosub.
+            ///*
+            ///* This opcode is identical to OP_Null.  It has a different name
+            ///* only to make the byte code easier to read and verify.
+            ////
+            ////* Opcode: Null P1 P2 P3 * *
+            ///* Synopsis: r[P2..P3]=NULL
+            ///*
+            ///* Write a NULL into registers P2.  If P3 greater than P2, then also write
+            ///* NULL into register P3 and every register in between P2 and P3.  If P3
+            ///* is less than P2 (typically P3 is zero) then only register P2 is
+            ///* set to NULL.
+            ///*
+            ///* If the P1 value is non-zero, then also set the MEM_Cleared flag so that
+            ///* NULL values will not compare equal even if SQLITE_NULLEQ is set on
+            ///* OP_Ne or OP_Eq.
+            /// out2
             let mut cnt: i32 = 0;
             let mut null_flag: u16 = 0 as u16;
+            /// Opcode: SoftNull P1 * * * *
+            ///* Synopsis: r[P1]=NULL
+            ///*
+            ///* Set register P1 to have the value NULL as seen by the OP_MakeRecord
+            ///* instruction, but do not free any string or blob memory associated with
+            ///* the register, so that if the value was a string or blob that was
+            ///* previously copied using OP_SCopy, the copies will continue to be valid.
+            /// Opcode: Blob P1 P2 * P4 *
+            ///* Synopsis: r[P2]=P4 (len=P1)
+            ///*
+            ///* P4 points to a blob of data P1 bytes long.  Store this
+            ///* blob in register P2.  If P4 is a NULL pointer, then construct
+            ///* a zero-filled blob that is P1 bytes long in P2.
+            /// out2
+            /// Opcode: Variable P1 P2 * * *
+            ///* Synopsis: r[P2]=parameter(P1)
+            ///*
+            ///* Transfer the values of bound parameter P1 into register P2
+            /// out2
             let mut p_var: *mut Mem = core::ptr::null_mut();
+            /// Value being transferred
+            /// Opcode: Move P1 P2 P3 * *
+            ///* Synopsis: r[P2@P3]=r[P1@P3]
+            ///*
+            ///* Move the P3 values in register P1..P1+P3-1 over into
+            ///* registers P2..P2+P3-1.  Registers P1..P1+P3-1 are
+            ///* left holding a NULL.  It is an error for register ranges
+            ///* P1..P1+P3-1 and P2..P2+P3-1 to overlap.  It is an error
+            ///* for P3 to be less than 1.
             let mut n: i32 = 0;
+            /// Number of registers left to copy
             let mut p1: i32 = 0;
+            /// Register to copy from
             let mut p2: i32 = 0;
+            /// Register to copy to
+            /// Opcode: Copy P1 P2 P3 * P5
+            ///* Synopsis: r[P2@P3+1]=r[P1@P3+1]
+            ///*
+            ///* Make a copy of registers P1..P1+P3 into registers P2..P2+P3.
+            ///*
+            ///* If the 0x0002 bit of P5 is set then also clear the MEM_Subtype flag in the
+            ///* destination.  The 0x0001 bit of P5 indicates that this Copy opcode cannot
+            ///* be merged.  The 0x0001 bit is used by the query planner and does not
+            ///* come into play during query execution.
+            ///*
+            ///* This instruction makes a deep copy of the value.  A duplicate
+            ///* is made of any string or blob constant.  See also OP_SCopy.
             let mut n__1: i32 = 0;
+            /// Opcode: SCopy P1 P2 * * *
+            ///* Synopsis: r[P2]=r[P1]
+            ///*
+            ///* Make a shallow copy of register P1 into register P2.
+            ///*
+            ///* This instruction makes a shallow copy of the value.  If the value
+            ///* is a string or blob, then the copy is only a pointer to the
+            ///* original and hence if the original changes so will the copy.
+            ///* Worse, if the original is deallocated, the copy becomes invalid.
+            ///* Thus the program must guarantee that the original will not change
+            ///* during the lifetime of the copy.  Use OP_Copy to make a complete
+            ///* copy.
+            /// out2
+            /// Opcode: IntCopy P1 P2 * * *
+            ///* Synopsis: r[P2]=r[P1]
+            ///*
+            ///* Transfer the integer value held in register P1 into register P2.
+            ///*
+            ///* This is an optimized version of SCopy that works only for integer
+            ///* values.
+            /// out2
+            /// Opcode: FkCheck * * * * *
+            ///*
+            ///* Halt with an SQLITE_CONSTRAINT error if there are any unresolved
+            ///* foreign key constraint violations.  If there are no foreign key
+            ///* constraint violations, this is a no-op.
+            ///*
+            ///* FK constraint violations are also checked when the prepared statement
+            ///* exits.  This opcode is used to raise foreign key constraint errors prior
+            ///* to returning results such as a row change count or the result of a
+            ///* RETURNING clause.
+            /// Opcode: ResultRow P1 P2 * * *
+            ///* Synopsis: output=r[P1@P2]
+            ///*
+            ///* The registers P1 through P1+P2-1 contain a single row of
+            ///* results. This opcode causes the sqlite3_step() call to terminate
+            ///* with an SQLITE_ROW return code and it sets up the sqlite3_stmt
+            ///* structure to provide access to the r(P1)..r(P1+P2-1) values as
+            ///* the result row.
+            /// Opcode: Concat P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]+r[P1]
+            ///*
+            ///* Add the text in register P1 onto the end of the text in
+            ///* register P2 and store the result in register P3.
+            ///* If either the P1 or P2 text are NULL then store NULL in P3.
+            ///*
+            ///*   P3 = P2 || P1
+            ///*
+            ///* It is illegal for P1 and P3 to be the same register. Sometimes,
+            ///* if P3 is the same register as P2, the implementation is able
+            ///* to avoid a memcpy().
+            /// same as TK_CONCAT, in1, in2, out3
             let mut n_byte: i64 = 0 as i64;
+            /// Total size of the output string or blob
             let mut flags1: u16 = 0 as u16;
+            /// Initial flags for P1
             let mut flags2: u16 = 0 as u16;
+            /// Initial flags for P2
+            /// Opcode: Add P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]+r[P2]
+            ///*
+            ///* Add the value in register P1 to the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Multiply P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]*r[P2]
+            ///*
+            ///*
+            ///* Multiply the value in register P1 by the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Subtract P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]-r[P1]
+            ///*
+            ///* Subtract the value in register P1 from the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Divide P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]/r[P1]
+            ///*
+            ///* Divide the value in register P1 by the value in register P2
+            ///* and store the result in register P3 (P3=P2/P1). If the value in
+            ///* register P1 is zero, then the result is NULL. If either input is
+            ///* NULL, the result is NULL.
+            ////
+            ////* Opcode: Remainder P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]%r[P1]
+            ///*
+            ///* Compute the remainder after integer register P2 is divided by
+            ///* register P1 and store the result in register P3.
+            ///* If the value in register P1 is zero the result is NULL.
+            ///* If either operand is NULL, the result is NULL.
+            /// same as TK_PLUS, in1, in2, out3
+            /// same as TK_MINUS, in1, in2, out3
+            /// same as TK_STAR, in1, in2, out3
+            /// same as TK_SLASH, in1, in2, out3
+            /// same as TK_REM, in1, in2, out3
             let mut type1: u16 = 0 as u16;
+            /// Numeric type of left operand
             let mut type2: u16 = 0 as u16;
+            /// Numeric type of right operand
             let mut i_a: i64 = 0 as i64;
+            /// Integer value of left operand
             let mut i_b: i64 = 0 as i64;
+            /// Integer value of right operand
             let mut r_a: f64 = 0.0;
+            /// Real value of left operand
             let mut r_b: f64 = 0.0;
+            /// Real value of right operand
+            /// (double)0 In case of SQLITE_OMIT_FLOATING_POINT...
+            /// Opcode: CollSeq P1 * * P4
+            ///*
+            ///* P4 is a pointer to a CollSeq object. If the next call to a user function
+            ///* or aggregate calls sqlite3GetFuncCollSeq(), this collation sequence will
+            ///* be returned. This is used by the built-in min(), max() and nullif()
+            ///* functions.
+            ///*
+            ///* If P1 is not zero, then it is a register that a subsequent min() or
+            ///* max() aggregate will set to 1 if the current row is not the minimum or
+            ///* maximum.  The P1 register is initialized to 0 by this instruction.
+            ///*
+            ///* The interface used by the implementation of the aforementioned functions
+            ///* to retrieve the collation sequence set by this opcode is not available
+            ///* publicly.  Only built-in functions have access to this feature.
+            /// Opcode: BitAnd P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]&r[P2]
+            ///*
+            ///* Take the bit-wise AND of the values in register P1 and P2 and
+            ///* store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: BitOr P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]|r[P2]
+            ///*
+            ///* Take the bit-wise OR of the values in register P1 and P2 and
+            ///* store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: ShiftLeft P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]<<r[P1]
+            ///*
+            ///* Shift the integer value in register P2 to the left by the
+            ///* number of bits specified by the integer in register P1.
+            ///* Store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: ShiftRight P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]>>r[P1]
+            ///*
+            ///* Shift the integer value in register P2 to the right by the
+            ///* number of bits specified by the integer in register P1.
+            ///* Store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            /// same as TK_BITAND, in1, in2, out3
+            /// same as TK_BITOR, in1, in2, out3
+            /// same as TK_LSHIFT, in1, in2, out3
+            /// same as TK_RSHIFT, in1, in2, out3
             let mut i_a_1: i64 = 0 as i64;
             let mut u_a: u64 = 0 as u64;
             let mut i_b_1: i64 = 0 as i64;
             let mut op: u8 = 0 as u8;
+            /// If shifting by a negative amount, shift in the other direction
+            /// Sign-extend on a right shift of a negative number
+            /// Opcode: AddImm  P1 P2 * * *
+            ///* Synopsis: r[P1]=r[P1]+P2
+            ///*
+            ///* Add the constant P2 to the value in register P1.
+            ///* The result is always an integer.
+            ///*
+            ///* To force any register to be an integer, just add 0.
+            /// in1
+            /// Opcode: MustBeInt P1 P2 * * *
+            ///*
+            ///* Force the value in register P1 to be an integer.  If the value
+            ///* in P1 is not an integer and cannot be converted into an integer
+            ///* without data loss, then jump immediately to P2, or if P2==0
+            ///* raise an SQLITE_MISMATCH exception.
+            /// jump0, in1
+            /// Opcode: RealAffinity P1 * * * *
+            ///*
+            ///* If register P1 holds an integer convert it to a real value.
+            ///*
+            ///* This opcode is used when extracting information from a column that
+            ///* has REAL affinity.  Such column values may still be stored as
+            ///* integers, for space efficiency, but after extraction we want them
+            ///* to have only a real value.
+            /// in1
+            /// Opcode: Cast P1 P2 * * *
+            ///* Synopsis: affinity(r[P1])
+            ///*
+            ///* Force the value in register P1 to be the type defined by P2.
+            ///*
+            ///* <ul>
+            ///* <li> P2=='A' &rarr; BLOB
+            ///* <li> P2=='B' &rarr; TEXT
+            ///* <li> P2=='C' &rarr; NUMERIC
+            ///* <li> P2=='D' &rarr; INTEGER
+            ///* <li> P2=='E' &rarr; REAL
+            ///* </ul>
+            ///*
+            ///* A NULL value is not changed by this routine.  It remains NULL.
+            /// in1
+            /// SQLITE_OMIT_CAST
+            /// Opcode: Eq P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]==r[P1]
+            ///*
+            ///* Compare the values in register P1 and P3.  If reg(P3)==reg(P1) then
+            ///* jump to address P2.
+            ///*
+            ///* The SQLITE_AFF_MASK portion of P5 must be an affinity character -
+            ///* SQLITE_AFF_TEXT, SQLITE_AFF_INTEGER, and so forth. An attempt is made
+            ///* to coerce both inputs according to this affinity before the
+            ///* comparison is made. If the SQLITE_AFF_MASK is 0x00, then numeric
+            ///* affinity is used. Note that the affinity conversions are stored
+            ///* back into the input registers P1 and P3.  So this opcode can cause
+            ///* persistent changes to registers P1 and P3.
+            ///*
+            ///* Once any conversions have taken place, and neither value is NULL,
+            ///* the values are compared. If both values are blobs then memcmp() is
+            ///* used to determine the results of the comparison.  If both values
+            ///* are text, then the appropriate collating function specified in
+            ///* P4 is used to do the comparison.  If P4 is not specified then
+            ///* memcmp() is used to compare text string.  If both values are
+            ///* numeric, then a numeric comparison is used. If the two values
+            ///* are of different types, then numbers are considered less than
+            ///* strings and strings are considered less than blobs.
+            ///*
+            ///* If SQLITE_NULLEQ is set in P5 then the result of comparison is always either
+            ///* true or false and is never NULL.  If both operands are NULL then the result
+            ///* of comparison is true.  If either operand is NULL then the result is false.
+            ///* If neither operand is NULL the result is the same as it would be if
+            ///* the SQLITE_NULLEQ flag were omitted from P5.
+            ///*
+            ///* This opcode saves the result of comparison for use by the new
+            ///* OP_Jump opcode.
+            ////
+            ////* Opcode: Ne P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]!=r[P1]
+            ///*
+            ///* This works just like the Eq opcode except that the jump is taken if
+            ///* the operands in registers P1 and P3 are not equal.  See the Eq opcode for
+            ///* additional information.
+            ////
+            ////* Opcode: Lt P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]<r[P1]
+            ///*
+            ///* Compare the values in register P1 and P3.  If reg(P3)<reg(P1) then
+            ///* jump to address P2.
+            ///*
+            ///* If the SQLITE_JUMPIFNULL bit of P5 is set and either reg(P1) or
+            ///* reg(P3) is NULL then the take the jump.  If the SQLITE_JUMPIFNULL
+            ///* bit is clear then fall through if either operand is NULL.
+            ///*
+            ///* The SQLITE_AFF_MASK portion of P5 must be an affinity character -
+            ///* SQLITE_AFF_TEXT, SQLITE_AFF_INTEGER, and so forth. An attempt is made
+            ///* to coerce both inputs according to this affinity before the
+            ///* comparison is made. If the SQLITE_AFF_MASK is 0x00, then numeric
+            ///* affinity is used. Note that the affinity conversions are stored
+            ///* back into the input registers P1 and P3.  So this opcode can cause
+            ///* persistent changes to registers P1 and P3.
+            ///*
+            ///* Once any conversions have taken place, and neither value is NULL,
+            ///* the values are compared. If both values are blobs then memcmp() is
+            ///* used to determine the results of the comparison.  If both values
+            ///* are text, then the appropriate collating function specified in
+            ///* P4 is  used to do the comparison.  If P4 is not specified then
+            ///* memcmp() is used to compare text string.  If both values are
+            ///* numeric, then a numeric comparison is used. If the two values
+            ///* are of different types, then numbers are considered less than
+            ///* strings and strings are considered less than blobs.
+            ///*
+            ///* This opcode saves the result of comparison for use by the new
+            ///* OP_Jump opcode.
+            ////
+            ////* Opcode: Le P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]<=r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is less than or equal to the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            ////
+            ////* Opcode: Gt P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]>r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is greater than the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            ////
+            ////* Opcode: Ge P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]>=r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is greater than or equal to the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            /// same as TK_EQ, jump, in1, in3
+            /// same as TK_NE, jump, in1, in3
+            /// same as TK_LT, jump, in1, in3
+            /// same as TK_LE, jump, in1, in3
+            /// same as TK_GT, jump, in1, in3
+            /// same as TK_GE, jump, in1, in3
             let mut res: i32 = 0;
             let mut res2: i32 = 0;
+            /// Result of the comparison of pIn1 against pIn3
             let mut affinity: i8 = 0 as i8;
+            /// Affinity to use for comparison
             let mut flags1__1: u16 = 0 as u16;
+            /// Copy of initial value of pIn1->flags
             let mut flags3: u16 = 0 as u16;
+            /// Copy of initial value of pIn3->flags
+            /// Common case of comparison of two integers
+            /// One or both operands are NULL
+            /// If SQLITE_NULLEQ is set (which will only happen if the operator is
+            ///* OP_Eq or OP_Ne) then take the jump or not depending on whether
+            ///* or not both operands are null.
+            /// Operands are equal
+            /// Operands are not equal
+            /// SQLITE_NULLEQ is clear and at least one operand is NULL,
+            ///* then the result is always NULL.
+            ///* The jump is taken if the SQLITE_JUMPIFNULL bit is set.
+            /// Operands are not equal
+            /// Neither operand is NULL and we couldn't do the special high-speed
+            ///* integer comparison case.  So do a general-case comparison.
+            /// At this point, res is negative, zero, or positive if reg[P1] is
+            ///* less than, equal to, or greater than reg[P3], respectively.  Compute
+            ///* the answer to this operator in res2, depending on what the comparison
+            ///* operator actually is.  The next block of code depends on the fact
+            ///* that the 6 comparison operators are consecutive integers in this
+            ///* order:  NE, EQ, GT, LE, LT, GE
+            /// Undo any changes made by applyAffinity() to the input registers.
+            /// Opcode: ElseEq * P2 * * *
+            ///*
+            ///* This opcode must follow an OP_Lt or OP_Gt comparison operator.  There
+            ///* can be zero or more OP_ReleaseReg opcodes intervening, but no other
+            ///* opcodes are allowed to occur between this instruction and the previous
+            ///* OP_Lt or OP_Gt.
+            ///*
+            ///* If the result of an OP_Eq comparison on the same two operands as
+            ///* the prior OP_Lt or OP_Gt would have been true, then jump to P2.  If
+            ///* the result of an OP_Eq comparison on the two previous operands
+            ///* would have been false or NULL, then fall through.
+            /// same as TK_ESCAPE, jump
+            /// SQLITE_DEBUG
+            /// Opcode: Permutation * * * P4 *
+            ///*
+            ///* Set the permutation used by the OP_Compare operator in the next
+            ///* instruction.  The permutation is stored in the P4 operand.
+            ///*
+            ///* The permutation is only valid for the next opcode which must be
+            ///* an OP_Compare that has the OPFLAG_PERMUTE bit set in P5.
+            ///*
+            ///* The first integer in the P4 integer array is the length of the array
+            ///* and does not become part of the permutation.
+            /// Opcode: Compare P1 P2 P3 P4 P5
+            ///* Synopsis: r[P1@P3] <-> r[P2@P3]
+            ///*
+            ///* Compare two vectors of registers in reg(P1)..reg(P1+P3-1) (call this
+            ///* vector "A") and in reg(P2)..reg(P2+P3-1) ("B").  Save the result of
+            ///* the comparison for use by the next OP_Jump instruct.
+            ///*
+            ///* If P5 has the OPFLAG_PERMUTE bit set, then the order of comparison is
+            ///* determined by the most recent OP_Permutation operator.  If the
+            ///* OPFLAG_PERMUTE bit is clear, then register are compared in sequential
+            ///* order.
+            ///*
+            ///* P4 is a KeyInfo structure that defines collating sequences and sort
+            ///* orders for the comparison.  The permutation applies to registers
+            ///* only.  The KeyInfo elements are used sequentially.
+            ///*
+            ///* The comparison is a sort comparison, so NULLs compare equal,
+            ///* NULLs are less than numbers, numbers are less than strings,
+            ///* and strings are less than blobs.
+            ///*
+            ///* This opcode must be immediately followed by an OP_Jump opcode.
             let mut n__2: i32 = 0;
             let mut i: i32 = 0;
             let mut p1__1: i32 = 0;
@@ -999,76 +1835,693 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
             let mut p_key_info: *const KeyInfo = core::ptr::null();
             let mut idx: u32 = 0 as u32;
             let mut p_coll: *const CollSeq = core::ptr::null();
+            /// Collating sequence to use on this term
             let mut b_rev: i32 = 0;
+            /// True for DESCENDING sort order
             let mut a_permute: *const u32 = core::ptr::null();
+            /// The permutation
+            /// SQLITE_DEBUG
+            /// Opcode: Jump P1 P2 P3 * *
+            ///*
+            ///* Jump to the instruction at address P1, P2, or P3 depending on whether
+            ///* in the most recent OP_Compare instruction the P1 vector was less than,
+            ///* equal to, or greater than the P2 vector, respectively.
+            ///*
+            ///* This opcode must immediately follow an OP_Compare opcode.
+            /// jump
+            /// Opcode: And P1 P2 P3 * *
+            ///* Synopsis: r[P3]=(r[P1] && r[P2])
+            ///*
+            ///* Take the logical AND of the values in registers P1 and P2 and
+            ///* write the result into register P3.
+            ///*
+            ///* If either P1 or P2 is 0 (false) then the result is 0 even if
+            ///* the other input is NULL.  A NULL and true or two NULLs give
+            ///* a NULL output.
+            ////
+            ////* Opcode: Or P1 P2 P3 * *
+            ///* Synopsis: r[P3]=(r[P1] || r[P2])
+            ///*
+            ///* Take the logical OR of the values in register P1 and P2 and
+            ///* store the answer in register P3.
+            ///*
+            ///* If either P1 or P2 is nonzero (true) then the result is 1 (true)
+            ///* even if the other input is NULL.  A NULL and false or two NULLs
+            ///* give a NULL output.
+            /// same as TK_AND, in1, in2, out3
+            /// same as TK_OR, in1, in2, out3
             let mut v1: i32 = 0;
+            /// Left operand:  0==FALSE, 1==TRUE, 2==UNKNOWN or NULL
             let mut v2: i32 = 0;
+            /// Opcode: IsTrue P1 P2 P3 P4 *
+            ///* Synopsis: r[P2] = coalesce(r[P1]==TRUE,P3) ^ P4
+            ///*
+            ///* This opcode implements the IS TRUE, IS FALSE, IS NOT TRUE, and
+            ///* IS NOT FALSE operators.
+            ///*
+            ///* Interpret the value in register P1 as a boolean value.  Store that
+            ///* boolean (a 0 or 1) in register P2.  Or if the value in register P1 is
+            ///* NULL, then the P3 is stored in register P2.  Invert the answer if P4
+            ///* is 1.
+            ///*
+            ///* The logic is summarized like this:
+            ///*
+            ///* <ul>
+            ///* <li> If P3==0 and P4==0  then  r[P2] := r[P1] IS TRUE
+            ///* <li> If P3==1 and P4==1  then  r[P2] := r[P1] IS FALSE
+            ///* <li> If P3==0 and P4==1  then  r[P2] := r[P1] IS NOT TRUE
+            ///* <li> If P3==1 and P4==0  then  r[P2] := r[P1] IS NOT FALSE
+            ///* </ul>
+            /// in1, out2
+            /// Opcode: Not P1 P2 * * *
+            ///* Synopsis: r[P2]= !r[P1]
+            ///*
+            ///* Interpret the value in register P1 as a boolean value.  Store the
+            ///* boolean complement in register P2.  If the value in register P1 is
+            ///* NULL, then a NULL is stored in P2.
+            /// same as TK_NOT, in1, out2
+            /// Opcode: BitNot P1 P2 * * *
+            ///* Synopsis: r[P2]= ~r[P1]
+            ///*
+            ///* Interpret the content of register P1 as an integer.  Store the
+            ///* ones-complement of the P1 value into register P2.  If P1 holds
+            ///* a NULL then store a NULL in P2.
+            /// same as TK_BITNOT, in1, out2
+            /// Opcode: Once P1 P2 P3 * *
+            ///*
+            ///* Fall through to the next instruction the first time this opcode is
+            ///* encountered on each invocation of the byte-code program.  Jump to P2
+            ///* on the second and all subsequent encounters during the same invocation.
+            ///*
+            ///* Top-level programs determine first invocation by comparing the P1
+            ///* operand against the P1 operand on the OP_Init opcode at the beginning
+            ///* of the program.  If the P1 values differ, then fall through and make
+            ///* the P1 of this opcode equal to the P1 of OP_Init.  If P1 values are
+            ///* the same then take the jump.
+            ///*
+            ///* For subprograms, there is a bitmask in the VdbeFrame that determines
+            ///* whether or not the jump should be taken.  The bitmask is necessary
+            ///* because the self-altering code trick does not work for recursive
+            ///* triggers.
+            ///*
+            ///* The P3 operand is not used directly by this opcode.  However P3 is
+            ///* used by the code generator as follows:  If this opcode is the start
+            ///* of a subroutine and that subroutine uses a Bloom filter, then P3 will
+            ///* be the register that holds that Bloom filter.  See tag-202407032019
+            ///* in the source code for implementation details.
+            /// jump
             let mut i_addr: u32 = 0 as u32;
+            /// Address of this instruction
+            /// Opcode: If P1 P2 P3 * *
+            ///*
+            ///* Jump to P2 if the value in register P1 is true.  The value
+            ///* is considered true if it is numeric and non-zero.  If the value
+            ///* in P1 is NULL then take the jump if and only if P3 is non-zero.
+            /// jump, in1
             let mut c: i32 = 0;
+            /// Opcode: IfNot P1 P2 P3 * *
+            ///*
+            ///* Jump to P2 if the value in register P1 is False.  The value
+            ///* is considered false if it has a numeric value of zero.  If the value
+            ///* in P1 is NULL then take the jump if and only if P3 is non-zero.
+            /// jump, in1
             let mut c__1: i32 = 0;
+            /// Opcode: IsNull P1 P2 * * *
+            ///* Synopsis: if r[P1]==NULL goto P2
+            ///*
+            ///* Jump to P2 if the value in register P1 is NULL.
+            /// same as TK_ISNULL, jump, in1
+            /// Opcode: IsType P1 P2 P3 P4 P5
+            ///* Synopsis: if typeof(P1.P3) in P5 goto P2
+            ///*
+            ///* Jump to P2 if the type of a column in a btree is one of the types specified
+            ///* by the P5 bitmask.
+            ///*
+            ///* P1 is normally a cursor on a btree for which the row decode cache is
+            ///* valid through at least column P3.  In other words, there should have been
+            ///* a prior OP_Column for column P3 or greater.  If the cursor is not valid,
+            ///* then this opcode might give spurious results.
+            ///* The the btree row has fewer than P3 columns, then use P4 as the
+            ///* datatype.
+            ///*
+            ///* If P1 is -1, then P3 is a register number and the datatype is taken
+            ///* from the value in that register.
+            ///*
+            ///* P5 is a bitmask of data types.  SQLITE_INTEGER is the least significant
+            ///* (0x01) bit. SQLITE_FLOAT is the 0x02 bit. SQLITE_TEXT is 0x04.
+            ///* SQLITE_BLOB is 0x08.  SQLITE_NULL is 0x10.
+            ///*
+            ///* WARNING: This opcode does not reliably distinguish between NULL and REAL
+            ///* when P1>=0.  If the database contains a NaN value, this opcode will think
+            ///* that the datatype is REAL when it should be NULL.  When P1<0 and the value
+            ///* is already stored in register P3, then this opcode does reliably
+            ///* distinguish between NULL and REAL.  The problem only arises then P1>=0.
+            ///*
+            ///* Take the jump to address P2 if and only if the datatype of the
+            ///* value determined by P1 and P3 corresponds to one of the bits in the
+            ///* P5 bitmask.
+            ///*
+            /// jump
             let mut p_c: *const VdbeCursor = core::ptr::null();
             let mut type_mask: u16 = 0 as u16;
             let mut serial_type: u32 = 0 as u32;
+            /// Opcode: ZeroOrNull P1 P2 P3 * *
+            ///* Synopsis: r[P2] = 0 OR NULL
+            ///*
+            ///* If both registers P1 and P3 are NOT NULL, then store a zero in
+            ///* register P2.  If either registers P1 or P3 are NULL then put
+            ///* a NULL in register P2.
+            /// in1, in2, out2, in3
+            /// Opcode: NotNull P1 P2 * * *
+            ///* Synopsis: if r[P1]!=NULL goto P2
+            ///*
+            ///* Jump to P2 if the value in register P1 is not NULL.
+            /// same as TK_NOTNULL, jump, in1
+            /// Opcode: IfNullRow P1 P2 P3 * *
+            ///* Synopsis: if P1.nullRow then r[P3]=NULL, goto P2
+            ///*
+            ///* Check the cursor P1 to see if it is currently pointing at a NULL row.
+            ///* If it is, then set register P3 to NULL and jump immediately to P2.
+            ///* If P1 is not on a NULL row, then fall through without making any
+            ///* changes.
+            ///*
+            ///* If P1 is not an open cursor, then this opcode is a no-op.
+            /// jump
             let mut p_c_1: *const VdbeCursor = core::ptr::null();
+            /// SQLITE_ENABLE_OFFSET_SQL_FUNC
+            /// Opcode: Column P1 P2 P3 P4 P5
+            ///* Synopsis: r[P3]=PX cursor P1 column P2
+            ///*
+            ///* Interpret the data that cursor P1 points to as a structure built using
+            ///* the MakeRecord instruction.  (See the MakeRecord opcode for additional
+            ///* information about the format of the data.)  Extract the P2-th column
+            ///* from this record.  If there are less than (P2+1)
+            ///* values in the record, extract a NULL.
+            ///*
+            ///* The value extracted is stored in register P3.
+            ///*
+            ///* If the record contains fewer than P2 fields, then extract a NULL.  Or,
+            ///* if the P4 argument is a P4_MEM use the value of the P4 argument as
+            ///* the result.
+            ///*
+            ///* If the OPFLAG_LENGTHARG bit is set in P5 then the result is guaranteed
+            ///* to only be used by the length() function or the equivalent.  The content
+            ///* of large blobs is not loaded, thus saving CPU cycles.  If the
+            ///* OPFLAG_TYPEOFARG bit is set then the result will only be used by the
+            ///* typeof() function or the IS NULL or IS NOT NULL operators or the
+            ///* equivalent.  In this case, all content loading can be omitted.
+            /// ncycle
             let mut p2__2: u32 = 0 as u32;
+            /// column number to retrieve
             let mut p_c_2: *mut VdbeCursor = core::ptr::null_mut();
+            /// The VDBE cursor
             let mut p_crsr: *mut BtCursor = core::ptr::null_mut();
+            /// The B-Tree cursor corresponding to pC
             let mut a_offset: *mut u32 = core::ptr::null_mut();
+            /// aOffset[i] is offset to start of data for i-th column
             let mut len: i32 = 0;
+            /// The length of the serialized data for the column
             let mut i__1: i32 = 0;
+            /// Loop counter
             let mut p_dest: *mut Mem = core::ptr::null_mut();
+            /// Where to write the extracted value
             let mut s_mem: Mem = unsafe { core::mem::zeroed() };
+            /// For storing the record being decoded
             let mut z_data: *const u8 = core::ptr::null();
+            /// Part of the record being decoded
             let mut z_hdr: *const u8 = core::ptr::null();
+            /// Next unparsed byte of the header
             let mut z_end_hdr: *const u8 = core::ptr::null();
+            /// Pointer to first byte after the header
             let mut offset64: u64 = 0 as u64;
+            /// 64-bit offset
             let mut t: u32 = 0 as u32;
+            /// A type code from the record header
             let mut p_reg: *mut Mem = core::ptr::null_mut();
+            /// PseudoTable input register
+            ///OPTIMIZATION-IF-FALSE
+            /// For the special case of as pseudo-cursor, the seekResult field
+            ///* identifies the register that holds the record
             let mut i_map: u32 = 0 as u32;
             let mut p5: u8 = 0 as u8;
+            /// This branch happens only when content is on overflow pages
+            /// Content is irrelevant for
+            ///*    1. the typeof() function,
+            ///*    2. the length(X) function if X is a blob, and
+            ///*    3. if the content length is zero.
+            ///* So we might as well use bogus content rather than reading
+            ///* content from disk.
+            ///*
+            ///* Although sqlite3VdbeSerialGet() may read at most 8 bytes from the
+            ///* buffer passed to it, debugging function VdbeMemPrettyPrint() may
+            ///* read more.  Use the global constant sqlite3CtypeMap[] as the array,
+            ///* as that array is 256 bytes long (plenty for VdbeMemPrettyPrint())
+            ///* and it begins with a bunch of zeros.
+            /// Opcode: TypeCheck P1 P2 P3 P4 *
+            ///* Synopsis: typecheck(r[P1@P2])
+            ///*
+            ///* Apply affinities to the range of P2 registers beginning with P1.
+            ///* Take the affinities from the Table object in P4.  If any value
+            ///* cannot be coerced into the correct type, then raise an error.
+            ///*
+            ///* If P3==0, then omit checking of VIRTUAL columns.
+            ///*
+            ///* If P3==1, then omit checking of all generated column, both VIRTUAL
+            ///* and STORED.
+            ///*
+            ///* If P3>=2, then only check column number P3-2 in the table (which will
+            ///* be a VIRTUAL column) against the value in reg[P1].  In this case,
+            ///* P2 will be 1.
+            ///*
+            ///* This opcode is similar to OP_Affinity except that this opcode
+            ///* forces the register type to the Table column type.  This is used
+            ///* to implement "strict affinity".
+            ///*
+            ///* GENERATED ALWAYS AS ... STATIC columns are only checked if P3
+            ///* is zero.  When P3 is non-zero, no type checking occurs for
+            ///* static generated columns.  Virtual columns are computed at query time
+            ///* and so they are never checked.
+            ///*
+            ///* Preconditions:
+            ///*
+            ///* <ul>
+            ///* <li> P2 should be the number of non-virtual columns in the
+            ///*      table of P4 unless P3>1, in which case P2 will be 1.
+            ///* <li> Table P4 is a STRICT table.
+            ///* </ul>
+            ///*
+            ///* If any precondition is false, an assertion fault occurs.
             let mut p_tab: *const Table = core::ptr::null();
             let mut a_col: *const Column = core::ptr::null();
             let mut i__2: i32 = 0;
             let mut n_col: i32 = 0;
+            /// When applying REAL affinity, if the result is still an MEM_Int
+            ///* that will fit in 6 bytes, then change the type to MEM_IntReal
+            ///* so that we keep the high-resolution integer value but know that
+            ///* the type really wants to be REAL.
+            /// COLTYPE_ANY.  Accept anything.
+            /// Opcode: Affinity P1 P2 * P4 *
+            ///* Synopsis: affinity(r[P1@P2])
+            ///*
+            ///* Apply affinities to a range of P2 registers starting with P1.
+            ///*
+            ///* P4 is a string that is P2 characters long. The N-th character of the
+            ///* string indicates the column affinity that should be used for the N-th
+            ///* memory cell in the range.
             let mut z_affinity: *const i8 = core::ptr::null();
+            /// The affinity to be applied
+            ///exit-by-break
+            /// When applying REAL affinity, if the result is still an MEM_Int
+            ///* that will fit in 6 bytes, then change the type to MEM_IntReal
+            ///* so that we keep the high-resolution integer value but know that
+            ///* the type really wants to be REAL.
+            /// Opcode: MakeRecord P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=mkrec(r[P1@P2])
+            ///*
+            ///* Convert P2 registers beginning with P1 into the [record format]
+            ///* use as a data record in a database table or as a key
+            ///* in an index.  The OP_Column opcode can decode the record later.
+            ///*
+            ///* P4 may be a string that is P2 characters long.  The N-th character of the
+            ///* string indicates the column affinity that should be used for the N-th
+            ///* field of the index key.
+            ///*
+            ///* The mapping from character to affinity is given by the SQLITE_AFF_
+            ///* macros defined in sqliteInt.h.
+            ///*
+            ///* If P4 is NULL then all index fields have the affinity BLOB.
+            ///*
+            ///* The meaning of P5 depends on whether or not the SQLITE_ENABLE_NULL_TRIM
+            ///* compile-time option is enabled:
+            ///*
+            ///*   * If SQLITE_ENABLE_NULL_TRIM is enabled, then the P5 is the index
+            ///*     of the right-most table that can be null-trimmed.
+            ///*
+            ///*   * If SQLITE_ENABLE_NULL_TRIM is omitted, then P5 has the value
+            ///*     OPFLAG_NOCHNG_MAGIC if the OP_MakeRecord opcode is allowed to
+            ///*     accept no-change records with serial_type 10.  This value is
+            ///*     only used inside an assert() and does not affect the end result.
             let mut p_rec: *mut Mem = core::ptr::null_mut();
+            /// The new record
             let mut n_data: u64 = 0 as u64;
+            /// Number of bytes of data space
             let mut n_hdr: i32 = 0;
+            /// Number of bytes of header space
             let mut n_byte_1: i64 = 0 as i64;
+            /// Data space required for this record
             let mut n_zero: i64 = 0 as i64;
+            /// Number of zero bytes at the end of the record
             let mut n_varint: i32 = 0;
+            /// Number of bytes in a varint
             let mut serial_type__1: u32 = 0 as u32;
+            /// Type field
             let mut p_data0: *mut Mem = core::ptr::null_mut();
+            /// First field to be combined into the record
             let mut p_last: *mut Mem = core::ptr::null_mut();
+            /// Last field of the record
             let mut n_field: i32 = 0;
+            /// Number of fields in the record
             let mut z_affinity_1: *const i8 = core::ptr::null();
+            /// The affinity string for the record
             let mut len__1: u32 = 0 as u32;
+            /// Length of a field
             let mut z_hdr_1: *mut u8 = core::ptr::null_mut();
+            /// Where to write next byte of the header
             let mut z_payload: *mut u8 = core::ptr::null_mut();
+            /// Where to write next byte of the payload
+            /// Assuming the record contains N fields, the record format looks
+            ///* like this:
+            ///*
+            ///* ------------------------------------------------------------------------
+            ///* | hdr-size | type 0 | type 1 | ... | type N-1 | data0 | ... | data N-1 |
+            ///* ------------------------------------------------------------------------
+            ///*
+            ///* Data(0) is taken from register P1.  Data(1) comes from register P1+1
+            ///* and so forth.
+            ///*
+            ///* Each type field is a varint representing the serial type of the
+            ///* corresponding data element (see sqlite3VdbeSerialType()). The
+            ///* hdr-size field is also a varint which is the offset from the beginning
+            ///* of the record to data0.
+            /// Number of bytes of data space
+            /// Number of bytes of header space
+            /// Number of zero bytes at the end of the record
+            /// Identify the output register
+            /// Apply the requested affinity to all inputs
+            /// Loop through the elements that will make up the record to figure
+            ///* out how much space is required for the new record.  After this loop,
+            ///* the Mem.uTemp field of each term should hold the serial-type that will
+            ///* be used for that term in the generated record:
+            ///*
+            ///*   Mem.uTemp value    type
+            ///*   ---------------    ---------------
+            ///*      0               NULL
+            ///*      1               1-byte signed integer
+            ///*      2               2-byte signed integer
+            ///*      3               3-byte signed integer
+            ///*      4               4-byte signed integer
+            ///*      5               6-byte signed integer
+            ///*      6               8-byte signed integer
+            ///*      7               IEEE float
+            ///*      8               Integer constant 0
+            ///*      9               Integer constant 1
+            ///*     10,11            reserved for expansion
+            ///*    N>=12 and even    BLOB
+            ///*    N>=13 and odd     text
+            ///*
+            ///* The following additional values are computed:
+            ///*     nHdr        Number of bytes needed for the record header
+            ///*     nData       Number of bytes of data space needed for the record
+            ///*     nZero       Zero bytes at the end of the record
+            /// Values with MEM_Null and MEM_Zero are created by xColumn virtual
+            ///* table methods that never invoke sqlite3_result_xxxxx() while
+            ///* computing an unchanging column value in an UPDATE statement.
+            ///* Give such values a special internal-use-only serial-type of 10
+            ///* so that they can be passed through to xUpdate and have
+            ///* a true sqlite3_value_nochange().
+            /// Figure out whether to use 1, 2, 4, 6 or 8 bytes.
             let mut i__3: i64 = 0 as i64;
             let mut uu: u64 = 0 as u64;
+            /// If the value is IntReal and is going to take up 8 bytes to store
+            ///* as an integer, then we might as well make it an 8-byte floating
+            ///* point value
+            /// EVIDENCE-OF: R-22564-11647 The header begins with a single varint
+            ///* which determines the total number of bytes in the header. The varint
+            ///* value is the size of the header in bytes including the size varint
+            ///* itself.
+            /// The common case
+            /// Rare case of a really large header
+            /// Make sure the output register has a buffer large enough to store
+            ///* the new record. The output register (pOp->p3) is not allowed to
+            ///* be one of the input registers (because the following call to
+            ///* sqlite3VdbeMemClearAndResize() could clobber the value before it is used).
+            /// The output register is already large enough to hold the record.
+            ///* No error checks or buffer enlargement is required
+            /// Need to make sure that the output is not too big and then enlarge
+            ///* the output register to hold the full result
+            /// Write the record
+            ///exit-by-break
+            /// EVIDENCE-OF: R-06529-47362 Following the size varint are one or more
+            ///* additional varints, one per column.
+            ///* EVIDENCE-OF: R-64536-51728 The values for each column in the record
+            ///* immediately follow the header.
+            /// NULL value.  No change in zPayload
             let mut v: u64 = 0 as u64;
+            /// no break
+            /// no break
+            /// no break
+            /// no break
+            /// no break
+            /// Opcode: Count P1 P2 P3 * *
+            ///* Synopsis: r[P2]=count()
+            ///*
+            ///* Store the number of entries (an integer value) in the table or index
+            ///* opened by cursor P1 in register P2.
+            ///*
+            ///* If P3==0, then an exact count is obtained, which involves visiting
+            ///* every btree page of the table.  But if P3 is non-zero, an estimate
+            ///* is returned based on the current cursor position.
+            /// out2
             let mut n_entry: i64 = 0 as i64;
             let mut p_crsr_1: *mut BtCursor = core::ptr::null_mut();
+            /// Not needed.  Only used to silence a warning.
+            /// Opcode: Savepoint P1 * * P4 *
+            ///*
+            ///* Open, release or rollback the savepoint named by parameter P4, depending
+            ///* on the value of P1. To open a new savepoint set P1==0 (SAVEPOINT_BEGIN).
+            ///* To release (commit) an existing savepoint set P1==1 (SAVEPOINT_RELEASE).
+            ///* To rollback an existing savepoint set P1==2 (SAVEPOINT_ROLLBACK).
             let mut p1__2: i32 = 0;
+            /// Value of P1 operand
             let mut z_name: *mut i8 = core::ptr::null_mut();
+            /// Name of savepoint
             let mut n_name: i32 = 0;
             let mut p_new: *mut Savepoint = core::ptr::null_mut();
             let mut p_savepoint: *mut Savepoint = core::ptr::null_mut();
             let mut p_tmp: *mut Savepoint = core::ptr::null_mut();
             let mut i_savepoint: i32 = 0;
             let mut ii: i32 = 0;
+            /// Assert that the p1 parameter is valid. Also that if there is no open
+            ///* transaction, then there cannot be any savepoints.
+            /// A new savepoint cannot be created if there are active write
+            ///* statements (i.e. open read/write incremental blob handles).
+            /// This call is Ok even if this savepoint is actually a transaction
+            ///* savepoint (and therefore should not prompt xSavepoint()) callbacks.
+            ///* If this is a transaction savepoint being opened, it is guaranteed
+            ///* that the db->aVTrans[] array is empty.
+            /// Create a new savepoint structure.
+            /// If there is no open transaction, then mark this as a special
+            ///* "transaction savepoint".
+            /// Link the new savepoint into the database handle's list.
+            /// Find the named savepoint. If there is no such savepoint, then an
+            ///* an error is returned to the user.
+            /// It is not possible to release (commit) a savepoint if there are
+            ///* active write statements.
+            /// Determine whether or not this is a transaction savepoint. If so,
+            ///* and this is a RELEASE command, then the current transaction
+            ///* is committed.
             let mut is_transaction: i32 = 0;
             let mut is_schema_change: i32 = 0;
+            /// Regardless of whether this is a RELEASE or ROLLBACK, destroy all
+            ///* savepoints nested inside of the savepoint being operated on.
+            /// If it is a RELEASE, then destroy the savepoint being operated on
+            ///* too. If it is a ROLLBACK TO, then set the number of deferred
+            ///* constraint violations present in the database to the value stored
+            ///* when the savepoint was created.
+            /// Opcode: AutoCommit P1 P2 * * *
+            ///*
+            ///* Set the database auto-commit flag to P1 (1 or 0). If P2 is true, roll
+            ///* back any currently active btree transactions. If there are any active
+            ///* VMs (apart from this one), then a ROLLBACK fails.  A COMMIT fails if
+            ///* there are active writing VMs or active VMs that use shared cache.
+            ///*
+            ///* This instruction causes the VM to halt.
             let mut desired_auto_commit: i32 = 0;
             let mut i_rollback: i32 = 0;
+            /// At least this one VM is active
+            /// If this instruction implements a COMMIT and other VMs are writing
+            ///* return an error indicating that the other VMs must complete first.
+            ///NOTREACHED
+            /// Opcode: Transaction P1 P2 P3 P4 P5
+            ///*
+            ///* Begin a transaction on database P1 if a transaction is not already
+            ///* active.
+            ///* If P2 is non-zero, then a write-transaction is started, or if a
+            ///* read-transaction is already active, it is upgraded to a write-transaction.
+            ///* If P2 is zero, then a read-transaction is started.  If P2 is 2 or more
+            ///* then an exclusive transaction is started.
+            ///*
+            ///* P1 is the index of the database file on which the transaction is
+            ///* started.  Index 0 is the main database file and index 1 is the
+            ///* file used for temporary tables.  Indices of 2 or more are used for
+            ///* attached databases.
+            ///*
+            ///* If a write-transaction is started and the Vdbe.usesStmtJournal flag is
+            ///* true (this flag is set if the Vdbe may modify more than one row and may
+            ///* throw an ABORT exception), a statement transaction may also be opened.
+            ///* More specifically, a statement transaction is opened iff the database
+            ///* connection is currently not in autocommit mode, or if there are other
+            ///* active statements. A statement transaction allows the changes made by this
+            ///* VDBE to be rolled back after an error without having to roll back the
+            ///* entire transaction. If no error is encountered, the statement transaction
+            ///* will automatically commit when the VDBE halts.
+            ///*
+            ///* If P5!=0 then this opcode also checks the schema cookie against P3
+            ///* and the schema generation counter against P4.
+            ///* The cookie changes its value whenever the database schema changes.
+            ///* This operation is used to detect when that the cookie has changed
+            ///* and that the current process needs to reread the schema.  If the schema
+            ///* cookie in P3 differs from the schema cookie in the database header or
+            ///* if the schema generation counter in P4 differs from the current
+            ///* generation counter, then an SQLITE_SCHEMA error is raised and execution
+            ///* halts.  The sqlite3_step() wrapper function might then reprepare the
+            ///* statement and rerun it from the beginning.
             let mut p_bt: *mut Btree = core::ptr::null_mut();
             let mut p_db: *const Db = core::ptr::null();
             let mut i_meta: i32 = 0;
+            /// Writes prohibited by the "PRAGMA query_only=TRUE" statement
+            /// Writes prohibited due to a prior SQLITE_CORRUPT in the current
+            ///* transaction
+            /// Store the current value of the database handles deferred constraint
+            ///* counter. If the statement transaction needs to be rolled back,
+            ///* the value of this counter needs to be restored too.
+            ///* IMPLEMENTATION-OF: R-03189-51135 As each SQL statement runs, the schema
+            ///* version is checked to ensure that the schema has not changed since the
+            ///* SQL statement was prepared.
+            /// If the schema-cookie from the database file matches the cookie
+            ///* stored with the in-memory representation of the schema, do
+            ///* not reload the schema from the database file.
+            ///*
+            ///* If virtual-tables are in use, this is not just an optimization.
+            ///* Often, v-tables store their data in other SQLite tables, which
+            ///* are queried from within xNext() and other v-table methods using
+            ///* prepared queries. If such a query is out-of-date, we do not want to
+            ///* discard the database schema, as the user code implementing the
+            ///* v-table would have to be ready for the sqlite3_vtab structure itself
+            ///* to be invalidated whenever sqlite3_step() is called from within
+            ///* a v-table method.
+            /// Set changeCntOn to 0 to prevent the value returned by sqlite3_changes()
+            ///* from being modified in sqlite3VdbeHalt(). If this statement is
+            ///* reprepared, changeCntOn will be set again.
+            /// Opcode: ReadCookie P1 P2 P3 * *
+            ///*
+            ///* Read cookie number P3 from database P1 and write it into register P2.
+            ///* P3==1 is the schema version.  P3==2 is the database format.
+            ///* P3==3 is the recommended pager cache size, and so forth.  P1==0 is
+            ///* the main database file and P1==1 is the database file used to store
+            ///* temporary tables.
+            ///*
+            ///* There must be a read-lock on the database (either a transaction
+            ///* must be started or there must be an open cursor) before
+            ///* executing this instruction.
+            /// out2
             let mut i_meta_1: i32 = 0;
             let mut i_db: i32 = 0;
             let mut i_cookie: i32 = 0;
+            /// Opcode: SetCookie P1 P2 P3 * P5
+            ///*
+            ///* Write the integer value P3 into cookie number P2 of database P1.
+            ///* P2==1 is the schema version.  P2==2 is the database format.
+            ///* P2==3 is the recommended pager cache
+            ///* size, and so forth.  P1==0 is the main database file and P1==1 is the
+            ///* database file used to store temporary tables.
+            ///*
+            ///* A transaction must be started before executing this opcode.
+            ///*
+            ///* If P2 is the SCHEMA_VERSION cookie (cookie number 1) then the internal
+            ///* schema version is set to P3-P5.  The "PRAGMA schema_version=N" statement
+            ///* has P5 set to 1, so that the internal schema version will be different
+            ///* from the database schema version, resulting in a schema reset.
             let mut p_db_1: *const Db = core::ptr::null();
+            /// See note about index shifting on OP_ReadCookie
+            /// When the schema cookie changes, record the new cookie internally
+            /// Record changes in the file format
+            /// Invalidate all prepared statements whenever the TEMP database
+            ///* schema is changed.  Ticket #1644
+            /// Opcode: OpenRead P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* Open a read-only cursor for the database table whose root page is
+            ///* P2 in a database file.  The database file is determined by P3.
+            ///* P3==0 means the main database, P3==1 means the database used for
+            ///* temporary tables, and P3>1 means used the corresponding attached
+            ///* database.  Give the new cursor an identifier of P1.  The P1
+            ///* values need not be contiguous but all P1 values should be small integers.
+            ///* It is an error for P1 to be negative.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* </ul>
+            ///*
+            ///* The P4 value may be either an integer (P4_INT32) or a pointer to
+            ///* a KeyInfo structure (P4_KEYINFO). If it is a pointer to a KeyInfo
+            ///* object, then table being opened must be an [index b-tree] where the
+            ///* KeyInfo object defines the content and collating
+            ///* sequence of that index b-tree. Otherwise, if P4 is an integer
+            ///* value, then the table being opened must be a [table b-tree] with a
+            ///* number of columns no less than the value of P4.
+            ///*
+            ///* See also: OpenWrite, ReopenIdx
+            ////
+            ////* Opcode: ReopenIdx P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* The ReopenIdx opcode works like OP_OpenRead except that it first
+            ///* checks to see if the cursor on P1 is already open on the same
+            ///* b-tree and if it is this opcode becomes a no-op.  In other words,
+            ///* if the cursor is already open, do not reopen it.
+            ///*
+            ///* The ReopenIdx opcode may only be used with P5==0 or P5==OPFLAG_SEEKEQ
+            ///* and with P4 being a P4_KEYINFO object.  Furthermore, the P3 value must
+            ///* be the same as every other ReopenIdx or OpenRead for the same cursor
+            ///* number.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* </ul>
+            ///*
+            ///* See also: OP_OpenRead, OP_OpenWrite
+            ////
+            ////* Opcode: OpenWrite P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* Open a read/write cursor named P1 on the table or index whose root
+            ///* page is P2 (or whose root page is held in register P2 if the
+            ///* OPFLAG_P2ISREG bit is set in P5 - see below).
+            ///*
+            ///* The P4 value may be either an integer (P4_INT32) or a pointer to
+            ///* a KeyInfo structure (P4_KEYINFO). If it is a pointer to a KeyInfo
+            ///* object, then table being opened must be an [index b-tree] where the
+            ///* KeyInfo object defines the content and collating
+            ///* sequence of that index b-tree. Otherwise, if P4 is an integer
+            ///* value, then the table being opened must be a [table b-tree] with a
+            ///* number of columns no less than the value of P4.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* <li>  <b>0x08 OPFLAG_FORDELETE</b>: This cursor is used only to seek
+            ///*       and subsequently delete entries in an index btree.  This is a
+            ///*       hint to the storage engine that the storage engine is allowed to
+            ///*       ignore.  The hint is not used by the official SQLite b*tree storage
+            ///*       engine, but is used by COMDB2.
+            ///* <li>  <b>0x10 OPFLAG_P2ISREG</b>: Use the content of register P2
+            ///*       as the root page, not the value of P2 itself.
+            ///* </ul>
+            ///*
+            ///* This instruction works like OpenRead except that it opens the cursor
+            ///* in read/write mode.
+            ///*
+            ///* See also: OP_OpenRead, OP_ReopenIdx
+            /// ncycle
             let mut n_field_1: i32 = 0;
             let mut p_key_info_1: *mut KeyInfo = core::ptr::null_mut();
             let mut p2__3: u32 = 0 as u32;
@@ -1077,176 +2530,1798 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
             let mut p_x: *mut Btree = core::ptr::null_mut();
             let mut p_cur: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_db_2: *const Db = core::ptr::null();
+            /// Guaranteed by the code generator
+            /// If the cursor is not currently open or is open on a different
+            ///* index, then fall through into OP_OpenRead to force a reopen
+            /// ncycle
+            /// The p2 value always comes from a prior OP_CreateBtree opcode and
+            ///* that opcode will always set the p2 value to 2 or more or else fail.
+            ///* If there were a failure, the prepared statement would have halted
+            ///* before reaching this instruction.
+            /// Table with INTEGER PRIMARY KEY and nothing else
+            /// Set the VdbeCursor.isTable variable. Previous versions of
+            ///* SQLite used to check if the root-page flags were sane at this point
+            ///* and report database corruption if they were not, but this check has
+            ///* since moved into the btree layer.
+            /// Opcode: OpenDup P1 P2 * * *
+            ///*
+            ///* Open a new cursor P1 that points to the same ephemeral table as
+            ///* cursor P2.  The P2 cursor must have been opened by a prior OP_OpenEphemeral
+            ///* opcode.  Only ephemeral cursors may be duplicated.
+            ///*
+            ///* Duplicate ephemeral cursors are used for self-joins of materialized views.
+            /// ncycle
             let mut p_orig: *mut VdbeCursor = core::ptr::null_mut();
+            /// The original cursor to be duplicated
             let mut p_cx: *mut VdbeCursor = core::ptr::null_mut();
+            /// The new cursor
+            /// Only ephemeral cursors can be duplicated
+            /// The sqlite3BtreeCursor() routine can only fail for the first cursor
+            ///* opened for a database.  Since there is already an open cursor when this
+            ///* opcode is run, the sqlite3BtreeCursor() cannot fail
+            /// Opcode: OpenEphemeral P1 P2 P3 P4 P5
+            ///* Synopsis: nColumn=P2
+            ///*
+            ///* Open a new cursor P1 to a transient table.
+            ///* The cursor is always opened read/write even if
+            ///* the main database is read-only.  The ephemeral
+            ///* table is deleted automatically when the cursor is closed.
+            ///*
+            ///* If the cursor P1 is already opened on an ephemeral table, the table
+            ///* is cleared (all content is erased).
+            ///*
+            ///* P2 is the number of columns in the ephemeral table.
+            ///* The cursor points to a BTree table if P4==0 and to a BTree index
+            ///* if P4 is not 0.  If P4 is not NULL, it points to a KeyInfo structure
+            ///* that defines the format of keys in the index.
+            ///*
+            ///* The P5 parameter can be a mask of the BTREE_* flags defined
+            ///* in btree.h.  These flags control aspects of the operation of
+            ///* the btree.  The BTREE_OMIT_JOURNAL and BTREE_SINGLE flags are
+            ///* added automatically.
+            ///*
+            ///* If P3 is positive, then reg[P3] is modified slightly so that it
+            ///* can be used as zero-length data for OP_Insert.  This is an optimization
+            ///* that avoids an extra OP_Blob opcode to initialize that register.
+            ////
+            ////* Opcode: OpenAutoindex P1 P2 * P4 *
+            ///* Synopsis: nColumn=P2
+            ///*
+            ///* This opcode works the same as OP_OpenEphemeral.  It has a
+            ///* different name to distinguish its use.  Tables created using
+            ///* by this opcode will be used for automatically created transient
+            ///* indices in joins.
+            /// ncycle
+            /// ncycle
             let mut p_cx_1: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_key_info_2: *mut KeyInfo = core::ptr::null_mut();
+            /// Make register reg[P3] into a value that can be used as the data
+            ///* form sqlite3BtreeInsert() where the length of the data is zero.
+            /// Only used when number of columns is zero
+            /// If the ephemeral table is already open and has no duplicates from
+            ///* OP_OpenDup, then erase all existing content so that the table is
+            ///* empty again, rather than creating a new table.
+            /// If a transient index is required, create it by calling
+            ///* sqlite3BtreeCreateTable() with the BTREE_BLOBKEY flag before
+            ///* opening it. If a transient table is required, just use the
+            ///* automatically created table with root-page 1 (an BLOB_INTKEY table).
+            /// Not required; helps with static analysis
+            /// Opcode: SorterOpen P1 P2 P3 P4 *
+            ///*
+            ///* This opcode works like OP_OpenEphemeral except that it opens
+            ///* a transient index that is specifically designed to sort large
+            ///* tables using an external merge-sort algorithm.
+            ///*
+            ///* If argument P3 is non-zero, then it indicates that the sorter may
+            ///* assume that a stable sort considering the first P3 fields of each
+            ///* key is sufficient to produce the required results.
             let mut p_cx_2: *mut VdbeCursor = core::ptr::null_mut();
+            /// Opcode: SequenceTest P1 P2 * * *
+            ///* Synopsis: if( cursor[P1].ctr++ ) pc = P2
+            ///*
+            ///* P1 is a sorter cursor. If the sequence counter is currently zero, jump
+            ///* to P2. Regardless of whether or not the jump is taken, increment the
+            ///* the sequence value.
             let mut p_c_3: *mut VdbeCursor = core::ptr::null_mut();
+            /// Opcode: OpenPseudo P1 P2 P3 * *
+            ///* Synopsis: P3 columns in r[P2]
+            ///*
+            ///* Open a new cursor that points to a fake table that contains a single
+            ///* row of data.  The content of that one row is the content of memory
+            ///* register P2.  In other words, cursor P1 becomes an alias for the
+            ///* MEM_Blob content contained in register P2.
+            ///*
+            ///* A pseudo-table created by this opcode is used to hold a single
+            ///* row output from the sorter so that the row can be decomposed into
+            ///* individual columns using the OP_Column opcode.  The OP_Column opcode
+            ///* is the only cursor opcode that works with a pseudo-table.
+            ///*
+            ///* P3 is the number of fields in the records that will be stored by
+            ///* the pseudo-table.  If P2 is 0 or negative then the pseudo-cursor
+            ///* will return NULL for every column.
             let mut p_cx_3: *mut VdbeCursor = core::ptr::null_mut();
+            /// Give this pseudo-cursor a fake BtCursor pointer so that pCx
+            ///* can be safely passed to sqlite3VdbeCursorMoveto().  This avoids a test
+            ///* for pCx->eCurType==CURTYPE_BTREE inside of sqlite3VdbeCursorMoveto()
+            ///* which is a performance optimization
+            /// Opcode: Close P1 * * * *
+            ///*
+            ///* Close a cursor previously opened as P1.  If P1 is not
+            ///* currently open, this instruction is a no-op.
+            /// ncycle
+            /// Opcode: SeekGE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as the key.  If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that  it points to the smallest entry that
+            ///* is greater than or equal to the key value. If there are no records
+            ///* greater than or equal to the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* If the cursor P1 was opened using the OPFLAG_SEEKEQ flag, then this
+            ///* opcode will either land on a record that exactly matches the key, or
+            ///* else it will cause a jump to P2.  When the cursor is OPFLAG_SEEKEQ,
+            ///* this opcode must be followed by an IdxLE opcode with the same arguments.
+            ///* The IdxGT opcode will be skipped if this opcode succeeds, but the
+            ///* IdxGT opcode will be used on subsequent loop iterations.  The
+            ///* OPFLAG_SEEKEQ flags is a hint to the btree layer to say that this
+            ///* is an equality search.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            ///*
+            ///* See also: Found, NotFound, SeekLt, SeekGt, SeekLe
+            ////
+            ////* Opcode: SeekGT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that it points to the smallest entry that
+            ///* is greater than the key value. If there are no records greater than
+            ///* the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            ///*
+            ///* See also: Found, NotFound, SeekLt, SeekGe, SeekLe
+            ////
+            ////* Opcode: SeekLT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that  it points to the largest entry that
+            ///* is less than the key value. If there are no records less than
+            ///* the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            ///*
+            ///* See also: Found, NotFound, SeekGt, SeekGe, SeekLe
+            ////
+            ////* Opcode: SeekLE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that it points to the largest entry that
+            ///* is less than or equal to the key value. If there are no records
+            ///* less than or equal to the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            ///*
+            ///* If the cursor P1 was opened using the OPFLAG_SEEKEQ flag, then this
+            ///* opcode will either land on a record that exactly matches the key, or
+            ///* else it will cause a jump to P2.  When the cursor is OPFLAG_SEEKEQ,
+            ///* this opcode must be followed by an IdxLE opcode with the same arguments.
+            ///* The IdxGE opcode will be skipped if this opcode succeeds, but the
+            ///* IdxGE opcode will be used on subsequent loop iterations.  The
+            ///* OPFLAG_SEEKEQ flags is a hint to the btree layer to say that this
+            ///* is an equality search.
+            ///*
+            ///* See also: Found, NotFound, SeekGt, SeekGe, SeekLt
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
             let mut res__1: i32 = 0;
+            /// Comparison result
             let mut oc: i32 = 0;
+            /// Opcode
             let mut p_c_4: *mut VdbeCursor = core::ptr::null_mut();
+            /// The cursor to seek
             let mut r: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// The key to seek for
             let mut n_field_2: i32 = 0;
+            /// Number of columns or fields in the key
             let mut i_key: i64 = 0 as i64;
+            /// The rowid we are to seek to
             let mut eq_only: i32 = 0;
+            /// Only interested in == results
             let mut flags3__1: u16 = 0 as u16;
             let mut new_type: u16 = 0 as u16;
+            /// The OPFLAG_SEEKEQ/BTREE_SEEK_EQ flag is only set on index cursors
+            /// The input value in P3 might be of any type: integer, real, string,
+            ///* blob, or NULL.  But it needs to be an integer before we can do
+            ///* the seek, so convert it.
+            /// Get the integer key value
+            /// Record the type after applying numeric affinity
+            /// But convert the type back to its original
+            /// If the P3 value could not be converted into an integer without
+            ///* loss of information, then special processing is required...
             let mut c__2: i32 = 0;
+            /// If the approximation iKey is larger than the actual real search
+            ///* term, substitute >= for > and < for <=. e.g. if the search term
+            ///* is 4.9 and the integer approximation 5:
+            ///*
+            ///*        (x >  4.9)    ->     (x >= 5)
+            ///*        (x <= 4.9)    ->     (x <  5)
+            /// If the approximation iKey is smaller than the actual real search
+            ///* term, substitute <= for < and > for >=.
+            /// Used by OP_Delete
+            /// For a cursor with the OPFLAG_SEEKEQ/BTREE_SEEK_EQ hint, only the
+            ///* OP_SeekGE and OP_SeekLE opcodes are allowed, and these must be
+            ///* immediately followed by an OP_IdxGT or OP_IdxLT opcode, respectively,
+            ///* with the same key.
+            /// The next line of code computes as follows, only faster:
+            ///*   if( oc==OP_SeekGT || oc==OP_SeekLE ){
+            ///*     r.default_rc = -1;
+            ///*   }else{
+            ///*     r.default_rc = +1;
+            ///*   }
+            /// res might be negative because the table is empty.  Check to
+            ///* see if this is the case.
+            /// Skip the OP_IdxLt or OP_IdxGT that follows
+            /// Opcode: SeekScan  P1 P2 * * P5
+            ///* Synopsis: Scan-ahead up to P1 rows
+            ///*
+            ///* This opcode is a prefix opcode to OP_SeekGE.  In other words, this
+            ///* opcode must be immediately followed by OP_SeekGE. This constraint is
+            ///* checked by assert() statements.
+            ///*
+            ///* This opcode uses the P1 through P4 operands of the subsequent
+            ///* OP_SeekGE.  In the text that follows, the operands of the subsequent
+            ///* OP_SeekGE opcode are denoted as SeekOP.P1 through SeekOP.P4.   Only
+            ///* the P1, P2 and P5 operands of this opcode are also used, and  are called
+            ///* This.P1, This.P2 and This.P5.
+            ///*
+            ///* This opcode helps to optimize IN operators on a multi-column index
+            ///* where the IN operator is on the later terms of the index by avoiding
+            ///* unnecessary seeks on the btree, substituting steps to the next row
+            ///* of the b-tree instead.  A correct answer is obtained if this opcode
+            ///* is omitted or is a no-op.
+            ///*
+            ///* The SeekGE.P3 and SeekGE.P4 operands identify an unpacked key which
+            ///* is the desired entry that we want the cursor SeekGE.P1 to be pointing
+            ///* to.  Call this SeekGE.P3/P4 row the "target".
+            ///*
+            ///* If the SeekGE.P1 cursor is not currently pointing to a valid row,
+            ///* then this opcode is a no-op and control passes through into the OP_SeekGE.
+            ///*
+            ///* If the SeekGE.P1 cursor is pointing to a valid row, then that row
+            ///* might be the target row, or it might be near and slightly before the
+            ///* target row, or it might be after the target row.  If the cursor is
+            ///* currently before the target row, then this opcode attempts to position
+            ///* the cursor on or after the target row by invoking sqlite3BtreeStep()
+            ///* on the cursor between 1 and This.P1 times.
+            ///*
+            ///* The This.P5 parameter is a flag that indicates what to do if the
+            ///* cursor ends up pointing at a valid row that is past the target
+            ///* row.  If This.P5 is false (0) then a jump is made to SeekGE.P2.  If
+            ///* This.P5 is true (non-zero) then a jump is made to This.P2.  The P5==0
+            ///* case occurs when there are no inequality constraints to the right of
+            ///* the IN constraint.  The jump to SeekGE.P2 ends the loop.  The P5!=0 case
+            ///* occurs when there are inequality constraints to the right of the IN
+            ///* operator.  In that case, the This.P2 will point either directly to or
+            ///* to setup code prior to the OP_IdxGT or OP_IdxGE opcode that checks for
+            ///* loop terminate.
+            ///*
+            ///* Possible outcomes from this opcode:<ol>
+            ///*
+            ///* <li> If the cursor is initially not pointed to any valid row, then
+            ///*      fall through into the subsequent OP_SeekGE opcode.
+            ///*
+            ///* <li> If the cursor is left pointing to a row that is before the target
+            ///*      row, even after making as many as This.P1 calls to
+            ///*      sqlite3BtreeNext(), then also fall through into OP_SeekGE.
+            ///*
+            ///* <li> If the cursor is left pointing at the target row, either because it
+            ///*      was at the target row to begin with or because one or more
+            ///*      sqlite3BtreeNext() calls moved the cursor to the target row,
+            ///*      then jump to This.P2..,
+            ///*
+            ///* <li> If the cursor started out before the target row and a call to
+            ///*      to sqlite3BtreeNext() moved the cursor off the end of the index
+            ///*      (indicating that the target row definitely does not exist in the
+            ///*      btree) then jump to SeekGE.P2, ending the loop.
+            ///*
+            ///* <li> If the cursor ends up on a valid row that is past the target row
+            ///*      (indicating that the target row does not exist in the btree) then
+            ///*      jump to SeekOP.P2 if This.P5==0 or to This.P2 if This.P5>0.
+            ///* </ol>
+            /// ncycle
             let mut p_c_5: *mut VdbeCursor = core::ptr::null_mut();
             let mut res__2: i32 = 0;
             let mut n_step: i32 = 0;
             let mut r__1: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// If pOp->p5 is clear, then pOp->p2 points to the first instruction past the
+            ///* OP_IdxGT that follows the OP_SeekGE. Otherwise, it points to the first
+            ///* opcode past the OP_SeekGE itself.
+            /// Not needed.  Only used to silence a warning.
+            /// Jump to SeekGE.P2, ending the loop
+            /// Jump to This.P2, bypassing the OP_SeekGE opcode
+            /// Opcode: SeekHit P1 P2 P3 * *
+            ///* Synopsis: set P2<=seekHit<=P3
+            ///*
+            ///* Increase or decrease the seekHit value for cursor P1, if necessary,
+            ///* so that it is no less than P2 and no greater than P3.
+            ///*
+            ///* The seekHit integer represents the maximum of terms in an index for which
+            ///* there is known to be at least one match.  If the seekHit value is smaller
+            ///* than the total number of equality terms in an index lookup, then the
+            ///* OP_IfNoHope opcode might run to see if the IN loop can be abandoned
+            ///* early, thus saving work.  This is part of the IN-early-out optimization.
+            ///*
+            ///* P1 must be a valid b-tree cursor.
+            /// ncycle
             let mut p_c_6: *mut VdbeCursor = core::ptr::null_mut();
+            /// Opcode: IfNotOpen P1 P2 * * *
+            ///* Synopsis: if( !csr[P1] ) goto P2
+            ///*
+            ///* If cursor P1 is not open or if P1 is set to a NULL row using the
+            ///* OP_NullRow opcode, then jump to instruction P2. Otherwise, fall through.
+            /// jump
             let mut p_cur_1: *const VdbeCursor = core::ptr::null();
+            /// Opcode: Found P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* is a prefix of any entry in P1 then a jump is made to P2 and
+            ///* P1 is left pointing at the matching entry.
+            ///*
+            ///* This operation leaves the cursor in a state where it can be
+            ///* advanced in the forward direction.  The Next instruction will work,
+            ///* but not the Prev instruction.
+            ///*
+            ///* See also: NotFound, NoConflict, NotExists. SeekGe
+            ////
+            ////* Opcode: NotFound P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* is not the prefix of any entry in P1 then a jump is made to P2.  If P1
+            ///* does contain an entry whose prefix matches the P3/P4 record then control
+            ///* falls through to the next instruction and P1 is left pointing at the
+            ///* matching entry.
+            ///*
+            ///* This operation leaves the cursor in a state where it cannot be
+            ///* advanced in either direction.  In other words, the Next and Prev
+            ///* opcodes do not work after this operation.
+            ///*
+            ///* See also: Found, NotExists, NoConflict, IfNoHope
+            ////
+            ////* Opcode: IfNoHope P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* Register P3 is the first of P4 registers that form an unpacked
+            ///* record.  Cursor P1 is an index btree.  P2 is a jump destination.
+            ///* In other words, the operands to this opcode are the same as the
+            ///* operands to OP_NotFound and OP_IdxGT.
+            ///*
+            ///* This opcode is an optimization attempt only.  If this opcode always
+            ///* falls through, the correct answer is still obtained, but extra work
+            ///* is performed.
+            ///*
+            ///* A value of N in the seekHit flag of cursor P1 means that there exists
+            ///* a key P3:N that will match some record in the index.  We want to know
+            ///* if it is possible for a record P3:P4 to match some record in the
+            ///* index.  If it is not possible, we can skip some work.  So if seekHit
+            ///* is less than P4, attempt to find out if a match is possible by running
+            ///* OP_NotFound.
+            ///*
+            ///* This opcode is used in IN clause processing for a multi-column key.
+            ///* If an IN clause is attached to an element of the key other than the
+            ///* left-most element, and if there are no matches on the most recent
+            ///* seek over the whole key, then it might be that one of the key element
+            ///* to the left is prohibiting a match, and hence there is "no hope" of
+            ///* any match regardless of how many IN clause elements are checked.
+            ///* In such a case, we abandon the IN clause search early, using this
+            ///* opcode.  The opcode name comes from the fact that the
+            ///* jump is taken if there is "no hope" of achieving a match.
+            ///*
+            ///* See also: NotFound, SeekHit
+            ////
+            ////* Opcode: NoConflict P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* contains any NULL value, jump immediately to P2.  If all terms of the
+            ///* record are not-NULL then a check is done to determine if any row in the
+            ///* P1 index btree has a matching key prefix.  If there are no matches, jump
+            ///* immediately to P2.  If there is a match, fall through and leave the P1
+            ///* cursor pointing to the matching row.
+            ///*
+            ///* This opcode is similar to OP_NotFound with the exceptions that the
+            ///* branch is always taken if any part of the search key input is NULL.
+            ///*
+            ///* This operation leaves the cursor in a state where it cannot be
+            ///* advanced in either direction.  In other words, the Next and Prev
+            ///* opcodes do not work after this operation.
+            ///*
+            ///* See also: NotFound, Found, NotExists
+            /// jump, in3, ncycle
             let mut p_c_7: *const VdbeCursor = core::ptr::null();
+            /// Fall through into OP_NotFound */
+            ///  /* no break
+            /// jump, in3, ncycle
+            /// jump, in3, ncycle
+            /// jump, in3, ncycle
             let mut already_exists: i32 = 0;
             let mut ii__1: i32 = 0;
             let mut p_c_8: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_idx_key: *mut UnpackedRecord = core::ptr::null_mut();
             let mut r__2: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// Key values in an array of registers
+            /// Composite key generated by OP_MakeRecord
+            /// For the OP_NoConflict opcode, take the jump if any of the
+            ///* input fields are NULL, since any key with a NULL will not
+            ///* conflict
+            /// Opcode: SeekRowid P1 P2 P3 * *
+            ///* Synopsis: intkey=r[P3]
+            ///*
+            ///* P1 is the index of a cursor open on an SQL table btree (with integer
+            ///* keys).  If register P3 does not contain an integer or if P1 does not
+            ///* contain a record with rowid P3 then jump immediately to P2. 
+            ///* Or, if P2 is 0, raise an SQLITE_CORRUPT error. If P1 does contain
+            ///* a record with rowid P3 then
+            ///* leave the cursor pointing at that record and fall through to the next
+            ///* instruction.
+            ///*
+            ///* The OP_NotExists opcode performs the same operation, but with OP_NotExists
+            ///* the P3 register must be guaranteed to contain an integer value.  With this
+            ///* opcode, register P3 might not contain an integer.
+            ///*
+            ///* The OP_NotFound opcode performs the same operation on index btrees
+            ///* (with arbitrary multi-value keys).
+            ///*
+            ///* This opcode leaves the cursor in a state where it cannot be advanced
+            ///* in either direction.  In other words, the Next and Prev opcodes will
+            ///* not work following this opcode.
+            ///*
+            ///* See also: Found, NotFound, NoConflict, SeekRowid
+            ////
+            ////* Opcode: NotExists P1 P2 P3 * *
+            ///* Synopsis: intkey=r[P3]
+            ///*
+            ///* P1 is the index of a cursor open on an SQL table btree (with integer
+            ///* keys).  P3 is an integer rowid.  If P1 does not contain a record with
+            ///* rowid P3 then jump immediately to P2.  Or, if P2 is 0, raise an
+            ///* SQLITE_CORRUPT error. If P1 does contain a record with rowid P3 then
+            ///* leave the cursor pointing at that record and fall through to the next
+            ///* instruction.
+            ///*
+            ///* The OP_SeekRowid opcode performs the same operation but also allows the
+            ///* P3 register to contain a non-integer value, in which case the jump is
+            ///* always taken.  This opcode requires that P3 always contain an integer.
+            ///*
+            ///* The OP_NotFound opcode performs the same operation on index btrees
+            ///* (with arbitrary multi-value keys).
+            ///*
+            ///* This opcode leaves the cursor in a state where it cannot be advanced
+            ///* in either direction.  In other words, the Next and Prev opcodes will
+            ///* not work following this opcode.
+            ///*
+            ///* See also: Found, NotFound, NoConflict, SeekRowid
+            /// jump0, in3, ncycle
             let mut p_c_9: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_crsr_2: *mut BtCursor = core::ptr::null_mut();
             let mut res__3: i32 = 0;
             let mut i_key_1: u64 = 0 as u64;
+            /// If pIn3->u.i does not contain an integer, compute iKey as the
+            ///* integer value of pIn3.  Jump to P2 if pIn3 cannot be converted
+            ///* into an integer without loss of information.  Take care to avoid
+            ///* changing the datatype of pIn3, however, as it is used by other
+            ///* parts of the prepared statement.
             let mut x: Mem = unsafe { core::mem::zeroed() };
+            /// Fall through into OP_NotExists */
+            ///  /* no break
+            /// jump, in3, ncycle
+            /// Used by OP_Delete
+            /// Opcode: Sequence P1 P2 * * *
+            ///* Synopsis: r[P2]=cursor[P1].ctr++
+            ///*
+            ///* Find the next available sequence number for cursor P1.
+            ///* Write the sequence number into register P2.
+            ///* The sequence number on the cursor is incremented after this
+            ///* instruction.
+            /// out2
+            /// Opcode: NewRowid P1 P2 P3 * *
+            ///* Synopsis: r[P2]=rowid
+            ///*
+            ///* Get a new integer record number (a.k.a "rowid") used as the key to a table.
+            ///* The record number is not previously used as a key in the database
+            ///* table that cursor P1 points to.  The new record number is written
+            ///* written to register P2.
+            ///*
+            ///* If P3>0 then P3 is a register in the root frame of this VDBE that holds
+            ///* the largest previously generated record number. No new record numbers are
+            ///* allowed to be less than this value. When this value reaches its maximum,
+            ///* an SQLITE_FULL error is generated. The P3 register is updated with the '
+            ///* generated record number. This P3 mechanism is used to help implement the
+            ///* AUTOINCREMENT feature.
+            /// out2
             let mut v__1: i64 = 0 as i64;
+            /// The new rowid
             let mut p_c_10: *mut VdbeCursor = core::ptr::null_mut();
+            /// Cursor of table to get the new rowid
             let mut res__4: i32 = 0;
+            /// Result of an sqlite3BtreeLast()
             let mut cnt__1: i32 = 0;
+            /// Counter to limit the number of searches
             let mut p_mem: *mut Mem = core::ptr::null_mut();
+            /// Register holding largest rowid for AUTOINCREMENT
             let mut p_frame_1: *const VdbeFrame = core::ptr::null();
+            /// Root frame of VDBE
+            /// The next rowid or record number (different terms for the same
+            ///* thing) is obtained in a two-step algorithm.
+            ///*
+            ///* First we attempt to find the largest existing rowid and add one
+            ///* to that.  But if the largest existing rowid is already the maximum
+            ///* positive integer, we have to fall through to the second
+            ///* probabilistic algorithm
+            ///*
+            ///* The second algorithm is to select a rowid at random and see if
+            ///* it already exists in the table.  If it does not exist, we have
+            ///* succeeded.  If the random rowid does exist, we select a new one
+            ///* and try again, up to 100 times.
+            /// Some compilers complain about constants of the form 0x7fffffffffffffff.
+            ///* Others complain about 0x7ffffffffffffffffLL.  The following macro seems
+            ///* to provide the constant while making all compilers happy.
+            /// IMP: R-61914-48074
+            /// IMP: R-29538-34987
+            /// Assert that P3 is a valid memory cell.
+            /// Assert that P3 is a valid memory cell.
+            /// Assert that P3 is a valid memory cell.
+            /// mem(P3) holds an integer
+            /// IMP: R-17817-00630
+            /// IMPLEMENTATION-OF: R-07677-41881 If the largest ROWID is equal to the
+            ///* largest possible integer (9223372036854775807) then the database
+            ///* engine starts picking positive candidate ROWIDs at random until
+            ///* it finds one that is not previously used.
+            /// We cannot be in random rowid mode if this is
+            ///* an AUTOINCREMENT table.
+            /// Ensure that v is greater than zero
+            /// IMP: R-38219-53002
+            /// EV: R-40812-03570
+            /// Opcode: Insert P1 P2 P3 P4 P5
+            ///* Synopsis: intkey=r[P3] data=r[P2]
+            ///*
+            ///* Write an entry into the table of cursor P1.  A new entry is
+            ///* created if it doesn't already exist or the data for an existing
+            ///* entry is overwritten.  The data is the value MEM_Blob stored in register
+            ///* number P2. The key is stored in register P3. The key must
+            ///* be a MEM_Int.
+            ///*
+            ///* If the OPFLAG_NCHANGE flag of P5 is set, then the row change count is
+            ///* incremented (otherwise not).  If the OPFLAG_LASTROWID flag of P5 is set,
+            ///* then rowid is stored for subsequent return by the
+            ///* sqlite3_last_insert_rowid() function (otherwise it is unmodified).
+            ///*
+            ///* If the OPFLAG_USESEEKRESULT flag of P5 is set, the implementation might
+            ///* run faster by avoiding an unnecessary seek on cursor P1.  However,
+            ///* the OPFLAG_USESEEKRESULT flag must only be set if there have been no prior
+            ///* seeks on the cursor or if the most recent seek used a key equal to P3.
+            ///*
+            ///* If the OPFLAG_ISUPDATE flag is set, then this opcode is part of an
+            ///* UPDATE operation.  Otherwise (if the flag is clear) then this opcode
+            ///* is part of an INSERT operation.  The difference is only important to
+            ///* the update hook.
+            ///*
+            ///* Parameter P4 may point to a Table structure, or may be NULL. If it is
+            ///* not NULL, then the update-hook (sqlite3.xUpdateCallback) is invoked
+            ///* following a successful insert.
+            ///*
+            ///* (WARNING/TODO: If P1 is a pseudo-cursor and P2 is dynamically
+            ///* allocated, then ownership of P2 is transferred to the pseudo-cursor
+            ///* and register P2 becomes ephemeral.  If the cursor is changed, the
+            ///* value of register P2 will then change.  Make sure this does not
+            ///* cause any problems.)
+            ///*
+            ///* This instruction only works on tables.  The equivalent instruction
+            ///* for indices is OP_IdxInsert.
             let mut p_data: *const Mem = core::ptr::null();
+            /// MEM cell holding data for the record to be inserted
             let mut p_key: *const Mem = core::ptr::null();
+            /// MEM cell holding key  for the record
             let mut p_c_11: *mut VdbeCursor = core::ptr::null_mut();
+            /// Cursor to table into which insert is written
             let mut seek_result: i32 = 0;
+            /// Result of prior seek or 0 if no USESEEKRESULT flag
             let mut z_db: *const i8 = core::ptr::null();
+            /// database name - used by the update hook
             let mut p_tab_1: *const Table = core::ptr::null();
+            /// Table structure - used by update and pre-update hooks
             let mut x__1: BtreePayload = unsafe { core::mem::zeroed() };
+            /// Payload to be inserted
+            /// Invoke the update-hook if required.
+            /// Opcode: RowCell P1 P2 P3 * *
+            ///*
+            ///* P1 and P2 are both open cursors. Both must be opened on the same type
+            ///* of table - intkey or index. This opcode is used as part of copying
+            ///* the current row from P2 into P1. If the cursors are opened on intkey
+            ///* tables, register P3 contains the rowid to use with the new record in
+            ///* P1. If they are opened on index tables, P3 is not used.
+            ///*
+            ///* This opcode must be followed by either an Insert or InsertIdx opcode
+            ///* with the OPFLAG_PREFORMAT flag set to complete the insert operation.
             let mut p_dest_1: *const VdbeCursor = core::ptr::null();
+            /// Cursor to write to
             let mut p_src: *const VdbeCursor = core::ptr::null();
+            /// Cursor to read from
             let mut i_key_2: i64 = 0 as i64;
+            /// Rowid value to insert with
+            /// Opcode: Delete P1 P2 P3 P4 P5
+            ///*
+            ///* Delete the record at which the P1 cursor is currently pointing.
+            ///*
+            ///* If the OPFLAG_SAVEPOSITION bit of the P5 parameter is set, then
+            ///* the cursor will be left pointing at  either the next or the previous
+            ///* record in the table. If it is left pointing at the next record, then
+            ///* the next Next instruction will be a no-op. As a result, in this case
+            ///* it is ok to delete a record from within a Next loop. If
+            ///* OPFLAG_SAVEPOSITION bit of P5 is clear, then the cursor will be
+            ///* left in an undefined state.
+            ///*
+            ///* If the OPFLAG_AUXDELETE bit is set on P5, that indicates that this
+            ///* delete is one of several associated with deleting a table row and
+            ///* all its associated index entries.  Exactly one of those deletes is
+            ///* the "primary" delete.  The others are all on OPFLAG_FORDELETE
+            ///* cursors or else are marked with the AUXDELETE flag.
+            ///*
+            ///* If the OPFLAG_NCHANGE (0x01) flag of P2 (NB: P2 not P5) is set, then
+            ///* the row change count is incremented (otherwise not).
+            ///*
+            ///* If the OPFLAG_ISNOOP (0x40) flag of P2 (not P5!) is set, then the
+            ///* pre-update-hook for deletes is run, but the btree is otherwise unchanged.
+            ///* This happens when the OP_Delete is to be shortly followed by an OP_Insert
+            ///* with the same key, causing the btree entry to be overwritten.
+            ///*
+            ///* P1 must not be pseudo-table.  It has to be a real table with
+            ///* multiple rows.
+            ///*
+            ///* If P4 is not NULL then it points to a Table object. In this case either
+            ///* the update or pre-update hook, or both, may be invoked. The P1 cursor must
+            ///* have been positioned using OP_NotFound prior to invoking this opcode in
+            ///* this case. Specifically, if one is configured, the pre-update hook is
+            ///* invoked if P4 is not NULL. The update-hook is invoked if one is configured,
+            ///* P4 is not NULL, and the OPFLAG_NCHANGE flag is set in P2.
+            ///*
+            ///* If the OPFLAG_ISUPDATE flag is set in P2, then P3 contains the address
+            ///* of the memory cell that contains the value that the rowid of the row will
+            ///* be set to by the update.
             let mut p_c_12: *mut VdbeCursor = core::ptr::null_mut();
             let mut z_db_1: *const i8 = core::ptr::null();
             let mut p_tab_2: *const Table = core::ptr::null();
             let mut opflags: i32 = 0;
+            /// If the update-hook or pre-update-hook will be invoked, set zDb to
+            ///* the name of the db to pass as to it. Also set local pTab to a copy
+            ///* of p4.pTab. Finally, if p5 is true, indicating that this cursor was
+            ///* last moved with OP_Next or OP_Prev, not Seek or NotFound, set
+            ///* VdbeCursor.movetoTarget to the current rowid.
+            /// Only flags that can be set are SAVEPOISTION and AUXDELETE
+            /// Invoke the update-hook if required.
+            /// Opcode: ResetCount * * * * *
+            ///*
+            ///* The value of the change counter is copied to the database handle
+            ///* change counter (returned by subsequent calls to sqlite3_changes()).
+            ///* Then the VMs internal change counter resets to 0.
+            ///* This is used by trigger programs.
+            /// Opcode: SorterCompare P1 P2 P3 P4
+            ///* Synopsis: if key(P1)!=trim(r[P3],P4) goto P2
+            ///*
+            ///* P1 is a sorter cursor. This instruction compares a prefix of the
+            ///* record blob in register P3 against a prefix of the entry that
+            ///* the sorter cursor currently points to.  Only the first P4 fields
+            ///* of r[P3] and the sorter record are compared.
+            ///*
+            ///* If either P3 or the sorter contains a NULL in one of their significant
+            ///* fields (not counting the P4 fields at the end which are ignored) then
+            ///* the comparison is assumed to be equal.
+            ///*
+            ///* Fall through to next instruction if the two records compare equal to
+            ///* each other.  Jump to P2 if they are different.
             let mut p_c_13: *const VdbeCursor = core::ptr::null();
             let mut res__5: i32 = 0;
             let mut n_key_col: i32 = 0;
+            /// Opcode: SorterData P1 P2 P3 * *
+            ///* Synopsis: r[P2]=data
+            ///*
+            ///* Write into register P2 the current sorter data for sorter cursor P1.
+            ///* Then clear the column header cache on cursor P3.
+            ///*
+            ///* This opcode is normally used to move a record out of the sorter and into
+            ///* a register that is the source for a pseudo-table cursor created using
+            ///* OpenPseudo.  That pseudo-table cursor is the one that is identified by
+            ///* parameter P3.  Clearing the P3 column cache as part of this opcode saves
+            ///* us from having to issue a separate NullRow instruction to clear that cache.
+            /// ncycle
             let mut p_c_14: *const VdbeCursor = core::ptr::null();
+            /// Opcode: RowData P1 P2 P3 * *
+            ///* Synopsis: r[P2]=data
+            ///*
+            ///* Write into register P2 the complete row content for the row at
+            ///* which cursor P1 is currently pointing.
+            ///* There is no interpretation of the data. 
+            ///* It is just copied onto the P2 register exactly as
+            ///* it is found in the database file.
+            ///*
+            ///* If cursor P1 is an index, then the content is the key of the row.
+            ///* If cursor P2 is a table, then the content extracted is the data.
+            ///*
+            ///* If the P1 cursor must be pointing to a valid row (not a NULL row)
+            ///* of a real table, not a pseudo-table.
+            ///*
+            ///* If P3!=0 then this opcode is allowed to make an ephemeral pointer
+            ///* into the database page.  That means that the content of the output
+            ///* register will be invalidated as soon as the cursor moves - including
+            ///* moves caused by other cursors that "save" the current cursors
+            ///* position in order that they can write to the same table.  If P3==0
+            ///* then a copy of the data is made into memory.  P3!=0 is faster, but
+            ///* P3==0 is safer.
+            ///*
+            ///* If P3!=0 then the content of the P2 register is unsuitable for use
+            ///* in OP_Result and any OP_Result will invalidate the P2 register content.
+            ///* The P2 register content is invalidated by opcodes like OP_Function or
+            ///* by any use of another cursor pointing to the same table.
             let mut p_c_15: *const VdbeCursor = core::ptr::null();
             let mut p_crsr_3: *mut BtCursor = core::ptr::null_mut();
             let mut n__3: u32 = 0 as u32;
+            /// The OP_RowData opcodes always follow OP_NotExists or
+            ///* OP_SeekRowid or OP_Rewind/Op_Next with no intervening instructions
+            ///* that might invalidate the cursor.
+            ///* If this were not the case, one of the following assert()s
+            ///* would fail.  Should this ever change (because of changes in the code
+            ///* generator) then the fix would be to insert a call to
+            ///* sqlite3VdbeCursorMoveto().
+            /// Opcode: Rowid P1 P2 * * *
+            ///* Synopsis: r[P2]=PX rowid of P1
+            ///*
+            ///* Store in register P2 an integer which is the key of the table entry that
+            ///* P1 is currently point to.
+            ///*
+            ///* P1 can be either an ordinary table or a virtual table.  There used to
+            ///* be a separate OP_VRowid opcode for use with virtual tables, but this
+            ///* one opcode now works for both table types.
+            /// out2, ncycle
             let mut p_c_16: *mut VdbeCursor = core::ptr::null_mut();
             let mut v__2: i64 = 0 as i64;
             let mut p_vtab: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module: *const Sqlite3Module = core::ptr::null();
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: NullRow P1 * * * *
+            ///*
+            ///* Move the cursor P1 to a null row.  Any OP_Column operations
+            ///* that occur while the cursor is on the null row will always
+            ///* write a NULL.
+            ///*
+            ///* If cursor P1 is not previously opened, open it now to a special
+            ///* pseudo-cursor that always returns NULL for every column.
             let mut p_c_17: *mut VdbeCursor = core::ptr::null_mut();
+            /// If the cursor is not already open, create a special kind of
+            ///* pseudo-cursor that always gives null rows.
+            /// Opcode: SeekEnd P1 * * * *
+            ///*
+            ///* Position cursor P1 at the end of the btree for the purpose of
+            ///* appending a new entry onto the btree.
+            ///*
+            ///* It is assumed that the cursor is used only for appending and so
+            ///* if the cursor is valid, then the cursor must already be pointing
+            ///* at the end of the btree and so no changes are made to
+            ///* the cursor.
+            ////
+            ////* Opcode: Last P1 P2 * * *
+            ///*
+            ///* The next use of the Rowid or Column or Prev instruction for P1
+            ///* will refer to the last entry in the database table or index.
+            ///* If the table or index is empty and P2>0, then jump immediately to P2.
+            ///* If P2 is 0 or if the table or index is not empty, fall through
+            ///* to the following instruction.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            /// ncycle
+            /// jump0, ncycle
             let mut p_c_18: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_crsr_4: *mut BtCursor = core::ptr::null_mut();
             let mut res__6: i32 = 0;
+            /// Opcode: IfSizeBetween P1 P2 P3 P4 *
+            ///*
+            ///* Let N be the approximate number of rows in the table or index
+            ///* with cursor P1 and let X be 10*log2(N) if N is positive or -1
+            ///* if N is zero.
+            ///*
+            ///* Jump to P2 if X is in between P3 and P4, inclusive.
+            /// jump
             let mut p_c_19: *const VdbeCursor = core::ptr::null();
             let mut p_crsr_5: *mut BtCursor = core::ptr::null_mut();
             let mut res__7: i32 = 0;
             let mut sz: i64 = 0 as i64;
+            /// -Infinity encoding
+            /// Opcode: SorterSort P1 P2 * * *
+            ///*
+            ///* After all records have been inserted into the Sorter object
+            ///* identified by P1, invoke this opcode to actually do the sorting.
+            ///* Jump to P2 if there are no records to be sorted.
+            ///*
+            ///* This opcode is an alias for OP_Sort and OP_Rewind that is used
+            ///* for Sorter objects.
+            ////
+            ////* Opcode: Sort P1 P2 * * *
+            ///*
+            ///* This opcode does exactly the same thing as OP_Rewind except that
+            ///* it increments an undocumented global variable used for testing.
+            ///*
+            ///* Sorting is accomplished by writing records into a sorting index,
+            ///* then rewinding that index and playing it back from beginning to
+            ///* end.  We use the OP_Sort opcode instead of OP_Rewind to do the
+            ///* rewinding so that the global variable will be incremented and
+            ///* regression tests can determine whether or not the optimizer is
+            ///* correctly optimizing out sorts.
+            /// jump ncycle
+            /// jump ncycle
+            /// Fall through into OP_Rewind */
+            ///  /* no break
+            /// Opcode: Rewind P1 P2 * * *
+            ///*
+            ///* The next use of the Rowid or Column or Next instruction for P1
+            ///* will refer to the first entry in the database table or index.
+            ///* If the table or index is empty, jump immediately to P2.
+            ///* If the table or index is not empty, fall through to the following
+            ///* instruction.
+            ///*
+            ///* If P2 is zero, that is an assertion that the P1 table is never
+            ///* empty and hence the jump will never be taken.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            /// jump0, ncycle
             let mut p_c_20: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_crsr_6: *mut BtCursor = core::ptr::null_mut();
             let mut res__8: i32 = 0;
+            /// Opcode: IfEmpty P1 P2 * * *
+            ///* Synopsis: if( empty(P1) ) goto P2
+            ///*
+            ///* Check to see if the b-tree table that cursor P1 references is empty
+            ///* and jump to P2 if it is.
+            /// jump
             let mut p_c_21: *const VdbeCursor = core::ptr::null();
             let mut p_crsr_7: *mut BtCursor = core::ptr::null_mut();
             let mut res__9: i32 = 0;
+            /// Opcode: Next P1 P2 P3 * P5
+            ///*
+            ///* Advance cursor P1 so that it points to the next key/data pair in its
+            ///* table or index.  If there are no more key/value pairs then fall through
+            ///* to the following instruction.  But if the cursor advance was successful,
+            ///* jump immediately to P2.
+            ///*
+            ///* The Next opcode is only valid following an SeekGT, SeekGE, or
+            ///* OP_Rewind opcode used to position the cursor.  Next is not allowed
+            ///* to follow SeekLT, SeekLE, or OP_Last.
+            ///*
+            ///* The P1 cursor must be for a real table, not a pseudo-table.  P1 must have
+            ///* been opened prior to this opcode or the program will segfault.
+            ///*
+            ///* The P3 value is a hint to the btree implementation. If P3==1, that
+            ///* means P1 is an SQL index and that this instruction could have been
+            ///* omitted if that index had been unique.  P3 is usually 0.  P3 is
+            ///* always either 0 or 1.
+            ///*
+            ///* If P5 is positive and the jump is taken, then event counter
+            ///* number P5-1 in the prepared statement is incremented.
+            ///*
+            ///* See also: Prev
+            ////
+            ////* Opcode: Prev P1 P2 P3 * P5
+            ///*
+            ///* Back up cursor P1 so that it points to the previous key/data pair in its
+            ///* table or index.  If there is no previous key/value pairs then fall through
+            ///* to the following instruction.  But if the cursor backup was successful,
+            ///* jump immediately to P2.
+            ///*
+            ///*
+            ///* The Prev opcode is only valid following an SeekLT, SeekLE, or
+            ///* OP_Last opcode used to position the cursor.  Prev is not allowed
+            ///* to follow SeekGT, SeekGE, or OP_Rewind.
+            ///*
+            ///* The P1 cursor must be for a real table, not a pseudo-table.  If P1 is
+            ///* not open then the behavior is undefined.
+            ///*
+            ///* The P3 value is a hint to the btree implementation. If P3==1, that
+            ///* means P1 is an SQL index and that this instruction could have been
+            ///* omitted if that index had been unique.  P3 is usually 0.  P3 is
+            ///* always either 0 or 1.
+            ///*
+            ///* If P5 is positive and the jump is taken, then event counter
+            ///* number P5-1 in the prepared statement is incremented.
+            ////
+            ////* Opcode: SorterNext P1 P2 * * P5
+            ///*
+            ///* This opcode works just like OP_Next except that P1 must be a
+            ///* sorter object for which the OP_SorterSort opcode has been
+            ///* invoked.  This opcode advances the cursor to the next sorted
+            ///* record, or jumps to P2 if there are no more sorted records.
+            /// jump
             let mut p_c_22: *mut VdbeCursor = core::ptr::null_mut();
+            /// jump, ncycle
+            /// jump, ncycle
+            /// Opcode: IdxInsert P1 P2 P3 P4 P5
+            ///* Synopsis: key=r[P2]
+            ///*
+            ///* Register P2 holds an SQL index key made using the
+            ///* MakeRecord instructions.  This opcode writes that key
+            ///* into the index P1.  Data for the entry is nil.
+            ///*
+            ///* If P4 is not zero, then it is the number of values in the unpacked
+            ///* key of reg(P2).  In that case, P3 is the index of the first register
+            ///* for the unpacked key.  The availability of the unpacked key can sometimes
+            ///* be an optimization.
+            ///*
+            ///* If P5 has the OPFLAG_APPEND bit set, that is a hint to the b-tree layer
+            ///* that this insert is likely to be an append.
+            ///*
+            ///* If P5 has the OPFLAG_NCHANGE bit set, then the change counter is
+            ///* incremented by this instruction.  If the OPFLAG_NCHANGE bit is clear,
+            ///* then the change counter is unchanged.
+            ///*
+            ///* If the OPFLAG_USESEEKRESULT flag of P5 is set, the implementation might
+            ///* run faster by avoiding an unnecessary seek on cursor P1.  However,
+            ///* the OPFLAG_USESEEKRESULT flag must only be set if there have been no prior
+            ///* seeks on the cursor or if the most recent seek used a key equivalent
+            ///* to P2.
+            ///*
+            ///* This instruction only works for indices.  The equivalent instruction
+            ///* for tables is OP_Insert.
+            /// in2
             let mut p_c_23: *mut VdbeCursor = core::ptr::null_mut();
             let mut x__2: BtreePayload = unsafe { core::mem::zeroed() };
+            /// Opcode: SorterInsert P1 P2 * * *
+            ///* Synopsis: key=r[P2]
+            ///*
+            ///* Register P2 holds an SQL index key made using the
+            ///* MakeRecord instructions.  This opcode writes that key
+            ///* into the sorter P1.  Data for the entry is nil.
+            /// in2
             let mut p_c_24: *const VdbeCursor = core::ptr::null();
+            /// Opcode: IdxDelete P1 P2 P3 P4 P5
+            ///* Synopsis: key=r[P2@P5]
+            ///*
+            ///* The content of P5 registers starting at register P2 form
+            ///* an unpacked index key. This opcode removes that entry from the
+            ///* index opened by cursor P1.
+            ///*
+            ///* P4 is a pointer to an Index structure.
+            ///*
+            ///* If P3 is non-zero, it is the register number of a register holding
+            ///* a record that will be inserted into this index. If that record is
+            ///* identical to the one that would be deleted by this instruction, 
+            ///* skip the delete and set register P3 to NULL.
+            ///*
+            ///* Raise an SQLITE_CORRUPT_INDEX error if no matching index entry is found
+            ///* and not in writable_schema mode.
             let mut p_c_25: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_crsr_8: *mut BtCursor = core::ptr::null_mut();
             let mut res__10: i32 = 0;
             let mut r__3: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// Opcode: DeferredSeek P1 * P3 P4 *
+            ///* Synopsis: Move P3 to P1.rowid if needed
+            ///*
+            ///* P1 is an open index cursor and P3 is a cursor on the corresponding
+            ///* table.  This opcode does a deferred seek of the P3 table cursor
+            ///* to the row that corresponds to the current row of P1.
+            ///*
+            ///* This is a deferred seek.  Nothing actually happens until
+            ///* the cursor is used to read a record.  That way, if no reads
+            ///* occur, no unnecessary I/O happens.
+            ///*
+            ///* P4 may be an array of integers (type P4_INTARRAY) containing
+            ///* one entry for each column in the P3 table.  If array entry a(i)
+            ///* is non-zero, then reading column a(i)-1 from cursor P3 is
+            ///* equivalent to performing the deferred seek and then reading column i
+            ///* from P1.  This information is stored in P3 and used to redirect
+            ///* reads against P3 over to P1, thus possibly avoiding the need to
+            ///* seek and read cursor P3.
+            ////
+            ////* Opcode: IdxRowid P1 P2 * * *
+            ///* Synopsis: r[P2]=rowid
+            ///*
+            ///* Write into register P2 an integer which is the last entry in the record at
+            ///* the end of the index key pointed to by cursor P1.  This integer should be
+            ///* the rowid of the table entry to which this index entry points.
+            ///*
+            ///* See also: Rowid, MakeRecord.
+            /// ncycle
+            /// out2, ncycle
             let mut p_c_26: *mut VdbeCursor = core::ptr::null_mut();
+            /// The P1 index cursor
             let mut p_tab_cur: *mut VdbeCursor = core::ptr::null_mut();
+            /// The P2 table cursor (OP_DeferredSeek only)
             let mut rowid: i64 = 0 as i64;
+            /// Rowid that P1 current points to
+            /// The IdxRowid and Seek opcodes are combined because of the commonality
+            ///* of sqlite3VdbeCursorRestore() and sqlite3VdbeIdxRowid().
+            /// sqlite3VdbeCursorRestore() may fail if the cursor has been disturbed
+            ///* since it was last positioned and an error (e.g. OOM or an IO error)
+            ///* occurs while trying to reposition it.
+            /// Not needed.  Only used to silence a warning.
+            /// Opcode: FinishSeek P1 * * * *
+            ///*
+            ///* If cursor P1 was previously moved via OP_DeferredSeek, complete that
+            ///* seek operation now, without further delay.  If the cursor seek has
+            ///* already occurred, this instruction is a no-op.
+            /// ncycle
             let mut p_c_27: *mut VdbeCursor = core::ptr::null_mut();
+            /// The P1 index cursor
+            /// Opcode: IdxGE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY.  Compare this key value against the index
+            ///* that P1 is currently pointing to, ignoring the PRIMARY KEY or ROWID
+            ///* fields at the end.
+            ///*
+            ///* If the P1 index entry is greater than or equal to the key value
+            ///* then jump to P2.  Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxGT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY.  Compare this key value against the index
+            ///* that P1 is currently pointing to, ignoring the PRIMARY KEY or ROWID
+            ///* fields at the end.
+            ///*
+            ///* If the P1 index entry is greater than the key value
+            ///* then jump to P2.  Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxLT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY or ROWID.  Compare this key value against
+            ///* the index that P1 is currently pointing to, ignoring the PRIMARY KEY or
+            ///* ROWID on the P1 index.
+            ///*
+            ///* If the P1 index entry is less than the key value then jump to P2.
+            ///* Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxLE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY or ROWID.  Compare this key value against
+            ///* the index that P1 is currently pointing to, ignoring the PRIMARY KEY or
+            ///* ROWID on the P1 index.
+            ///*
+            ///* If the P1 index entry is less than or equal to the key value then jump
+            ///* to P2. Otherwise fall through to the next instruction.
+            /// jump, ncycle
+            /// jump, ncycle
+            /// jump, ncycle
+            /// jump, ncycle
             let mut p_c_28: *const VdbeCursor = core::ptr::null();
             let mut res__11: i32 = 0;
             let mut r__4: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// Inlined version of sqlite3VdbeIdxKeyCompare()
             let mut n_cell_key: i64 = 0 as i64;
             let mut p_cur_2: *mut BtCursor = core::ptr::null_mut();
             let mut m: Mem = unsafe { core::mem::zeroed() };
+            /// nCellKey will always be between 0 and 0xffffffff because of the way
+            ///* that btreeParseCellPtr() and sqlite3GetVarint32() are implemented
+            /// End of inlined sqlite3VdbeIdxKeyCompare()
+            /// Opcode: Destroy P1 P2 P3 * *
+            ///*
+            ///* Delete an entire database table or index whose root page in the database
+            ///* file is given by P1.
+            ///*
+            ///* The table being destroyed is in the main database file if P3==0.  If
+            ///* P3==1 then the table to be destroyed is in the auxiliary database file
+            ///* that is used to store tables create using CREATE TEMPORARY TABLE.
+            ///*
+            ///* If AUTOVACUUM is enabled then it is possible that another root page
+            ///* might be moved into the newly deleted root page in order to keep all
+            ///* root pages contiguous at the beginning of the database.  The former
+            ///* value of the root page that moved - its value before the move occurred -
+            ///* is stored in register P2. If no page movement was required (because the
+            ///* table being dropped was already the last one in the database) then a
+            ///* zero is stored in register P2.  If AUTOVACUUM is disabled then a zero
+            ///* is stored in register P2.
+            ///*
+            ///* This opcode throws an error if there are any active reader VMs when
+            ///* it is invoked. This is done to avoid the difficulty associated with
+            ///* updating existing cursors when a root page is moved in an AUTOVACUUM
+            ///* database. This error is thrown even if the database is not an AUTOVACUUM
+            ///* db in order to avoid introducing an incompatibility between autovacuum
+            ///* and non-autovacuum modes.
+            ///*
+            ///* See also: Clear
+            /// out2
             let mut i_moved: i32 = 0;
             let mut i_db_2: i32 = 0;
+            /// Not needed.  Only to silence a warning.
+            /// All OP_Destroy operations occur on the same btree
+            /// Opcode: Clear P1 P2 P3
+            ///*
+            ///* Delete all contents of the database table or index whose root page
+            ///* in the database file is given by P1.  But, unlike Destroy, do not
+            ///* remove the table or index from the database file.
+            ///*
+            ///* The table being cleared is in the main database file if P2==0.  If
+            ///* P2==1 then the table to be cleared is in the auxiliary database file
+            ///* that is used to store tables create using CREATE TEMPORARY TABLE.
+            ///*
+            ///* If the P3 value is non-zero, then the row change count is incremented
+            ///* by the number of rows in the table being cleared. If P3 is greater
+            ///* than zero, then the value stored in register P3 is also incremented
+            ///* by the number of rows in the table being cleared.
+            ///*
+            ///* See also: Destroy
             let mut n_change: i64 = 0 as i64;
+            /// Opcode: ResetSorter P1 * * * *
+            ///*
+            ///* Delete all contents from the ephemeral table or sorter
+            ///* that is open on cursor P1.
+            ///*
+            ///* This opcode only works for cursors used for sorting and
+            ///* opened with OP_OpenEphemeral or OP_SorterOpen.
             let mut p_c_29: *const VdbeCursor = core::ptr::null();
+            /// Opcode: CreateBtree P1 P2 P3 * *
+            ///* Synopsis: r[P2]=root iDb=P1 flags=P3
+            ///*
+            ///* Allocate a new b-tree in the main database file if P1==0 or in the
+            ///* TEMP database file if P1==1 or in an attached database if
+            ///* P1>1.  The P3 argument must be 1 (BTREE_INTKEY) for a rowid table
+            ///* it must be 2 (BTREE_BLOBKEY) for an index or WITHOUT ROWID table.
+            ///* The root page number of the new b-tree is stored in register P2.
+            /// out2
             let mut pgno: Pgno = 0 as Pgno;
             let mut p_db_3: *const Db = core::ptr::null();
+            /// Opcode: SqlExec P1 P2 * P4 *
+            ///*
+            ///* Run the SQL statement or statements specified in the P4 string.
+            ///*
+            ///* The P1 parameter is a bitmask of options:
+            ///*
+            ///*    0x0001     Disable Auth and Trace callbacks while the statements
+            ///*               in P4 are running.
+            ///*
+            ///*    0x0002     Set db->nAnalysisLimit to P2 while the statements in
+            ///*               P4 are running.
+            ///*
             let mut z_err_1: *mut i8 = core::ptr::null_mut();
             let mut x_auth:
                     Option<unsafe extern "C" fn(*mut (), i32, *const i8,
                         *const i8, *const i8, *const i8) -> i32> = None;
             let mut m_trace: u8 = 0 as u8;
             let mut saved_analysis_limit: i32 = 0;
+            /// Opcode: ParseSchema P1 * * P4 P5
+            ///*
+            ///* Read and parse all entries from the schema table of database P1
+            ///* that match the WHERE clause P4.  If P4 is a NULL pointer, then the
+            ///* entire schema for P1 is reparsed.
+            ///*
+            ///* When P4 is NULL, the P5 value is used as the mFlags argument
+            ///* to sqlite3InitOne().  In other words, P5 should be a mask composed
+            ///* of INITFLAG_* values.
+            ///*
+            ///* The P4==0 case is only used by ALTER TABLE and P5!=0 for all such
+            ///* cases.  For uses other than ALTER TABLE, P4<>0 and P5==0.
+            ///*
+            ///* This opcode invokes the parser to create a new virtual machine,
+            ///* then runs the new virtual machine.  It is thus a re-entrant opcode.
             let mut i_db_3: i32 = 0;
             let mut z_schema: *const i8 = core::ptr::null();
             let mut z_sql: *mut i8 = core::ptr::null_mut();
             let mut init_data: InitData = unsafe { core::mem::zeroed() };
+            /// Any prepared statement that invokes this opcode will hold mutexes
+            ///* on every btree.  This is a prerequisite for invoking
+            ///* sqlite3InitCallback().
+            /// The OP_ParseSchema opcode with a non-NULL P4 argument should parse
+            ///* at least one SQL statement. Any less than that indicates that
+            ///* the sqlite_schema table is corrupt.
+            /// Opcode: LoadAnalysis P1 * * * *
+            ///*
+            ///* Read the sqlite_stat1 table for database P1 and load the content
+            ///* of that table into the internal index hash table.  This will cause
+            ///* the analysis to be used when preparing all subsequent queries.
+            /// !defined(SQLITE_OMIT_ANALYZE)
+            /// Opcode: DropTable P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the table named P4 in database P1.  This is called after a table
+            ///* is dropped from disk (using the Destroy opcode) in order to keep
+            ///* the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: DropIndex P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the index named P4 in database P1.  This is called after an index
+            ///* is dropped from disk (using the Destroy opcode)
+            ///* in order to keep the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: DropTrigger P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the trigger named P4 in database P1.  This is called after a trigger
+            ///* is dropped from disk (using the Destroy opcode) in order to keep
+            ///* the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: IntegrityCk P1 P2 P3 P4 P5
+            ///*
+            ///* Do an analysis of the currently open database.  Store in
+            ///* register (P1+1) the text of an error message describing any problems.
+            ///* If no problems are found, store a NULL in register (P1+1).
+            ///*
+            ///* The register (P1) contains one less than the maximum number of allowed
+            ///* errors.  At most reg(P1) errors will be reported.
+            ///* In other words, the analysis stops as soon as reg(P1) errors are
+            ///* seen.  Reg(P1) is updated with the number of errors remaining.
+            ///*
+            ///* The root page numbers of all tables in the database are integers
+            ///* stored in P4_INTARRAY argument.
+            ///*
+            ///* If P5 is not zero, the check is done on the auxiliary database
+            ///* file, not the main database file.
+            ///*
+            ///* This opcode is used to implement the integrity_check pragma.
             let mut n_root: i32 = 0;
+            /// Number of tables to check.  (Number of root pages.)
             let mut a_root: *mut Pgno = core::ptr::null_mut();
+            /// Array of rootpage numbers for tables to be checked
             let mut n_err: i32 = 0;
+            /// Number of errors reported
             let mut z: *mut i8 = core::ptr::null_mut();
+            /// Text of the error report
             let mut pn_err: *mut Mem = core::ptr::null_mut();
+            /// Register keeping track of errors remaining
+            /// Opcode: IFindKey P1 P2 P3 P4 *
+            ///*
+            ///* This instruction always follows an OP_Found with the same P1, P2 and P3
+            ///* values as this instruction and a non-zero P4 value. The P4 value to
+            ///* this opcode is of type P4_INDEX and contains a pointer to the Index
+            ///* object of for the index being searched.
+            ///*
+            ///* This opcode uses sqlite3VdbeFindIndexKey() to search around the current
+            ///* cursor location for an index key that exactly matches all fields that
+            ///* are not indexed expressions or references to VIRTUAL generated columns,
+            ///* and either exactly match or are real numbers that are within 2 ULPs of
+            ///* each other if the don't match.
+            ///*
+            ///* To put it another way, this opcode looks for nearby index entries that
+            ///* are very close to the search key, but which might have small differences
+            ///* in floating-point values that come via an expression.
+            ///*
+            ///* If no nearby alternative entry is found in cursor P1, then jump to P2.
+            ///* But if a close match is found, fall through.
+            ///*
+            ///* This opcode is used by PRAGMA integrity_check to help distinguish
+            ///* between truely corrupt indexes and expression indexes that are holding
+            ///* floating-point values that are off by one or two ULPs.
+            /// jump, in3
             let mut p_c_30: *mut VdbeCursor = core::ptr::null_mut();
             let mut res__12: i32 = 0;
             let mut r__5: UnpackedRecord = unsafe { core::mem::zeroed() };
+            /// SQLITE_OMIT_INTEGRITY_CHECK
+            /// Opcode: RowSetAdd P1 P2 * * *
+            ///* Synopsis: rowset(P1)=r[P2]
+            ///*
+            ///* Insert the integer value held by register P2 into a RowSet object
+            ///* held in register P1.
+            ///*
+            ///* An assertion fails if P2 is not an integer.
+            /// in1, in2
+            /// Opcode: RowSetRead P1 P2 P3 * *
+            ///* Synopsis: r[P3]=rowset(P1)
+            ///*
+            ///* Extract the smallest value from the RowSet object in P1
+            ///* and put that value into register P3.
+            ///* Or, if RowSet object P1 is initially empty, leave P3
+            ///* unchanged and jump to instruction P2.
+            /// jump, in1, out3
             let mut val: i64 = 0 as i64;
+            /// The boolean index is empty
+            /// A value was pulled from the index
+            /// Opcode: RowSetTest P1 P2 P3 P4
+            ///* Synopsis: if r[P3] in rowset(P1) goto P2
+            ///*
+            ///* Register P3 is assumed to hold a 64-bit integer value. If register P1
+            ///* contains a RowSet object and that RowSet object contains
+            ///* the value held in P3, jump to register P2. Otherwise, insert the
+            ///* integer in P3 into the RowSet and continue on to the
+            ///* next opcode.
+            ///*
+            ///* The RowSet object is optimized for the case where sets of integers
+            ///* are inserted in distinct phases, which each set contains no duplicates.
+            ///* Each set is identified by a unique P4 value. The first set
+            ///* must have P4==0, the final set must have P4==-1, and for all other sets
+            ///* must have P4>0.
+            ///*
+            ///* This allows optimizations: (a) when P4==0 there is no need to test
+            ///* the RowSet object for P3, as it is guaranteed not to contain it,
+            ///* (b) when P4==-1 there is no need to insert the value, as it will
+            ///* never be tested for, and (c) when a value that is part of set X is
+            ///* inserted, there is no need to search to see if the same value was
+            ///* previously inserted as part of set X (only if it was previously
+            ///* inserted as part of some other set).
+            /// jump, in1, in3
             let mut i_set: i32 = 0;
             let mut exists: i32 = 0;
+            /// If there is anything other than a rowset object in memory cell P1,
+            ///* delete it now and initialize P1 with an empty rowset
+            /// Opcode: Program P1 P2 P3 P4 P5
+            ///*
+            ///* Execute the trigger program passed as P4 (type P4_SUBPROGRAM).
+            ///*
+            ///* P1 contains the address of the memory cell that contains the first memory
+            ///* cell in an array of values used as arguments to the sub-program. P2
+            ///* contains the address to jump to if the sub-program throws an IGNORE
+            ///* exception using the RAISE() function. P2 might be zero, if there is
+            ///* no possibility that an IGNORE exception will be raised.
+            ///* Register P3 contains the address
+            ///* of a memory cell in this (the parent) VM that is used to allocate the
+            ///* memory required by the sub-vdbe at runtime.
+            ///*
+            ///* P4 is a pointer to the VM containing the trigger program.
+            ///*
+            ///* If P5 is non-zero, then recursive program invocation is enabled.
+            /// jump0
             let mut n_mem: i32 = 0;
+            /// Number of memory registers for sub-program
             let mut n_byte_2: i64 = 0 as i64;
+            /// Bytes of runtime space required for sub-program
             let mut p_rt: *mut Mem = core::ptr::null_mut();
+            /// Register to allocate runtime space
             let mut p_mem_1: *mut Mem = core::ptr::null_mut();
+            /// Used to iterate through memory cells
             let mut p_end: *mut Mem = core::ptr::null_mut();
+            /// Last memory cell in new array
             let mut p_frame_2: *mut VdbeFrame = core::ptr::null_mut();
+            /// New vdbe frame to execute in
             let mut p_program: *const SubProgram = core::ptr::null();
+            /// Sub-program to execute
             let mut t__1: *mut () = core::ptr::null_mut();
+            /// Token identifying trigger
+            /// If the p5 flag is clear, then recursive invocation of triggers is
+            ///* disabled for backwards compatibility (p5 is set if this sub-program
+            ///* is really a trigger, not a foreign key action, and the flag set
+            ///* and cleared by the "PRAGMA recursive_triggers" command is clear).
+            ///*
+            ///* It is recursive invocation of triggers, at the SQL level, that is
+            ///* disabled. In some cases a single trigger may generate more than one
+            ///* SubProgram (if the trigger may be executed with more than one different
+            ///* ON CONFLICT algorithm). SubProgram structures associated with a
+            ///* single trigger all have the same value for the SubProgram.token
+            ///* variable.
+            /// Register pRt is used to store the memory required to save the state
+            ///* of the current program, and the memory required at runtime to execute
+            ///* the trigger program. If this trigger has been fired before, then pRt
+            ///* is already allocated. Otherwise, it must be initialized.
+            /// SubProgram.nMem is set to the number of memory cells used by the
+            ///* program stored in SubProgram.aOp. As well as these, one memory
+            ///* cell is required for each cursor used by the program. Set local
+            ///* variable nMem (and later, VdbeFrame.nChildMem) to this value.
+            /// Opcode: Param P1 P2 * * *
+            ///*
+            ///* This opcode is only ever present in sub-programs called via the
+            ///* OP_Program instruction. Copy a value currently stored in a memory
+            ///* cell of the calling (parent) frame to cell P2 in the current frames
+            ///* address space. This is used by trigger programs to access the new.*
+            ///* and old.* values.
+            ///*
+            ///* The address of the cell in the parent frame is determined by adding
+            ///* the value of the P1 argument to the value of the P1 argument to the
+            ///* calling OP_Program instruction.
+            /// out2
             let mut p_frame_3: *const VdbeFrame = core::ptr::null();
             let mut p_in: *const Mem = core::ptr::null();
+            /// #ifndef SQLITE_OMIT_TRIGGER
+            /// Opcode: FkCounter P1 P2 * * *
+            ///* Synopsis: fkctr[P1]+=P2
+            ///*
+            ///* Increment a "constraint counter" by P2 (P2 may be negative or positive).
+            ///* If P1 is non-zero, the database constraint counter is incremented
+            ///* (deferred foreign key constraints). Otherwise, if P1 is zero, the
+            ///* statement counter is incremented (immediate foreign key constraints).
+            /// Opcode: FkIfZero P1 P2 * * *
+            ///* Synopsis: if fkctr[P1]==0 goto P2
+            ///*
+            ///* This opcode tests if a foreign key constraint-counter is currently zero.
+            ///* If so, jump to instruction P2. Otherwise, fall through to the next
+            ///* instruction.
+            ///*
+            ///* If P1 is non-zero, then the jump is taken if the database constraint-counter
+            ///* is zero (the one that counts deferred constraint violations). If P1 is
+            ///* zero, the jump is taken if the statement constraint-counter is zero
+            ///* (immediate foreign key constraint violations).
+            /// jump
+            /// #ifndef SQLITE_OMIT_FOREIGN_KEY
+            /// Opcode: MemMax P1 P2 * * *
+            ///* Synopsis: r[P1]=max(r[P1],r[P2])
+            ///*
+            ///* P1 is a register in the root frame of this VM (the root frame is
+            ///* different from the current frame if this instruction is being executed
+            ///* within a sub-program). Set the value of register P1 to the maximum of
+            ///* its current value and the value in register P2.
+            ///*
+            ///* This instruction throws an error if the memory cell is not initially
+            ///* an integer.
+            /// in2
             let mut p_frame_4: *const VdbeFrame = core::ptr::null();
+            /// SQLITE_OMIT_AUTOINCREMENT
+            /// Opcode: IfPos P1 P2 P3 * *
+            ///* Synopsis: if r[P1]>0 then r[P1]-=P3, goto P2
+            ///*
+            ///* Register P1 must contain an integer.
+            ///* If the value of register P1 is 1 or greater, subtract P3 from the
+            ///* value in P1 and jump to P2.
+            ///*
+            ///* If the initial value of register P1 is less than 1, then the
+            ///* value is unchanged and control passes through to the next instruction.
+            /// jump, in1
+            /// Opcode: OffsetLimit P1 P2 P3 * *
+            ///* Synopsis: if r[P1]>0 then r[P2]=r[P1]+max(0,r[P3]) else r[P2]=(-1)
+            ///*
+            ///* This opcode performs a commonly used computation associated with
+            ///* LIMIT and OFFSET processing.  r[P1] holds the limit counter.  r[P3]
+            ///* holds the offset counter.  The opcode computes the combined value
+            ///* of the LIMIT and OFFSET and stores that value in r[P2].  The r[P2]
+            ///* value computed is the total number of rows that will need to be
+            ///* visited in order to complete the query.
+            ///*
+            ///* If r[P3] is zero or negative, that means there is no OFFSET
+            ///* and r[P2] is set to be the value of the LIMIT, r[P1].
+            ///*
+            ///* if r[P1] is zero or negative, that means there is no LIMIT
+            ///* and r[P2] is set to -1.
+            ///*
+            ///* Otherwise, r[P2] is set to the sum of r[P1] and r[P3].
+            /// in1, out2, in3
             let mut x__3: i64 = 0 as i64;
+            /// If the LIMIT is less than or equal to zero, loop forever.  This
+            ///* is documented.  But also, if the LIMIT+OFFSET exceeds 2^63 then
+            ///* also loop forever.  This is undocumented.  In fact, one could argue
+            ///* that the loop should terminate.  But assuming 1 billion iterations
+            ///* per second (far exceeding the capabilities of any current hardware)
+            ///* it would take nearly 300 years to actually reach the limit.  So
+            ///* looping forever is a reasonable approximation.
+            /// Opcode: IfNotZero P1 P2 * * *
+            ///* Synopsis: if r[P1]!=0 then r[P1]--, goto P2
+            ///*
+            ///* Register P1 must contain an integer.  If the content of register P1 is
+            ///* initially greater than zero, then decrement the value in register P1.
+            ///* If it is non-zero (negative or positive) and then also jump to P2. 
+            ///* If register P1 is initially zero, leave it unchanged and fall through.
+            /// jump, in1
+            /// Opcode: DecrJumpZero P1 P2 * * *
+            ///* Synopsis: if (--r[P1])==0 goto P2
+            ///*
+            ///* Register P1 must hold an integer.  Decrement the value in P1
+            ///* and jump to P2 if the new value is exactly zero.
+            /// jump, in1
+            /// Opcode: AggStep * P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] step(r[P2@P5])
+            ///*
+            ///* Execute the xStep function for an aggregate.
+            ///* The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ////
+            ////* Opcode: AggInverse * P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] inverse(r[P2@P5])
+            ///*
+            ///* Execute the xInverse function for an aggregate.
+            ///* The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ////
+            ////* Opcode: AggStep1 P1 P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] step(r[P2@P5])
+            ///*
+            ///* Execute the xStep (if P1==0) or xInverse (if P1!=0) function for an
+            ///* aggregate.  The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ///*
+            ///* This opcode is initially coded as OP_AggStep0.  On first evaluation,
+            ///* the FuncDef stored in P4 is converted into an sqlite3_context and
+            ///* the opcode is changed.  In this way, the initialization of the
+            ///* sqlite3_context only happens once, instead of on each call to the
+            ///* step function.
             let mut n__4: i32 = 0;
             let mut p_ctx: *mut Sqlite3Context = core::ptr::null_mut();
             let mut n_alloc: u64 = 0 as u64;
+            /// Allocate space for (a) the context object and (n-1) extra pointers
+            ///* to append to the sqlite3_context.argv[1] array, and (b) a memory
+            ///* cell in which to store the accumulation. Be careful that the memory
+            ///* cell is 8-byte aligned, even on platforms where a pointer is 32-bits.
+            ///*
+            ///* Note: We could avoid this by using a regular memory cell from aMem[] for 
+            ///* the accumulator, instead of allocating one here.
+            /// OP_AggInverse must have P1==1 and OP_AggStep must have P1==0
+            /// Fall through into OP_AggStep */
+            ///  /* no break
             let mut i__4: i32 = 0;
             let mut p_ctx_1: *mut Sqlite3Context = core::ptr::null_mut();
             let mut p_mem_2: *mut Mem = core::ptr::null_mut();
+            /// If this function is inside of a trigger, the register array in aMem[]
+            ///* might change from one evaluation to the next.  The next block of code
+            ///* checks to see if the register array has changed, and if so it
+            ///* reinitializes the relevant parts of the sqlite3_context object
+            /// IMP: R-24505-23230
+            /// Opcode: AggFinal P1 P2 * P4 *
+            ///* Synopsis: accum=r[P1] N=P2
+            ///*
+            ///* P1 is the memory location that is the accumulator for an aggregate
+            ///* or window function.  Execute the finalizer function
+            ///* for an aggregate and store the result in P1.
+            ///*
+            ///* P2 is the number of arguments that the step function takes and
+            ///* P4 is a pointer to the FuncDef for this function.  The P2
+            ///* argument is not used by this opcode.  It is only there to disambiguate
+            ///* functions that can take varying numbers of arguments.  The
+            ///* P4 argument is only needed for the case where
+            ///* the step function was not previously called.
+            ////
+            ////* Opcode: AggValue * P2 P3 P4 *
+            ///* Synopsis: r[P3]=value N=P2
+            ///*
+            ///* Invoke the xValue() function and store the result in register P3.
+            ///*
+            ///* P2 is the number of arguments that the step function takes and
+            ///* P4 is a pointer to the FuncDef for this function.  The P2
+            ///* argument is not used by this opcode.  It is only there to disambiguate
+            ///* functions that can take varying numbers of arguments.  The
+            ///* P4 argument is only needed for the case where
+            ///* the step function was not previously called.
             let mut p_mem_3: *mut Mem = core::ptr::null_mut();
+            /// Opcode: Checkpoint P1 P2 P3 * *
+            ///*
+            ///* Checkpoint database P1. This is a no-op if P1 is not currently in
+            ///* WAL mode. Parameter P2 is one of SQLITE_CHECKPOINT_PASSIVE, FULL,
+            ///* RESTART, or TRUNCATE.  Write 1 or 0 into mem[P3] if the checkpoint returns
+            ///* SQLITE_BUSY or not, respectively.  Write the number of pages in the
+            ///* WAL after the checkpoint into mem[P3+1] and the number of pages
+            ///* in the WAL that have been checkpointed after the checkpoint
+            ///* completes into mem[P3+2].  However on an error, mem[P3+1] and
+            ///* mem[P3+2] are initialized to -1.
             let mut i__5: i32 = 0;
+            /// Loop counter
             let mut a_res: [i32; 3] = [0; 3];
+            /// Results
             let mut p_mem_4: *mut Mem = core::ptr::null_mut();
+            /// Write results here
+            /// Opcode: JournalMode P1 P2 P3 * *
+            ///*
+            ///* Change the journal mode of database P1 to P3. P3 must be one of the
+            ///* PAGER_JOURNALMODE_XXX values. If changing between the various rollback
+            ///* modes (delete, truncate, persist, off and memory), this is a simple
+            ///* operation. No IO is required.
+            ///*
+            ///* If changing into or out of WAL mode the procedure is more complicated.
+            ///*
+            ///* Write a string containing the final journal-mode to register P2.
+            /// out2
             let mut p_bt_1: *mut Btree = core::ptr::null_mut();
+            /// Btree to change journal mode of
             let mut p_pager: *mut Pager = core::ptr::null_mut();
+            /// Pager associated with pBt
             let mut e_new: i32 = 0;
+            /// New journal mode
             let mut e_old: i32 = 0;
+            /// The old journal mode
             let mut z_filename: *const i8 = core::ptr::null();
+            /// Name of database file for pPager
+            /// Do not allow a transition to journal_mode=WAL for a database
+            ///* in temporary storage or if the VFS does not support shared memory
+            /// Temp file
+            /// No shared-memory support
+            /// If leaving WAL mode, close the log file. If successful, the call
+            ///* to PagerCloseWal() checkpoints and deletes the write-ahead-log
+            ///* file. An EXCLUSIVE lock may still be held on the database file
+            ///* after a successful return.
+            /// Cannot transition directly from MEMORY to WAL.  Use mode OFF
+            ///* as an intermediate
+            /// Open a transaction on the database file. Regardless of the journal
+            ///* mode, this transaction always uses a rollback journal.
+            /// ifndef SQLITE_OMIT_WAL
+            /// SQLITE_OMIT_PRAGMA
+            /// Opcode: Vacuum P1 P2 * * *
+            ///*
+            ///* Vacuum the entire database P1.  P1 is 0 for "main", and 2 or more
+            ///* for an attached database.  The "temp" database may not be vacuumed.
+            ///*
+            ///* If P2 is not zero, then it is a register holding a string which is
+            ///* the file into which the result of vacuum should be written.  When
+            ///* P2 is zero, the vacuum overwrites the original database.
+            /// Opcode: IncrVacuum P1 P2 * * *
+            ///*
+            ///* Perform a single step of the incremental vacuum procedure on
+            ///* the P1 database. If the vacuum has finished, jump to instruction
+            ///* P2. Otherwise, fall through to the next instruction.
+            /// jump
             let mut p_bt_2: *mut Btree = core::ptr::null_mut();
+            /// Opcode: Expire P1 P2 * * *
+            ///*
+            ///* Cause precompiled statements to expire.  When an expired statement
+            ///* is executed using sqlite3_step() it will either automatically
+            ///* reprepare itself (if it was originally created using sqlite3_prepare_v2())
+            ///* or it will fail with SQLITE_SCHEMA.
+            ///*
+            ///* If P1 is 0, then all SQL statements become expired. If P1 is non-zero,
+            ///* then only the currently executing statement is expired.
+            ///*
+            ///* If P2 is 0, then SQL statements are expired immediately.  If P2 is 1,
+            ///* then running SQL statements are allowed to continue to run to completion.
+            ///* The P2==1 case occurs when a CREATE INDEX or similar schema change happens
+            ///* that might help the statement run faster but which does not affect the
+            ///* correctness of operation.
+            /// Opcode: CursorLock P1 * * * *
+            ///*
+            ///* Lock the btree to which cursor P1 is pointing so that the btree cannot be
+            ///* written by an other cursor.
             let mut p_c_31: *const VdbeCursor = core::ptr::null();
+            /// Opcode: CursorUnlock P1 * * * *
+            ///*
+            ///* Unlock the btree to which cursor P1 is pointing so that it can be
+            ///* written by other cursors.
             let mut p_c_32: *const VdbeCursor = core::ptr::null();
+            /// Opcode: TableLock P1 P2 P3 P4 *
+            ///* Synopsis: iDb=P1 root=P2 write=P3
+            ///*
+            ///* Obtain a lock on a particular table. This instruction is only used when
+            ///* the shared-cache feature is enabled.
+            ///*
+            ///* P1 is the index of the database in sqlite3.aDb[] of the database
+            ///* on which the lock is acquired.  A readlock is obtained if P3==0 or
+            ///* a write lock if P3==1.
+            ///*
+            ///* P2 contains the root-page of the table to lock.
+            ///*
+            ///* P4 contains a pointer to the name of the table being locked. This is only
+            ///* used to generate an error message if the lock cannot be obtained.
             let mut is_write_lock: u8 = 0 as u8;
             let mut p1__3: i32 = 0;
             let mut z__1: *const i8 = core::ptr::null();
+            /// SQLITE_OMIT_SHARED_CACHE
+            /// Opcode: VBegin * * * P4 *
+            ///*
+            ///* P4 may be a pointer to an sqlite3_vtab structure. If so, call the
+            ///* xBegin method for that table.
+            ///*
+            ///* Also, whether or not P4 is set, check that this is not being called from
+            ///* within a callback to a virtual table xSync() method. If it is, the error
+            ///* code will be set to SQLITE_LOCKED.
             let mut p_v_tab: *mut VTable = core::ptr::null_mut();
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VCreate P1 P2 * * *
+            ///*
+            ///* P2 is a register that holds the name of a virtual table in database
+            ///* P1. Call the xCreate method for that table.
             let mut s_mem_1: Mem = unsafe { core::mem::zeroed() };
+            /// For storing the record being decoded
             let mut z_tab: *const i8 = core::ptr::null();
+            /// Name of the virtual table
+            /// Because P2 is always a static string, it is impossible for the
+            ///* sqlite3VdbeMemCopy() to fail
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VDestroy P1 * * P4 *
+            ///*
+            ///* P4 is the name of a virtual table in database P1.  Call the xDestroy method
+            ///* of that table.
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VOpen P1 * * P4 *
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* P1 is a cursor number.  This opcode opens a cursor to the virtual
+            ///* table and stores that cursor in P1.
+            /// ncycle
             let mut p_cur_3: *mut VdbeCursor = core::ptr::null_mut();
             let mut p_v_cur: *mut Sqlite3VtabCursor = core::ptr::null_mut();
             let mut p_vtab_1: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module_1: *const Sqlite3Module = core::ptr::null();
+            /// This opcode is a no-op if the cursor is already open
+            /// Initialize sqlite3_vtab_cursor base class
+            /// Initialize vdbe cursor object
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VCheck P1 P2 P3 P4 *
+            ///*
+            ///* P4 is a pointer to a Table object that is a virtual table in schema P1
+            ///* that supports the xIntegrity() method.  This opcode runs the xIntegrity()
+            ///* method for that virtual table, using P3 as the integer argument.  If
+            ///* an error is reported back, the table name is prepended to the error
+            ///* message and that message is stored in P2.  If no errors are seen,
+            ///* register P2 is set to NULL.
+            /// out2
             let mut p_tab_3: *const Table = core::ptr::null();
             let mut p_vtab_2: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module_2: *const Sqlite3Module = core::ptr::null();
             let mut z_err_2: *mut i8 = core::ptr::null_mut();
+            /// Innocent until proven guilty
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VInitIn P1 P2 P3 * *
+            ///* Synopsis: r[P2]=ValueList(P1,P3)
+            ///*
+            ///* Set register P2 to be a pointer to a ValueList object for cursor P1
+            ///* with cache register P3 and output register P3+1.  This ValueList object
+            ///* can be used as the first argument to sqlite3_vtab_in_first() and
+            ///* sqlite3_vtab_in_next() to extract all of the values stored in the P1
+            ///* cursor.  Register P3 is used to hold the values returned by
+            ///* sqlite3_vtab_in_first() and sqlite3_vtab_in_next().
+            /// out2, ncycle
             let mut p_c_33: *const VdbeCursor = core::ptr::null();
+            /// The cursor containing the RHS values
             let mut p_rhs: *mut ValueList = core::ptr::null_mut();
+            /// New ValueList object to put in reg[P2]
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VFilter P1 P2 P3 P4 *
+            ///* Synopsis: iplan=r[P3] zplan='P4'
+            ///*
+            ///* P1 is a cursor opened using VOpen.  P2 is an address to jump to if
+            ///* the filtered result set is empty.
+            ///*
+            ///* P4 is either NULL or a string that was generated by the xBestIndex
+            ///* method of the module.  The interpretation of the P4 string is left
+            ///* to the module implementation.
+            ///*
+            ///* This opcode invokes the xFilter method on the virtual table specified
+            ///* by P1.  The integer query plan parameter to xFilter is stored in register
+            ///* P3. Register P3+1 stores the argc parameter to be passed to the
+            ///* xFilter method. Registers P3+2..P3+1+argc are the argc
+            ///* additional parameters which are passed to
+            ///* xFilter as argv. Register P3+2 becomes argv[0] when passed to xFilter.
+            ///*
+            ///* A jump is made to P2 if the result set after filtering would be empty.
+            /// jump, ncycle
             let mut n_arg: i32 = 0;
             let mut i_query: i32 = 0;
             let mut p_module_3: *const Sqlite3Module = core::ptr::null();
@@ -1258,6 +4333,23 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
             let mut res__13: i32 = 0;
             let mut i__6: i32 = 0;
             let mut ap_arg: *mut *mut Mem = core::ptr::null_mut();
+            /// Grab the index number and argc parameters
+            /// Invoke the xFilter method
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VColumn P1 P2 P3 * P5
+            ///* Synopsis: r[P3]=vcolumn(P2)
+            ///*
+            ///* Store in register P3 the value of the P2-th column of
+            ///* the current row of the virtual-table of cursor P1.
+            ///*
+            ///* If the VColumn opcode is being used to fetch the value of
+            ///* an unchanging column during an UPDATE operation, then the P5
+            ///* value is OPFLAG_NOCHNG.  This will cause the sqlite3_vtab_nochange()
+            ///* function to return true inside the xColumn method of the virtual
+            ///* table implementation.  The P5 column might also contain other
+            ///* bits (OPFLAG_LENGTHARG or OPFLAG_TYPEOFARG) but those bits are
+            ///* unused by OP_VColumn.
+            /// ncycle
             let mut p_vtab_4: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module_4: *const Sqlite3Module = core::ptr::null();
             let mut p_dest_2: *mut Mem = core::ptr::null_mut();
@@ -1265,13 +4357,58 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
                 unsafe { core::mem::zeroed() };
             let mut null_func: FuncDef = unsafe { core::mem::zeroed() };
             let mut p_cur_5: *const VdbeCursor = core::ptr::null();
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VNext P1 P2 * * *
+            ///*
+            ///* Advance virtual table P1 to the next row in its result set and
+            ///* jump to instruction P2.  Or, if the virtual table has reached
+            ///* the end of its result set, then fall through to the next instruction.
+            /// jump, ncycle
             let mut p_vtab_5: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module_5: *const Sqlite3Module = core::ptr::null();
             let mut res__14: i32 = 0;
             let mut p_cur_6: *const VdbeCursor = core::ptr::null();
+            /// Invoke the xNext() method of the module. There is no way for the
+            ///* underlying implementation to return an error if one occurs during
+            ///* xNext(). Instead, if an error occurs, true is returned (indicating that
+            ///* data is available) and the error code returned when xColumn or
+            ///* some other method is next invoked on the save virtual table cursor.
+            /// If there is data, jump to P2
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VRename P1 * * P4 *
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* This opcode invokes the corresponding xRename method. The value
+            ///* in register P1 is passed as the zName argument to the xRename method.
             let mut p_vtab_6: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_name: *mut Mem = core::ptr::null_mut();
             let mut is_legacy: i32 = 0;
+            /// Opcode: VUpdate P1 P2 P3 P4 P5
+            ///* Synopsis: data=r[P3@P2]
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* This opcode invokes the corresponding xUpdate method. P2 values
+            ///* are contiguous memory cells starting at P3 to pass to the xUpdate
+            ///* invocation. The value in register (P3+P2-1) corresponds to the
+            ///* p2th element of the argv array passed to xUpdate.
+            ///*
+            ///* The xUpdate method will do a DELETE or an INSERT or both.
+            ///* The argv[0] element (which corresponds to memory cell P3)
+            ///* is the rowid of a row to delete.  If argv[0] is NULL then no
+            ///* deletion occurs.  The argv[1] element is the rowid of the new
+            ///* row.  This can be NULL to have the virtual table select the new
+            ///* rowid for itself.  The subsequent elements in the array are
+            ///* the values of columns in the new row.
+            ///*
+            ///* If P2==1 then no insert is performed.  argv[0] is the rowid of
+            ///* a row to delete.
+            ///*
+            ///* P1 is a boolean flag. If it is set to true and the xUpdate call
+            ///* is successful, then the value returned by sqlite3_last_insert_rowid()
+            ///* is set to the value of the rowid for the row just inserted.
+            ///*
+            ///* P5 is the error actions (OE_Replace, OE_Fail, OE_Ignore, etc) to
+            ///* apply in the case of a constraint failure on an insert or update.
             let mut p_vtab_7: *mut Sqlite3Vtab = core::ptr::null_mut();
             let mut p_module_6: *const Sqlite3Module = core::ptr::null();
             let mut n_arg_1: i32 = 0;
@@ -1280,14 +4417,151 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
             let mut ap_arg_1: *mut *mut Mem = core::ptr::null_mut();
             let mut p_x_1: *mut Mem = core::ptr::null_mut();
             let mut vtab_on_conflict: u8 = 0 as u8;
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: Pagecount P1 P2 * * *
+            ///*
+            ///* Write the current number of pages in database P1 to memory cell P2.
+            /// out2
+            /// Opcode: MaxPgcnt P1 P2 P3 * *
+            ///*
+            ///* Try to set the maximum page count for database P1 to the value in P3.
+            ///* Do not let the maximum page count fall below the current page count and
+            ///* do not change the maximum page count value if P3==0.
+            ///*
+            ///* Store the maximum page count after the change in register P2.
+            /// out2
             let mut new_max: u32 = 0 as u32;
             let mut p_bt_3: *mut Btree = core::ptr::null_mut();
+            /// Opcode: Function P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=func(r[P2@NP])
+            ///*
+            ///* Invoke a user function (P4 is a pointer to an sqlite3_context object that
+            ///* contains a pointer to the function to be run) with arguments taken
+            ///* from register P2 and successors.  The number of arguments is in
+            ///* the sqlite3_context object that P4 points to.
+            ///* The result of the function is stored
+            ///* in register P3.  Register P3 must not be one of the function inputs.
+            ///*
+            ///* P1 is a 32-bit bitmask indicating whether or not each argument to the
+            ///* function was determined to be constant at compile time. If the first
+            ///* argument was constant then bit 0 of P1 is set. This is used to determine
+            ///* whether meta data associated with a user function argument using the
+            ///* sqlite3_set_auxdata() API may be safely retained until the next
+            ///* invocation of this opcode.
+            ///*
+            ///* See also: AggStep, AggFinal, PureFunc
+            ////
+            ////* Opcode: PureFunc P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=func(r[P2@NP])
+            ///*
+            ///* Invoke a user function (P4 is a pointer to an sqlite3_context object that
+            ///* contains a pointer to the function to be run) with arguments taken
+            ///* from register P2 and successors.  The number of arguments is in
+            ///* the sqlite3_context object that P4 points to.
+            ///* The result of the function is stored
+            ///* in register P3.  Register P3 must not be one of the function inputs.
+            ///*
+            ///* P1 is a 32-bit bitmask indicating whether or not each argument to the
+            ///* function was determined to be constant at compile time. If the first
+            ///* argument was constant then bit 0 of P1 is set. This is used to determine
+            ///* whether meta data associated with a user function argument using the
+            ///* sqlite3_set_auxdata() API may be safely retained until the next
+            ///* invocation of this opcode.
+            ///*
+            ///* This opcode works exactly like OP_Function.  The only difference is in
+            ///* its name.  This opcode is used in places where the function must be
+            ///* purely non-deterministic.  Some built-in date/time functions can be
+            ///* either deterministic of non-deterministic, depending on their arguments.
+            ///* When those function are used in a non-deterministic way, they will check
+            ///* to see if they were called using OP_PureFunc instead of OP_Function, and
+            ///* if they were, they throw an error.
+            ///*
+            ///* See also: AggStep, AggFinal, Function
+            /// group
+            /// group
             let mut i__8: i32 = 0;
             let mut p_ctx_2: *mut Sqlite3Context = core::ptr::null_mut();
+            /// If this function is inside of a trigger, the register array in aMem[]
+            ///* might change from one evaluation to the next.  The next block of code
+            ///* checks to see if the register array has changed, and if so it
+            ///* reinitializes the relevant parts of the sqlite3_context object
+            /// IMP: R-24505-23230
+            /// If the function returned an error, throw an exception
+            /// Opcode: ClrSubtype P1 * * * *
+            ///* Synopsis:  r[P1].subtype = 0
+            ///*
+            ///* Clear the subtype from register P1.
+            /// in1
+            /// Opcode: GetSubtype P1 P2 * * *
+            ///* Synopsis:  r[P2] = r[P1].subtype
+            ///*
+            ///* Extract the subtype value from register P1 and write that subtype
+            ///* into register P2.  If P1 has no subtype, then P1 gets a NULL.
+            /// in1 out2
+            /// Opcode: SetSubtype P1 P2 * * *
+            ///* Synopsis:  r[P2].subtype = r[P1]
+            ///*
+            ///* Set the subtype value of register P2 to the integer from register P1.
+            ///* If P1 is NULL, clear the subtype from p2.
+            /// in1 out2
+            /// Opcode: FilterAdd P1 * P3 P4 *
+            ///* Synopsis: filter(P1) += key(P3@P4)
+            ///*
+            ///* Compute a hash on the P4 registers starting with r[P3] and
+            ///* add that hash to the bloom filter contained in r[P1].
             let mut h: u64 = 0 as u64;
+            /// Opcode: Filter P1 P2 P3 P4 *
+            ///* Synopsis: if key(P3@P4) not in filter(P1) goto P2
+            ///*
+            ///* Compute a hash on the key contained in the P4 registers starting
+            ///* with r[P3].  Check to see if that hash is found in the
+            ///* bloom filter hosted by register P1.  If it is not present then
+            ///* maybe jump to P2.  Otherwise fall through.
+            ///*
+            ///* False negatives are harmless.  It is always safe to fall through,
+            ///* even if the value is in the bloom filter.  A false negative causes
+            ///* more CPU cycles to be used, but it should still yield the correct
+            ///* answer.  However, an incorrect answer may well arise from a
+            ///* false positive - if the jump is taken when it should fall through.
+            /// jump
             let mut h__1: u64 = 0 as u64;
+            /// Opcode: Trace P1 P2 * P4 *
+            ///*
+            ///* Write P4 on the statement trace output if statement tracing is
+            ///* enabled.
+            ///*
+            ///* Operand P1 must be 0x7fffffff and P2 must positive.
+            ////
+            ////* Opcode: Init P1 P2 P3 P4 *
+            ///* Synopsis: Start at P2
+            ///*
+            ///* Programs contain a single instance of this opcode as the very first
+            ///* opcode.
+            ///*
+            ///* If tracing is enabled (by the sqlite3_trace()) interface, then
+            ///* the UTF-8 string contained in P4 is emitted on the trace callback.
+            ///* Or if P4 is blank, use the string returned by sqlite3_sql().
+            ///*
+            ///* If P2 is not zero, jump to instruction P2.
+            ///*
+            ///* Increment the value of P1 so that OP_Once opcodes will jump the
+            ///* first time they are evaluated for this run.
+            ///*
+            ///* If P3 is not zero, then it is an address to jump to if an SQLITE_CORRUPT
+            ///* error is encountered.
+            /// jump0
             let mut i__9: i32 = 0;
             let mut z_trace: *mut i8 = core::ptr::null_mut();
+            /// If the P4 argument is not NULL, then it must be an SQL comment string.
+            ///* The "--" string is broken up to prevent false-positives with srcck1.c.
+            ///*
+            ///* This assert() provides evidence for:
+            ///* EVIDENCE-OF: R-50676-09860 The callback can compute the same text that
+            ///* would have been returned by the legacy sqlite3_trace() interface by
+            ///* using the X argument when X begins with "--" and invoking
+            ///* sqlite3_expanded_sql(P) otherwise.
+            /// OP_Init is always instruction 0
+            /// tag-20220401a
             let mut z__2: *mut i8 = core::ptr::null_mut();
             let mut z__3: *mut i8 = core::ptr::null_mut();
             let mut __state: i32 = 0;
@@ -13202,6 +16476,3225 @@ pub extern "C" fn sqlite3_vdbe_exec(p: *mut Vdbe) -> i32 {
                     }
                 }
             }
+
+            /// Copy of p->aOp
+            /// Current operation
+            /// Value to return
+            /// The database
+            /// Reset schema after an error if positive
+            /// The database encoding
+            /// Result of last comparison
+            /// Number of virtual machine steps
+            /// Invoke xProgress() when nVmStep reaches this
+            /// Copy of p->aMem
+            /// 1st input operand
+            /// 2nd input operand
+            /// 3rd input operand
+            /// Output operand
+            /// Column cache counter
+            ///INSERT STACK UNION HERE **
+            /// sqlite3_step() verifies this
+            /// This happens if a malloc() inside a call to sqlite3_column_text() or
+            ///* sqlite3_column_text16() failed.
+            /// Errors are detected by individual opcodes, with an immediate
+            ///* jumps to abort_due_to_error.
+            /// Only allow tracing if SQLITE_DEBUG is defined.
+            /// Check to see if we need to simulate an interrupt.  This only happens
+            ///* if we have a special test build.
+            /// Sanity checking on other operands
+            ///**************************************************************************
+            ///* What follows is a massive switch statement where each case implements a
+            ///* separate instruction in the virtual machine.  If we follow the usual
+            ///* indentation conventions, each case should be indented by 6 spaces.  But
+            ///* that is a lot of wasted space on the left margin.  So the code within
+            ///* the switch statement will break with convention and be flush-left. Another
+            ///* big comment (similar to this one) will mark the point in the code where
+            ///* we transition back to normal indentation.
+            ///*
+            ///* The formatting of each case is important.  The makefile for SQLite
+            ///* generates two C files "opcodes.h" and "opcodes.c" by scanning this
+            ///* file looking for lines that begin with "case OP_".  The opcodes.h files
+            ///* will be filled with #defines that give unique integer values to each
+            ///* opcode and the opcodes.c file is filled with an array of strings where
+            ///* each string is the symbolic name for the corresponding opcode.  If the
+            ///* case statement is followed by a comment of the form "/# same as ... #/"
+            ///* that comment is used to determine the particular value of the opcode.
+            ///*
+            ///* Other keywords in the comment that follows each case are used to
+            ///* construct the OPFLG_INITIALIZER value that initializes opcodeProperty[].
+            ///* Keywords include: in1, in2, in3, out2, out3.  See
+            ///* the mkopcodeh.awk script for additional information.
+            ///*
+            ///* Documentation about VDBE opcodes is generated by scanning this file
+            ///* for lines of that contain "Opcode:".  That line and all subsequent
+            ///* comment lines are used in the generation of the opcode.html documentation
+            ///* file.
+            ///*
+            ///* SUMMARY:
+            ///*
+            ///*     Formatting is important to scripts that scan this file.
+            ///*     Do not deviate from the formatting style currently in use.
+            ///*
+            ///***************************************************************************
+            /// Opcode:  Goto * P2 * * *
+            ///*
+            ///* An unconditional jump to address P2.
+            ///* The next instruction executed will be
+            ///* the one at index P2 from the beginning of
+            ///* the program.
+            ///*
+            ///* The P1 parameter is not actually used by this opcode.  However, it
+            ///* is sometimes set to 1 instead of 0 as a hint to the command-line shell
+            ///* that this Goto is the bottom of a loop and that the lines from P2 down
+            ///* to the current line should be indented for EXPLAIN output.
+            /// jump
+            /// Opcodes that are used as the bottom of a loop (OP_Next, OP_Prev,
+            ///* OP_VNext, or OP_SorterNext) all jump here upon
+            ///* completion.  Check to see if sqlite3_interrupt() has been called
+            ///* or if the progress callback needs to be invoked.
+            ///*
+            ///* This code uses unstructured "goto" statements and does not look clean.
+            ///* But that is not due to sloppy coding habits. The code is written this
+            ///* way for performance, to avoid having to run the interrupt and progress
+            ///* checks on every opcode.  This helps sqlite3_step() to run about 1.5%
+            ///* faster according to "valgrind --tool=cachegrind"
+            /// Call the progress callback if it is configured and the required number
+            ///* of VDBE ops have been executed (either since this invocation of
+            ///* sqlite3VdbeExec() or since last time the progress callback was called).
+            ///* If the progress callback returns non-zero, exit the virtual machine with
+            ///* a return code SQLITE_ABORT.
+            /// Opcode:  Gosub P1 P2 * * *
+            ///*
+            ///* Write the current address onto register P1
+            ///* and then jump to address P2.
+            /// jump
+            /// Opcode:  Return P1 P2 P3 * *
+            ///*
+            ///* Jump to the address stored in register P1.  If P1 is a return address
+            ///* register, then this accomplishes a return from a subroutine.
+            ///*
+            ///* If P3 is 1, then the jump is only taken if register P1 holds an integer
+            ///* values, otherwise execution falls through to the next opcode, and the
+            ///* OP_Return becomes a no-op. If P3 is 0, then register P1 must hold an
+            ///* integer or else an assert() is raised.  P3 should be set to 1 when
+            ///* this opcode is used in combination with OP_BeginSubrtn, and set to 0
+            ///* otherwise.
+            ///*
+            ///* The value in register P1 is unchanged by this opcode.
+            ///*
+            ///* P2 is not used by the byte-code engine.  However, if P2 is positive
+            ///* and also less than the current address, then the "EXPLAIN" output
+            ///* formatter in the CLI will indent all opcodes from the P2 opcode up
+            ///* to be not including the current Return.   P2 should be the first opcode
+            ///* in the subroutine from which this opcode is returning.  Thus the P2
+            ///* value is a byte-code indentation hint.  See tag-20220407a in
+            ///* wherecode.c and shell.c.
+            /// in1
+            /// Opcode: InitCoroutine P1 P2 P3 * *
+            ///*
+            ///* Set up register P1 so that it will Yield to the coroutine
+            ///* located at address P3.
+            ///*
+            ///* If P2!=0 then the coroutine implementation immediately follows
+            ///* this opcode.  So jump over the coroutine implementation to
+            ///* address P2.
+            ///*
+            ///* See also: EndCoroutine
+            /// jump0
+            /// Most jump operations do a goto to this spot in order to update
+            ///* the pOp pointer.
+            /// There are never any jumps to instruction 0
+            /// Jumps must be in range
+            /// Opcode:  EndCoroutine P1 * * * *
+            ///*
+            ///* The instruction at the address in register P1 is a Yield.
+            ///* Jump to the P2 parameter of that Yield.
+            ///* After the jump, the value register P1 is left with a value
+            ///* such that subsequent OP_Yields go back to the this same
+            ///* OP_EndCoroutine instruction.
+            ///*
+            ///* See also: InitCoroutine
+            /// in1
+            /// Opcode:  Yield P1 P2 * * *
+            ///*
+            ///* Swap the program counter with the value in register P1.  This
+            ///* has the effect of yielding to a coroutine.
+            ///*
+            ///* If the coroutine that is launched by this instruction ends with
+            ///* Yield or Return then continue to the next instruction.  But if
+            ///* the coroutine launched by this instruction ends with
+            ///* EndCoroutine, then jump to P2 rather than continuing with the
+            ///* next instruction.
+            ///*
+            ///* See also: InitCoroutine
+            /// in1, jump0
+            /// Opcode:  HaltIfNull  P1 P2 P3 P4 P5
+            ///* Synopsis: if r[P3]=null halt
+            ///*
+            ///* Check the value in register P3.  If it is NULL then Halt using
+            ///* parameter P1, P2, and P4 as if this were a Halt instruction.  If the
+            ///* value in register P3 is not NULL, then this routine is a no-op.
+            ///* The P5 parameter should be 1.
+            /// in3
+            /// Fall through into OP_Halt */
+            ///  /* no break
+            /// Opcode:  Halt P1 P2 P3 P4 P5
+            ///*
+            ///* Exit immediately.  All open cursors, etc are closed
+            ///* automatically.
+            ///*
+            ///* P1 is the result code returned by sqlite3_exec(), sqlite3_reset(),
+            ///* or sqlite3_finalize().  For a normal halt, this should be SQLITE_OK (0).
+            ///* For errors, it can be some other value.  If P1!=0 then P2 will determine
+            ///* whether or not to rollback the current transaction.  Do not rollback
+            ///* if P2==OE_Fail. Do the rollback if P2==OE_Rollback.  If P2==OE_Abort,
+            ///* then back out all changes that have occurred during this execution of the
+            ///* VDBE, but do not rollback the transaction.
+            ///*
+            ///* If P3 is not zero and P4 is NULL, then P3 is a register that holds the
+            ///* text of an error message.
+            ///*
+            ///* If P3 is zero and P4 is not null then the error message string is held
+            ///* in P4.
+            ///*
+            ///* P5 is a value between 1 and 4, inclusive, then the P4 error message
+            ///* string is modified as follows:
+            ///*
+            ///*    1:  NOT NULL constraint failed: P4
+            ///*    2:  UNIQUE constraint failed: P4
+            ///*    3:  CHECK constraint failed: P4
+            ///*    4:  FOREIGN KEY constraint failed: P4
+            ///*
+            ///* If P3 is zero and P5 is not zero and P4 is NULL, then everything after
+            ///* the ":" is omitted.
+            ///*
+            ///* There is an implied "Halt 0 0 0" instruction inserted at the very end of
+            ///* every program.  So a jump past the last instruction of the program
+            ///* is the same as executing Halt.
+            /// A deliberately coded "OP_Halt SQLITE_INTERNAL * * * *" opcode indicates
+            ///* something is wrong with the code generator.  Raise an assertion in order
+            ///* to bring this to the attention of fuzzers and other testing tools.
+            /// Halt the sub-program. Return control to the parent frame.
+            /// Instruction pcx is the OP_Program that invoked the sub-program
+            ///* currently being halted. If the p2 instruction of this OP_Halt
+            ///* instruction is set to OE_Ignore, then the sub-program is throwing
+            ///* an IGNORE exception. In this case jump to the address specified
+            ///* as the p2 of the calling OP_Program.
+            /// Opcode: Integer P1 P2 * * *
+            ///* Synopsis: r[P2]=P1
+            ///*
+            ///* The 32-bit integer value P1 is written into register P2.
+            /// out2
+            /// Opcode: Int64 * P2 * P4 *
+            ///* Synopsis: r[P2]=P4
+            ///*
+            ///* P4 is a pointer to a 64-bit integer value.
+            ///* Write that value into register P2.
+            /// out2
+            /// Opcode: Real * P2 * P4 *
+            ///* Synopsis: r[P2]=P4
+            ///*
+            ///* P4 is a pointer to a 64-bit floating point value.
+            ///* Write that value into register P2.
+            /// same as TK_FLOAT, out2
+            /// Opcode: String8 * P2 * P4 *
+            ///* Synopsis: r[P2]='P4'
+            ///*
+            ///* P4 points to a nul terminated UTF-8 string. This opcode is transformed
+            ///* into a String opcode before it is executed for the first time.  During
+            ///* this transformation, the length of string P4 is computed and stored
+            ///* as the P1 parameter.
+            /// same as TK_STRING, out2
+            /// Fall through to the next case, OP_String */
+            ///  /* no break
+            /// Opcode: String P1 P2 P3 P4 P5
+            ///* Synopsis: r[P2]='P4' (len=P1)
+            ///*
+            ///* The string value P4 of length P1 (bytes) is stored in register P2.
+            ///*
+            ///* If P3 is not zero and the content of register P3 is equal to P5, then
+            ///* the datatype of the register P2 is converted to BLOB.  The content is
+            ///* the same sequence of bytes, it is merely interpreted as a BLOB instead
+            ///* of a string, as if it had been CAST.  In other words:
+            ///*
+            ///* if( P3!=0 and reg[P3]==P5 ) reg[P2] := CAST(reg[P2] as BLOB)
+            /// out2
+            /// Opcode: BeginSubrtn * P2 * * *
+            ///* Synopsis: r[P2]=NULL
+            ///*
+            ///* Mark the beginning of a subroutine that can be entered in-line
+            ///* or that can be called using OP_Gosub.  The subroutine should
+            ///* be terminated by an OP_Return instruction that has a P1 operand that
+            ///* is the same as the P2 operand to this opcode and that has P3 set to 1.
+            ///* If the subroutine is entered in-line, then the OP_Return will simply
+            ///* fall through.  But if the subroutine is entered using OP_Gosub, then
+            ///* the OP_Return will jump back to the first instruction after the OP_Gosub.
+            ///*
+            ///* This routine works by loading a NULL into the P2 register.  When the
+            ///* return address register contains a NULL, the OP_Return instruction is
+            ///* a no-op that simply falls through to the next instruction (assuming that
+            ///* the OP_Return opcode has a P3 value of 1).  Thus if the subroutine is
+            ///* entered in-line, then the OP_Return will cause in-line execution to
+            ///* continue.  But if the subroutine is entered via OP_Gosub, then the
+            ///* OP_Return will cause a return to the address following the OP_Gosub.
+            ///*
+            ///* This opcode is identical to OP_Null.  It has a different name
+            ///* only to make the byte code easier to read and verify.
+            ////
+            ////* Opcode: Null P1 P2 P3 * *
+            ///* Synopsis: r[P2..P3]=NULL
+            ///*
+            ///* Write a NULL into registers P2.  If P3 greater than P2, then also write
+            ///* NULL into register P3 and every register in between P2 and P3.  If P3
+            ///* is less than P2 (typically P3 is zero) then only register P2 is
+            ///* set to NULL.
+            ///*
+            ///* If the P1 value is non-zero, then also set the MEM_Cleared flag so that
+            ///* NULL values will not compare equal even if SQLITE_NULLEQ is set on
+            ///* OP_Ne or OP_Eq.
+            /// out2
+            /// Opcode: SoftNull P1 * * * *
+            ///* Synopsis: r[P1]=NULL
+            ///*
+            ///* Set register P1 to have the value NULL as seen by the OP_MakeRecord
+            ///* instruction, but do not free any string or blob memory associated with
+            ///* the register, so that if the value was a string or blob that was
+            ///* previously copied using OP_SCopy, the copies will continue to be valid.
+            /// Opcode: Blob P1 P2 * P4 *
+            ///* Synopsis: r[P2]=P4 (len=P1)
+            ///*
+            ///* P4 points to a blob of data P1 bytes long.  Store this
+            ///* blob in register P2.  If P4 is a NULL pointer, then construct
+            ///* a zero-filled blob that is P1 bytes long in P2.
+            /// out2
+            /// Opcode: Variable P1 P2 * * *
+            ///* Synopsis: r[P2]=parameter(P1)
+            ///*
+            ///* Transfer the values of bound parameter P1 into register P2
+            /// out2
+            /// Value being transferred
+            /// Opcode: Move P1 P2 P3 * *
+            ///* Synopsis: r[P2@P3]=r[P1@P3]
+            ///*
+            ///* Move the P3 values in register P1..P1+P3-1 over into
+            ///* registers P2..P2+P3-1.  Registers P1..P1+P3-1 are
+            ///* left holding a NULL.  It is an error for register ranges
+            ///* P1..P1+P3-1 and P2..P2+P3-1 to overlap.  It is an error
+            ///* for P3 to be less than 1.
+            /// Number of registers left to copy
+            /// Register to copy from
+            /// Register to copy to
+            /// Opcode: Copy P1 P2 P3 * P5
+            ///* Synopsis: r[P2@P3+1]=r[P1@P3+1]
+            ///*
+            ///* Make a copy of registers P1..P1+P3 into registers P2..P2+P3.
+            ///*
+            ///* If the 0x0002 bit of P5 is set then also clear the MEM_Subtype flag in the
+            ///* destination.  The 0x0001 bit of P5 indicates that this Copy opcode cannot
+            ///* be merged.  The 0x0001 bit is used by the query planner and does not
+            ///* come into play during query execution.
+            ///*
+            ///* This instruction makes a deep copy of the value.  A duplicate
+            ///* is made of any string or blob constant.  See also OP_SCopy.
+            /// Opcode: SCopy P1 P2 * * *
+            ///* Synopsis: r[P2]=r[P1]
+            ///*
+            ///* Make a shallow copy of register P1 into register P2.
+            ///*
+            ///* This instruction makes a shallow copy of the value.  If the value
+            ///* is a string or blob, then the copy is only a pointer to the
+            ///* original and hence if the original changes so will the copy.
+            ///* Worse, if the original is deallocated, the copy becomes invalid.
+            ///* Thus the program must guarantee that the original will not change
+            ///* during the lifetime of the copy.  Use OP_Copy to make a complete
+            ///* copy.
+            /// out2
+            /// Opcode: IntCopy P1 P2 * * *
+            ///* Synopsis: r[P2]=r[P1]
+            ///*
+            ///* Transfer the integer value held in register P1 into register P2.
+            ///*
+            ///* This is an optimized version of SCopy that works only for integer
+            ///* values.
+            /// out2
+            /// Opcode: FkCheck * * * * *
+            ///*
+            ///* Halt with an SQLITE_CONSTRAINT error if there are any unresolved
+            ///* foreign key constraint violations.  If there are no foreign key
+            ///* constraint violations, this is a no-op.
+            ///*
+            ///* FK constraint violations are also checked when the prepared statement
+            ///* exits.  This opcode is used to raise foreign key constraint errors prior
+            ///* to returning results such as a row change count or the result of a
+            ///* RETURNING clause.
+            /// Opcode: ResultRow P1 P2 * * *
+            ///* Synopsis: output=r[P1@P2]
+            ///*
+            ///* The registers P1 through P1+P2-1 contain a single row of
+            ///* results. This opcode causes the sqlite3_step() call to terminate
+            ///* with an SQLITE_ROW return code and it sets up the sqlite3_stmt
+            ///* structure to provide access to the r(P1)..r(P1+P2-1) values as
+            ///* the result row.
+            /// Opcode: Concat P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]+r[P1]
+            ///*
+            ///* Add the text in register P1 onto the end of the text in
+            ///* register P2 and store the result in register P3.
+            ///* If either the P1 or P2 text are NULL then store NULL in P3.
+            ///*
+            ///*   P3 = P2 || P1
+            ///*
+            ///* It is illegal for P1 and P3 to be the same register. Sometimes,
+            ///* if P3 is the same register as P2, the implementation is able
+            ///* to avoid a memcpy().
+            /// same as TK_CONCAT, in1, in2, out3
+            /// Total size of the output string or blob
+            /// Initial flags for P1
+            /// Initial flags for P2
+            /// Opcode: Add P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]+r[P2]
+            ///*
+            ///* Add the value in register P1 to the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Multiply P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]*r[P2]
+            ///*
+            ///*
+            ///* Multiply the value in register P1 by the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Subtract P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]-r[P1]
+            ///*
+            ///* Subtract the value in register P1 from the value in register P2
+            ///* and store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: Divide P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]/r[P1]
+            ///*
+            ///* Divide the value in register P1 by the value in register P2
+            ///* and store the result in register P3 (P3=P2/P1). If the value in
+            ///* register P1 is zero, then the result is NULL. If either input is
+            ///* NULL, the result is NULL.
+            ////
+            ////* Opcode: Remainder P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]%r[P1]
+            ///*
+            ///* Compute the remainder after integer register P2 is divided by
+            ///* register P1 and store the result in register P3.
+            ///* If the value in register P1 is zero the result is NULL.
+            ///* If either operand is NULL, the result is NULL.
+            /// same as TK_PLUS, in1, in2, out3
+            /// same as TK_MINUS, in1, in2, out3
+            /// same as TK_STAR, in1, in2, out3
+            /// same as TK_SLASH, in1, in2, out3
+            /// same as TK_REM, in1, in2, out3
+            /// Numeric type of left operand
+            /// Numeric type of right operand
+            /// Integer value of left operand
+            /// Integer value of right operand
+            /// Real value of left operand
+            /// Real value of right operand
+            /// (double)0 In case of SQLITE_OMIT_FLOATING_POINT...
+            /// Opcode: CollSeq P1 * * P4
+            ///*
+            ///* P4 is a pointer to a CollSeq object. If the next call to a user function
+            ///* or aggregate calls sqlite3GetFuncCollSeq(), this collation sequence will
+            ///* be returned. This is used by the built-in min(), max() and nullif()
+            ///* functions.
+            ///*
+            ///* If P1 is not zero, then it is a register that a subsequent min() or
+            ///* max() aggregate will set to 1 if the current row is not the minimum or
+            ///* maximum.  The P1 register is initialized to 0 by this instruction.
+            ///*
+            ///* The interface used by the implementation of the aforementioned functions
+            ///* to retrieve the collation sequence set by this opcode is not available
+            ///* publicly.  Only built-in functions have access to this feature.
+            /// Opcode: BitAnd P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]&r[P2]
+            ///*
+            ///* Take the bit-wise AND of the values in register P1 and P2 and
+            ///* store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: BitOr P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P1]|r[P2]
+            ///*
+            ///* Take the bit-wise OR of the values in register P1 and P2 and
+            ///* store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: ShiftLeft P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]<<r[P1]
+            ///*
+            ///* Shift the integer value in register P2 to the left by the
+            ///* number of bits specified by the integer in register P1.
+            ///* Store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            ////
+            ////* Opcode: ShiftRight P1 P2 P3 * *
+            ///* Synopsis: r[P3]=r[P2]>>r[P1]
+            ///*
+            ///* Shift the integer value in register P2 to the right by the
+            ///* number of bits specified by the integer in register P1.
+            ///* Store the result in register P3.
+            ///* If either input is NULL, the result is NULL.
+            /// same as TK_BITAND, in1, in2, out3
+            /// same as TK_BITOR, in1, in2, out3
+            /// same as TK_LSHIFT, in1, in2, out3
+            /// same as TK_RSHIFT, in1, in2, out3
+            /// If shifting by a negative amount, shift in the other direction
+            /// Sign-extend on a right shift of a negative number
+            /// Opcode: AddImm  P1 P2 * * *
+            ///* Synopsis: r[P1]=r[P1]+P2
+            ///*
+            ///* Add the constant P2 to the value in register P1.
+            ///* The result is always an integer.
+            ///*
+            ///* To force any register to be an integer, just add 0.
+            /// in1
+            /// Opcode: MustBeInt P1 P2 * * *
+            ///*
+            ///* Force the value in register P1 to be an integer.  If the value
+            ///* in P1 is not an integer and cannot be converted into an integer
+            ///* without data loss, then jump immediately to P2, or if P2==0
+            ///* raise an SQLITE_MISMATCH exception.
+            /// jump0, in1
+            /// Opcode: RealAffinity P1 * * * *
+            ///*
+            ///* If register P1 holds an integer convert it to a real value.
+            ///*
+            ///* This opcode is used when extracting information from a column that
+            ///* has REAL affinity.  Such column values may still be stored as
+            ///* integers, for space efficiency, but after extraction we want them
+            ///* to have only a real value.
+            /// in1
+            /// Opcode: Cast P1 P2 * * *
+            ///* Synopsis: affinity(r[P1])
+            ///*
+            ///* Force the value in register P1 to be the type defined by P2.
+            ///*
+            ///* <ul>
+            ///* <li> P2=='A' &rarr; BLOB
+            ///* <li> P2=='B' &rarr; TEXT
+            ///* <li> P2=='C' &rarr; NUMERIC
+            ///* <li> P2=='D' &rarr; INTEGER
+            ///* <li> P2=='E' &rarr; REAL
+            ///* </ul>
+            ///*
+            ///* A NULL value is not changed by this routine.  It remains NULL.
+            /// in1
+            /// SQLITE_OMIT_CAST
+            /// Opcode: Eq P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]==r[P1]
+            ///*
+            ///* Compare the values in register P1 and P3.  If reg(P3)==reg(P1) then
+            ///* jump to address P2.
+            ///*
+            ///* The SQLITE_AFF_MASK portion of P5 must be an affinity character -
+            ///* SQLITE_AFF_TEXT, SQLITE_AFF_INTEGER, and so forth. An attempt is made
+            ///* to coerce both inputs according to this affinity before the
+            ///* comparison is made. If the SQLITE_AFF_MASK is 0x00, then numeric
+            ///* affinity is used. Note that the affinity conversions are stored
+            ///* back into the input registers P1 and P3.  So this opcode can cause
+            ///* persistent changes to registers P1 and P3.
+            ///*
+            ///* Once any conversions have taken place, and neither value is NULL,
+            ///* the values are compared. If both values are blobs then memcmp() is
+            ///* used to determine the results of the comparison.  If both values
+            ///* are text, then the appropriate collating function specified in
+            ///* P4 is used to do the comparison.  If P4 is not specified then
+            ///* memcmp() is used to compare text string.  If both values are
+            ///* numeric, then a numeric comparison is used. If the two values
+            ///* are of different types, then numbers are considered less than
+            ///* strings and strings are considered less than blobs.
+            ///*
+            ///* If SQLITE_NULLEQ is set in P5 then the result of comparison is always either
+            ///* true or false and is never NULL.  If both operands are NULL then the result
+            ///* of comparison is true.  If either operand is NULL then the result is false.
+            ///* If neither operand is NULL the result is the same as it would be if
+            ///* the SQLITE_NULLEQ flag were omitted from P5.
+            ///*
+            ///* This opcode saves the result of comparison for use by the new
+            ///* OP_Jump opcode.
+            ////
+            ////* Opcode: Ne P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]!=r[P1]
+            ///*
+            ///* This works just like the Eq opcode except that the jump is taken if
+            ///* the operands in registers P1 and P3 are not equal.  See the Eq opcode for
+            ///* additional information.
+            ////
+            ////* Opcode: Lt P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]<r[P1]
+            ///*
+            ///* Compare the values in register P1 and P3.  If reg(P3)<reg(P1) then
+            ///* jump to address P2.
+            ///*
+            ///* If the SQLITE_JUMPIFNULL bit of P5 is set and either reg(P1) or
+            ///* reg(P3) is NULL then the take the jump.  If the SQLITE_JUMPIFNULL
+            ///* bit is clear then fall through if either operand is NULL.
+            ///*
+            ///* The SQLITE_AFF_MASK portion of P5 must be an affinity character -
+            ///* SQLITE_AFF_TEXT, SQLITE_AFF_INTEGER, and so forth. An attempt is made
+            ///* to coerce both inputs according to this affinity before the
+            ///* comparison is made. If the SQLITE_AFF_MASK is 0x00, then numeric
+            ///* affinity is used. Note that the affinity conversions are stored
+            ///* back into the input registers P1 and P3.  So this opcode can cause
+            ///* persistent changes to registers P1 and P3.
+            ///*
+            ///* Once any conversions have taken place, and neither value is NULL,
+            ///* the values are compared. If both values are blobs then memcmp() is
+            ///* used to determine the results of the comparison.  If both values
+            ///* are text, then the appropriate collating function specified in
+            ///* P4 is  used to do the comparison.  If P4 is not specified then
+            ///* memcmp() is used to compare text string.  If both values are
+            ///* numeric, then a numeric comparison is used. If the two values
+            ///* are of different types, then numbers are considered less than
+            ///* strings and strings are considered less than blobs.
+            ///*
+            ///* This opcode saves the result of comparison for use by the new
+            ///* OP_Jump opcode.
+            ////
+            ////* Opcode: Le P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]<=r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is less than or equal to the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            ////
+            ////* Opcode: Gt P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]>r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is greater than the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            ////
+            ////* Opcode: Ge P1 P2 P3 P4 P5
+            ///* Synopsis: IF r[P3]>=r[P1]
+            ///*
+            ///* This works just like the Lt opcode except that the jump is taken if
+            ///* the content of register P3 is greater than or equal to the content of
+            ///* register P1.  See the Lt opcode for additional information.
+            /// same as TK_EQ, jump, in1, in3
+            /// same as TK_NE, jump, in1, in3
+            /// same as TK_LT, jump, in1, in3
+            /// same as TK_LE, jump, in1, in3
+            /// same as TK_GT, jump, in1, in3
+            /// same as TK_GE, jump, in1, in3
+            /// Result of the comparison of pIn1 against pIn3
+            /// Affinity to use for comparison
+            /// Copy of initial value of pIn1->flags
+            /// Copy of initial value of pIn3->flags
+            /// Common case of comparison of two integers
+            /// One or both operands are NULL
+            /// If SQLITE_NULLEQ is set (which will only happen if the operator is
+            ///* OP_Eq or OP_Ne) then take the jump or not depending on whether
+            ///* or not both operands are null.
+            /// Operands are equal
+            /// Operands are not equal
+            /// SQLITE_NULLEQ is clear and at least one operand is NULL,
+            ///* then the result is always NULL.
+            ///* The jump is taken if the SQLITE_JUMPIFNULL bit is set.
+            /// Operands are not equal
+            /// Neither operand is NULL and we couldn't do the special high-speed
+            ///* integer comparison case.  So do a general-case comparison.
+            /// At this point, res is negative, zero, or positive if reg[P1] is
+            ///* less than, equal to, or greater than reg[P3], respectively.  Compute
+            ///* the answer to this operator in res2, depending on what the comparison
+            ///* operator actually is.  The next block of code depends on the fact
+            ///* that the 6 comparison operators are consecutive integers in this
+            ///* order:  NE, EQ, GT, LE, LT, GE
+            /// Undo any changes made by applyAffinity() to the input registers.
+            /// Opcode: ElseEq * P2 * * *
+            ///*
+            ///* This opcode must follow an OP_Lt or OP_Gt comparison operator.  There
+            ///* can be zero or more OP_ReleaseReg opcodes intervening, but no other
+            ///* opcodes are allowed to occur between this instruction and the previous
+            ///* OP_Lt or OP_Gt.
+            ///*
+            ///* If the result of an OP_Eq comparison on the same two operands as
+            ///* the prior OP_Lt or OP_Gt would have been true, then jump to P2.  If
+            ///* the result of an OP_Eq comparison on the two previous operands
+            ///* would have been false or NULL, then fall through.
+            /// same as TK_ESCAPE, jump
+            /// SQLITE_DEBUG
+            /// Opcode: Permutation * * * P4 *
+            ///*
+            ///* Set the permutation used by the OP_Compare operator in the next
+            ///* instruction.  The permutation is stored in the P4 operand.
+            ///*
+            ///* The permutation is only valid for the next opcode which must be
+            ///* an OP_Compare that has the OPFLAG_PERMUTE bit set in P5.
+            ///*
+            ///* The first integer in the P4 integer array is the length of the array
+            ///* and does not become part of the permutation.
+            /// Opcode: Compare P1 P2 P3 P4 P5
+            ///* Synopsis: r[P1@P3] <-> r[P2@P3]
+            ///*
+            ///* Compare two vectors of registers in reg(P1)..reg(P1+P3-1) (call this
+            ///* vector "A") and in reg(P2)..reg(P2+P3-1) ("B").  Save the result of
+            ///* the comparison for use by the next OP_Jump instruct.
+            ///*
+            ///* If P5 has the OPFLAG_PERMUTE bit set, then the order of comparison is
+            ///* determined by the most recent OP_Permutation operator.  If the
+            ///* OPFLAG_PERMUTE bit is clear, then register are compared in sequential
+            ///* order.
+            ///*
+            ///* P4 is a KeyInfo structure that defines collating sequences and sort
+            ///* orders for the comparison.  The permutation applies to registers
+            ///* only.  The KeyInfo elements are used sequentially.
+            ///*
+            ///* The comparison is a sort comparison, so NULLs compare equal,
+            ///* NULLs are less than numbers, numbers are less than strings,
+            ///* and strings are less than blobs.
+            ///*
+            ///* This opcode must be immediately followed by an OP_Jump opcode.
+            /// Collating sequence to use on this term
+            /// True for DESCENDING sort order
+            /// The permutation
+            /// SQLITE_DEBUG
+            /// Opcode: Jump P1 P2 P3 * *
+            ///*
+            ///* Jump to the instruction at address P1, P2, or P3 depending on whether
+            ///* in the most recent OP_Compare instruction the P1 vector was less than,
+            ///* equal to, or greater than the P2 vector, respectively.
+            ///*
+            ///* This opcode must immediately follow an OP_Compare opcode.
+            /// jump
+            /// Opcode: And P1 P2 P3 * *
+            ///* Synopsis: r[P3]=(r[P1] && r[P2])
+            ///*
+            ///* Take the logical AND of the values in registers P1 and P2 and
+            ///* write the result into register P3.
+            ///*
+            ///* If either P1 or P2 is 0 (false) then the result is 0 even if
+            ///* the other input is NULL.  A NULL and true or two NULLs give
+            ///* a NULL output.
+            ////
+            ////* Opcode: Or P1 P2 P3 * *
+            ///* Synopsis: r[P3]=(r[P1] || r[P2])
+            ///*
+            ///* Take the logical OR of the values in register P1 and P2 and
+            ///* store the answer in register P3.
+            ///*
+            ///* If either P1 or P2 is nonzero (true) then the result is 1 (true)
+            ///* even if the other input is NULL.  A NULL and false or two NULLs
+            ///* give a NULL output.
+            /// same as TK_AND, in1, in2, out3
+            /// same as TK_OR, in1, in2, out3
+            /// Left operand:  0==FALSE, 1==TRUE, 2==UNKNOWN or NULL
+            /// Right operand: 0==FALSE, 1==TRUE, 2==UNKNOWN or NULL
+            /// Opcode: IsTrue P1 P2 P3 P4 *
+            ///* Synopsis: r[P2] = coalesce(r[P1]==TRUE,P3) ^ P4
+            ///*
+            ///* This opcode implements the IS TRUE, IS FALSE, IS NOT TRUE, and
+            ///* IS NOT FALSE operators.
+            ///*
+            ///* Interpret the value in register P1 as a boolean value.  Store that
+            ///* boolean (a 0 or 1) in register P2.  Or if the value in register P1 is
+            ///* NULL, then the P3 is stored in register P2.  Invert the answer if P4
+            ///* is 1.
+            ///*
+            ///* The logic is summarized like this:
+            ///*
+            ///* <ul>
+            ///* <li> If P3==0 and P4==0  then  r[P2] := r[P1] IS TRUE
+            ///* <li> If P3==1 and P4==1  then  r[P2] := r[P1] IS FALSE
+            ///* <li> If P3==0 and P4==1  then  r[P2] := r[P1] IS NOT TRUE
+            ///* <li> If P3==1 and P4==0  then  r[P2] := r[P1] IS NOT FALSE
+            ///* </ul>
+            /// in1, out2
+            /// Opcode: Not P1 P2 * * *
+            ///* Synopsis: r[P2]= !r[P1]
+            ///*
+            ///* Interpret the value in register P1 as a boolean value.  Store the
+            ///* boolean complement in register P2.  If the value in register P1 is
+            ///* NULL, then a NULL is stored in P2.
+            /// same as TK_NOT, in1, out2
+            /// Opcode: BitNot P1 P2 * * *
+            ///* Synopsis: r[P2]= ~r[P1]
+            ///*
+            ///* Interpret the content of register P1 as an integer.  Store the
+            ///* ones-complement of the P1 value into register P2.  If P1 holds
+            ///* a NULL then store a NULL in P2.
+            /// same as TK_BITNOT, in1, out2
+            /// Opcode: Once P1 P2 P3 * *
+            ///*
+            ///* Fall through to the next instruction the first time this opcode is
+            ///* encountered on each invocation of the byte-code program.  Jump to P2
+            ///* on the second and all subsequent encounters during the same invocation.
+            ///*
+            ///* Top-level programs determine first invocation by comparing the P1
+            ///* operand against the P1 operand on the OP_Init opcode at the beginning
+            ///* of the program.  If the P1 values differ, then fall through and make
+            ///* the P1 of this opcode equal to the P1 of OP_Init.  If P1 values are
+            ///* the same then take the jump.
+            ///*
+            ///* For subprograms, there is a bitmask in the VdbeFrame that determines
+            ///* whether or not the jump should be taken.  The bitmask is necessary
+            ///* because the self-altering code trick does not work for recursive
+            ///* triggers.
+            ///*
+            ///* The P3 operand is not used directly by this opcode.  However P3 is
+            ///* used by the code generator as follows:  If this opcode is the start
+            ///* of a subroutine and that subroutine uses a Bloom filter, then P3 will
+            ///* be the register that holds that Bloom filter.  See tag-202407032019
+            ///* in the source code for implementation details.
+            /// jump
+            /// Address of this instruction
+            /// Opcode: If P1 P2 P3 * *
+            ///*
+            ///* Jump to P2 if the value in register P1 is true.  The value
+            ///* is considered true if it is numeric and non-zero.  If the value
+            ///* in P1 is NULL then take the jump if and only if P3 is non-zero.
+            /// jump, in1
+            /// Opcode: IfNot P1 P2 P3 * *
+            ///*
+            ///* Jump to P2 if the value in register P1 is False.  The value
+            ///* is considered false if it has a numeric value of zero.  If the value
+            ///* in P1 is NULL then take the jump if and only if P3 is non-zero.
+            /// jump, in1
+            /// Opcode: IsNull P1 P2 * * *
+            ///* Synopsis: if r[P1]==NULL goto P2
+            ///*
+            ///* Jump to P2 if the value in register P1 is NULL.
+            /// same as TK_ISNULL, jump, in1
+            /// Opcode: IsType P1 P2 P3 P4 P5
+            ///* Synopsis: if typeof(P1.P3) in P5 goto P2
+            ///*
+            ///* Jump to P2 if the type of a column in a btree is one of the types specified
+            ///* by the P5 bitmask.
+            ///*
+            ///* P1 is normally a cursor on a btree for which the row decode cache is
+            ///* valid through at least column P3.  In other words, there should have been
+            ///* a prior OP_Column for column P3 or greater.  If the cursor is not valid,
+            ///* then this opcode might give spurious results.
+            ///* The the btree row has fewer than P3 columns, then use P4 as the
+            ///* datatype.
+            ///*
+            ///* If P1 is -1, then P3 is a register number and the datatype is taken
+            ///* from the value in that register.
+            ///*
+            ///* P5 is a bitmask of data types.  SQLITE_INTEGER is the least significant
+            ///* (0x01) bit. SQLITE_FLOAT is the 0x02 bit. SQLITE_TEXT is 0x04.
+            ///* SQLITE_BLOB is 0x08.  SQLITE_NULL is 0x10.
+            ///*
+            ///* WARNING: This opcode does not reliably distinguish between NULL and REAL
+            ///* when P1>=0.  If the database contains a NaN value, this opcode will think
+            ///* that the datatype is REAL when it should be NULL.  When P1<0 and the value
+            ///* is already stored in register P3, then this opcode does reliably
+            ///* distinguish between NULL and REAL.  The problem only arises then P1>=0.
+            ///*
+            ///* Take the jump to address P2 if and only if the datatype of the
+            ///* value determined by P1 and P3 corresponds to one of the bits in the
+            ///* P5 bitmask.
+            ///*
+            /// jump
+            /// SQLITE_TEXT
+            /// SQLITE_BLOB
+            /// Opcode: ZeroOrNull P1 P2 P3 * *
+            ///* Synopsis: r[P2] = 0 OR NULL
+            ///*
+            ///* If both registers P1 and P3 are NOT NULL, then store a zero in
+            ///* register P2.  If either registers P1 or P3 are NULL then put
+            ///* a NULL in register P2.
+            /// in1, in2, out2, in3
+            /// Opcode: NotNull P1 P2 * * *
+            ///* Synopsis: if r[P1]!=NULL goto P2
+            ///*
+            ///* Jump to P2 if the value in register P1 is not NULL.
+            /// same as TK_NOTNULL, jump, in1
+            /// Opcode: IfNullRow P1 P2 P3 * *
+            ///* Synopsis: if P1.nullRow then r[P3]=NULL, goto P2
+            ///*
+            ///* Check the cursor P1 to see if it is currently pointing at a NULL row.
+            ///* If it is, then set register P3 to NULL and jump immediately to P2.
+            ///* If P1 is not on a NULL row, then fall through without making any
+            ///* changes.
+            ///*
+            ///* If P1 is not an open cursor, then this opcode is a no-op.
+            /// jump
+            /// SQLITE_ENABLE_OFFSET_SQL_FUNC
+            /// Opcode: Column P1 P2 P3 P4 P5
+            ///* Synopsis: r[P3]=PX cursor P1 column P2
+            ///*
+            ///* Interpret the data that cursor P1 points to as a structure built using
+            ///* the MakeRecord instruction.  (See the MakeRecord opcode for additional
+            ///* information about the format of the data.)  Extract the P2-th column
+            ///* from this record.  If there are less than (P2+1)
+            ///* values in the record, extract a NULL.
+            ///*
+            ///* The value extracted is stored in register P3.
+            ///*
+            ///* If the record contains fewer than P2 fields, then extract a NULL.  Or,
+            ///* if the P4 argument is a P4_MEM use the value of the P4 argument as
+            ///* the result.
+            ///*
+            ///* If the OPFLAG_LENGTHARG bit is set in P5 then the result is guaranteed
+            ///* to only be used by the length() function or the equivalent.  The content
+            ///* of large blobs is not loaded, thus saving CPU cycles.  If the
+            ///* OPFLAG_TYPEOFARG bit is set then the result will only be used by the
+            ///* typeof() function or the IS NULL or IS NOT NULL operators or the
+            ///* equivalent.  In this case, all content loading can be omitted.
+            /// ncycle
+            /// column number to retrieve
+            /// The VDBE cursor
+            /// The B-Tree cursor corresponding to pC
+            /// aOffset[i] is offset to start of data for i-th column
+            /// The length of the serialized data for the column
+            /// Loop counter
+            /// Where to write the extracted value
+            /// For storing the record being decoded
+            /// Part of the record being decoded
+            /// Next unparsed byte of the header
+            /// Pointer to first byte after the header
+            /// 64-bit offset
+            /// A type code from the record header
+            /// PseudoTable input register
+            ///OPTIMIZATION-IF-FALSE
+            /// For the special case of as pseudo-cursor, the seekResult field
+            ///* identifies the register that holds the record
+            /// Maximum page size is 64KiB
+            ///OPTIMIZATION-IF-FALSE*/
+            ///      /* pC->aRow does not have to hold the entire row, but it does at least
+            ///* need to cover the header of the record.  If pC->aRow does not contain
+            ///* the complete header, then set it to zero, forcing the header to be
+            ///* dynamically allocated.
+            /// Make sure a corrupt database has not given us an oversize header.
+            ///* Do this now to avoid an oversize memory allocation.
+            ///*
+            ///* Type entries can be between 1 and 5 bytes each.  But 4 and 5 byte
+            ///* types use so much data space that there can only be 4096 and 32 of
+            ///* them, respectively.  So the maximum header length results from a
+            ///* 3-byte type for each of the maximum of 32768 columns plus three
+            ///* extra bytes for the header length itself.  32768*3 + 3 = 98307.
+            /// This is an optimization.  By skipping over the first few tests
+            ///* (ex: pC->nHdrParsed<=p2) in the next section, we achieve a
+            ///* measurable performance gain.
+            ///*
+            ///* This branch is taken even if aOffset[0]==0.  Such a record is never
+            ///* generated by SQLite, and could be considered corruption, but we
+            ///* accept it for historical reasons.  When aOffset[0]==0, the code this
+            ///* branch jumps to reads past the end of the record, but never more
+            ///* than a few bytes.  Even if the record occurs at the end of the page
+            ///* content area, the "page header" comes after the page content and so
+            ///* this overread is harmless.  Similar overreads can occur for a corrupt
+            ///* database file.
+            /// Conditional skipped
+            /// Make sure at least the first p2+1 entries of the header have been
+            ///* parsed and valid information is in aOffset[] and pC->aType[].
+            /// If there is more header available for parsing in the record, try
+            ///* to extract additional fields up through the p2+1-th field
+            /// Make sure zData points to enough of the record to cover the header.
+            /// Fill in pC->aType[i] and aOffset[i] values through the p2-th field.
+            /// The record is corrupt if any of the following are true:
+            ///* (1) the bytes of the header extend past the declared header size
+            ///* (2) the entire header was used but not all data was used
+            ///* (3) the end of the data extends beyond the end of the record.
+            /// If after trying to extract new entries from the header, nHdrParsed is
+            ///* still not up to p2, that means that the record has fewer than p2
+            ///* columns.  So the result will be either the default value or a NULL.
+            /// Extract the content for the p2+1-th column.  Control can only
+            ///* reach this point if aOffset[p2], aOffset[p2+1], and pC->aType[p2] are
+            ///* all valid.
+            /// This is the common case where the desired content fits on the original
+            ///* page - where the content is not on an overflow page
+            /// If the column value is a string, we need a persistent value, not
+            ///* a MEM_Ephem value.  This branch is a fast short-cut that is equivalent
+            ///* to calling sqlite3VdbeSerialGet() and sqlite3VdbeDeephemeralize().
+            /// This branch happens only when content is on overflow pages
+            /// Content is irrelevant for
+            ///*    1. the typeof() function,
+            ///*    2. the length(X) function if X is a blob, and
+            ///*    3. if the content length is zero.
+            ///* So we might as well use bogus content rather than reading
+            ///* content from disk.
+            ///*
+            ///* Although sqlite3VdbeSerialGet() may read at most 8 bytes from the
+            ///* buffer passed to it, debugging function VdbeMemPrettyPrint() may
+            ///* read more.  Use the global constant sqlite3CtypeMap[] as the array,
+            ///* as that array is 256 bytes long (plenty for VdbeMemPrettyPrint())
+            ///* and it begins with a bunch of zeros.
+            /// Opcode: TypeCheck P1 P2 P3 P4 *
+            ///* Synopsis: typecheck(r[P1@P2])
+            ///*
+            ///* Apply affinities to the range of P2 registers beginning with P1.
+            ///* Take the affinities from the Table object in P4.  If any value
+            ///* cannot be coerced into the correct type, then raise an error.
+            ///*
+            ///* If P3==0, then omit checking of VIRTUAL columns.
+            ///*
+            ///* If P3==1, then omit checking of all generated column, both VIRTUAL
+            ///* and STORED.
+            ///*
+            ///* If P3>=2, then only check column number P3-2 in the table (which will
+            ///* be a VIRTUAL column) against the value in reg[P1].  In this case,
+            ///* P2 will be 1.
+            ///*
+            ///* This opcode is similar to OP_Affinity except that this opcode
+            ///* forces the register type to the Table column type.  This is used
+            ///* to implement "strict affinity".
+            ///*
+            ///* GENERATED ALWAYS AS ... STATIC columns are only checked if P3
+            ///* is zero.  When P3 is non-zero, no type checking occurs for
+            ///* static generated columns.  Virtual columns are computed at query time
+            ///* and so they are never checked.
+            ///*
+            ///* Preconditions:
+            ///*
+            ///* <ul>
+            ///* <li> P2 should be the number of non-virtual columns in the
+            ///*      table of P4 unless P3>1, in which case P2 will be 1.
+            ///* <li> Table P4 is a STRICT table.
+            ///* </ul>
+            ///*
+            ///* If any precondition is false, an assertion fault occurs.
+            /// When applying REAL affinity, if the result is still an MEM_Int
+            ///* that will fit in 6 bytes, then change the type to MEM_IntReal
+            ///* so that we keep the high-resolution integer value but know that
+            ///* the type really wants to be REAL.
+            /// COLTYPE_ANY.  Accept anything.
+            /// Opcode: Affinity P1 P2 * P4 *
+            ///* Synopsis: affinity(r[P1@P2])
+            ///*
+            ///* Apply affinities to a range of P2 registers starting with P1.
+            ///*
+            ///* P4 is a string that is P2 characters long. The N-th character of the
+            ///* string indicates the column affinity that should be used for the N-th
+            ///* memory cell in the range.
+            /// The affinity to be applied
+            ///exit-by-break
+            /// When applying REAL affinity, if the result is still an MEM_Int
+            ///* that will fit in 6 bytes, then change the type to MEM_IntReal
+            ///* so that we keep the high-resolution integer value but know that
+            ///* the type really wants to be REAL.
+            /// Opcode: MakeRecord P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=mkrec(r[P1@P2])
+            ///*
+            ///* Convert P2 registers beginning with P1 into the [record format]
+            ///* use as a data record in a database table or as a key
+            ///* in an index.  The OP_Column opcode can decode the record later.
+            ///*
+            ///* P4 may be a string that is P2 characters long.  The N-th character of the
+            ///* string indicates the column affinity that should be used for the N-th
+            ///* field of the index key.
+            ///*
+            ///* The mapping from character to affinity is given by the SQLITE_AFF_
+            ///* macros defined in sqliteInt.h.
+            ///*
+            ///* If P4 is NULL then all index fields have the affinity BLOB.
+            ///*
+            ///* The meaning of P5 depends on whether or not the SQLITE_ENABLE_NULL_TRIM
+            ///* compile-time option is enabled:
+            ///*
+            ///*   * If SQLITE_ENABLE_NULL_TRIM is enabled, then the P5 is the index
+            ///*     of the right-most table that can be null-trimmed.
+            ///*
+            ///*   * If SQLITE_ENABLE_NULL_TRIM is omitted, then P5 has the value
+            ///*     OPFLAG_NOCHNG_MAGIC if the OP_MakeRecord opcode is allowed to
+            ///*     accept no-change records with serial_type 10.  This value is
+            ///*     only used inside an assert() and does not affect the end result.
+            /// The new record
+            /// Number of bytes of data space
+            /// Number of bytes of header space
+            /// Data space required for this record
+            /// Number of zero bytes at the end of the record
+            /// Number of bytes in a varint
+            /// Type field
+            /// First field to be combined into the record
+            /// Last field of the record
+            /// Number of fields in the record
+            /// The affinity string for the record
+            /// Length of a field
+            /// Where to write next byte of the header
+            /// Where to write next byte of the payload
+            /// Assuming the record contains N fields, the record format looks
+            ///* like this:
+            ///*
+            ///* ------------------------------------------------------------------------
+            ///* | hdr-size | type 0 | type 1 | ... | type N-1 | data0 | ... | data N-1 |
+            ///* ------------------------------------------------------------------------
+            ///*
+            ///* Data(0) is taken from register P1.  Data(1) comes from register P1+1
+            ///* and so forth.
+            ///*
+            ///* Each type field is a varint representing the serial type of the
+            ///* corresponding data element (see sqlite3VdbeSerialType()). The
+            ///* hdr-size field is also a varint which is the offset from the beginning
+            ///* of the record to data0.
+            /// Number of bytes of data space
+            /// Number of bytes of header space
+            /// Number of zero bytes at the end of the record
+            /// Identify the output register
+            /// Apply the requested affinity to all inputs
+            /// Loop through the elements that will make up the record to figure
+            ///* out how much space is required for the new record.  After this loop,
+            ///* the Mem.uTemp field of each term should hold the serial-type that will
+            ///* be used for that term in the generated record:
+            ///*
+            ///*   Mem.uTemp value    type
+            ///*   ---------------    ---------------
+            ///*      0               NULL
+            ///*      1               1-byte signed integer
+            ///*      2               2-byte signed integer
+            ///*      3               3-byte signed integer
+            ///*      4               4-byte signed integer
+            ///*      5               6-byte signed integer
+            ///*      6               8-byte signed integer
+            ///*      7               IEEE float
+            ///*      8               Integer constant 0
+            ///*      9               Integer constant 1
+            ///*     10,11            reserved for expansion
+            ///*    N>=12 and even    BLOB
+            ///*    N>=13 and odd     text
+            ///*
+            ///* The following additional values are computed:
+            ///*     nHdr        Number of bytes needed for the record header
+            ///*     nData       Number of bytes of data space needed for the record
+            ///*     nZero       Zero bytes at the end of the record
+            /// Values with MEM_Null and MEM_Zero are created by xColumn virtual
+            ///* table methods that never invoke sqlite3_result_xxxxx() while
+            ///* computing an unchanging column value in an UPDATE statement.
+            ///* Give such values a special internal-use-only serial-type of 10
+            ///* so that they can be passed through to xUpdate and have
+            ///* a true sqlite3_value_nochange().
+            /// Figure out whether to use 1, 2, 4, 6 or 8 bytes.
+            /// If the value is IntReal and is going to take up 8 bytes to store
+            ///* as an integer, then we might as well make it an 8-byte floating
+            ///* point value
+            /// EVIDENCE-OF: R-22564-11647 The header begins with a single varint
+            ///* which determines the total number of bytes in the header. The varint
+            ///* value is the size of the header in bytes including the size varint
+            ///* itself.
+            /// The common case
+            /// Rare case of a really large header
+            /// Make sure the output register has a buffer large enough to store
+            ///* the new record. The output register (pOp->p3) is not allowed to
+            ///* be one of the input registers (because the following call to
+            ///* sqlite3VdbeMemClearAndResize() could clobber the value before it is used).
+            /// The output register is already large enough to hold the record.
+            ///* No error checks or buffer enlargement is required
+            /// Need to make sure that the output is not too big and then enlarge
+            ///* the output register to hold the full result
+            /// Write the record
+            ///exit-by-break
+            /// EVIDENCE-OF: R-06529-47362 Following the size varint are one or more
+            ///* additional varints, one per column.
+            ///* EVIDENCE-OF: R-64536-51728 The values for each column in the record
+            ///* immediately follow the header.
+            /// NULL value.  No change in zPayload
+            /// no break
+            /// no break
+            /// no break
+            /// no break
+            /// no break
+            /// Opcode: Count P1 P2 P3 * *
+            ///* Synopsis: r[P2]=count()
+            ///*
+            ///* Store the number of entries (an integer value) in the table or index
+            ///* opened by cursor P1 in register P2.
+            ///*
+            ///* If P3==0, then an exact count is obtained, which involves visiting
+            ///* every btree page of the table.  But if P3 is non-zero, an estimate
+            ///* is returned based on the current cursor position.
+            /// out2
+            /// Not needed.  Only used to silence a warning.
+            /// Opcode: Savepoint P1 * * P4 *
+            ///*
+            ///* Open, release or rollback the savepoint named by parameter P4, depending
+            ///* on the value of P1. To open a new savepoint set P1==0 (SAVEPOINT_BEGIN).
+            ///* To release (commit) an existing savepoint set P1==1 (SAVEPOINT_RELEASE).
+            ///* To rollback an existing savepoint set P1==2 (SAVEPOINT_ROLLBACK).
+            /// Value of P1 operand
+            /// Name of savepoint
+            /// Assert that the p1 parameter is valid. Also that if there is no open
+            ///* transaction, then there cannot be any savepoints.
+            /// A new savepoint cannot be created if there are active write
+            ///* statements (i.e. open read/write incremental blob handles).
+            /// This call is Ok even if this savepoint is actually a transaction
+            ///* savepoint (and therefore should not prompt xSavepoint()) callbacks.
+            ///* If this is a transaction savepoint being opened, it is guaranteed
+            ///* that the db->aVTrans[] array is empty.
+            /// Create a new savepoint structure.
+            /// If there is no open transaction, then mark this as a special
+            ///* "transaction savepoint".
+            /// Link the new savepoint into the database handle's list.
+            /// Find the named savepoint. If there is no such savepoint, then an
+            ///* an error is returned to the user.
+            /// It is not possible to release (commit) a savepoint if there are
+            ///* active write statements.
+            /// Determine whether or not this is a transaction savepoint. If so,
+            ///* and this is a RELEASE command, then the current transaction
+            ///* is committed.
+            /// Regardless of whether this is a RELEASE or ROLLBACK, destroy all
+            ///* savepoints nested inside of the savepoint being operated on.
+            /// If it is a RELEASE, then destroy the savepoint being operated on
+            ///* too. If it is a ROLLBACK TO, then set the number of deferred
+            ///* constraint violations present in the database to the value stored
+            ///* when the savepoint was created.
+            /// Opcode: AutoCommit P1 P2 * * *
+            ///*
+            ///* Set the database auto-commit flag to P1 (1 or 0). If P2 is true, roll
+            ///* back any currently active btree transactions. If there are any active
+            ///* VMs (apart from this one), then a ROLLBACK fails.  A COMMIT fails if
+            ///* there are active writing VMs or active VMs that use shared cache.
+            ///*
+            ///* This instruction causes the VM to halt.
+            /// At least this one VM is active
+            /// If this instruction implements a COMMIT and other VMs are writing
+            ///* return an error indicating that the other VMs must complete first.
+            ///NOTREACHED
+            /// Opcode: Transaction P1 P2 P3 P4 P5
+            ///*
+            ///* Begin a transaction on database P1 if a transaction is not already
+            ///* active.
+            ///* If P2 is non-zero, then a write-transaction is started, or if a
+            ///* read-transaction is already active, it is upgraded to a write-transaction.
+            ///* If P2 is zero, then a read-transaction is started.  If P2 is 2 or more
+            ///* then an exclusive transaction is started.
+            ///*
+            ///* P1 is the index of the database file on which the transaction is
+            ///* started.  Index 0 is the main database file and index 1 is the
+            ///* file used for temporary tables.  Indices of 2 or more are used for
+            ///* attached databases.
+            ///*
+            ///* If a write-transaction is started and the Vdbe.usesStmtJournal flag is
+            ///* true (this flag is set if the Vdbe may modify more than one row and may
+            ///* throw an ABORT exception), a statement transaction may also be opened.
+            ///* More specifically, a statement transaction is opened iff the database
+            ///* connection is currently not in autocommit mode, or if there are other
+            ///* active statements. A statement transaction allows the changes made by this
+            ///* VDBE to be rolled back after an error without having to roll back the
+            ///* entire transaction. If no error is encountered, the statement transaction
+            ///* will automatically commit when the VDBE halts.
+            ///*
+            ///* If P5!=0 then this opcode also checks the schema cookie against P3
+            ///* and the schema generation counter against P4.
+            ///* The cookie changes its value whenever the database schema changes.
+            ///* This operation is used to detect when that the cookie has changed
+            ///* and that the current process needs to reread the schema.  If the schema
+            ///* cookie in P3 differs from the schema cookie in the database header or
+            ///* if the schema generation counter in P4 differs from the current
+            ///* generation counter, then an SQLITE_SCHEMA error is raised and execution
+            ///* halts.  The sqlite3_step() wrapper function might then reprepare the
+            ///* statement and rerun it from the beginning.
+            /// Writes prohibited by the "PRAGMA query_only=TRUE" statement
+            /// Writes prohibited due to a prior SQLITE_CORRUPT in the current
+            ///* transaction
+            /// Store the current value of the database handles deferred constraint
+            ///* counter. If the statement transaction needs to be rolled back,
+            ///* the value of this counter needs to be restored too.
+            ///* IMPLEMENTATION-OF: R-03189-51135 As each SQL statement runs, the schema
+            ///* version is checked to ensure that the schema has not changed since the
+            ///* SQL statement was prepared.
+            /// If the schema-cookie from the database file matches the cookie
+            ///* stored with the in-memory representation of the schema, do
+            ///* not reload the schema from the database file.
+            ///*
+            ///* If virtual-tables are in use, this is not just an optimization.
+            ///* Often, v-tables store their data in other SQLite tables, which
+            ///* are queried from within xNext() and other v-table methods using
+            ///* prepared queries. If such a query is out-of-date, we do not want to
+            ///* discard the database schema, as the user code implementing the
+            ///* v-table would have to be ready for the sqlite3_vtab structure itself
+            ///* to be invalidated whenever sqlite3_step() is called from within
+            ///* a v-table method.
+            /// Set changeCntOn to 0 to prevent the value returned by sqlite3_changes()
+            ///* from being modified in sqlite3VdbeHalt(). If this statement is
+            ///* reprepared, changeCntOn will be set again.
+            /// Opcode: ReadCookie P1 P2 P3 * *
+            ///*
+            ///* Read cookie number P3 from database P1 and write it into register P2.
+            ///* P3==1 is the schema version.  P3==2 is the database format.
+            ///* P3==3 is the recommended pager cache size, and so forth.  P1==0 is
+            ///* the main database file and P1==1 is the database file used to store
+            ///* temporary tables.
+            ///*
+            ///* There must be a read-lock on the database (either a transaction
+            ///* must be started or there must be an open cursor) before
+            ///* executing this instruction.
+            /// out2
+            /// Opcode: SetCookie P1 P2 P3 * P5
+            ///*
+            ///* Write the integer value P3 into cookie number P2 of database P1.
+            ///* P2==1 is the schema version.  P2==2 is the database format.
+            ///* P2==3 is the recommended pager cache
+            ///* size, and so forth.  P1==0 is the main database file and P1==1 is the
+            ///* database file used to store temporary tables.
+            ///*
+            ///* A transaction must be started before executing this opcode.
+            ///*
+            ///* If P2 is the SCHEMA_VERSION cookie (cookie number 1) then the internal
+            ///* schema version is set to P3-P5.  The "PRAGMA schema_version=N" statement
+            ///* has P5 set to 1, so that the internal schema version will be different
+            ///* from the database schema version, resulting in a schema reset.
+            /// See note about index shifting on OP_ReadCookie
+            /// When the schema cookie changes, record the new cookie internally
+            /// Record changes in the file format
+            /// Invalidate all prepared statements whenever the TEMP database
+            ///* schema is changed.  Ticket #1644
+            /// Opcode: OpenRead P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* Open a read-only cursor for the database table whose root page is
+            ///* P2 in a database file.  The database file is determined by P3.
+            ///* P3==0 means the main database, P3==1 means the database used for
+            ///* temporary tables, and P3>1 means used the corresponding attached
+            ///* database.  Give the new cursor an identifier of P1.  The P1
+            ///* values need not be contiguous but all P1 values should be small integers.
+            ///* It is an error for P1 to be negative.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* </ul>
+            ///*
+            ///* The P4 value may be either an integer (P4_INT32) or a pointer to
+            ///* a KeyInfo structure (P4_KEYINFO). If it is a pointer to a KeyInfo
+            ///* object, then table being opened must be an [index b-tree] where the
+            ///* KeyInfo object defines the content and collating
+            ///* sequence of that index b-tree. Otherwise, if P4 is an integer
+            ///* value, then the table being opened must be a [table b-tree] with a
+            ///* number of columns no less than the value of P4.
+            ///*
+            ///* See also: OpenWrite, ReopenIdx
+            ////
+            ////* Opcode: ReopenIdx P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* The ReopenIdx opcode works like OP_OpenRead except that it first
+            ///* checks to see if the cursor on P1 is already open on the same
+            ///* b-tree and if it is this opcode becomes a no-op.  In other words,
+            ///* if the cursor is already open, do not reopen it.
+            ///*
+            ///* The ReopenIdx opcode may only be used with P5==0 or P5==OPFLAG_SEEKEQ
+            ///* and with P4 being a P4_KEYINFO object.  Furthermore, the P3 value must
+            ///* be the same as every other ReopenIdx or OpenRead for the same cursor
+            ///* number.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* </ul>
+            ///*
+            ///* See also: OP_OpenRead, OP_OpenWrite
+            ////
+            ////* Opcode: OpenWrite P1 P2 P3 P4 P5
+            ///* Synopsis: root=P2 iDb=P3
+            ///*
+            ///* Open a read/write cursor named P1 on the table or index whose root
+            ///* page is P2 (or whose root page is held in register P2 if the
+            ///* OPFLAG_P2ISREG bit is set in P5 - see below).
+            ///*
+            ///* The P4 value may be either an integer (P4_INT32) or a pointer to
+            ///* a KeyInfo structure (P4_KEYINFO). If it is a pointer to a KeyInfo
+            ///* object, then table being opened must be an [index b-tree] where the
+            ///* KeyInfo object defines the content and collating
+            ///* sequence of that index b-tree. Otherwise, if P4 is an integer
+            ///* value, then the table being opened must be a [table b-tree] with a
+            ///* number of columns no less than the value of P4.
+            ///*
+            ///* Allowed P5 bits:
+            ///* <ul>
+            ///* <li>  <b>0x02 OPFLAG_SEEKEQ</b>: This cursor will only be used for
+            ///*       equality lookups (implemented as a pair of opcodes OP_SeekGE/OP_IdxGT
+            ///*       of OP_SeekLE/OP_IdxLT)
+            ///* <li>  <b>0x08 OPFLAG_FORDELETE</b>: This cursor is used only to seek
+            ///*       and subsequently delete entries in an index btree.  This is a
+            ///*       hint to the storage engine that the storage engine is allowed to
+            ///*       ignore.  The hint is not used by the official SQLite b*tree storage
+            ///*       engine, but is used by COMDB2.
+            ///* <li>  <b>0x10 OPFLAG_P2ISREG</b>: Use the content of register P2
+            ///*       as the root page, not the value of P2 itself.
+            ///* </ul>
+            ///*
+            ///* This instruction works like OpenRead except that it opens the cursor
+            ///* in read/write mode.
+            ///*
+            ///* See also: OP_OpenRead, OP_ReopenIdx
+            /// ncycle
+            /// Guaranteed by the code generator
+            /// If the cursor is not currently open or is open on a different
+            ///* index, then fall through into OP_OpenRead to force a reopen
+            /// ncycle
+            /// The p2 value always comes from a prior OP_CreateBtree opcode and
+            ///* that opcode will always set the p2 value to 2 or more or else fail.
+            ///* If there were a failure, the prepared statement would have halted
+            ///* before reaching this instruction.
+            /// Table with INTEGER PRIMARY KEY and nothing else
+            /// Set the VdbeCursor.isTable variable. Previous versions of
+            ///* SQLite used to check if the root-page flags were sane at this point
+            ///* and report database corruption if they were not, but this check has
+            ///* since moved into the btree layer.
+            /// Opcode: OpenDup P1 P2 * * *
+            ///*
+            ///* Open a new cursor P1 that points to the same ephemeral table as
+            ///* cursor P2.  The P2 cursor must have been opened by a prior OP_OpenEphemeral
+            ///* opcode.  Only ephemeral cursors may be duplicated.
+            ///*
+            ///* Duplicate ephemeral cursors are used for self-joins of materialized views.
+            /// ncycle
+            /// The original cursor to be duplicated
+            /// The new cursor
+            /// Only ephemeral cursors can be duplicated
+            /// The sqlite3BtreeCursor() routine can only fail for the first cursor
+            ///* opened for a database.  Since there is already an open cursor when this
+            ///* opcode is run, the sqlite3BtreeCursor() cannot fail
+            /// Opcode: OpenEphemeral P1 P2 P3 P4 P5
+            ///* Synopsis: nColumn=P2
+            ///*
+            ///* Open a new cursor P1 to a transient table.
+            ///* The cursor is always opened read/write even if
+            ///* the main database is read-only.  The ephemeral
+            ///* table is deleted automatically when the cursor is closed.
+            ///*
+            ///* If the cursor P1 is already opened on an ephemeral table, the table
+            ///* is cleared (all content is erased).
+            ///*
+            ///* P2 is the number of columns in the ephemeral table.
+            ///* The cursor points to a BTree table if P4==0 and to a BTree index
+            ///* if P4 is not 0.  If P4 is not NULL, it points to a KeyInfo structure
+            ///* that defines the format of keys in the index.
+            ///*
+            ///* The P5 parameter can be a mask of the BTREE_* flags defined
+            ///* in btree.h.  These flags control aspects of the operation of
+            ///* the btree.  The BTREE_OMIT_JOURNAL and BTREE_SINGLE flags are
+            ///* added automatically.
+            ///*
+            ///* If P3 is positive, then reg[P3] is modified slightly so that it
+            ///* can be used as zero-length data for OP_Insert.  This is an optimization
+            ///* that avoids an extra OP_Blob opcode to initialize that register.
+            ////
+            ////* Opcode: OpenAutoindex P1 P2 * P4 *
+            ///* Synopsis: nColumn=P2
+            ///*
+            ///* This opcode works the same as OP_OpenEphemeral.  It has a
+            ///* different name to distinguish its use.  Tables created using
+            ///* by this opcode will be used for automatically created transient
+            ///* indices in joins.
+            /// ncycle
+            /// ncycle
+            /// Make register reg[P3] into a value that can be used as the data
+            ///* form sqlite3BtreeInsert() where the length of the data is zero.
+            /// Only used when number of columns is zero
+            /// If the ephemeral table is already open and has no duplicates from
+            ///* OP_OpenDup, then erase all existing content so that the table is
+            ///* empty again, rather than creating a new table.
+            /// If a transient index is required, create it by calling
+            ///* sqlite3BtreeCreateTable() with the BTREE_BLOBKEY flag before
+            ///* opening it. If a transient table is required, just use the
+            ///* automatically created table with root-page 1 (an BLOB_INTKEY table).
+            /// Not required; helps with static analysis
+            /// Opcode: SorterOpen P1 P2 P3 P4 *
+            ///*
+            ///* This opcode works like OP_OpenEphemeral except that it opens
+            ///* a transient index that is specifically designed to sort large
+            ///* tables using an external merge-sort algorithm.
+            ///*
+            ///* If argument P3 is non-zero, then it indicates that the sorter may
+            ///* assume that a stable sort considering the first P3 fields of each
+            ///* key is sufficient to produce the required results.
+            /// Opcode: SequenceTest P1 P2 * * *
+            ///* Synopsis: if( cursor[P1].ctr++ ) pc = P2
+            ///*
+            ///* P1 is a sorter cursor. If the sequence counter is currently zero, jump
+            ///* to P2. Regardless of whether or not the jump is taken, increment the
+            ///* the sequence value.
+            /// Opcode: OpenPseudo P1 P2 P3 * *
+            ///* Synopsis: P3 columns in r[P2]
+            ///*
+            ///* Open a new cursor that points to a fake table that contains a single
+            ///* row of data.  The content of that one row is the content of memory
+            ///* register P2.  In other words, cursor P1 becomes an alias for the
+            ///* MEM_Blob content contained in register P2.
+            ///*
+            ///* A pseudo-table created by this opcode is used to hold a single
+            ///* row output from the sorter so that the row can be decomposed into
+            ///* individual columns using the OP_Column opcode.  The OP_Column opcode
+            ///* is the only cursor opcode that works with a pseudo-table.
+            ///*
+            ///* P3 is the number of fields in the records that will be stored by
+            ///* the pseudo-table.  If P2 is 0 or negative then the pseudo-cursor
+            ///* will return NULL for every column.
+            /// Give this pseudo-cursor a fake BtCursor pointer so that pCx
+            ///* can be safely passed to sqlite3VdbeCursorMoveto().  This avoids a test
+            ///* for pCx->eCurType==CURTYPE_BTREE inside of sqlite3VdbeCursorMoveto()
+            ///* which is a performance optimization
+            /// Opcode: Close P1 * * * *
+            ///*
+            ///* Close a cursor previously opened as P1.  If P1 is not
+            ///* currently open, this instruction is a no-op.
+            /// ncycle
+            /// Opcode: SeekGE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as the key.  If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that  it points to the smallest entry that
+            ///* is greater than or equal to the key value. If there are no records
+            ///* greater than or equal to the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* If the cursor P1 was opened using the OPFLAG_SEEKEQ flag, then this
+            ///* opcode will either land on a record that exactly matches the key, or
+            ///* else it will cause a jump to P2.  When the cursor is OPFLAG_SEEKEQ,
+            ///* this opcode must be followed by an IdxLE opcode with the same arguments.
+            ///* The IdxGT opcode will be skipped if this opcode succeeds, but the
+            ///* IdxGT opcode will be used on subsequent loop iterations.  The
+            ///* OPFLAG_SEEKEQ flags is a hint to the btree layer to say that this
+            ///* is an equality search.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            ///*
+            ///* See also: Found, NotFound, SeekLt, SeekGt, SeekLe
+            ////
+            ////* Opcode: SeekGT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that it points to the smallest entry that
+            ///* is greater than the key value. If there are no records greater than
+            ///* the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            ///*
+            ///* See also: Found, NotFound, SeekLt, SeekGe, SeekLe
+            ////
+            ////* Opcode: SeekLT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that  it points to the largest entry that
+            ///* is less than the key value. If there are no records less than
+            ///* the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            ///*
+            ///* See also: Found, NotFound, SeekGt, SeekGe, SeekLe
+            ////
+            ////* Opcode: SeekLE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If cursor P1 refers to an SQL table (B-Tree that uses integer keys),
+            ///* use the value in register P3 as a key. If cursor P1 refers
+            ///* to an SQL index, then P3 is the first in an array of P4 registers
+            ///* that are used as an unpacked index key.
+            ///*
+            ///* Reposition cursor P1 so that it points to the largest entry that
+            ///* is less than or equal to the key value. If there are no records
+            ///* less than or equal to the key and P2 is not zero, then jump to P2.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            ///*
+            ///* If the cursor P1 was opened using the OPFLAG_SEEKEQ flag, then this
+            ///* opcode will either land on a record that exactly matches the key, or
+            ///* else it will cause a jump to P2.  When the cursor is OPFLAG_SEEKEQ,
+            ///* this opcode must be followed by an IdxLE opcode with the same arguments.
+            ///* The IdxGE opcode will be skipped if this opcode succeeds, but the
+            ///* IdxGE opcode will be used on subsequent loop iterations.  The
+            ///* OPFLAG_SEEKEQ flags is a hint to the btree layer to say that this
+            ///* is an equality search.
+            ///*
+            ///* See also: Found, NotFound, SeekGt, SeekGe, SeekLt
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
+            /// jump0, in3, group, ncycle
+            /// Comparison result
+            /// Opcode
+            /// The cursor to seek
+            /// The key to seek for
+            /// Number of columns or fields in the key
+            /// The rowid we are to seek to
+            /// Only interested in == results
+            /// The OPFLAG_SEEKEQ/BTREE_SEEK_EQ flag is only set on index cursors
+            /// The input value in P3 might be of any type: integer, real, string,
+            ///* blob, or NULL.  But it needs to be an integer before we can do
+            ///* the seek, so convert it.
+            /// Get the integer key value
+            /// Record the type after applying numeric affinity
+            /// But convert the type back to its original
+            /// If the P3 value could not be converted into an integer without
+            ///* loss of information, then special processing is required...
+            /// If the approximation iKey is larger than the actual real search
+            ///* term, substitute >= for > and < for <=. e.g. if the search term
+            ///* is 4.9 and the integer approximation 5:
+            ///*
+            ///*        (x >  4.9)    ->     (x >= 5)
+            ///*        (x <= 4.9)    ->     (x <  5)
+            /// If the approximation iKey is smaller than the actual real search
+            ///* term, substitute <= for < and > for >=.
+            /// Used by OP_Delete
+            /// For a cursor with the OPFLAG_SEEKEQ/BTREE_SEEK_EQ hint, only the
+            ///* OP_SeekGE and OP_SeekLE opcodes are allowed, and these must be
+            ///* immediately followed by an OP_IdxGT or OP_IdxLT opcode, respectively,
+            ///* with the same key.
+            /// The next line of code computes as follows, only faster:
+            ///*   if( oc==OP_SeekGT || oc==OP_SeekLE ){
+            ///*     r.default_rc = -1;
+            ///*   }else{
+            ///*     r.default_rc = +1;
+            ///*   }
+            /// res might be negative because the table is empty.  Check to
+            ///* see if this is the case.
+            /// Skip the OP_IdxLt or OP_IdxGT that follows
+            /// Opcode: SeekScan  P1 P2 * * P5
+            ///* Synopsis: Scan-ahead up to P1 rows
+            ///*
+            ///* This opcode is a prefix opcode to OP_SeekGE.  In other words, this
+            ///* opcode must be immediately followed by OP_SeekGE. This constraint is
+            ///* checked by assert() statements.
+            ///*
+            ///* This opcode uses the P1 through P4 operands of the subsequent
+            ///* OP_SeekGE.  In the text that follows, the operands of the subsequent
+            ///* OP_SeekGE opcode are denoted as SeekOP.P1 through SeekOP.P4.   Only
+            ///* the P1, P2 and P5 operands of this opcode are also used, and  are called
+            ///* This.P1, This.P2 and This.P5.
+            ///*
+            ///* This opcode helps to optimize IN operators on a multi-column index
+            ///* where the IN operator is on the later terms of the index by avoiding
+            ///* unnecessary seeks on the btree, substituting steps to the next row
+            ///* of the b-tree instead.  A correct answer is obtained if this opcode
+            ///* is omitted or is a no-op.
+            ///*
+            ///* The SeekGE.P3 and SeekGE.P4 operands identify an unpacked key which
+            ///* is the desired entry that we want the cursor SeekGE.P1 to be pointing
+            ///* to.  Call this SeekGE.P3/P4 row the "target".
+            ///*
+            ///* If the SeekGE.P1 cursor is not currently pointing to a valid row,
+            ///* then this opcode is a no-op and control passes through into the OP_SeekGE.
+            ///*
+            ///* If the SeekGE.P1 cursor is pointing to a valid row, then that row
+            ///* might be the target row, or it might be near and slightly before the
+            ///* target row, or it might be after the target row.  If the cursor is
+            ///* currently before the target row, then this opcode attempts to position
+            ///* the cursor on or after the target row by invoking sqlite3BtreeStep()
+            ///* on the cursor between 1 and This.P1 times.
+            ///*
+            ///* The This.P5 parameter is a flag that indicates what to do if the
+            ///* cursor ends up pointing at a valid row that is past the target
+            ///* row.  If This.P5 is false (0) then a jump is made to SeekGE.P2.  If
+            ///* This.P5 is true (non-zero) then a jump is made to This.P2.  The P5==0
+            ///* case occurs when there are no inequality constraints to the right of
+            ///* the IN constraint.  The jump to SeekGE.P2 ends the loop.  The P5!=0 case
+            ///* occurs when there are inequality constraints to the right of the IN
+            ///* operator.  In that case, the This.P2 will point either directly to or
+            ///* to setup code prior to the OP_IdxGT or OP_IdxGE opcode that checks for
+            ///* loop terminate.
+            ///*
+            ///* Possible outcomes from this opcode:<ol>
+            ///*
+            ///* <li> If the cursor is initially not pointed to any valid row, then
+            ///*      fall through into the subsequent OP_SeekGE opcode.
+            ///*
+            ///* <li> If the cursor is left pointing to a row that is before the target
+            ///*      row, even after making as many as This.P1 calls to
+            ///*      sqlite3BtreeNext(), then also fall through into OP_SeekGE.
+            ///*
+            ///* <li> If the cursor is left pointing at the target row, either because it
+            ///*      was at the target row to begin with or because one or more
+            ///*      sqlite3BtreeNext() calls moved the cursor to the target row,
+            ///*      then jump to This.P2..,
+            ///*
+            ///* <li> If the cursor started out before the target row and a call to
+            ///*      to sqlite3BtreeNext() moved the cursor off the end of the index
+            ///*      (indicating that the target row definitely does not exist in the
+            ///*      btree) then jump to SeekGE.P2, ending the loop.
+            ///*
+            ///* <li> If the cursor ends up on a valid row that is past the target row
+            ///*      (indicating that the target row does not exist in the btree) then
+            ///*      jump to SeekOP.P2 if This.P5==0 or to This.P2 if This.P5>0.
+            ///* </ol>
+            /// ncycle
+            /// If pOp->p5 is clear, then pOp->p2 points to the first instruction past the
+            ///* OP_IdxGT that follows the OP_SeekGE. Otherwise, it points to the first
+            ///* opcode past the OP_SeekGE itself.
+            /// Not needed.  Only used to silence a warning.
+            /// Jump to SeekGE.P2, ending the loop
+            /// Jump to This.P2, bypassing the OP_SeekGE opcode
+            /// Opcode: SeekHit P1 P2 P3 * *
+            ///* Synopsis: set P2<=seekHit<=P3
+            ///*
+            ///* Increase or decrease the seekHit value for cursor P1, if necessary,
+            ///* so that it is no less than P2 and no greater than P3.
+            ///*
+            ///* The seekHit integer represents the maximum of terms in an index for which
+            ///* there is known to be at least one match.  If the seekHit value is smaller
+            ///* than the total number of equality terms in an index lookup, then the
+            ///* OP_IfNoHope opcode might run to see if the IN loop can be abandoned
+            ///* early, thus saving work.  This is part of the IN-early-out optimization.
+            ///*
+            ///* P1 must be a valid b-tree cursor.
+            /// ncycle
+            /// Opcode: IfNotOpen P1 P2 * * *
+            ///* Synopsis: if( !csr[P1] ) goto P2
+            ///*
+            ///* If cursor P1 is not open or if P1 is set to a NULL row using the
+            ///* OP_NullRow opcode, then jump to instruction P2. Otherwise, fall through.
+            /// jump
+            /// Opcode: Found P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* is a prefix of any entry in P1 then a jump is made to P2 and
+            ///* P1 is left pointing at the matching entry.
+            ///*
+            ///* This operation leaves the cursor in a state where it can be
+            ///* advanced in the forward direction.  The Next instruction will work,
+            ///* but not the Prev instruction.
+            ///*
+            ///* See also: NotFound, NoConflict, NotExists. SeekGe
+            ////
+            ////* Opcode: NotFound P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* is not the prefix of any entry in P1 then a jump is made to P2.  If P1
+            ///* does contain an entry whose prefix matches the P3/P4 record then control
+            ///* falls through to the next instruction and P1 is left pointing at the
+            ///* matching entry.
+            ///*
+            ///* This operation leaves the cursor in a state where it cannot be
+            ///* advanced in either direction.  In other words, the Next and Prev
+            ///* opcodes do not work after this operation.
+            ///*
+            ///* See also: Found, NotExists, NoConflict, IfNoHope
+            ////
+            ////* Opcode: IfNoHope P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* Register P3 is the first of P4 registers that form an unpacked
+            ///* record.  Cursor P1 is an index btree.  P2 is a jump destination.
+            ///* In other words, the operands to this opcode are the same as the
+            ///* operands to OP_NotFound and OP_IdxGT.
+            ///*
+            ///* This opcode is an optimization attempt only.  If this opcode always
+            ///* falls through, the correct answer is still obtained, but extra work
+            ///* is performed.
+            ///*
+            ///* A value of N in the seekHit flag of cursor P1 means that there exists
+            ///* a key P3:N that will match some record in the index.  We want to know
+            ///* if it is possible for a record P3:P4 to match some record in the
+            ///* index.  If it is not possible, we can skip some work.  So if seekHit
+            ///* is less than P4, attempt to find out if a match is possible by running
+            ///* OP_NotFound.
+            ///*
+            ///* This opcode is used in IN clause processing for a multi-column key.
+            ///* If an IN clause is attached to an element of the key other than the
+            ///* left-most element, and if there are no matches on the most recent
+            ///* seek over the whole key, then it might be that one of the key element
+            ///* to the left is prohibiting a match, and hence there is "no hope" of
+            ///* any match regardless of how many IN clause elements are checked.
+            ///* In such a case, we abandon the IN clause search early, using this
+            ///* opcode.  The opcode name comes from the fact that the
+            ///* jump is taken if there is "no hope" of achieving a match.
+            ///*
+            ///* See also: NotFound, SeekHit
+            ////
+            ////* Opcode: NoConflict P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* If P4==0 then register P3 holds a blob constructed by MakeRecord.  If
+            ///* P4>0 then register P3 is the first of P4 registers that form an unpacked
+            ///* record.
+            ///*
+            ///* Cursor P1 is on an index btree.  If the record identified by P3 and P4
+            ///* contains any NULL value, jump immediately to P2.  If all terms of the
+            ///* record are not-NULL then a check is done to determine if any row in the
+            ///* P1 index btree has a matching key prefix.  If there are no matches, jump
+            ///* immediately to P2.  If there is a match, fall through and leave the P1
+            ///* cursor pointing to the matching row.
+            ///*
+            ///* This opcode is similar to OP_NotFound with the exceptions that the
+            ///* branch is always taken if any part of the search key input is NULL.
+            ///*
+            ///* This operation leaves the cursor in a state where it cannot be
+            ///* advanced in either direction.  In other words, the Next and Prev
+            ///* opcodes do not work after this operation.
+            ///*
+            ///* See also: NotFound, Found, NotExists
+            /// jump, in3, ncycle
+            /// Fall through into OP_NotFound */
+            ///  /* no break
+            /// jump, in3, ncycle
+            /// jump, in3, ncycle
+            /// jump, in3, ncycle
+            /// Key values in an array of registers
+            /// Composite key generated by OP_MakeRecord
+            /// For the OP_NoConflict opcode, take the jump if any of the
+            ///* input fields are NULL, since any key with a NULL will not
+            ///* conflict
+            /// Opcode: SeekRowid P1 P2 P3 * *
+            ///* Synopsis: intkey=r[P3]
+            ///*
+            ///* P1 is the index of a cursor open on an SQL table btree (with integer
+            ///* keys).  If register P3 does not contain an integer or if P1 does not
+            ///* contain a record with rowid P3 then jump immediately to P2. 
+            ///* Or, if P2 is 0, raise an SQLITE_CORRUPT error. If P1 does contain
+            ///* a record with rowid P3 then
+            ///* leave the cursor pointing at that record and fall through to the next
+            ///* instruction.
+            ///*
+            ///* The OP_NotExists opcode performs the same operation, but with OP_NotExists
+            ///* the P3 register must be guaranteed to contain an integer value.  With this
+            ///* opcode, register P3 might not contain an integer.
+            ///*
+            ///* The OP_NotFound opcode performs the same operation on index btrees
+            ///* (with arbitrary multi-value keys).
+            ///*
+            ///* This opcode leaves the cursor in a state where it cannot be advanced
+            ///* in either direction.  In other words, the Next and Prev opcodes will
+            ///* not work following this opcode.
+            ///*
+            ///* See also: Found, NotFound, NoConflict, SeekRowid
+            ////
+            ////* Opcode: NotExists P1 P2 P3 * *
+            ///* Synopsis: intkey=r[P3]
+            ///*
+            ///* P1 is the index of a cursor open on an SQL table btree (with integer
+            ///* keys).  P3 is an integer rowid.  If P1 does not contain a record with
+            ///* rowid P3 then jump immediately to P2.  Or, if P2 is 0, raise an
+            ///* SQLITE_CORRUPT error. If P1 does contain a record with rowid P3 then
+            ///* leave the cursor pointing at that record and fall through to the next
+            ///* instruction.
+            ///*
+            ///* The OP_SeekRowid opcode performs the same operation but also allows the
+            ///* P3 register to contain a non-integer value, in which case the jump is
+            ///* always taken.  This opcode requires that P3 always contain an integer.
+            ///*
+            ///* The OP_NotFound opcode performs the same operation on index btrees
+            ///* (with arbitrary multi-value keys).
+            ///*
+            ///* This opcode leaves the cursor in a state where it cannot be advanced
+            ///* in either direction.  In other words, the Next and Prev opcodes will
+            ///* not work following this opcode.
+            ///*
+            ///* See also: Found, NotFound, NoConflict, SeekRowid
+            /// jump0, in3, ncycle
+            /// If pIn3->u.i does not contain an integer, compute iKey as the
+            ///* integer value of pIn3.  Jump to P2 if pIn3 cannot be converted
+            ///* into an integer without loss of information.  Take care to avoid
+            ///* changing the datatype of pIn3, however, as it is used by other
+            ///* parts of the prepared statement.
+            /// Fall through into OP_NotExists */
+            ///  /* no break
+            /// jump, in3, ncycle
+            /// Used by OP_Delete
+            /// Opcode: Sequence P1 P2 * * *
+            ///* Synopsis: r[P2]=cursor[P1].ctr++
+            ///*
+            ///* Find the next available sequence number for cursor P1.
+            ///* Write the sequence number into register P2.
+            ///* The sequence number on the cursor is incremented after this
+            ///* instruction.
+            /// out2
+            /// Opcode: NewRowid P1 P2 P3 * *
+            ///* Synopsis: r[P2]=rowid
+            ///*
+            ///* Get a new integer record number (a.k.a "rowid") used as the key to a table.
+            ///* The record number is not previously used as a key in the database
+            ///* table that cursor P1 points to.  The new record number is written
+            ///* written to register P2.
+            ///*
+            ///* If P3>0 then P3 is a register in the root frame of this VDBE that holds
+            ///* the largest previously generated record number. No new record numbers are
+            ///* allowed to be less than this value. When this value reaches its maximum,
+            ///* an SQLITE_FULL error is generated. The P3 register is updated with the '
+            ///* generated record number. This P3 mechanism is used to help implement the
+            ///* AUTOINCREMENT feature.
+            /// out2
+            /// The new rowid
+            /// Cursor of table to get the new rowid
+            /// Result of an sqlite3BtreeLast()
+            /// Counter to limit the number of searches
+            /// Register holding largest rowid for AUTOINCREMENT
+            /// Root frame of VDBE
+            /// The next rowid or record number (different terms for the same
+            ///* thing) is obtained in a two-step algorithm.
+            ///*
+            ///* First we attempt to find the largest existing rowid and add one
+            ///* to that.  But if the largest existing rowid is already the maximum
+            ///* positive integer, we have to fall through to the second
+            ///* probabilistic algorithm
+            ///*
+            ///* The second algorithm is to select a rowid at random and see if
+            ///* it already exists in the table.  If it does not exist, we have
+            ///* succeeded.  If the random rowid does exist, we select a new one
+            ///* and try again, up to 100 times.
+            /// Some compilers complain about constants of the form 0x7fffffffffffffff.
+            ///* Others complain about 0x7ffffffffffffffffLL.  The following macro seems
+            ///* to provide the constant while making all compilers happy.
+            /// IMP: R-61914-48074
+            /// IMP: R-29538-34987
+            /// Assert that P3 is a valid memory cell.
+            /// Assert that P3 is a valid memory cell.
+            /// Assert that P3 is a valid memory cell.
+            /// mem(P3) holds an integer
+            /// IMP: R-17817-00630
+            /// IMPLEMENTATION-OF: R-07677-41881 If the largest ROWID is equal to the
+            ///* largest possible integer (9223372036854775807) then the database
+            ///* engine starts picking positive candidate ROWIDs at random until
+            ///* it finds one that is not previously used.
+            /// We cannot be in random rowid mode if this is
+            ///* an AUTOINCREMENT table.
+            /// Ensure that v is greater than zero
+            /// IMP: R-38219-53002
+            /// EV: R-40812-03570
+            /// Opcode: Insert P1 P2 P3 P4 P5
+            ///* Synopsis: intkey=r[P3] data=r[P2]
+            ///*
+            ///* Write an entry into the table of cursor P1.  A new entry is
+            ///* created if it doesn't already exist or the data for an existing
+            ///* entry is overwritten.  The data is the value MEM_Blob stored in register
+            ///* number P2. The key is stored in register P3. The key must
+            ///* be a MEM_Int.
+            ///*
+            ///* If the OPFLAG_NCHANGE flag of P5 is set, then the row change count is
+            ///* incremented (otherwise not).  If the OPFLAG_LASTROWID flag of P5 is set,
+            ///* then rowid is stored for subsequent return by the
+            ///* sqlite3_last_insert_rowid() function (otherwise it is unmodified).
+            ///*
+            ///* If the OPFLAG_USESEEKRESULT flag of P5 is set, the implementation might
+            ///* run faster by avoiding an unnecessary seek on cursor P1.  However,
+            ///* the OPFLAG_USESEEKRESULT flag must only be set if there have been no prior
+            ///* seeks on the cursor or if the most recent seek used a key equal to P3.
+            ///*
+            ///* If the OPFLAG_ISUPDATE flag is set, then this opcode is part of an
+            ///* UPDATE operation.  Otherwise (if the flag is clear) then this opcode
+            ///* is part of an INSERT operation.  The difference is only important to
+            ///* the update hook.
+            ///*
+            ///* Parameter P4 may point to a Table structure, or may be NULL. If it is
+            ///* not NULL, then the update-hook (sqlite3.xUpdateCallback) is invoked
+            ///* following a successful insert.
+            ///*
+            ///* (WARNING/TODO: If P1 is a pseudo-cursor and P2 is dynamically
+            ///* allocated, then ownership of P2 is transferred to the pseudo-cursor
+            ///* and register P2 becomes ephemeral.  If the cursor is changed, the
+            ///* value of register P2 will then change.  Make sure this does not
+            ///* cause any problems.)
+            ///*
+            ///* This instruction only works on tables.  The equivalent instruction
+            ///* for indices is OP_IdxInsert.
+            /// MEM cell holding data for the record to be inserted
+            /// MEM cell holding key  for the record
+            /// Cursor to table into which insert is written
+            /// Result of prior seek or 0 if no USESEEKRESULT flag
+            /// database name - used by the update hook
+            /// Table structure - used by update and pre-update hooks
+            /// Payload to be inserted
+            /// Invoke the update-hook if required.
+            /// Opcode: RowCell P1 P2 P3 * *
+            ///*
+            ///* P1 and P2 are both open cursors. Both must be opened on the same type
+            ///* of table - intkey or index. This opcode is used as part of copying
+            ///* the current row from P2 into P1. If the cursors are opened on intkey
+            ///* tables, register P3 contains the rowid to use with the new record in
+            ///* P1. If they are opened on index tables, P3 is not used.
+            ///*
+            ///* This opcode must be followed by either an Insert or InsertIdx opcode
+            ///* with the OPFLAG_PREFORMAT flag set to complete the insert operation.
+            /// Cursor to write to
+            /// Cursor to read from
+            /// Rowid value to insert with
+            /// Opcode: Delete P1 P2 P3 P4 P5
+            ///*
+            ///* Delete the record at which the P1 cursor is currently pointing.
+            ///*
+            ///* If the OPFLAG_SAVEPOSITION bit of the P5 parameter is set, then
+            ///* the cursor will be left pointing at  either the next or the previous
+            ///* record in the table. If it is left pointing at the next record, then
+            ///* the next Next instruction will be a no-op. As a result, in this case
+            ///* it is ok to delete a record from within a Next loop. If
+            ///* OPFLAG_SAVEPOSITION bit of P5 is clear, then the cursor will be
+            ///* left in an undefined state.
+            ///*
+            ///* If the OPFLAG_AUXDELETE bit is set on P5, that indicates that this
+            ///* delete is one of several associated with deleting a table row and
+            ///* all its associated index entries.  Exactly one of those deletes is
+            ///* the "primary" delete.  The others are all on OPFLAG_FORDELETE
+            ///* cursors or else are marked with the AUXDELETE flag.
+            ///*
+            ///* If the OPFLAG_NCHANGE (0x01) flag of P2 (NB: P2 not P5) is set, then
+            ///* the row change count is incremented (otherwise not).
+            ///*
+            ///* If the OPFLAG_ISNOOP (0x40) flag of P2 (not P5!) is set, then the
+            ///* pre-update-hook for deletes is run, but the btree is otherwise unchanged.
+            ///* This happens when the OP_Delete is to be shortly followed by an OP_Insert
+            ///* with the same key, causing the btree entry to be overwritten.
+            ///*
+            ///* P1 must not be pseudo-table.  It has to be a real table with
+            ///* multiple rows.
+            ///*
+            ///* If P4 is not NULL then it points to a Table object. In this case either
+            ///* the update or pre-update hook, or both, may be invoked. The P1 cursor must
+            ///* have been positioned using OP_NotFound prior to invoking this opcode in
+            ///* this case. Specifically, if one is configured, the pre-update hook is
+            ///* invoked if P4 is not NULL. The update-hook is invoked if one is configured,
+            ///* P4 is not NULL, and the OPFLAG_NCHANGE flag is set in P2.
+            ///*
+            ///* If the OPFLAG_ISUPDATE flag is set in P2, then P3 contains the address
+            ///* of the memory cell that contains the value that the rowid of the row will
+            ///* be set to by the update.
+            /// If the update-hook or pre-update-hook will be invoked, set zDb to
+            ///* the name of the db to pass as to it. Also set local pTab to a copy
+            ///* of p4.pTab. Finally, if p5 is true, indicating that this cursor was
+            ///* last moved with OP_Next or OP_Prev, not Seek or NotFound, set
+            ///* VdbeCursor.movetoTarget to the current rowid.
+            /// Only flags that can be set are SAVEPOISTION and AUXDELETE
+            /// Invoke the update-hook if required.
+            /// Opcode: ResetCount * * * * *
+            ///*
+            ///* The value of the change counter is copied to the database handle
+            ///* change counter (returned by subsequent calls to sqlite3_changes()).
+            ///* Then the VMs internal change counter resets to 0.
+            ///* This is used by trigger programs.
+            /// Opcode: SorterCompare P1 P2 P3 P4
+            ///* Synopsis: if key(P1)!=trim(r[P3],P4) goto P2
+            ///*
+            ///* P1 is a sorter cursor. This instruction compares a prefix of the
+            ///* record blob in register P3 against a prefix of the entry that
+            ///* the sorter cursor currently points to.  Only the first P4 fields
+            ///* of r[P3] and the sorter record are compared.
+            ///*
+            ///* If either P3 or the sorter contains a NULL in one of their significant
+            ///* fields (not counting the P4 fields at the end which are ignored) then
+            ///* the comparison is assumed to be equal.
+            ///*
+            ///* Fall through to next instruction if the two records compare equal to
+            ///* each other.  Jump to P2 if they are different.
+            /// Opcode: SorterData P1 P2 P3 * *
+            ///* Synopsis: r[P2]=data
+            ///*
+            ///* Write into register P2 the current sorter data for sorter cursor P1.
+            ///* Then clear the column header cache on cursor P3.
+            ///*
+            ///* This opcode is normally used to move a record out of the sorter and into
+            ///* a register that is the source for a pseudo-table cursor created using
+            ///* OpenPseudo.  That pseudo-table cursor is the one that is identified by
+            ///* parameter P3.  Clearing the P3 column cache as part of this opcode saves
+            ///* us from having to issue a separate NullRow instruction to clear that cache.
+            /// ncycle
+            /// Opcode: RowData P1 P2 P3 * *
+            ///* Synopsis: r[P2]=data
+            ///*
+            ///* Write into register P2 the complete row content for the row at
+            ///* which cursor P1 is currently pointing.
+            ///* There is no interpretation of the data. 
+            ///* It is just copied onto the P2 register exactly as
+            ///* it is found in the database file.
+            ///*
+            ///* If cursor P1 is an index, then the content is the key of the row.
+            ///* If cursor P2 is a table, then the content extracted is the data.
+            ///*
+            ///* If the P1 cursor must be pointing to a valid row (not a NULL row)
+            ///* of a real table, not a pseudo-table.
+            ///*
+            ///* If P3!=0 then this opcode is allowed to make an ephemeral pointer
+            ///* into the database page.  That means that the content of the output
+            ///* register will be invalidated as soon as the cursor moves - including
+            ///* moves caused by other cursors that "save" the current cursors
+            ///* position in order that they can write to the same table.  If P3==0
+            ///* then a copy of the data is made into memory.  P3!=0 is faster, but
+            ///* P3==0 is safer.
+            ///*
+            ///* If P3!=0 then the content of the P2 register is unsuitable for use
+            ///* in OP_Result and any OP_Result will invalidate the P2 register content.
+            ///* The P2 register content is invalidated by opcodes like OP_Function or
+            ///* by any use of another cursor pointing to the same table.
+            /// The OP_RowData opcodes always follow OP_NotExists or
+            ///* OP_SeekRowid or OP_Rewind/Op_Next with no intervening instructions
+            ///* that might invalidate the cursor.
+            ///* If this were not the case, one of the following assert()s
+            ///* would fail.  Should this ever change (because of changes in the code
+            ///* generator) then the fix would be to insert a call to
+            ///* sqlite3VdbeCursorMoveto().
+            /// Opcode: Rowid P1 P2 * * *
+            ///* Synopsis: r[P2]=PX rowid of P1
+            ///*
+            ///* Store in register P2 an integer which is the key of the table entry that
+            ///* P1 is currently point to.
+            ///*
+            ///* P1 can be either an ordinary table or a virtual table.  There used to
+            ///* be a separate OP_VRowid opcode for use with virtual tables, but this
+            ///* one opcode now works for both table types.
+            /// out2, ncycle
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: NullRow P1 * * * *
+            ///*
+            ///* Move the cursor P1 to a null row.  Any OP_Column operations
+            ///* that occur while the cursor is on the null row will always
+            ///* write a NULL.
+            ///*
+            ///* If cursor P1 is not previously opened, open it now to a special
+            ///* pseudo-cursor that always returns NULL for every column.
+            /// If the cursor is not already open, create a special kind of
+            ///* pseudo-cursor that always gives null rows.
+            /// Opcode: SeekEnd P1 * * * *
+            ///*
+            ///* Position cursor P1 at the end of the btree for the purpose of
+            ///* appending a new entry onto the btree.
+            ///*
+            ///* It is assumed that the cursor is used only for appending and so
+            ///* if the cursor is valid, then the cursor must already be pointing
+            ///* at the end of the btree and so no changes are made to
+            ///* the cursor.
+            ////
+            ////* Opcode: Last P1 P2 * * *
+            ///*
+            ///* The next use of the Rowid or Column or Prev instruction for P1
+            ///* will refer to the last entry in the database table or index.
+            ///* If the table or index is empty and P2>0, then jump immediately to P2.
+            ///* If P2 is 0 or if the table or index is not empty, fall through
+            ///* to the following instruction.
+            ///*
+            ///* This opcode leaves the cursor configured to move in reverse order,
+            ///* from the end toward the beginning.  In other words, the cursor is
+            ///* configured to use Prev, not Next.
+            /// ncycle
+            /// jump0, ncycle
+            /// Opcode: IfSizeBetween P1 P2 P3 P4 *
+            ///*
+            ///* Let N be the approximate number of rows in the table or index
+            ///* with cursor P1 and let X be 10*log2(N) if N is positive or -1
+            ///* if N is zero.
+            ///*
+            ///* Jump to P2 if X is in between P3 and P4, inclusive.
+            /// jump
+            /// -Infinity encoding
+            /// Opcode: SorterSort P1 P2 * * *
+            ///*
+            ///* After all records have been inserted into the Sorter object
+            ///* identified by P1, invoke this opcode to actually do the sorting.
+            ///* Jump to P2 if there are no records to be sorted.
+            ///*
+            ///* This opcode is an alias for OP_Sort and OP_Rewind that is used
+            ///* for Sorter objects.
+            ////
+            ////* Opcode: Sort P1 P2 * * *
+            ///*
+            ///* This opcode does exactly the same thing as OP_Rewind except that
+            ///* it increments an undocumented global variable used for testing.
+            ///*
+            ///* Sorting is accomplished by writing records into a sorting index,
+            ///* then rewinding that index and playing it back from beginning to
+            ///* end.  We use the OP_Sort opcode instead of OP_Rewind to do the
+            ///* rewinding so that the global variable will be incremented and
+            ///* regression tests can determine whether or not the optimizer is
+            ///* correctly optimizing out sorts.
+            /// jump ncycle
+            /// jump ncycle
+            /// Fall through into OP_Rewind */
+            ///  /* no break
+            /// Opcode: Rewind P1 P2 * * *
+            ///*
+            ///* The next use of the Rowid or Column or Next instruction for P1
+            ///* will refer to the first entry in the database table or index.
+            ///* If the table or index is empty, jump immediately to P2.
+            ///* If the table or index is not empty, fall through to the following
+            ///* instruction.
+            ///*
+            ///* If P2 is zero, that is an assertion that the P1 table is never
+            ///* empty and hence the jump will never be taken.
+            ///*
+            ///* This opcode leaves the cursor configured to move in forward order,
+            ///* from the beginning toward the end.  In other words, the cursor is
+            ///* configured to use Next, not Prev.
+            /// jump0, ncycle
+            /// Opcode: IfEmpty P1 P2 * * *
+            ///* Synopsis: if( empty(P1) ) goto P2
+            ///*
+            ///* Check to see if the b-tree table that cursor P1 references is empty
+            ///* and jump to P2 if it is.
+            /// jump
+            /// Opcode: Next P1 P2 P3 * P5
+            ///*
+            ///* Advance cursor P1 so that it points to the next key/data pair in its
+            ///* table or index.  If there are no more key/value pairs then fall through
+            ///* to the following instruction.  But if the cursor advance was successful,
+            ///* jump immediately to P2.
+            ///*
+            ///* The Next opcode is only valid following an SeekGT, SeekGE, or
+            ///* OP_Rewind opcode used to position the cursor.  Next is not allowed
+            ///* to follow SeekLT, SeekLE, or OP_Last.
+            ///*
+            ///* The P1 cursor must be for a real table, not a pseudo-table.  P1 must have
+            ///* been opened prior to this opcode or the program will segfault.
+            ///*
+            ///* The P3 value is a hint to the btree implementation. If P3==1, that
+            ///* means P1 is an SQL index and that this instruction could have been
+            ///* omitted if that index had been unique.  P3 is usually 0.  P3 is
+            ///* always either 0 or 1.
+            ///*
+            ///* If P5 is positive and the jump is taken, then event counter
+            ///* number P5-1 in the prepared statement is incremented.
+            ///*
+            ///* See also: Prev
+            ////
+            ////* Opcode: Prev P1 P2 P3 * P5
+            ///*
+            ///* Back up cursor P1 so that it points to the previous key/data pair in its
+            ///* table or index.  If there is no previous key/value pairs then fall through
+            ///* to the following instruction.  But if the cursor backup was successful,
+            ///* jump immediately to P2.
+            ///*
+            ///*
+            ///* The Prev opcode is only valid following an SeekLT, SeekLE, or
+            ///* OP_Last opcode used to position the cursor.  Prev is not allowed
+            ///* to follow SeekGT, SeekGE, or OP_Rewind.
+            ///*
+            ///* The P1 cursor must be for a real table, not a pseudo-table.  If P1 is
+            ///* not open then the behavior is undefined.
+            ///*
+            ///* The P3 value is a hint to the btree implementation. If P3==1, that
+            ///* means P1 is an SQL index and that this instruction could have been
+            ///* omitted if that index had been unique.  P3 is usually 0.  P3 is
+            ///* always either 0 or 1.
+            ///*
+            ///* If P5 is positive and the jump is taken, then event counter
+            ///* number P5-1 in the prepared statement is incremented.
+            ////
+            ////* Opcode: SorterNext P1 P2 * * P5
+            ///*
+            ///* This opcode works just like OP_Next except that P1 must be a
+            ///* sorter object for which the OP_SorterSort opcode has been
+            ///* invoked.  This opcode advances the cursor to the next sorted
+            ///* record, or jumps to P2 if there are no more sorted records.
+            /// jump
+            /// jump, ncycle
+            /// jump, ncycle
+            /// Opcode: IdxInsert P1 P2 P3 P4 P5
+            ///* Synopsis: key=r[P2]
+            ///*
+            ///* Register P2 holds an SQL index key made using the
+            ///* MakeRecord instructions.  This opcode writes that key
+            ///* into the index P1.  Data for the entry is nil.
+            ///*
+            ///* If P4 is not zero, then it is the number of values in the unpacked
+            ///* key of reg(P2).  In that case, P3 is the index of the first register
+            ///* for the unpacked key.  The availability of the unpacked key can sometimes
+            ///* be an optimization.
+            ///*
+            ///* If P5 has the OPFLAG_APPEND bit set, that is a hint to the b-tree layer
+            ///* that this insert is likely to be an append.
+            ///*
+            ///* If P5 has the OPFLAG_NCHANGE bit set, then the change counter is
+            ///* incremented by this instruction.  If the OPFLAG_NCHANGE bit is clear,
+            ///* then the change counter is unchanged.
+            ///*
+            ///* If the OPFLAG_USESEEKRESULT flag of P5 is set, the implementation might
+            ///* run faster by avoiding an unnecessary seek on cursor P1.  However,
+            ///* the OPFLAG_USESEEKRESULT flag must only be set if there have been no prior
+            ///* seeks on the cursor or if the most recent seek used a key equivalent
+            ///* to P2.
+            ///*
+            ///* This instruction only works for indices.  The equivalent instruction
+            ///* for tables is OP_Insert.
+            /// in2
+            /// Opcode: SorterInsert P1 P2 * * *
+            ///* Synopsis: key=r[P2]
+            ///*
+            ///* Register P2 holds an SQL index key made using the
+            ///* MakeRecord instructions.  This opcode writes that key
+            ///* into the sorter P1.  Data for the entry is nil.
+            /// in2
+            /// Opcode: IdxDelete P1 P2 P3 P4 P5
+            ///* Synopsis: key=r[P2@P5]
+            ///*
+            ///* The content of P5 registers starting at register P2 form
+            ///* an unpacked index key. This opcode removes that entry from the
+            ///* index opened by cursor P1.
+            ///*
+            ///* P4 is a pointer to an Index structure.
+            ///*
+            ///* If P3 is non-zero, it is the register number of a register holding
+            ///* a record that will be inserted into this index. If that record is
+            ///* identical to the one that would be deleted by this instruction, 
+            ///* skip the delete and set register P3 to NULL.
+            ///*
+            ///* Raise an SQLITE_CORRUPT_INDEX error if no matching index entry is found
+            ///* and not in writable_schema mode.
+            /// Opcode: DeferredSeek P1 * P3 P4 *
+            ///* Synopsis: Move P3 to P1.rowid if needed
+            ///*
+            ///* P1 is an open index cursor and P3 is a cursor on the corresponding
+            ///* table.  This opcode does a deferred seek of the P3 table cursor
+            ///* to the row that corresponds to the current row of P1.
+            ///*
+            ///* This is a deferred seek.  Nothing actually happens until
+            ///* the cursor is used to read a record.  That way, if no reads
+            ///* occur, no unnecessary I/O happens.
+            ///*
+            ///* P4 may be an array of integers (type P4_INTARRAY) containing
+            ///* one entry for each column in the P3 table.  If array entry a(i)
+            ///* is non-zero, then reading column a(i)-1 from cursor P3 is
+            ///* equivalent to performing the deferred seek and then reading column i
+            ///* from P1.  This information is stored in P3 and used to redirect
+            ///* reads against P3 over to P1, thus possibly avoiding the need to
+            ///* seek and read cursor P3.
+            ////
+            ////* Opcode: IdxRowid P1 P2 * * *
+            ///* Synopsis: r[P2]=rowid
+            ///*
+            ///* Write into register P2 an integer which is the last entry in the record at
+            ///* the end of the index key pointed to by cursor P1.  This integer should be
+            ///* the rowid of the table entry to which this index entry points.
+            ///*
+            ///* See also: Rowid, MakeRecord.
+            /// ncycle
+            /// out2, ncycle
+            /// The P1 index cursor
+            /// The P2 table cursor (OP_DeferredSeek only)
+            /// Rowid that P1 current points to
+            /// The IdxRowid and Seek opcodes are combined because of the commonality
+            ///* of sqlite3VdbeCursorRestore() and sqlite3VdbeIdxRowid().
+            /// sqlite3VdbeCursorRestore() may fail if the cursor has been disturbed
+            ///* since it was last positioned and an error (e.g. OOM or an IO error)
+            ///* occurs while trying to reposition it.
+            /// Not needed.  Only used to silence a warning.
+            /// Opcode: FinishSeek P1 * * * *
+            ///*
+            ///* If cursor P1 was previously moved via OP_DeferredSeek, complete that
+            ///* seek operation now, without further delay.  If the cursor seek has
+            ///* already occurred, this instruction is a no-op.
+            /// ncycle
+            /// The P1 index cursor
+            /// Opcode: IdxGE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY.  Compare this key value against the index
+            ///* that P1 is currently pointing to, ignoring the PRIMARY KEY or ROWID
+            ///* fields at the end.
+            ///*
+            ///* If the P1 index entry is greater than or equal to the key value
+            ///* then jump to P2.  Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxGT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY.  Compare this key value against the index
+            ///* that P1 is currently pointing to, ignoring the PRIMARY KEY or ROWID
+            ///* fields at the end.
+            ///*
+            ///* If the P1 index entry is greater than the key value
+            ///* then jump to P2.  Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxLT P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY or ROWID.  Compare this key value against
+            ///* the index that P1 is currently pointing to, ignoring the PRIMARY KEY or
+            ///* ROWID on the P1 index.
+            ///*
+            ///* If the P1 index entry is less than the key value then jump to P2.
+            ///* Otherwise fall through to the next instruction.
+            ////
+            ////* Opcode: IdxLE P1 P2 P3 P4 *
+            ///* Synopsis: key=r[P3@P4]
+            ///*
+            ///* The P4 register values beginning with P3 form an unpacked index
+            ///* key that omits the PRIMARY KEY or ROWID.  Compare this key value against
+            ///* the index that P1 is currently pointing to, ignoring the PRIMARY KEY or
+            ///* ROWID on the P1 index.
+            ///*
+            ///* If the P1 index entry is less than or equal to the key value then jump
+            ///* to P2. Otherwise fall through to the next instruction.
+            /// jump, ncycle
+            /// jump, ncycle
+            /// jump, ncycle
+            /// jump, ncycle
+            /// Inlined version of sqlite3VdbeIdxKeyCompare()
+            /// nCellKey will always be between 0 and 0xffffffff because of the way
+            ///* that btreeParseCellPtr() and sqlite3GetVarint32() are implemented
+            /// End of inlined sqlite3VdbeIdxKeyCompare()
+            /// Opcode: Destroy P1 P2 P3 * *
+            ///*
+            ///* Delete an entire database table or index whose root page in the database
+            ///* file is given by P1.
+            ///*
+            ///* The table being destroyed is in the main database file if P3==0.  If
+            ///* P3==1 then the table to be destroyed is in the auxiliary database file
+            ///* that is used to store tables create using CREATE TEMPORARY TABLE.
+            ///*
+            ///* If AUTOVACUUM is enabled then it is possible that another root page
+            ///* might be moved into the newly deleted root page in order to keep all
+            ///* root pages contiguous at the beginning of the database.  The former
+            ///* value of the root page that moved - its value before the move occurred -
+            ///* is stored in register P2. If no page movement was required (because the
+            ///* table being dropped was already the last one in the database) then a
+            ///* zero is stored in register P2.  If AUTOVACUUM is disabled then a zero
+            ///* is stored in register P2.
+            ///*
+            ///* This opcode throws an error if there are any active reader VMs when
+            ///* it is invoked. This is done to avoid the difficulty associated with
+            ///* updating existing cursors when a root page is moved in an AUTOVACUUM
+            ///* database. This error is thrown even if the database is not an AUTOVACUUM
+            ///* db in order to avoid introducing an incompatibility between autovacuum
+            ///* and non-autovacuum modes.
+            ///*
+            ///* See also: Clear
+            /// out2
+            /// Not needed.  Only to silence a warning.
+            /// All OP_Destroy operations occur on the same btree
+            /// Opcode: Clear P1 P2 P3
+            ///*
+            ///* Delete all contents of the database table or index whose root page
+            ///* in the database file is given by P1.  But, unlike Destroy, do not
+            ///* remove the table or index from the database file.
+            ///*
+            ///* The table being cleared is in the main database file if P2==0.  If
+            ///* P2==1 then the table to be cleared is in the auxiliary database file
+            ///* that is used to store tables create using CREATE TEMPORARY TABLE.
+            ///*
+            ///* If the P3 value is non-zero, then the row change count is incremented
+            ///* by the number of rows in the table being cleared. If P3 is greater
+            ///* than zero, then the value stored in register P3 is also incremented
+            ///* by the number of rows in the table being cleared.
+            ///*
+            ///* See also: Destroy
+            /// Opcode: ResetSorter P1 * * * *
+            ///*
+            ///* Delete all contents from the ephemeral table or sorter
+            ///* that is open on cursor P1.
+            ///*
+            ///* This opcode only works for cursors used for sorting and
+            ///* opened with OP_OpenEphemeral or OP_SorterOpen.
+            /// Opcode: CreateBtree P1 P2 P3 * *
+            ///* Synopsis: r[P2]=root iDb=P1 flags=P3
+            ///*
+            ///* Allocate a new b-tree in the main database file if P1==0 or in the
+            ///* TEMP database file if P1==1 or in an attached database if
+            ///* P1>1.  The P3 argument must be 1 (BTREE_INTKEY) for a rowid table
+            ///* it must be 2 (BTREE_BLOBKEY) for an index or WITHOUT ROWID table.
+            ///* The root page number of the new b-tree is stored in register P2.
+            /// out2
+            /// Opcode: SqlExec P1 P2 * P4 *
+            ///*
+            ///* Run the SQL statement or statements specified in the P4 string.
+            ///*
+            ///* The P1 parameter is a bitmask of options:
+            ///*
+            ///*    0x0001     Disable Auth and Trace callbacks while the statements
+            ///*               in P4 are running.
+            ///*
+            ///*    0x0002     Set db->nAnalysisLimit to P2 while the statements in
+            ///*               P4 are running.
+            ///*
+            /// Opcode: ParseSchema P1 * * P4 P5
+            ///*
+            ///* Read and parse all entries from the schema table of database P1
+            ///* that match the WHERE clause P4.  If P4 is a NULL pointer, then the
+            ///* entire schema for P1 is reparsed.
+            ///*
+            ///* When P4 is NULL, the P5 value is used as the mFlags argument
+            ///* to sqlite3InitOne().  In other words, P5 should be a mask composed
+            ///* of INITFLAG_* values.
+            ///*
+            ///* The P4==0 case is only used by ALTER TABLE and P5!=0 for all such
+            ///* cases.  For uses other than ALTER TABLE, P4<>0 and P5==0.
+            ///*
+            ///* This opcode invokes the parser to create a new virtual machine,
+            ///* then runs the new virtual machine.  It is thus a re-entrant opcode.
+            /// Any prepared statement that invokes this opcode will hold mutexes
+            ///* on every btree.  This is a prerequisite for invoking
+            ///* sqlite3InitCallback().
+            /// The OP_ParseSchema opcode with a non-NULL P4 argument should parse
+            ///* at least one SQL statement. Any less than that indicates that
+            ///* the sqlite_schema table is corrupt.
+            /// Opcode: LoadAnalysis P1 * * * *
+            ///*
+            ///* Read the sqlite_stat1 table for database P1 and load the content
+            ///* of that table into the internal index hash table.  This will cause
+            ///* the analysis to be used when preparing all subsequent queries.
+            /// !defined(SQLITE_OMIT_ANALYZE)
+            /// Opcode: DropTable P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the table named P4 in database P1.  This is called after a table
+            ///* is dropped from disk (using the Destroy opcode) in order to keep
+            ///* the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: DropIndex P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the index named P4 in database P1.  This is called after an index
+            ///* is dropped from disk (using the Destroy opcode)
+            ///* in order to keep the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: DropTrigger P1 * * P4 *
+            ///*
+            ///* Remove the internal (in-memory) data structures that describe
+            ///* the trigger named P4 in database P1.  This is called after a trigger
+            ///* is dropped from disk (using the Destroy opcode) in order to keep
+            ///* the internal representation of the
+            ///* schema consistent with what is on disk.
+            /// Opcode: IntegrityCk P1 P2 P3 P4 P5
+            ///*
+            ///* Do an analysis of the currently open database.  Store in
+            ///* register (P1+1) the text of an error message describing any problems.
+            ///* If no problems are found, store a NULL in register (P1+1).
+            ///*
+            ///* The register (P1) contains one less than the maximum number of allowed
+            ///* errors.  At most reg(P1) errors will be reported.
+            ///* In other words, the analysis stops as soon as reg(P1) errors are
+            ///* seen.  Reg(P1) is updated with the number of errors remaining.
+            ///*
+            ///* The root page numbers of all tables in the database are integers
+            ///* stored in P4_INTARRAY argument.
+            ///*
+            ///* If P5 is not zero, the check is done on the auxiliary database
+            ///* file, not the main database file.
+            ///*
+            ///* This opcode is used to implement the integrity_check pragma.
+            /// Number of tables to check.  (Number of root pages.)
+            /// Array of rootpage numbers for tables to be checked
+            /// Number of errors reported
+            /// Text of the error report
+            /// Register keeping track of errors remaining
+            /// Opcode: IFindKey P1 P2 P3 P4 *
+            ///*
+            ///* This instruction always follows an OP_Found with the same P1, P2 and P3
+            ///* values as this instruction and a non-zero P4 value. The P4 value to
+            ///* this opcode is of type P4_INDEX and contains a pointer to the Index
+            ///* object of for the index being searched.
+            ///*
+            ///* This opcode uses sqlite3VdbeFindIndexKey() to search around the current
+            ///* cursor location for an index key that exactly matches all fields that
+            ///* are not indexed expressions or references to VIRTUAL generated columns,
+            ///* and either exactly match or are real numbers that are within 2 ULPs of
+            ///* each other if the don't match.
+            ///*
+            ///* To put it another way, this opcode looks for nearby index entries that
+            ///* are very close to the search key, but which might have small differences
+            ///* in floating-point values that come via an expression.
+            ///*
+            ///* If no nearby alternative entry is found in cursor P1, then jump to P2.
+            ///* But if a close match is found, fall through.
+            ///*
+            ///* This opcode is used by PRAGMA integrity_check to help distinguish
+            ///* between truely corrupt indexes and expression indexes that are holding
+            ///* floating-point values that are off by one or two ULPs.
+            /// jump, in3
+            /// SQLITE_OMIT_INTEGRITY_CHECK
+            /// Opcode: RowSetAdd P1 P2 * * *
+            ///* Synopsis: rowset(P1)=r[P2]
+            ///*
+            ///* Insert the integer value held by register P2 into a RowSet object
+            ///* held in register P1.
+            ///*
+            ///* An assertion fails if P2 is not an integer.
+            /// in1, in2
+            /// Opcode: RowSetRead P1 P2 P3 * *
+            ///* Synopsis: r[P3]=rowset(P1)
+            ///*
+            ///* Extract the smallest value from the RowSet object in P1
+            ///* and put that value into register P3.
+            ///* Or, if RowSet object P1 is initially empty, leave P3
+            ///* unchanged and jump to instruction P2.
+            /// jump, in1, out3
+            /// The boolean index is empty
+            /// A value was pulled from the index
+            /// Opcode: RowSetTest P1 P2 P3 P4
+            ///* Synopsis: if r[P3] in rowset(P1) goto P2
+            ///*
+            ///* Register P3 is assumed to hold a 64-bit integer value. If register P1
+            ///* contains a RowSet object and that RowSet object contains
+            ///* the value held in P3, jump to register P2. Otherwise, insert the
+            ///* integer in P3 into the RowSet and continue on to the
+            ///* next opcode.
+            ///*
+            ///* The RowSet object is optimized for the case where sets of integers
+            ///* are inserted in distinct phases, which each set contains no duplicates.
+            ///* Each set is identified by a unique P4 value. The first set
+            ///* must have P4==0, the final set must have P4==-1, and for all other sets
+            ///* must have P4>0.
+            ///*
+            ///* This allows optimizations: (a) when P4==0 there is no need to test
+            ///* the RowSet object for P3, as it is guaranteed not to contain it,
+            ///* (b) when P4==-1 there is no need to insert the value, as it will
+            ///* never be tested for, and (c) when a value that is part of set X is
+            ///* inserted, there is no need to search to see if the same value was
+            ///* previously inserted as part of set X (only if it was previously
+            ///* inserted as part of some other set).
+            /// jump, in1, in3
+            /// If there is anything other than a rowset object in memory cell P1,
+            ///* delete it now and initialize P1 with an empty rowset
+            /// Opcode: Program P1 P2 P3 P4 P5
+            ///*
+            ///* Execute the trigger program passed as P4 (type P4_SUBPROGRAM).
+            ///*
+            ///* P1 contains the address of the memory cell that contains the first memory
+            ///* cell in an array of values used as arguments to the sub-program. P2
+            ///* contains the address to jump to if the sub-program throws an IGNORE
+            ///* exception using the RAISE() function. P2 might be zero, if there is
+            ///* no possibility that an IGNORE exception will be raised.
+            ///* Register P3 contains the address
+            ///* of a memory cell in this (the parent) VM that is used to allocate the
+            ///* memory required by the sub-vdbe at runtime.
+            ///*
+            ///* P4 is a pointer to the VM containing the trigger program.
+            ///*
+            ///* If P5 is non-zero, then recursive program invocation is enabled.
+            /// jump0
+            /// Number of memory registers for sub-program
+            /// Bytes of runtime space required for sub-program
+            /// Register to allocate runtime space
+            /// Used to iterate through memory cells
+            /// Last memory cell in new array
+            /// New vdbe frame to execute in
+            /// Sub-program to execute
+            /// Token identifying trigger
+            /// If the p5 flag is clear, then recursive invocation of triggers is
+            ///* disabled for backwards compatibility (p5 is set if this sub-program
+            ///* is really a trigger, not a foreign key action, and the flag set
+            ///* and cleared by the "PRAGMA recursive_triggers" command is clear).
+            ///*
+            ///* It is recursive invocation of triggers, at the SQL level, that is
+            ///* disabled. In some cases a single trigger may generate more than one
+            ///* SubProgram (if the trigger may be executed with more than one different
+            ///* ON CONFLICT algorithm). SubProgram structures associated with a
+            ///* single trigger all have the same value for the SubProgram.token
+            ///* variable.
+            /// Register pRt is used to store the memory required to save the state
+            ///* of the current program, and the memory required at runtime to execute
+            ///* the trigger program. If this trigger has been fired before, then pRt
+            ///* is already allocated. Otherwise, it must be initialized.
+            /// SubProgram.nMem is set to the number of memory cells used by the
+            ///* program stored in SubProgram.aOp. As well as these, one memory
+            ///* cell is required for each cursor used by the program. Set local
+            ///* variable nMem (and later, VdbeFrame.nChildMem) to this value.
+            /// Opcode: Param P1 P2 * * *
+            ///*
+            ///* This opcode is only ever present in sub-programs called via the
+            ///* OP_Program instruction. Copy a value currently stored in a memory
+            ///* cell of the calling (parent) frame to cell P2 in the current frames
+            ///* address space. This is used by trigger programs to access the new.*
+            ///* and old.* values.
+            ///*
+            ///* The address of the cell in the parent frame is determined by adding
+            ///* the value of the P1 argument to the value of the P1 argument to the
+            ///* calling OP_Program instruction.
+            /// out2
+            /// #ifndef SQLITE_OMIT_TRIGGER
+            /// Opcode: FkCounter P1 P2 * * *
+            ///* Synopsis: fkctr[P1]+=P2
+            ///*
+            ///* Increment a "constraint counter" by P2 (P2 may be negative or positive).
+            ///* If P1 is non-zero, the database constraint counter is incremented
+            ///* (deferred foreign key constraints). Otherwise, if P1 is zero, the
+            ///* statement counter is incremented (immediate foreign key constraints).
+            /// Opcode: FkIfZero P1 P2 * * *
+            ///* Synopsis: if fkctr[P1]==0 goto P2
+            ///*
+            ///* This opcode tests if a foreign key constraint-counter is currently zero.
+            ///* If so, jump to instruction P2. Otherwise, fall through to the next
+            ///* instruction.
+            ///*
+            ///* If P1 is non-zero, then the jump is taken if the database constraint-counter
+            ///* is zero (the one that counts deferred constraint violations). If P1 is
+            ///* zero, the jump is taken if the statement constraint-counter is zero
+            ///* (immediate foreign key constraint violations).
+            /// jump
+            /// #ifndef SQLITE_OMIT_FOREIGN_KEY
+            /// Opcode: MemMax P1 P2 * * *
+            ///* Synopsis: r[P1]=max(r[P1],r[P2])
+            ///*
+            ///* P1 is a register in the root frame of this VM (the root frame is
+            ///* different from the current frame if this instruction is being executed
+            ///* within a sub-program). Set the value of register P1 to the maximum of
+            ///* its current value and the value in register P2.
+            ///*
+            ///* This instruction throws an error if the memory cell is not initially
+            ///* an integer.
+            /// in2
+            /// SQLITE_OMIT_AUTOINCREMENT
+            /// Opcode: IfPos P1 P2 P3 * *
+            ///* Synopsis: if r[P1]>0 then r[P1]-=P3, goto P2
+            ///*
+            ///* Register P1 must contain an integer.
+            ///* If the value of register P1 is 1 or greater, subtract P3 from the
+            ///* value in P1 and jump to P2.
+            ///*
+            ///* If the initial value of register P1 is less than 1, then the
+            ///* value is unchanged and control passes through to the next instruction.
+            /// jump, in1
+            /// Opcode: OffsetLimit P1 P2 P3 * *
+            ///* Synopsis: if r[P1]>0 then r[P2]=r[P1]+max(0,r[P3]) else r[P2]=(-1)
+            ///*
+            ///* This opcode performs a commonly used computation associated with
+            ///* LIMIT and OFFSET processing.  r[P1] holds the limit counter.  r[P3]
+            ///* holds the offset counter.  The opcode computes the combined value
+            ///* of the LIMIT and OFFSET and stores that value in r[P2].  The r[P2]
+            ///* value computed is the total number of rows that will need to be
+            ///* visited in order to complete the query.
+            ///*
+            ///* If r[P3] is zero or negative, that means there is no OFFSET
+            ///* and r[P2] is set to be the value of the LIMIT, r[P1].
+            ///*
+            ///* if r[P1] is zero or negative, that means there is no LIMIT
+            ///* and r[P2] is set to -1.
+            ///*
+            ///* Otherwise, r[P2] is set to the sum of r[P1] and r[P3].
+            /// in1, out2, in3
+            /// If the LIMIT is less than or equal to zero, loop forever.  This
+            ///* is documented.  But also, if the LIMIT+OFFSET exceeds 2^63 then
+            ///* also loop forever.  This is undocumented.  In fact, one could argue
+            ///* that the loop should terminate.  But assuming 1 billion iterations
+            ///* per second (far exceeding the capabilities of any current hardware)
+            ///* it would take nearly 300 years to actually reach the limit.  So
+            ///* looping forever is a reasonable approximation.
+            /// Opcode: IfNotZero P1 P2 * * *
+            ///* Synopsis: if r[P1]!=0 then r[P1]--, goto P2
+            ///*
+            ///* Register P1 must contain an integer.  If the content of register P1 is
+            ///* initially greater than zero, then decrement the value in register P1.
+            ///* If it is non-zero (negative or positive) and then also jump to P2. 
+            ///* If register P1 is initially zero, leave it unchanged and fall through.
+            /// jump, in1
+            /// Opcode: DecrJumpZero P1 P2 * * *
+            ///* Synopsis: if (--r[P1])==0 goto P2
+            ///*
+            ///* Register P1 must hold an integer.  Decrement the value in P1
+            ///* and jump to P2 if the new value is exactly zero.
+            /// jump, in1
+            /// Opcode: AggStep * P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] step(r[P2@P5])
+            ///*
+            ///* Execute the xStep function for an aggregate.
+            ///* The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ////
+            ////* Opcode: AggInverse * P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] inverse(r[P2@P5])
+            ///*
+            ///* Execute the xInverse function for an aggregate.
+            ///* The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ////
+            ////* Opcode: AggStep1 P1 P2 P3 P4 P5
+            ///* Synopsis: accum=r[P3] step(r[P2@P5])
+            ///*
+            ///* Execute the xStep (if P1==0) or xInverse (if P1!=0) function for an
+            ///* aggregate.  The function has P5 arguments.  P4 is a pointer to the
+            ///* FuncDef structure that specifies the function.  Register P3 is the
+            ///* accumulator.
+            ///*
+            ///* The P5 arguments are taken from register P2 and its
+            ///* successors.
+            ///*
+            ///* This opcode is initially coded as OP_AggStep0.  On first evaluation,
+            ///* the FuncDef stored in P4 is converted into an sqlite3_context and
+            ///* the opcode is changed.  In this way, the initialization of the
+            ///* sqlite3_context only happens once, instead of on each call to the
+            ///* step function.
+            /// Allocate space for (a) the context object and (n-1) extra pointers
+            ///* to append to the sqlite3_context.argv[1] array, and (b) a memory
+            ///* cell in which to store the accumulation. Be careful that the memory
+            ///* cell is 8-byte aligned, even on platforms where a pointer is 32-bits.
+            ///*
+            ///* Note: We could avoid this by using a regular memory cell from aMem[] for 
+            ///* the accumulator, instead of allocating one here.
+            /// OP_AggInverse must have P1==1 and OP_AggStep must have P1==0
+            /// Fall through into OP_AggStep */
+            ///  /* no break
+            /// If this function is inside of a trigger, the register array in aMem[]
+            ///* might change from one evaluation to the next.  The next block of code
+            ///* checks to see if the register array has changed, and if so it
+            ///* reinitializes the relevant parts of the sqlite3_context object
+            /// IMP: R-24505-23230
+            /// Opcode: AggFinal P1 P2 * P4 *
+            ///* Synopsis: accum=r[P1] N=P2
+            ///*
+            ///* P1 is the memory location that is the accumulator for an aggregate
+            ///* or window function.  Execute the finalizer function
+            ///* for an aggregate and store the result in P1.
+            ///*
+            ///* P2 is the number of arguments that the step function takes and
+            ///* P4 is a pointer to the FuncDef for this function.  The P2
+            ///* argument is not used by this opcode.  It is only there to disambiguate
+            ///* functions that can take varying numbers of arguments.  The
+            ///* P4 argument is only needed for the case where
+            ///* the step function was not previously called.
+            ////
+            ////* Opcode: AggValue * P2 P3 P4 *
+            ///* Synopsis: r[P3]=value N=P2
+            ///*
+            ///* Invoke the xValue() function and store the result in register P3.
+            ///*
+            ///* P2 is the number of arguments that the step function takes and
+            ///* P4 is a pointer to the FuncDef for this function.  The P2
+            ///* argument is not used by this opcode.  It is only there to disambiguate
+            ///* functions that can take varying numbers of arguments.  The
+            ///* P4 argument is only needed for the case where
+            ///* the step function was not previously called.
+            /// Opcode: Checkpoint P1 P2 P3 * *
+            ///*
+            ///* Checkpoint database P1. This is a no-op if P1 is not currently in
+            ///* WAL mode. Parameter P2 is one of SQLITE_CHECKPOINT_PASSIVE, FULL,
+            ///* RESTART, or TRUNCATE.  Write 1 or 0 into mem[P3] if the checkpoint returns
+            ///* SQLITE_BUSY or not, respectively.  Write the number of pages in the
+            ///* WAL after the checkpoint into mem[P3+1] and the number of pages
+            ///* in the WAL that have been checkpointed after the checkpoint
+            ///* completes into mem[P3+2].  However on an error, mem[P3+1] and
+            ///* mem[P3+2] are initialized to -1.
+            /// Loop counter
+            /// Results
+            /// Write results here
+            /// Opcode: JournalMode P1 P2 P3 * *
+            ///*
+            ///* Change the journal mode of database P1 to P3. P3 must be one of the
+            ///* PAGER_JOURNALMODE_XXX values. If changing between the various rollback
+            ///* modes (delete, truncate, persist, off and memory), this is a simple
+            ///* operation. No IO is required.
+            ///*
+            ///* If changing into or out of WAL mode the procedure is more complicated.
+            ///*
+            ///* Write a string containing the final journal-mode to register P2.
+            /// out2
+            /// Btree to change journal mode of
+            /// Pager associated with pBt
+            /// New journal mode
+            /// The old journal mode
+            /// Name of database file for pPager
+            /// Do not allow a transition to journal_mode=WAL for a database
+            ///* in temporary storage or if the VFS does not support shared memory
+            /// Temp file
+            /// No shared-memory support
+            /// If leaving WAL mode, close the log file. If successful, the call
+            ///* to PagerCloseWal() checkpoints and deletes the write-ahead-log
+            ///* file. An EXCLUSIVE lock may still be held on the database file
+            ///* after a successful return.
+            /// Cannot transition directly from MEMORY to WAL.  Use mode OFF
+            ///* as an intermediate
+            /// Open a transaction on the database file. Regardless of the journal
+            ///* mode, this transaction always uses a rollback journal.
+            /// ifndef SQLITE_OMIT_WAL
+            /// SQLITE_OMIT_PRAGMA
+            /// Opcode: Vacuum P1 P2 * * *
+            ///*
+            ///* Vacuum the entire database P1.  P1 is 0 for "main", and 2 or more
+            ///* for an attached database.  The "temp" database may not be vacuumed.
+            ///*
+            ///* If P2 is not zero, then it is a register holding a string which is
+            ///* the file into which the result of vacuum should be written.  When
+            ///* P2 is zero, the vacuum overwrites the original database.
+            /// Opcode: IncrVacuum P1 P2 * * *
+            ///*
+            ///* Perform a single step of the incremental vacuum procedure on
+            ///* the P1 database. If the vacuum has finished, jump to instruction
+            ///* P2. Otherwise, fall through to the next instruction.
+            /// jump
+            /// Opcode: Expire P1 P2 * * *
+            ///*
+            ///* Cause precompiled statements to expire.  When an expired statement
+            ///* is executed using sqlite3_step() it will either automatically
+            ///* reprepare itself (if it was originally created using sqlite3_prepare_v2())
+            ///* or it will fail with SQLITE_SCHEMA.
+            ///*
+            ///* If P1 is 0, then all SQL statements become expired. If P1 is non-zero,
+            ///* then only the currently executing statement is expired.
+            ///*
+            ///* If P2 is 0, then SQL statements are expired immediately.  If P2 is 1,
+            ///* then running SQL statements are allowed to continue to run to completion.
+            ///* The P2==1 case occurs when a CREATE INDEX or similar schema change happens
+            ///* that might help the statement run faster but which does not affect the
+            ///* correctness of operation.
+            /// Opcode: CursorLock P1 * * * *
+            ///*
+            ///* Lock the btree to which cursor P1 is pointing so that the btree cannot be
+            ///* written by an other cursor.
+            /// Opcode: CursorUnlock P1 * * * *
+            ///*
+            ///* Unlock the btree to which cursor P1 is pointing so that it can be
+            ///* written by other cursors.
+            /// Opcode: TableLock P1 P2 P3 P4 *
+            ///* Synopsis: iDb=P1 root=P2 write=P3
+            ///*
+            ///* Obtain a lock on a particular table. This instruction is only used when
+            ///* the shared-cache feature is enabled.
+            ///*
+            ///* P1 is the index of the database in sqlite3.aDb[] of the database
+            ///* on which the lock is acquired.  A readlock is obtained if P3==0 or
+            ///* a write lock if P3==1.
+            ///*
+            ///* P2 contains the root-page of the table to lock.
+            ///*
+            ///* P4 contains a pointer to the name of the table being locked. This is only
+            ///* used to generate an error message if the lock cannot be obtained.
+            /// SQLITE_OMIT_SHARED_CACHE
+            /// Opcode: VBegin * * * P4 *
+            ///*
+            ///* P4 may be a pointer to an sqlite3_vtab structure. If so, call the
+            ///* xBegin method for that table.
+            ///*
+            ///* Also, whether or not P4 is set, check that this is not being called from
+            ///* within a callback to a virtual table xSync() method. If it is, the error
+            ///* code will be set to SQLITE_LOCKED.
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VCreate P1 P2 * * *
+            ///*
+            ///* P2 is a register that holds the name of a virtual table in database
+            ///* P1. Call the xCreate method for that table.
+            /// For storing the record being decoded
+            /// Name of the virtual table
+            /// Because P2 is always a static string, it is impossible for the
+            ///* sqlite3VdbeMemCopy() to fail
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VDestroy P1 * * P4 *
+            ///*
+            ///* P4 is the name of a virtual table in database P1.  Call the xDestroy method
+            ///* of that table.
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VOpen P1 * * P4 *
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* P1 is a cursor number.  This opcode opens a cursor to the virtual
+            ///* table and stores that cursor in P1.
+            /// ncycle
+            /// This opcode is a no-op if the cursor is already open
+            /// Initialize sqlite3_vtab_cursor base class
+            /// Initialize vdbe cursor object
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VCheck P1 P2 P3 P4 *
+            ///*
+            ///* P4 is a pointer to a Table object that is a virtual table in schema P1
+            ///* that supports the xIntegrity() method.  This opcode runs the xIntegrity()
+            ///* method for that virtual table, using P3 as the integer argument.  If
+            ///* an error is reported back, the table name is prepended to the error
+            ///* message and that message is stored in P2.  If no errors are seen,
+            ///* register P2 is set to NULL.
+            /// out2
+            /// Innocent until proven guilty
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VInitIn P1 P2 P3 * *
+            ///* Synopsis: r[P2]=ValueList(P1,P3)
+            ///*
+            ///* Set register P2 to be a pointer to a ValueList object for cursor P1
+            ///* with cache register P3 and output register P3+1.  This ValueList object
+            ///* can be used as the first argument to sqlite3_vtab_in_first() and
+            ///* sqlite3_vtab_in_next() to extract all of the values stored in the P1
+            ///* cursor.  Register P3 is used to hold the values returned by
+            ///* sqlite3_vtab_in_first() and sqlite3_vtab_in_next().
+            /// out2, ncycle
+            /// The cursor containing the RHS values
+            /// New ValueList object to put in reg[P2]
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VFilter P1 P2 P3 P4 *
+            ///* Synopsis: iplan=r[P3] zplan='P4'
+            ///*
+            ///* P1 is a cursor opened using VOpen.  P2 is an address to jump to if
+            ///* the filtered result set is empty.
+            ///*
+            ///* P4 is either NULL or a string that was generated by the xBestIndex
+            ///* method of the module.  The interpretation of the P4 string is left
+            ///* to the module implementation.
+            ///*
+            ///* This opcode invokes the xFilter method on the virtual table specified
+            ///* by P1.  The integer query plan parameter to xFilter is stored in register
+            ///* P3. Register P3+1 stores the argc parameter to be passed to the
+            ///* xFilter method. Registers P3+2..P3+1+argc are the argc
+            ///* additional parameters which are passed to
+            ///* xFilter as argv. Register P3+2 becomes argv[0] when passed to xFilter.
+            ///*
+            ///* A jump is made to P2 if the result set after filtering would be empty.
+            /// jump, ncycle
+            /// Grab the index number and argc parameters
+            /// Invoke the xFilter method
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VColumn P1 P2 P3 * P5
+            ///* Synopsis: r[P3]=vcolumn(P2)
+            ///*
+            ///* Store in register P3 the value of the P2-th column of
+            ///* the current row of the virtual-table of cursor P1.
+            ///*
+            ///* If the VColumn opcode is being used to fetch the value of
+            ///* an unchanging column during an UPDATE operation, then the P5
+            ///* value is OPFLAG_NOCHNG.  This will cause the sqlite3_vtab_nochange()
+            ///* function to return true inside the xColumn method of the virtual
+            ///* table implementation.  The P5 column might also contain other
+            ///* bits (OPFLAG_LENGTHARG or OPFLAG_TYPEOFARG) but those bits are
+            ///* unused by OP_VColumn.
+            /// ncycle
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VNext P1 P2 * * *
+            ///*
+            ///* Advance virtual table P1 to the next row in its result set and
+            ///* jump to instruction P2.  Or, if the virtual table has reached
+            ///* the end of its result set, then fall through to the next instruction.
+            /// jump, ncycle
+            /// Invoke the xNext() method of the module. There is no way for the
+            ///* underlying implementation to return an error if one occurs during
+            ///* xNext(). Instead, if an error occurs, true is returned (indicating that
+            ///* data is available) and the error code returned when xColumn or
+            ///* some other method is next invoked on the save virtual table cursor.
+            /// If there is data, jump to P2
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: VRename P1 * * P4 *
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* This opcode invokes the corresponding xRename method. The value
+            ///* in register P1 is passed as the zName argument to the xRename method.
+            /// Opcode: VUpdate P1 P2 P3 P4 P5
+            ///* Synopsis: data=r[P3@P2]
+            ///*
+            ///* P4 is a pointer to a virtual table object, an sqlite3_vtab structure.
+            ///* This opcode invokes the corresponding xUpdate method. P2 values
+            ///* are contiguous memory cells starting at P3 to pass to the xUpdate
+            ///* invocation. The value in register (P3+P2-1) corresponds to the
+            ///* p2th element of the argv array passed to xUpdate.
+            ///*
+            ///* The xUpdate method will do a DELETE or an INSERT or both.
+            ///* The argv[0] element (which corresponds to memory cell P3)
+            ///* is the rowid of a row to delete.  If argv[0] is NULL then no
+            ///* deletion occurs.  The argv[1] element is the rowid of the new
+            ///* row.  This can be NULL to have the virtual table select the new
+            ///* rowid for itself.  The subsequent elements in the array are
+            ///* the values of columns in the new row.
+            ///*
+            ///* If P2==1 then no insert is performed.  argv[0] is the rowid of
+            ///* a row to delete.
+            ///*
+            ///* P1 is a boolean flag. If it is set to true and the xUpdate call
+            ///* is successful, then the value returned by sqlite3_last_insert_rowid()
+            ///* is set to the value of the rowid for the row just inserted.
+            ///*
+            ///* P5 is the error actions (OE_Replace, OE_Fail, OE_Ignore, etc) to
+            ///* apply in the case of a constraint failure on an insert or update.
+            /// SQLITE_OMIT_VIRTUALTABLE
+            /// Opcode: Pagecount P1 P2 * * *
+            ///*
+            ///* Write the current number of pages in database P1 to memory cell P2.
+            /// out2
+            /// Opcode: MaxPgcnt P1 P2 P3 * *
+            ///*
+            ///* Try to set the maximum page count for database P1 to the value in P3.
+            ///* Do not let the maximum page count fall below the current page count and
+            ///* do not change the maximum page count value if P3==0.
+            ///*
+            ///* Store the maximum page count after the change in register P2.
+            /// out2
+            /// Opcode: Function P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=func(r[P2@NP])
+            ///*
+            ///* Invoke a user function (P4 is a pointer to an sqlite3_context object that
+            ///* contains a pointer to the function to be run) with arguments taken
+            ///* from register P2 and successors.  The number of arguments is in
+            ///* the sqlite3_context object that P4 points to.
+            ///* The result of the function is stored
+            ///* in register P3.  Register P3 must not be one of the function inputs.
+            ///*
+            ///* P1 is a 32-bit bitmask indicating whether or not each argument to the
+            ///* function was determined to be constant at compile time. If the first
+            ///* argument was constant then bit 0 of P1 is set. This is used to determine
+            ///* whether meta data associated with a user function argument using the
+            ///* sqlite3_set_auxdata() API may be safely retained until the next
+            ///* invocation of this opcode.
+            ///*
+            ///* See also: AggStep, AggFinal, PureFunc
+            ////
+            ////* Opcode: PureFunc P1 P2 P3 P4 *
+            ///* Synopsis: r[P3]=func(r[P2@NP])
+            ///*
+            ///* Invoke a user function (P4 is a pointer to an sqlite3_context object that
+            ///* contains a pointer to the function to be run) with arguments taken
+            ///* from register P2 and successors.  The number of arguments is in
+            ///* the sqlite3_context object that P4 points to.
+            ///* The result of the function is stored
+            ///* in register P3.  Register P3 must not be one of the function inputs.
+            ///*
+            ///* P1 is a 32-bit bitmask indicating whether or not each argument to the
+            ///* function was determined to be constant at compile time. If the first
+            ///* argument was constant then bit 0 of P1 is set. This is used to determine
+            ///* whether meta data associated with a user function argument using the
+            ///* sqlite3_set_auxdata() API may be safely retained until the next
+            ///* invocation of this opcode.
+            ///*
+            ///* This opcode works exactly like OP_Function.  The only difference is in
+            ///* its name.  This opcode is used in places where the function must be
+            ///* purely non-deterministic.  Some built-in date/time functions can be
+            ///* either deterministic of non-deterministic, depending on their arguments.
+            ///* When those function are used in a non-deterministic way, they will check
+            ///* to see if they were called using OP_PureFunc instead of OP_Function, and
+            ///* if they were, they throw an error.
+            ///*
+            ///* See also: AggStep, AggFinal, Function
+            /// group
+            /// group
+            /// If this function is inside of a trigger, the register array in aMem[]
+            ///* might change from one evaluation to the next.  The next block of code
+            ///* checks to see if the register array has changed, and if so it
+            ///* reinitializes the relevant parts of the sqlite3_context object
+            /// IMP: R-24505-23230
+            /// If the function returned an error, throw an exception
+            /// Opcode: ClrSubtype P1 * * * *
+            ///* Synopsis:  r[P1].subtype = 0
+            ///*
+            ///* Clear the subtype from register P1.
+            /// in1
+            /// Opcode: GetSubtype P1 P2 * * *
+            ///* Synopsis:  r[P2] = r[P1].subtype
+            ///*
+            ///* Extract the subtype value from register P1 and write that subtype
+            ///* into register P2.  If P1 has no subtype, then P1 gets a NULL.
+            /// in1 out2
+            /// Opcode: SetSubtype P1 P2 * * *
+            ///* Synopsis:  r[P2].subtype = r[P1]
+            ///*
+            ///* Set the subtype value of register P2 to the integer from register P1.
+            ///* If P1 is NULL, clear the subtype from p2.
+            /// in1 out2
+            /// Opcode: FilterAdd P1 * P3 P4 *
+            ///* Synopsis: filter(P1) += key(P3@P4)
+            ///*
+            ///* Compute a hash on the P4 registers starting with r[P3] and
+            ///* add that hash to the bloom filter contained in r[P1].
+            /// Opcode: Filter P1 P2 P3 P4 *
+            ///* Synopsis: if key(P3@P4) not in filter(P1) goto P2
+            ///*
+            ///* Compute a hash on the key contained in the P4 registers starting
+            ///* with r[P3].  Check to see if that hash is found in the
+            ///* bloom filter hosted by register P1.  If it is not present then
+            ///* maybe jump to P2.  Otherwise fall through.
+            ///*
+            ///* False negatives are harmless.  It is always safe to fall through,
+            ///* even if the value is in the bloom filter.  A false negative causes
+            ///* more CPU cycles to be used, but it should still yield the correct
+            ///* answer.  However, an incorrect answer may well arise from a
+            ///* false positive - if the jump is taken when it should fall through.
+            /// jump
+            /// Opcode: Trace P1 P2 * P4 *
+            ///*
+            ///* Write P4 on the statement trace output if statement tracing is
+            ///* enabled.
+            ///*
+            ///* Operand P1 must be 0x7fffffff and P2 must positive.
+            ////
+            ////* Opcode: Init P1 P2 P3 P4 *
+            ///* Synopsis: Start at P2
+            ///*
+            ///* Programs contain a single instance of this opcode as the very first
+            ///* opcode.
+            ///*
+            ///* If tracing is enabled (by the sqlite3_trace()) interface, then
+            ///* the UTF-8 string contained in P4 is emitted on the trace callback.
+            ///* Or if P4 is blank, use the string returned by sqlite3_sql().
+            ///*
+            ///* If P2 is not zero, jump to instruction P2.
+            ///*
+            ///* Increment the value of P1 so that OP_Once opcodes will jump the
+            ///* first time they are evaluated for this run.
+            ///*
+            ///* If P3 is not zero, then it is an address to jump to if an SQLITE_CORRUPT
+            ///* error is encountered.
+            /// jump0
+            /// If the P4 argument is not NULL, then it must be an SQL comment string.
+            ///* The "--" string is broken up to prevent false-positives with srcck1.c.
+            ///*
+            ///* This assert() provides evidence for:
+            ///* EVIDENCE-OF: R-50676-09860 The callback can compute the same text that
+            ///* would have been returned by the legacy sqlite3_trace() interface by
+            ///* using the X argument when X begins with "--" and invoking
+            ///* sqlite3_expanded_sql(P) otherwise.
+            /// OP_Init is always instruction 0
+            /// tag-20220401a
+            /// SQLITE_USE_FCNTL_TRACE
+            /// SQLITE_DEBUG
+            /// SQLITE_OMIT_TRACE
+            /// SQLITE_ENABLE_CURSOR_HINTS
+            /// Opcode: Noop * * * * *
+            ///*
+            ///* Do nothing.  Continue downward to the next opcode.
+            ////
+            ////* Opcode: Explain P1 P2 P3 P4 *
+            ///*
+            ///* This is the same as OP_Noop during normal query execution.  The
+            ///* purpose of this opcode is to hold information about the query
+            ///* plan for the purpose of EXPLAIN QUERY PLAN output.
+            ///*
+            ///* The P4 value is human-readable text that describes the query plan
+            ///* element.  Something like "SCAN t1" or "SEARCH t2 USING INDEX t2x1".
+            ///*
+            ///* The P1 value is the ID of the current element and P2 is the parent
+            ///* element for the case of nested query plan elements.  If P2 is zero
+            ///* then this element is a top-level element.
+            ///*
+            ///* For loop elements, P3 is the estimated code of each invocation of this
+            ///* element.
+            ///*
+            ///* As with all opcodes, the meanings of the parameters for OP_Explain
+            ///* are subject to change from one release to the next.  Applications
+            ///* should not attempt to interpret or use any of the information
+            ///* contained in the OP_Explain opcode.  The information provided by this
+            ///* opcode is intended for testing and debugging use only.
+            /// This is really OP_Noop, OP_Explain
+            ///**************************************************************************
+            ///* The cases of the switch statement above this line should all be indented
+            ///* by 6 spaces.  But the left-most 6 spaces have been removed to improve the
+            ///* readability.  From this point on down, the normal indentation rules are
+            ///* restored.
+            ///***************************************************************************
+            /// The following code adds nothing to the actual functionality
+            ///* of the program.  It is only here for testing and debugging.
+            ///* On the other hand, it does burn CPU cycles every time through
+            ///* the evaluator loop.  So we can leave it out when NDEBUG is defined.
+            /// NDEBUG
+            /// The end of the for(;;) loop the loops through opcodes
+            /// If we reach this point, it means that execution is finished with
+            ///* an error of some kind.
+            /// This is the only way out of this procedure.  We have to
+            ///* release the mutexes on btrees that were acquired at the
+            ///* top.
+            /// Jump to here if a string or blob larger than SQLITE_MAX_LENGTH
+            ///* is encountered.
+            /// Jump to here if a malloc() fails.
+            /// Jump to here if the sqlite3_interrupt() API sets the interrupt
+            ///* flag.
             unreachable!();
         }
     }

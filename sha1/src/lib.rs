@@ -2,9 +2,15 @@
 #![allow(unused_imports, dead_code)]
 
 mod sqlite3_h;
-pub(crate) use crate::sqlite3_h::*;
 mod sqlite3ext_h;
-pub(crate) use crate::sqlite3ext_h::*;
+use crate::sqlite3_h::{
+    Sqlite3, Sqlite3Backup, Sqlite3Blob, Sqlite3Context, Sqlite3File,
+    Sqlite3Filename, Sqlite3IndexInfo, Sqlite3Int64, Sqlite3Module,
+    Sqlite3Mutex, Sqlite3RtreeGeometry, Sqlite3RtreeQueryInfo,
+    Sqlite3Snapshot, Sqlite3Stmt, Sqlite3Str, Sqlite3Uint64, Sqlite3Value,
+    Sqlite3Vfs,
+};
+use crate::sqlite3ext_h::Sqlite3ApiRoutines;
 
 type DarwinSizeT = u64;
 
@@ -16,6 +22,8 @@ struct SHA1Context {
     buffer: [u8; 64],
 }
 
+///Hash a single 512-bit block. This is the core of the algorithm.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     unsafe {
         let mut qq: [u32; 5] = [0; 5];
@@ -1368,6 +1376,8 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
                         } + 3395469782u32 +
                 (qq[1 as usize] << 5 | qq[1 as usize] >> 32 - 5);
         qq[2 as usize] = qq[2 as usize] << 32 - 2 | qq[2 as usize] >> 2;
+
+        /// Add the working vars back into context.state[]
         unsafe { *state.offset(0 as isize) += qq[0 as usize] };
         unsafe { *state.offset(1 as isize) += qq[1 as usize] };
         unsafe { *state.offset(2 as isize) += qq[2 as usize] };
@@ -1376,8 +1386,12 @@ extern "C" fn sha1_transform(state: *mut u32, buffer: *const u8) -> () {
     }
 }
 
+/// Initialize a SHA1 context
+#[allow(unused_doc_comments)]
 extern "C" fn hash_init(p: &mut SHA1Context) -> () {
-    (*p).state[0 as usize] = 1732584193 as u32;
+
+    /// SHA1 initialization constants
+    ((*p).state[0 as usize] = 1732584193 as u32);
     (*p).state[1 as usize] = 4023233417u32;
     (*p).state[2 as usize] = 2562383102u32;
     (*p).state[3 as usize] = 271733878 as u32;
@@ -1386,6 +1400,7 @@ extern "C" fn hash_init(p: &mut SHA1Context) -> () {
         { (*p).count[1 as usize] = 0 as u32; (*p).count[1 as usize] };
 }
 
+/// Add new content to the SHA1 hash
 extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
     -> () {
     let mut i: u32 = 0 as u32;
@@ -1430,6 +1445,7 @@ extern "C" fn hash_step(p: &mut SHA1Context, data: *const u8, len: u32)
     }
 }
 
+/// Compute a string using sqlite3_vsnprintf() and hash it
 unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
     z_format_1: *const i8, mut __va0: ...) -> () {
     let mut ap: *mut i8 = core::ptr::null_mut();
@@ -1448,6 +1464,9 @@ unsafe extern "C" fn hash_step_vformat(p: *mut SHA1Context,
         &raw mut z_buf[0 as usize] as *mut u8 as *const u8, n as u32);
 }
 
+/// Add padding and compute the message digest.  Render the
+///* message digest as lower-case hexadecimal and put it into
+///* zOut[].  zOut[] must be at least 41 bytes long.
 extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
     b_as_binary_1: i32) -> () {
     let mut i: u32 = 0 as u32;
@@ -1519,6 +1538,17 @@ extern "C" fn hash_finish(p: *mut SHA1Context, z_out_1: *mut i8,
     }
 }
 
+///* Two SQL functions:  sha1(X) and sha1b(X).
+///*
+///* sha1(X) returns a lower-case hexadecimal rendering of the SHA1 hash
+///* of the argument X.  If X is a BLOB, it is hashed as is.  For all other
+///* types of input, X is converted into a UTF-8 string and the string
+///* is hashed without the trailing 0x00 terminator.  The hash of a NULL
+///* value is NULL.
+///*
+///* sha1b(X) is the same except that it returns a 20-byte BLOB containing
+///* the binary hash instead of a hexadecimal string.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let mut cx: SHA1Context = unsafe { core::mem::zeroed() };
@@ -1549,6 +1579,8 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     if p_data == core::ptr::null() { return; }
     hash_step(&mut cx, p_data, n_byte as u32);
     if unsafe { sqlite3_user_data(context) } != core::ptr::null_mut() {
+
+        /// sha1b() - binary result
         hash_finish(&mut cx, &raw mut z_out[0 as usize] as *mut i8, 1);
         unsafe {
             sqlite3_result_blob(context,
@@ -1560,6 +1592,8 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
                     }))
         };
     } else {
+
+        /// sha1() - hexadecimal text result
         hash_finish(&mut cx, &raw mut z_out[0 as usize] as *mut i8, 0);
         unsafe {
             sqlite3_result_text(context,
@@ -1573,6 +1607,17 @@ extern "C" fn sha1_func(context: *mut Sqlite3Context, argc: i32,
     }
 }
 
+///* Implementation of the sha1_query(SQL) function.
+///*
+///* This function compiles and runs the SQL statement(s) given in the
+///* argument. The results are hashed using SHA1 and that hash is returned.
+///*
+///* The original SQL text is included as part of the hash.
+///*
+///* The hash is not just a concatenation of the outputs.  Each query
+///* is delimited and each row and value within the query is delimited,
+///* with all values being marked with their datatypes.
+#[allow(unused_doc_comments)]
 extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
     argv: *mut *mut Sqlite3Value) -> () {
     let db: *mut Sqlite3 = unsafe { sqlite3_context_db_handle(context) };
@@ -1581,7 +1626,9 @@ extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
             *const i8;
     let mut p_stmt: *mut Sqlite3Stmt = core::ptr::null_mut();
     let mut n_col: i32 = 0;
+    /// Number of columns in the result set
     let mut i: i32 = 0;
+    /// Loop counter
     let mut rc: i32 = 0;
     let mut n: i32 = 0;
     let mut z: *const i8 = core::ptr::null();
@@ -1918,19 +1965,22 @@ extern "C" fn sha1_query_func(context: *mut Sqlite3Context, argc: i32,
 }
 
 #[unsafe(no_mangle)]
+#[allow(unused_doc_comments)]
 pub extern "C" fn sqlite3_sha_init(db: *mut Sqlite3,
     pz_err_msg_1: *const *mut i8, p_api_1: *const Sqlite3ApiRoutines) -> i32 {
     unsafe {
         let mut rc: i32 = 0;
         { let _ = p_api_1; };
         { let _ = pz_err_msg_1; };
-        rc =
+
+        /// Unused parameter
+        (rc =
             unsafe {
                 sqlite3_create_function(db,
                     c"sha1".as_ptr() as *mut i8 as *const i8, 1,
                     1 | 2097152 | 2048, core::ptr::null_mut(), Some(sha1_func),
                     None, None)
-            };
+            });
         if rc == 0 {
             rc =
                 unsafe {
